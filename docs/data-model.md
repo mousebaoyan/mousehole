@@ -319,7 +319,7 @@ CREATE TABLE uploads (
   mime        text    NOT NULL,              -- 处理后的格式，通常是 image/webp
   width       integer NOT NULL,
   height      integer NOT NULL,
-  bytes       integer NOT NULL,              -- 处理后的大小
+  bytes       integer NOT NULL,              -- 处理后两档文件合计的大小
   created_at  timestamptz NOT NULL DEFAULT now()
 );
 
@@ -331,9 +331,9 @@ CREATE TABLE post_uploads (
 CREATE INDEX post_uploads_upload ON post_uploads (upload_id);
 ```
 
-- 文件存在 `data/uploads/{哈希前两位}/{哈希}.webp`，地址里带内容哈希，可以设为永久缓存。
+- 每张图存两个文件：`data/uploads/{哈希前两位}/{哈希}.webp` 是大图（长边不超过 2048px），同目录的 `{哈希}-960.webp` 是正文里显示的一档（宽度不超过 960px）；动图只存大图。地址里带内容哈希，可以永久缓存。
 - 上传后 24 小时内没有被任何 `post_uploads` 引用的图片，每天清理。
-- 头像缓存在 `data/avatars/{用户ID}.webp`，不进数据库，只用 `users.avatar_version` 控制刷新。
+- 头像统一转成 96px，缓存在 `data/avatars/{用户ID}.webp`，不进数据库，只用 `users.avatar_version` 控制刷新。
 
 ## QQ 消息映射与事件
 
