@@ -54,6 +54,7 @@
 
 表：`reactions`、`boosts`、`thread_users`、`notifications`。
 
+- 表情回应每人每条一个，主键 `(post_id, user_id)`，换表情就是覆盖。每个表情都算一次赞：`posts.like_count` 是总数，`posts.reactions` 是各表情的数量，都和写入在同一个事务里更新。
 - 短评每人每层一条，`UNIQUE (post_id, user_id)`，修改就是覆盖；只挂在楼层上，楼中楼不行。字数（16 个字，emoji 算一个）由应用按字素计数，库里不设长度约束。
 - 短评数冗余在 `posts.boost_count`，楼层列表每层取前 6 条短评，其余点开再取。删除短评是真删除，它的举报跟着删掉。
 - 短评通知的 `type` 是 `boost`，和点赞一样按楼层合并。
