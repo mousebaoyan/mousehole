@@ -257,3 +257,11 @@ export async function membersByQq(qqs: number[]) {
           .execute();
   return new Map(rows.flatMap((r) => (r.qq === null ? [] : [[r.qq, r] as const])));
 }
+
+export async function countLikes(trx: Transaction<DB>, userId: number, likes: number) {
+  await trx
+    .updateTable("users")
+    .set((eb) => ({ like_received: eb("like_received", "+", likes) }))
+    .where("id", "=", userId)
+    .execute();
+}

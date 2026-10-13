@@ -1,11 +1,12 @@
 import { Heart } from "lucide-react";
 import { useRef, useState } from "react";
+import { useFetcher } from "react-router";
 import { cn } from "cn";
+import type { UserBrief } from "~/api-types";
 import { useDismiss } from "~/components/disclosure";
 import { UserAvatar } from "~/components/user-avatar";
-import { reactorsOf, type ReactionKey, type Reactions } from "~/draft-data";
 
-const REACTIONS: { key: ReactionKey; emoji: string; label: string }[] = [
+export const REACTIONS = [
   { key: "heart", emoji: "❤️", label: "赞" },
   { key: "+1", emoji: "👍", label: "顶" },
   { key: "laughing", emoji: "😆", label: "笑" },
@@ -16,7 +17,11 @@ const REACTIONS: { key: ReactionKey; emoji: string; label: string }[] = [
   { key: "thinking", emoji: "🤔", label: "思考" },
   { key: "sob", emoji: "😭", label: "大哭" },
   { key: "mouse", emoji: "🐭", label: "鼠鼠" },
-];
+] as const;
+
+export type ReactionKey = (typeof REACTIONS)[number]["key"];
+
+type Reactions = Record<string, number>;
 
 function emojiOf(key: string) {
   return REACTIONS.find((r) => r.key === key)?.emoji;
@@ -29,30 +34,39 @@ function tabClass(active: boolean) {
   );
 }
 
-// The draft keeps the viewer's reaction locally; counts follow it.
-export function useReaction(base: Reactions, initial?: ReactionKey) {
+// The reader's reaction shows at once; the counts the page was loaded with follow it. Saving it
+// happens alongside, and a failure puts it back.
+export function useReaction(base: Reactions, initial: string | null) {
   const [mine, setMine] = useState(initial);
   const counts: Reactions = { ...base };
-  if (initial) counts[initial] = (counts[initial] ?? 1) - 1;
-  if (mine) counts[mine] = (counts[mine] ?? 0) + 1;
+  if (initial !== null) counts[initial] = (counts[initial] ?? 1) - 1;
+  if (mine !== null) counts[mine] = (counts[mine] ?? 0) + 1;
   const sorted = Object.entries(counts)
     .filter(([, n]) => n > 0)
     .toSorted(([, a], [, b]) => b - a);
   return { sorted, mine, setMine };
 }
 
-// The most used three, stacked, and the total; opens the list of who reacted with what.
-export function ReactionSummary({ sorted }: { sorted: [string, number][] }) {
+type Reactor = { user: UserBrief; emoji: string };
+
+// The most used three, stacked, and the total; opens the list of who reacted with what, fetched
+// when opened.
+export function ReactionSummary({
+  sorted,
+  source,
+}: {
+  sorted: [string, number][];
+  source: string;
+}) {
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<string | null>(null);
   const root = useRef<HTMLDivElement>(null);
+  const list = useFetcher<{ items: Reactor[] }>();
   useDismiss(open, () => setOpen(false), root);
   if (sorted.length === 0) return null;
 
   const total = sorted.reduce((sum, [, n]) => sum + n, 0);
-  const reactors = reactorsOf(Object.fromEntries(sorted)).filter(
-    (r) => tab === null || r.reaction === tab,
-  );
+  const reactors = (list.data?.items ?? []).filter((r) => tab === null || r.emoji === tab);
 
   return (
     <div ref={root} className="relative">
@@ -60,7 +74,10 @@ export function ReactionSummary({ sorted }: { sorted: [string, number][] }) {
         type="button"
         aria-expanded={open}
         aria-label={`${total} 个表情回应，查看是谁`}
-        onClick={() => setOpen(!open)}
+        onClick={() => {
+          if (!open && list.state === "idle") void list.load(source);
+          setOpen(!open);
+        }}
         className="flex h-7 items-center gap-1.5 rounded-lg px-1.5 text-meta text-muted-foreground tabular-nums hover:bg-accent"
       >
         <span className="flex -space-x-0.5 text-base">
@@ -88,18 +105,17 @@ export function ReactionSummary({ sorted }: { sorted: [string, number][] }) {
             ))}
           </div>
           <ul className="max-h-72 overflow-y-auto py-1">
-            {reactors.map((r, i) => (
-              // Made-up reactors can repeat a user, so the position is part of the key.
-              <li
-                key={`${r.user.id}-${r.reaction}-${i}`}
-                className="flex items-center gap-3 px-3 py-2"
-              >
+            {!list.data && <li className="px-3 py-2 text-muted-foreground">加载中…</li>}
+            {reactors.map((r) => (
+              <li key={r.user.id} className="flex items-center gap-3 px-3 py-2">
                 <UserAvatar user={r.user} className="size-8" />
                 <div className="min-w-0 flex-1">
                   <div className="truncate font-medium">{r.user.display_name}</div>
-                  <div className="truncate text-xs text-muted-foreground">LV{r.user.level}</div>
+                  {r.user.level !== null && (
+                    <div className="truncate text-xs text-muted-foreground">LV{r.user.level}</div>
+                  )}
                 </div>
-                <span className="text-lg">{emojiOf(r.reaction)}</span>
+                <span className="text-lg">{emojiOf(r.emoji)}</span>
               </li>
             ))}
           </ul>
@@ -115,8 +131,8 @@ export function LikeButton({
   mine,
   onChange,
 }: {
-  mine: ReactionKey | undefined;
-  onChange: (key: ReactionKey | undefined) => void;
+  mine: string | null;
+  onChange: (key: ReactionKey | null) => void;
 }) {
   const [palette, setPalette] = useState(false);
   const timer = useRef(0);
@@ -130,7 +146,7 @@ export function LikeButton({
   }
 
   function choose(key: ReactionKey) {
-    onChange(mine === key ? undefined : key);
+    onChange(mine === key ? null : key);
     setPalette(false);
   }
 
@@ -147,11 +163,11 @@ export function LikeButton({
     >
       <button
         type="button"
-        aria-label={mine ? `已回应 ${emojiOf(mine) ?? ""}，点击取消` : "赞"}
-        aria-pressed={mine !== undefined}
+        aria-label={mine === null ? "赞" : `已回应 ${emojiOf(mine) ?? ""}，点击取消`}
+        aria-pressed={mine !== null}
         className={cn(
           "flex size-8 items-center justify-center rounded-lg hover:bg-accent [&_svg]:size-[1.125rem]",
-          mine && "bg-rose-500/10 hover:bg-rose-500/15",
+          mine !== null && "bg-rose-500/10 hover:bg-rose-500/15",
         )}
         onPointerDown={(e) => {
           if (e.pointerType === "mouse") return;
@@ -170,13 +186,13 @@ export function LikeButton({
         }}
         onClick={() => {
           if (longPress.current) longPress.current = false;
-          else onChange(mine ? undefined : "heart");
+          else onChange(mine === null ? "heart" : null);
         }}
       >
-        {mine && mine !== "heart" ? (
+        {mine !== null && mine !== "heart" ? (
           <span className="text-base">{emojiOf(mine)}</span>
         ) : (
-          <Heart className={cn(mine && "fill-rose-500 text-rose-500")} />
+          <Heart className={cn(mine !== null && "fill-rose-500 text-rose-500")} />
         )}
       </button>
       {palette && (

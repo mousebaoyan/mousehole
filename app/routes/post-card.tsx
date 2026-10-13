@@ -18,7 +18,7 @@ import {
   X,
 } from "lucide-react";
 import { useEffect, useRef, useState, type Ref } from "react";
-import { useFetcher } from "react-router";
+import { useFetcher, useNavigate } from "react-router";
 import { cn } from "cn";
 import { Dropdown, menuItem, useDismiss } from "~/components/disclosure";
 import { EmojiButton } from "~/components/emoji-button";
@@ -87,8 +87,14 @@ export function PostCard({
     editing.current = false;
     onEdit(source.data.body);
   }, [source.state, source.data, onEdit]);
-  // Reactions and boosts are kept on this page until their API exists.
-  const reaction = useReaction({}, undefined);
+  const me = useMe();
+  const navigate = useNavigate();
+  const reaction = useReaction(post.reactions, post.my_reaction);
+  const reacting = useFetcher<{ ok: true } | { ok: false; message: string }>();
+  useEffect(() => {
+    if (reacting.state === "idle" && reacting.data?.ok === false) alert(reacting.data.message);
+  }, [reacting.state, reacting.data]);
+  // Boosts are kept on this page until their API exists.
   const boosts: { user: UserBrief; text: string }[] = [];
   const shownBoosts = allBoosts ? boosts : boosts.slice(0, BOOSTS_SHOWN);
   const replyTo = post.reply_to;
@@ -204,7 +210,10 @@ export function PostCard({
 
         {/* Relative: the boost input floats from this row when there are no boosts yet. */}
         <div className="relative mt-4 flex flex-wrap items-center gap-x-1 gap-y-2">
-          <ReactionSummary sorted={reaction.sorted} />
+          <ReactionSummary
+            sorted={reaction.sorted}
+            source={`/t/${threadId}/p/${post.id}/reactions`}
+          />
           {post.reply_count > 0 && (
             <Button
               variant="ghost"
@@ -227,7 +236,22 @@ export function PostCard({
             </div>
           )}
           <div className="ml-auto flex items-center text-muted-foreground">
-            <LikeButton mine={reaction.mine} onChange={reaction.setMine} />
+            {me?.id !== post.author.id && (
+              <LikeButton
+                mine={reaction.mine}
+                onChange={(emoji) => {
+                  if (!me) {
+                    void navigate("/login");
+                    return;
+                  }
+                  reaction.setMine(emoji);
+                  void reacting.submit(
+                    { intent: "react", post_id: post.id, emoji: emoji ?? "" },
+                    { method: "post", action: `/t/${threadId}`, defaultShouldRevalidate: false },
+                  );
+                }}
+              />
+            )}
             <Button variant="ghost" size="icon-sm" aria-label="复制链接" title="复制链接">
               <Link2 />
             </Button>

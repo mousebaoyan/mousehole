@@ -16,6 +16,7 @@ export default [
   route("t/:id/p/:post", "routes/topic-post.ts"),
   route("t/:id/p/:post/replies", "routes/topic-replies.ts"),
   route("t/:id/p/:post/revisions", "routes/topic-revisions.ts"),
+  route("t/:id/p/:post/reactions", "routes/topic-reactions.ts"),
   route("t/:id/reply", "routes/topic-reply.ts"),
   route("preview", "routes/preview.ts"),
   route("mention", "routes/mention.ts"),
