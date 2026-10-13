@@ -98,7 +98,8 @@ export default function Topic({
           ))}
         </ol>
 
-        <div className="mt-4 flex flex-wrap items-center gap-2 border-t pt-5 sm:pl-[4.25rem]">
+        {/* Lined up with the avatars above. */}
+        <div className="mt-4 flex flex-wrap items-center gap-2 border-t px-3 pt-5 sm:px-4">
           <Button size="lg" onClick={() => openComposer({ thread: target, replyTo: null })}>
             <Reply /> 回复
           </Button>
@@ -114,7 +115,7 @@ export default function Topic({
         </div>
 
         <section className="mt-12">
-          <h2 className="px-1 font-semibold">推荐主题</h2>
+          <h2 className="px-3 font-semibold sm:px-4">推荐主题</h2>
           <div className="mt-3">
             <ThreadList threads={suggested} />
           </div>
