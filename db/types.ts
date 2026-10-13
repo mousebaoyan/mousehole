@@ -156,15 +156,14 @@ export interface Posts {
   deleted_at: Timestamp | null;
   edit_count: Generated<number>;
   edited_at: Timestamp | null;
-  floor: number | null;
+  floor: number;
   html: string;
   id: Generated<number>;
   like_count: Generated<number>;
-  parent_id: number | null;
   reactions: Generated<Json>;
+  reply_count: Generated<number>;
   reply_to_id: number | null;
   status: Generated<string>;
-  sub_count: Generated<number>;
   thread_id: number;
   via: Generated<string>;
 }
@@ -260,6 +259,9 @@ export interface Threads {
   like_count: Generated<number>;
   locked: Generated<boolean>;
   pinned: Generated<number>;
+  /**
+   * floors, excluding the opening post
+   */
   reply_count: Generated<number>;
   solved_post_id: number | null;
   status: Generated<string>;

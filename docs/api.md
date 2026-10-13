@@ -31,10 +31,10 @@
   "last_post_at": 1760000000, "created_at": 1759990000, "url": "https://bbs.mousebaoyan.cn/t/42" }
 
 // 回复。source 只返回给 bot 和管理员；正文只带 html 或 body 中的一个，见上面的「正文」
-{ "id": 108, "thread_id": 42, "floor": 3, "parent_id": null, "reply_to_id": null,
+{ "id": 108, "thread_id": 42, "floor": 3, "reply_to": { "id": 105, "floor": 2, "author": { … } },
   "author": { … }, "html": "<p>…</p>", "via": "qq",
   "source": { "chat_type": "group", "chat_id": 987654321, "message_id": 7731 },
-  "status": "visible", "reactions": { "heart": 2, "+1": 1 }, "my_reaction": "heart", "sub_count": 1,
+  "status": "visible", "reactions": { "heart": 2, "+1": 1 }, "my_reaction": "heart", "reply_count": 1,
   "boosts": [ { "id": 31, "user": { … }, "body": "学到了", "created_at": 1760000100 } ],
   "boost_count": 9, "my_boost": "已收藏",
   "edited_at": null, "created_at": 1760000000 }
@@ -101,7 +101,7 @@ token 由管理员在后台创建，只显示一次。每个 token 绑定一个 
 | `image`、`mface` | 论坛立即下载转存（QQ 图片链接会过期）；下载失败时显示"[图片已失效]" |
 | `face` | QQ 经典表情；一期显示为"[表情]"，二期换成表情图 |
 | `at` | 已同步的成员转为 @论坛用户，并触发提醒；`all` 忽略；其他显示为"@昵称" |
-| `reply` | 被回复的消息对应论坛内容时，转为引用；否则忽略 |
+| `reply` | 被回复的消息对应论坛里的某一条时，记为回复那一条（`reply_to`）；否则忽略 |
 | 其他（`file`、`video`、`record`、`json` 等） | 显示为"[文件] 文件名"之类的占位文字 |
 
 `chat_log` 用来发"聊天记录帖"（`kind: "chatlog"`，二期），每条消息的 `message` 同样是 OneBot 消息段。插件把合并转发的节点展开后传进来即可。
@@ -186,10 +186,10 @@ token 由管理员在后台创建，只显示一次。每个 token 绑定一个 
 
 | 方法 | 路径 | 说明 | 权限 |
 | --- | --- | --- | --- |
-| GET | `/threads/{id}/posts` | 楼层列表：`page`（每页 30 层）。楼中楼默认收起，只带 `sub_count` | 访客 |
-| POST | `/threads/{id}/posts` | 回复：`content`、`parent_id`（发楼中楼时填楼层 ID）、`reply_to_id`（回复或引用某一条）、`source` | 成员 / `act` |
+| GET | `/threads/{id}/posts` | 楼层列表：`page`（每页 30 层）。每层带 `reply_to`（回复的是哪一条，没有为 `null`）和 `reply_count`（有几条回复它） | 访客 |
+| POST | `/threads/{id}/posts` | 回复：`content`、`reply_to_id`（回复同一主题里的哪一条，可选）、`source` | 成员 / `act` |
 | GET | `/posts/{id}` | 单条回复，附所在楼层号和页码，方便跳转 | 访客 |
-| GET | `/posts/{id}/replies` | 某一层的全部楼中楼：`cursor` | 访客 |
+| GET | `/posts/{id}/replies` | 回复这一条的楼层，按楼层号排序：`cursor` | 访客 |
 | PATCH | `/posts/{id}` | 作者修改 `content`，保留编辑记录；版主还可以改 `status`（审核通过或隐藏），可附 `reason` | 作者、版主 / `act`、`moderate` |
 | DELETE | `/posts/{id}` | 删除；楼层号保留，显示"该楼已删除" | 作者、版主 / `act`、`moderate` |
 | GET | `/posts/{id}/revisions` | 编辑记录 | 作者、版主 / `read` |
@@ -197,7 +197,7 @@ token 由管理员在后台创建，只显示一次。每个 token 绑定一个 
 | DELETE | `/posts/{id}/reaction` | 取消自己的回应 | 成员 / `act` |
 | GET | `/posts/{id}/reactions` | 谁回应了什么：可按 `emoji` 筛选，`cursor` 翻页 | 访客 |
 | POST | `/posts/{id}/report` | 举报：`{ reason }` | 成员 / `act` |
-| PUT | `/posts/{id}/boost` | 留下或修改自己在这一层的短评：`{ body }`，不超过 16 个字；楼中楼返回 `422 boost_not_allowed` | 成员 / `act` |
+| PUT | `/posts/{id}/boost` | 留下或修改自己在这一层的短评：`{ body }`，不超过 16 个字 | 成员 / `act` |
 | DELETE | `/posts/{id}/boost` | 删除自己的短评 | 成员 / `act` |
 | GET | `/posts/{id}/boosts` | 这一层的全部短评，按时间排序；楼层列表里每层只带前 6 条 | 访客 |
 | DELETE | `/boosts/{id}` | 删除任意短评，可附 `reason` | 版主 / `moderate` |

@@ -1,4 +1,6 @@
 import {
+  ArrowDown,
+  ArrowUp,
   Bookmark,
   Check,
   ChevronDown,
@@ -6,6 +8,7 @@ import {
   CircleCheck,
   Ellipsis,
   Flag,
+  Forward,
   Link2,
   MessagesSquare,
   Reply,
@@ -21,9 +24,13 @@ import { UserAvatar } from "~/components/user-avatar";
 import { UserBadges } from "~/components/user-badges";
 import { Button, buttonVariants } from "~/components/ui/button";
 import { Textarea } from "~/components/ui/textarea";
-import type { Post, SubReply } from "~/draft-data";
+import type { Post } from "~/draft-data";
 import type { loader as forumLoader } from "./forum-layout.tsx";
 import { LikeButton, ReactionSummary, useReaction } from "./reactions.tsx";
+
+// Shared by posts and the previews of the posts they reply to or that reply to them.
+const PROSE =
+  "prose prose-neutral mt-2 max-w-none text-body leading-7 dark:prose-invert prose-p:my-2 prose-a:font-normal prose-a:text-link prose-a:no-underline hover:prose-a:underline prose-blockquote:border-brand/50 prose-blockquote:font-normal prose-blockquote:text-muted-foreground prose-blockquote:not-italic prose-code:before:content-none prose-code:after:content-none prose-pre:bg-secondary prose-pre:text-foreground prose-li:my-0.5 [&_blockquote_p]:before:content-none [&_blockquote_p]:after:content-none";
 
 // Busy posts can collect dozens of boosts; past this many they fold behind a counter.
 const BOOSTS_SHOWN = 6;
@@ -35,22 +42,27 @@ const graphemes = new Intl.Segmenter("zh", { granularity: "grapheme" });
 
 const reportReasons = ["垃圾广告", "人身攻击", "违法违规", "其他"];
 
+// `parent` is the post this one replies to; `replies` are the posts that reply to this one.
 export function PostCard({
   post,
   op,
+  parent,
+  replies,
   onReply,
 }: {
   post: Post;
   op: boolean;
-  onReply: (name: string) => void;
+  parent: Post | undefined;
+  replies: Post[];
+  onReply: () => void;
 }) {
   const [allBoosts, setAllBoosts] = useState(false);
+  const [parentOpen, setParentOpen] = useState(false);
   const [repliesOpen, setRepliesOpen] = useState(false);
   const report = useRef<HTMLDialogElement>(null);
   const reaction = useReaction(post.reactions, post.myReaction);
   const boosts = post.boosts ?? [];
   const shownBoosts = allBoosts ? boosts : boosts.slice(0, BOOSTS_SHOWN);
-  const replies = post.replies ?? [];
 
   return (
     <li
@@ -79,6 +91,22 @@ export function PostCard({
                 <title>来自群聊</title>
               </MessagesSquare>
             )}
+            {parent && (
+              <button
+                type="button"
+                aria-expanded={parentOpen}
+                title={`回复 #${parent.floor}，点开查看`}
+                onClick={() => setParentOpen(!parentOpen)}
+                className={cn(
+                  "inline-flex items-center gap-1.5 rounded-full py-0.5 pr-2 pl-1 hover:bg-accent hover:text-foreground",
+                  parentOpen && "bg-accent text-foreground",
+                )}
+              >
+                <Forward className="size-3.5" />
+                <UserAvatar user={parent.author} className="size-5 text-2xs" />
+                {parent.author.name}
+              </button>
+            )}
             {post.time}
             <a href={`#floor-${post.floor}`} className="tabular-nums hover:text-foreground">
               #{post.floor}
@@ -89,12 +117,15 @@ export function PostCard({
 
       {/* Indented under the name on wider screens; full width on phones. */}
       <div className="sm:pl-[3.25rem]">
-        <div
-          className="prose prose-neutral mt-2 max-w-none text-body leading-7 dark:prose-invert prose-p:my-2 prose-a:font-normal prose-a:text-link prose-a:no-underline hover:prose-a:underline prose-blockquote:border-brand/50 prose-blockquote:font-normal prose-blockquote:text-muted-foreground prose-blockquote:not-italic prose-code:before:content-none prose-code:after:content-none prose-pre:bg-secondary prose-pre:text-foreground prose-li:my-0.5 [&_blockquote_p]:before:content-none [&_blockquote_p]:after:content-none"
-          dangerouslySetInnerHTML={{ __html: post.html }}
-        />
+        {parent && parentOpen && (
+          <div className="mt-3 rounded-xl border-l-2 border-border bg-secondary/40 px-3 py-1">
+            <PostPreview post={parent} jump="up" />
+          </div>
+        )}
+        <div className={cn(PROSE, "mt-2")} dangerouslySetInnerHTML={{ __html: post.html }} />
 
-        <div className="mt-4 flex flex-wrap items-center gap-x-1 gap-y-2">
+        {/* Relative: the boost input floats from this row when there are no boosts yet. */}
+        <div className="relative mt-4 flex flex-wrap items-center gap-x-1 gap-y-2">
           <ReactionSummary sorted={reaction.sorted} />
           {replies.length > 0 && (
             <Button
@@ -104,8 +135,13 @@ export function PostCard({
               onClick={() => setRepliesOpen(!repliesOpen)}
               className={cn("text-muted-foreground", repliesOpen && "bg-accent text-foreground")}
             >
-              {replies.length} 条回复 {repliesOpen ? <ChevronUp /> : <ChevronDown />}
+              {replies.length} 个回复 {repliesOpen ? <ChevronUp /> : <ChevronDown />}
             </Button>
+          )}
+          {boosts.length === 0 && (
+            <div className="text-muted-foreground">
+              <BoostButton />
+            </div>
           )}
           <div className="ml-auto flex items-center text-muted-foreground">
             <LikeButton mine={reaction.mine} onChange={reaction.setMine} />
@@ -135,45 +171,49 @@ export function PostCard({
                 </>
               )}
             </Dropdown>
-            <Button variant="ghost" size="sm" onClick={() => onReply(post.author.name)}>
+            <Button variant="ghost" size="sm" onClick={onReply}>
               <Reply /> 回复
             </Button>
           </div>
         </div>
 
         {/* Boosts, with the rocket at the end; the boost input floats from this row. */}
-        <ul className="relative mt-2 flex flex-wrap items-center gap-1.5">
-          {shownBoosts.map((b) => (
-            <li
-              key={b.user.id}
-              title={b.user.name}
-              className="inline-flex items-center gap-1.5 rounded-full bg-secondary py-0.5 pr-2.5 pl-0.5 text-meta"
-            >
-              <UserAvatar user={b.user} className="size-5 text-2xs" />
-              {b.text}
-            </li>
-          ))}
-          {!allBoosts && boosts.length > BOOSTS_SHOWN && (
-            <li>
-              <button
-                type="button"
-                onClick={() => setAllBoosts(true)}
-                className="h-6 rounded-full px-2 text-meta text-muted-foreground hover:bg-accent hover:text-foreground"
+        {boosts.length > 0 && (
+          <ul className="relative mt-2 flex flex-wrap items-center gap-1.5">
+            {shownBoosts.map((b) => (
+              <li
+                key={b.user.id}
+                title={b.user.name}
+                className="inline-flex items-center gap-1.5 rounded-full bg-secondary py-0.5 pr-2.5 pl-0.5 text-meta"
               >
-                +{boosts.length - BOOSTS_SHOWN}
-              </button>
+                <UserAvatar user={b.user} className="size-5 text-2xs" />
+                {b.text}
+              </li>
+            ))}
+            {!allBoosts && boosts.length > BOOSTS_SHOWN && (
+              <li>
+                <button
+                  type="button"
+                  onClick={() => setAllBoosts(true)}
+                  className="h-6 rounded-full px-2 text-meta text-muted-foreground hover:bg-accent hover:text-foreground"
+                >
+                  +{boosts.length - BOOSTS_SHOWN}
+                </button>
+              </li>
+            )}
+            <li className="text-muted-foreground">
+              <BoostButton />
             </li>
-          )}
-          <li className="text-muted-foreground">
-            <BoostButton />
-          </li>
-        </ul>
+          </ul>
+        )}
 
         {repliesOpen && (
           // A rule down the avatars ties the replies to this floor.
           <ol className="relative mt-3 before:absolute before:top-4 before:bottom-8 before:left-[1.125rem] before:w-0.5 before:rounded-full before:bg-border">
             {replies.map((r) => (
-              <SubReplyItem key={r.id} reply={r} onReply={() => onReply(r.author.name)} />
+              <li key={r.id}>
+                <PostPreview post={r} jump="down" />
+              </li>
             ))}
           </ol>
         )}
@@ -184,32 +224,26 @@ export function PostCard({
   );
 }
 
-function SubReplyItem({ reply, onReply }: { reply: SubReply; onReply: () => void }) {
-  const reaction = useReaction(reply.reactions);
+// A compact copy of another floor, with a way to jump to where it sits in the thread.
+function PostPreview({ post, jump }: { post: Post; jump: "up" | "down" }) {
+  const Arrow = jump === "up" ? ArrowUp : ArrowDown;
   return (
-    <li className="relative flex gap-3 py-3">
-      <UserAvatar user={reply.author} className="size-9 ring-4 ring-background" />
+    <div className="relative flex gap-3 py-3">
+      <UserAvatar user={post.author} className="size-9 ring-4 ring-background" />
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1">
-          <span className="text-sm font-semibold">{reply.author.name}</span>
-          <UserBadges user={reply.author} />
-          <span className="ml-auto text-xs text-muted-foreground">{reply.time}</span>
+          <span className="text-sm font-semibold">{post.author.name}</span>
+          <UserBadges user={post.author} />
+          <a
+            href={`#floor-${post.floor}`}
+            className="ml-auto inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+          >
+            <Arrow className="size-3.5" /> 跳到 #{post.floor}
+          </a>
         </div>
-        <p className="mt-1 text-body leading-7">
-          {reply.replyTo && <span className="mr-1 text-link">回复 @{reply.replyTo.name}</span>}
-          {reply.text}
-        </p>
-        <div className="mt-1 flex items-center gap-1">
-          <ReactionSummary sorted={reaction.sorted} />
-          <div className="ml-auto flex items-center text-muted-foreground">
-            <LikeButton mine={reaction.mine} onChange={reaction.setMine} />
-            <Button variant="ghost" size="sm" onClick={onReply}>
-              <Reply /> 回复
-            </Button>
-          </div>
-        </div>
+        <div className={cn(PROSE, "mt-1")} dangerouslySetInnerHTML={{ __html: post.html }} />
       </div>
-    </li>
+    </div>
   );
 }
 

@@ -7,7 +7,7 @@ ALTER TABLE posts ADD COLUMN boost_count integer NOT NULL DEFAULT 0;
 
 CREATE TABLE boosts (
   id          integer GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-  post_id     integer NOT NULL REFERENCES posts (id), -- floors only, not sub-replies
+  post_id     integer NOT NULL REFERENCES posts (id),
   user_id     integer NOT NULL REFERENCES users (id),
   body        text    NOT NULL,                       -- at most 16 graphemes, counted by the app
   created_at  timestamptz NOT NULL DEFAULT now(),

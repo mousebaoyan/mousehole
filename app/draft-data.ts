@@ -140,7 +140,7 @@ export const threads: Thread[] = [
     kind: "question",
     solved: true,
     fromQQ: true,
-    replies: 7,
+    replies: 8,
     views: 289,
     lastPoster: users.rex,
     lastActive: "1 小时前",
@@ -229,15 +229,6 @@ export type ReactionKey =
 
 export type Reactions = Partial<Record<ReactionKey, number>>;
 
-export type SubReply = {
-  id: number;
-  author: User;
-  replyTo?: User;
-  time: string;
-  text: string;
-  reactions: Reactions;
-};
-
 export type Post = {
   id: number;
   floor: number;
@@ -249,7 +240,8 @@ export type Post = {
   reactions: Reactions;
   myReaction?: ReactionKey;
   boosts?: { user: User; text: string }[];
-  replies?: SubReply[];
+  // The floor this post answers.
+  replyTo?: number;
 };
 
 export const topicPosts: Post[] = [
@@ -290,49 +282,28 @@ export const topicPosts: Post[] = [
       { user: users.moon, text: "结构很清晰" },
       { user: users.rex, text: "欢迎补充" },
     ],
-    replies: [
-      {
-        id: 201,
-        author: users.ict,
-        time: "09:52",
-        text: "明白了，我去把结题报告里的实验数据翻出来",
-        reactions: { heart: 2 },
-      },
-      {
-        id: 202,
-        author: users.moon,
-        replyTo: users.ict,
-        time: "10:03",
-        text: "顺便把代码整理一下放 GitHub，面试时打开给老师看很加分",
-        reactions: { "+1": 5 },
-      },
-      {
-        id: 203,
-        author: users.nj,
-        time: "10:20",
-        text: "数据要写清楚对比的基线是什么，不然老师会追问",
-        reactions: { heart: 3 },
-      },
-      {
-        id: 204,
-        author: users.ict,
-        replyTo: users.nj,
-        time: "10:26",
-        text: "基线是原版 ProtoNet，我补上",
-        reactions: {},
-      },
-      {
-        id: 205,
-        author: users.sea,
-        time: "11:02",
-        text: "收藏了，明年用得上",
-        reactions: { laughing: 1 },
-      },
-    ],
+  },
+  {
+    id: 1105,
+    floor: 3,
+    author: users.ict,
+    time: "今天 09:52",
+    replyTo: 2,
+    html: "<p>明白了，我去把结题报告里的实验数据翻出来</p>",
+    reactions: { heart: 2 },
+  },
+  {
+    id: 1106,
+    floor: 4,
+    author: users.moon,
+    time: "今天 10:03",
+    replyTo: 3,
+    html: "<p>顺便把代码整理一下放 GitHub，面试时打开给老师看很加分</p>",
+    reactions: { "+1": 5 },
   },
   {
     id: 103,
-    floor: 3,
+    floor: 5,
     author: users.moon,
     time: "今天 10:15",
     html: `<p>补充一点：如果大创用到了什么工程上的东西，可以单独写一行技术栈，比如：</p>
@@ -341,8 +312,35 @@ export const topicPosts: Post[] = [
     reactions: { "+1": 6 },
   },
   {
+    id: 1107,
+    floor: 6,
+    author: users.nj,
+    time: "今天 10:20",
+    replyTo: 2,
+    html: "<p>数据要写清楚对比的基线是什么，不然老师会追问</p>",
+    reactions: { heart: 3 },
+  },
+  {
+    id: 1108,
+    floor: 7,
+    author: users.ict,
+    time: "今天 10:26",
+    replyTo: 6,
+    html: "<p>基线是原版 ProtoNet，我补上</p>",
+    reactions: {},
+  },
+  {
+    id: 1109,
+    floor: 8,
+    author: users.sea,
+    time: "今天 11:02",
+    replyTo: 2,
+    html: "<p>收藏了，明年用得上</p>",
+    reactions: { laughing: 1 },
+  },
+  {
     id: 104,
-    floor: 4,
+    floor: 9,
     author: users.cat,
     time: "今天 11:30",
     html: `<p>楼上说得都对。另外别忘了在群里搜一下，<a href="#">去年有人整理过简历模板</a>。</p>`,

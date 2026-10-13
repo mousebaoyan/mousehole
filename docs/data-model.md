@@ -48,6 +48,7 @@
 
 表：`threads`、`posts`、`post_revisions`。
 
+- 所有回复都是楼层，没有楼中楼。`reply_to_id` 记回复的是同一主题里的哪一条，`reply_count` 冗余有几条回复它，和发帖在同一个事务里更新。
 - 主楼就是 `floor = 1` 的那条。
 - 发楼层：在同一个事务里先 `UPDATE threads SET floor_count = floor_count + 1 ... RETURNING floor_count` 分配楼层号，再插入回复，并更新计数和最后回复。这条 UPDATE 会锁住主题行，同一主题的并发回复因此按顺序拿到楼层号。
 - 删除只设 `deleted_at`，楼层号保留，页面显示"该楼已删除"，页码不会错位。
@@ -58,7 +59,7 @@
 表：`reactions`、`boosts`、`thread_users`、`notifications`。
 
 - 表情回应每人每条一个，主键 `(post_id, user_id)`，换表情就是覆盖。每个表情都算一次赞：`posts.like_count` 是总数，`posts.reactions` 是各表情的数量，都和写入在同一个事务里更新。
-- 短评每人每层一条，`UNIQUE (post_id, user_id)`，修改就是覆盖；只挂在楼层上，楼中楼不行。字数（16 个字，emoji 算一个）由应用按字素计数，库里不设长度约束。
+- 短评每人每层一条，`UNIQUE (post_id, user_id)`，修改就是覆盖。字数（16 个字，emoji 算一个）由应用按字素计数，库里不设长度约束。
 - 短评数冗余在 `posts.boost_count`，楼层列表每层取前 6 条短评，其余点开再取。删除短评是真删除，它的举报跟着删掉。
 - 短评通知的 `type` 是 `boost`，和点赞一样按楼层合并。
 
@@ -127,7 +128,7 @@
 | 首页"待解答" | `threads_unsolved` |
 | 标签页 | `thread_tags_list` |
 | 主题第 N 页 | `posts_floor` |
-| 某一层的楼中楼 | `posts_sub` |
+| 回复某一条的楼层 | `posts_reply_to` |
 | 用户的主题和回复 | `threads_author`、`posts_author` |
 | 全量同步时取出一个群的成员 | `group_members` 主键 |
 | 重算一个人的成员资格 | `group_members_user` |

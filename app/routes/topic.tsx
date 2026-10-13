@@ -79,8 +79,13 @@ export default function Topic({
               key={post.id}
               post={post}
               op={post.author.id === thread.author.id}
-              onReply={(name) =>
-                openComposer({ thread: target, replyTo: { floor: post.floor, name } })
+              parent={posts.find((p) => p.floor === post.replyTo)}
+              replies={posts.filter((p) => p.replyTo === post.floor)}
+              onReply={() =>
+                openComposer({
+                  thread: target,
+                  replyTo: { floor: post.floor, name: post.author.name },
+                })
               }
             />
           ))}
