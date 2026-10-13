@@ -6,7 +6,8 @@
 /* Like the main site: html[data-theme] is set before first paint from localStorage or the OS. */
 @custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
 
-/* Colors come from the 鼠群 logo: near-white paper, slate ink, and the apricot sun for buttons and accents. */
+/* Colors come from the 鼠群 logo: near-white paper and slate ink, a sea teal for buttons and the
+   apricot sun for accents. */
 
 @theme inline {
   --font-sans:
@@ -58,8 +59,8 @@
   --card-foreground: #1f2a28;
   --popover: #ffffff;
   --popover-foreground: #1f2a28;
-  --primary: #f0a173;
-  --primary-foreground: #2c1a0f;
+  --primary: #2b7a6b;
+  --primary-foreground: #ffffff;
   --secondary: #f5f2ec;
   --secondary-foreground: #1f2a28;
   --muted: #f5f2ec;
@@ -85,8 +86,8 @@
   --card-foreground: #ece7dc;
   --popover: #1f2624;
   --popover-foreground: #ece7dc;
-  --primary: #eeb084;
-  --primary-foreground: #1b1712;
+  --primary: #2e8070;
+  --primary-foreground: #ffffff;
   --secondary: #222927;
   --secondary-foreground: #ece7dc;
   --muted: #222927;

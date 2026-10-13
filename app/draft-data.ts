@@ -215,6 +215,29 @@ export const threads: Thread[] = [
   },
 ];
 
+export type ReactionKey =
+  | "heart"
+  | "+1"
+  | "laughing"
+  | "open_mouth"
+  | "clap"
+  | "tada"
+  | "hugs"
+  | "thinking"
+  | "sob"
+  | "mouse";
+
+export type Reactions = Partial<Record<ReactionKey, number>>;
+
+export type SubReply = {
+  id: number;
+  author: User;
+  replyTo?: User;
+  time: string;
+  text: string;
+  reactions: Reactions;
+};
+
 export type Post = {
   id: number;
   floor: number;
@@ -223,10 +246,10 @@ export type Post = {
   html: string;
   fromQQ?: boolean;
   accepted?: boolean;
-  reactions: { emoji: string; count: number; mine?: boolean }[];
+  reactions: Reactions;
+  myReaction?: ReactionKey;
   boosts?: { user: User; text: string }[];
-  replies?: { id: number; author: User; replyTo?: User; time: string; text: string }[];
-  moreReplies?: number;
+  replies?: SubReply[];
 };
 
 export const topicPosts: Post[] = [
@@ -239,7 +262,7 @@ export const topicPosts: Post[] = [
     html: `<p>27 届，本科四非 CS，rank 15%。目前唯一的科研经历是一段校级大创（做的是小样本图像分类，没有论文），另外有两个课程项目。</p>
 <p>看了好几份上岸学长的简历，感觉别人都有一作或者竞赛。想问问：</p>
 <ol><li>大创只有结题报告，简历上怎么写才不显得单薄？</li><li>课程项目值得写吗，还是干脆不写？</li></ol>`,
-    reactions: [{ emoji: "👀", count: 4 }],
+    reactions: { heart: 4, thinking: 2 },
     boosts: [
       { user: users.qi, text: "同问" },
       { user: users.sea, text: "蹲一个回答" },
@@ -255,10 +278,8 @@ export const topicPosts: Post[] = [
 <ul><li><strong>问题</strong>：一句话说明要解决什么，为什么难</li><li><strong>你的工作</strong>：用动词开头，比如"复现了 ProtoNet 并改进了数据增强"</li><li><strong>结果</strong>：给数字，哪怕是"在 miniImageNet 5-way 1-shot 上从 49.4% 提到 52.1%"</li></ul>
 <p>课程项目挑一个和目标方向最相关的写，其他的放到 GitHub 链接里就行。</p>
 <blockquote><p>面试官问得最多的就是"这里面哪部分是你做的"，提前准备好。</p></blockquote>`,
-    reactions: [
-      { emoji: "👍", count: 18, mine: true },
-      { emoji: "🎉", count: 3 },
-    ],
+    reactions: { heart: 18, "+1": 7, clap: 3, tada: 1 },
+    myReaction: "heart",
     boosts: [
       { user: users.ict, text: "清楚了，感谢！" },
       { user: users.nj, text: "补充得很全面" },
@@ -275,6 +296,7 @@ export const topicPosts: Post[] = [
         author: users.ict,
         time: "09:52",
         text: "明白了，我去把结题报告里的实验数据翻出来",
+        reactions: { heart: 2 },
       },
       {
         id: 202,
@@ -282,9 +304,31 @@ export const topicPosts: Post[] = [
         replyTo: users.ict,
         time: "10:03",
         text: "顺便把代码整理一下放 GitHub，面试时打开给老师看很加分",
+        reactions: { "+1": 5 },
+      },
+      {
+        id: 203,
+        author: users.nj,
+        time: "10:20",
+        text: "数据要写清楚对比的基线是什么，不然老师会追问",
+        reactions: { heart: 3 },
+      },
+      {
+        id: 204,
+        author: users.ict,
+        replyTo: users.nj,
+        time: "10:26",
+        text: "基线是原版 ProtoNet，我补上",
+        reactions: {},
+      },
+      {
+        id: 205,
+        author: users.sea,
+        time: "11:02",
+        text: "收藏了，明年用得上",
+        reactions: { laughing: 1 },
       },
     ],
-    moreReplies: 3,
   },
   {
     id: 103,
@@ -294,7 +338,7 @@ export const topicPosts: Post[] = [
     html: `<p>补充一点：如果大创用到了什么工程上的东西，可以单独写一行技术栈，比如：</p>
 <pre><code>PyTorch · 混合精度训练 · 4×3090 多卡</code></pre>
 <p>老师扫一眼就知道你动手能力怎么样。</p>`,
-    reactions: [{ emoji: "👍", count: 6 }],
+    reactions: { "+1": 6 },
   },
   {
     id: 104,
@@ -302,7 +346,7 @@ export const topicPosts: Post[] = [
     author: users.cat,
     time: "今天 11:30",
     html: `<p>楼上说得都对。另外别忘了在群里搜一下，<a href="#">去年有人整理过简历模板</a>。</p>`,
-    reactions: [],
+    reactions: {},
   },
 ];
 
@@ -325,8 +369,19 @@ export const checkInPosts: Post[] = Array.from({ length: 64 }, (_, i) => ({
     i === 0
       ? "<p>每天来这里打卡，记录当天完成的事情。</p>"
       : `<p>打卡：${checkIns[i % checkIns.length] ?? ""}。</p>`,
-  reactions: i % 4 === 0 ? [{ emoji: "👍", count: 1 + (i % 7) }] : [],
+  reactions: i % 4 === 0 ? { heart: 1 + (i % 7) } : {},
 }));
+
+// Who left each reaction, made up from the users above for the reactions list.
+export function reactorsOf(reactions: Reactions) {
+  const pool = Object.values(users);
+  return Object.entries(reactions).flatMap(([key, count], k) =>
+    Array.from({ length: Math.min(count, 12) }, (_, i) => ({
+      user: pool[(i + k * 3) % pool.length] ?? users.owner,
+      reaction: key,
+    })),
+  );
+}
 
 export const group = { name: "四非计算机保研鼠群", members: 1824, capacity: 2000 };
 

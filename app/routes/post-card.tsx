@@ -1,6 +1,8 @@
 import {
   Bookmark,
   Check,
+  ChevronDown,
+  ChevronUp,
   CircleCheck,
   Ellipsis,
   Flag,
@@ -8,7 +10,6 @@ import {
   MessagesSquare,
   Reply,
   Rocket,
-  SmilePlus,
   X,
 } from "lucide-react";
 import { useEffect, useRef, useState, type Ref } from "react";
@@ -20,8 +21,9 @@ import { UserAvatar } from "~/components/user-avatar";
 import { UserBadges } from "~/components/user-badges";
 import { Button, buttonVariants } from "~/components/ui/button";
 import { Textarea } from "~/components/ui/textarea";
-import type { Post } from "~/draft-data";
+import type { Post, SubReply } from "~/draft-data";
 import type { loader as forumLoader } from "./forum-layout.tsx";
+import { LikeButton, ReactionSummary, useReaction } from "./reactions.tsx";
 
 // Busy posts can collect dozens of boosts; past this many they fold behind a counter.
 const BOOSTS_SHOWN = 6;
@@ -33,11 +35,22 @@ const graphemes = new Intl.Segmenter("zh", { granularity: "grapheme" });
 
 const reportReasons = ["垃圾广告", "人身攻击", "违法违规", "其他"];
 
-export function PostCard({ post, op, onReply }: { post: Post; op: boolean; onReply: () => void }) {
+export function PostCard({
+  post,
+  op,
+  onReply,
+}: {
+  post: Post;
+  op: boolean;
+  onReply: (name: string) => void;
+}) {
   const [allBoosts, setAllBoosts] = useState(false);
+  const [repliesOpen, setRepliesOpen] = useState(false);
   const report = useRef<HTMLDialogElement>(null);
+  const reaction = useReaction(post.reactions, post.myReaction);
   const boosts = post.boosts ?? [];
   const shownBoosts = allBoosts ? boosts : boosts.slice(0, BOOSTS_SHOWN);
+  const replies = post.replies ?? [];
 
   return (
     <li
@@ -81,54 +94,21 @@ export function PostCard({ post, op, onReply }: { post: Post; op: boolean; onRep
           dangerouslySetInnerHTML={{ __html: post.html }}
         />
 
-        {boosts.length > 0 && (
-          <ul className="mt-3 flex flex-wrap gap-1.5">
-            {shownBoosts.map((b) => (
-              <li
-                key={b.user.id}
-                title={b.user.name}
-                className="inline-flex items-center gap-1.5 rounded-full border bg-card py-0.5 pr-2.5 pl-0.5 text-meta"
-              >
-                <UserAvatar user={b.user} className="size-5 text-2xs" />
-                {b.text}
-              </li>
-            ))}
-            {!allBoosts && boosts.length > BOOSTS_SHOWN && (
-              <li>
-                <button
-                  type="button"
-                  onClick={() => setAllBoosts(true)}
-                  className="h-full rounded-full px-2 text-meta text-muted-foreground hover:bg-accent hover:text-foreground"
-                >
-                  +{boosts.length - BOOSTS_SHOWN}
-                </button>
-              </li>
-            )}
-          </ul>
-        )}
-
-        <div className="relative mt-3 flex flex-wrap items-center gap-1.5">
-          {post.reactions.map((r) => (
-            <button
-              key={r.emoji}
-              type="button"
-              className={cn(
-                "inline-flex h-7 items-center gap-1 rounded-full border px-2.5 text-meta tabular-nums hover:bg-accent",
-                r.mine && "border-brand/50 bg-brand/15 hover:bg-brand/25",
-              )}
+        <div className="mt-4 flex flex-wrap items-center gap-x-1 gap-y-2">
+          <ReactionSummary sorted={reaction.sorted} />
+          {replies.length > 0 && (
+            <Button
+              variant="ghost"
+              size="sm"
+              aria-expanded={repliesOpen}
+              onClick={() => setRepliesOpen(!repliesOpen)}
+              className={cn("text-muted-foreground", repliesOpen && "bg-accent text-foreground")}
             >
-              <span>{r.emoji}</span>
-              {r.count}
-            </button>
-          ))}
-          <Button variant="ghost" size="icon-sm" aria-label="表情回应" title="表情回应">
-            <SmilePlus />
-          </Button>
-          <BoostButton />
-          <div className="ml-auto flex items-center text-muted-foreground">
-            <Button variant="ghost" size="sm" onClick={onReply}>
-              <Reply /> 回复
+              {replies.length} 条回复 {repliesOpen ? <ChevronUp /> : <ChevronDown />}
             </Button>
+          )}
+          <div className="ml-auto flex items-center text-muted-foreground">
+            <LikeButton mine={reaction.mine} onChange={reaction.setMine} />
             <Button variant="ghost" size="icon-sm" aria-label="复制链接" title="复制链接">
               <Link2 />
             </Button>
@@ -155,35 +135,80 @@ export function PostCard({ post, op, onReply }: { post: Post; op: boolean; onRep
                 </>
               )}
             </Dropdown>
+            <Button variant="ghost" size="sm" onClick={() => onReply(post.author.name)}>
+              <Reply /> 回复
+            </Button>
           </div>
         </div>
 
-        {post.replies && (
-          <div className="mt-3 rounded-xl bg-secondary/60 px-3 py-2">
-            {post.replies.map((r) => (
-              <div key={r.id} className="flex gap-2 py-1.5 text-sm leading-relaxed">
-                <UserAvatar user={r.author} className="mt-0.5 size-6" />
-                <p className="min-w-0 flex-1">
-                  <span className="font-medium">{r.author.name}</span>
-                  {r.replyTo && (
-                    <span className="text-muted-foreground"> 回复 {r.replyTo.name}</span>
-                  )}
-                  <span className="text-muted-foreground">：</span>
-                  {r.text}
-                  <span className="ml-2 text-xs text-muted-foreground">{r.time}</span>
-                </p>
-              </div>
-            ))}
-            {post.moreReplies && (
-              <button type="button" className="py-1.5 pl-8 text-meta text-link hover:underline">
-                展开其余 {post.moreReplies} 条
+        {/* Boosts, with the rocket at the end; the boost input floats from this row. */}
+        <ul className="relative mt-2 flex flex-wrap items-center gap-1.5">
+          {shownBoosts.map((b) => (
+            <li
+              key={b.user.id}
+              title={b.user.name}
+              className="inline-flex items-center gap-1.5 rounded-full bg-secondary py-0.5 pr-2.5 pl-0.5 text-meta"
+            >
+              <UserAvatar user={b.user} className="size-5 text-2xs" />
+              {b.text}
+            </li>
+          ))}
+          {!allBoosts && boosts.length > BOOSTS_SHOWN && (
+            <li>
+              <button
+                type="button"
+                onClick={() => setAllBoosts(true)}
+                className="h-6 rounded-full px-2 text-meta text-muted-foreground hover:bg-accent hover:text-foreground"
+              >
+                +{boosts.length - BOOSTS_SHOWN}
               </button>
-            )}
-          </div>
+            </li>
+          )}
+          <li className="text-muted-foreground">
+            <BoostButton />
+          </li>
+        </ul>
+
+        {repliesOpen && (
+          // A rule down the avatars ties the replies to this floor.
+          <ol className="relative mt-3 before:absolute before:top-4 before:bottom-8 before:left-[1.125rem] before:w-0.5 before:rounded-full before:bg-border">
+            {replies.map((r) => (
+              <SubReplyItem key={r.id} reply={r} onReply={() => onReply(r.author.name)} />
+            ))}
+          </ol>
         )}
       </div>
 
       <ReportDialog ref={report} floor={post.floor} />
+    </li>
+  );
+}
+
+function SubReplyItem({ reply, onReply }: { reply: SubReply; onReply: () => void }) {
+  const reaction = useReaction(reply.reactions);
+  return (
+    <li className="relative flex gap-3 py-3">
+      <UserAvatar user={reply.author} className="size-9 ring-4 ring-background" />
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1">
+          <span className="text-sm font-semibold">{reply.author.name}</span>
+          <UserBadges user={reply.author} />
+          <span className="ml-auto text-xs text-muted-foreground">{reply.time}</span>
+        </div>
+        <p className="mt-1 text-body leading-7">
+          {reply.replyTo && <span className="mr-1 text-link">回复 @{reply.replyTo.name}</span>}
+          {reply.text}
+        </p>
+        <div className="mt-1 flex items-center gap-1">
+          <ReactionSummary sorted={reaction.sorted} />
+          <div className="ml-auto flex items-center text-muted-foreground">
+            <LikeButton mine={reaction.mine} onChange={reaction.setMine} />
+            <Button variant="ghost" size="sm" onClick={onReply}>
+              <Reply /> 回复
+            </Button>
+          </div>
+        </div>
+      </div>
     </li>
   );
 }
