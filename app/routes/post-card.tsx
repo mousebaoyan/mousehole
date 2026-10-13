@@ -11,8 +11,10 @@ import {
   Forward,
   Link2,
   MessagesSquare,
+  Pencil,
   Reply,
   Rocket,
+  Trash2,
   X,
 } from "lucide-react";
 import { useEffect, useRef, useState, type Ref } from "react";
@@ -42,6 +44,8 @@ const reportReasons = ["垃圾广告", "人身攻击", "违法违规", "其他"]
 
 // `parent` is the floor this one replies to when it is on the page; otherwise it is fetched when
 // the reader opens it. The floors that reply to this one are fetched the same way.
+// `manage` holds what the reader may do to this floor besides replying: change it (edit or
+// delete), read its edit history, delete the whole thread from its opening post.
 export function PostCard({
   post,
   threadId,
@@ -49,8 +53,11 @@ export function PostCard({
   accepted,
   now,
   parent,
+  manage,
   onReply,
   onJump,
+  onEdit,
+  onDelete,
 }: {
   post: PostItem;
   threadId: number;
@@ -58,8 +65,11 @@ export function PostCard({
   accepted: boolean;
   now: number;
   parent: PostItem | undefined;
+  manage: { change: boolean; history: boolean; deleteThread: boolean };
   onReply: () => void;
   onJump: (floor: number) => void;
+  onEdit: (markdown: string) => void;
+  onDelete: () => void;
 }) {
   const [allBoosts, setAllBoosts] = useState(false);
   const [parentOpen, setParentOpen] = useState(false);
@@ -67,6 +77,16 @@ export function PostCard({
   const parentFetcher = useFetcher<PostItem>();
   const repliesFetcher = useFetcher<PostItem[]>();
   const report = useRef<HTMLDialogElement>(null);
+  const history = useRef<HTMLDialogElement>(null);
+  const historyFetcher = useFetcher<Revision[]>();
+  // The Markdown to edit, fetched when 编辑 is chosen; `editing` marks a choice still waiting.
+  const source = useFetcher<PostItem>();
+  const editing = useRef(false);
+  useEffect(() => {
+    if (!editing.current || source.state !== "idle" || source.data?.body === undefined) return;
+    editing.current = false;
+    onEdit(source.data.body);
+  }, [source.state, source.data, onEdit]);
   // Reactions and boosts are kept on this page until their API exists.
   const reaction = useReaction({}, undefined);
   const boosts: { user: UserBrief; text: string }[] = [];
@@ -107,7 +127,7 @@ export function PostCard({
         <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-1.5 gap-y-1">
           <span className="mr-0.5 text-body font-semibold">{post.author.display_name}</span>
           <UserBadges user={post.author} op={op} />
-          <span className="ml-auto flex items-center gap-2 text-xs text-muted-foreground">
+          <span className="ml-auto flex items-center gap-2 text-xs whitespace-nowrap text-muted-foreground">
             {post.via === "qq" && (
               <MessagesSquare className="size-3.5" aria-label="来自群聊">
                 <title>来自群聊</title>
@@ -131,9 +151,33 @@ export function PostCard({
               >
                 <Forward className="size-3.5" />
                 <UserAvatar user={replyTo.author} className="size-5 text-2xs" />
-                {replyTo.author.display_name}
+                {/* Phones have little room on this line for a long group card. */}
+                <span className="max-w-24 truncate sm:max-w-none">
+                  {replyTo.author.display_name}
+                </span>
               </button>
             )}
+            {post.edited_at !== null &&
+              (manage.history ? (
+                <button
+                  type="button"
+                  aria-label="编辑记录"
+                  title={`编辑于 ${stamp(post.edited_at, now)}，查看编辑记录`}
+                  onClick={() => {
+                    if (historyFetcher.state === "idle") {
+                      void historyFetcher.load(`/t/${threadId}/p/${post.id}/revisions`);
+                    }
+                    history.current?.showModal();
+                  }}
+                  className="-m-1 rounded p-1 hover:bg-accent hover:text-foreground"
+                >
+                  <Pencil className="size-3.5" />
+                </button>
+              ) : (
+                <Pencil className="size-3.5" aria-label="已编辑">
+                  <title>{`编辑于 ${stamp(post.edited_at, now)}`}</title>
+                </Pencil>
+              ))}
             {stamp(post.created_at, now)}
             <a
               href={`?floor=${post.floor}`}
@@ -194,6 +238,31 @@ export function PostCard({
             >
               {(close) => (
                 <>
+                  {manage.change && (
+                    <button
+                      type="button"
+                      className={menuItem}
+                      onClick={() => {
+                        close();
+                        editing.current = true;
+                        void source.load(`/t/${threadId}/p/${post.id}?body=markdown`);
+                      }}
+                    >
+                      <Pencil /> 编辑
+                    </button>
+                  )}
+                  {(post.floor === 1 ? manage.deleteThread : manage.change) && (
+                    <button
+                      type="button"
+                      className={cn(menuItem, "text-destructive [&_svg]:text-destructive")}
+                      onClick={() => {
+                        close();
+                        onDelete();
+                      }}
+                    >
+                      <Trash2 /> {post.floor === 1 ? "删除主题" : "删除"}
+                    </button>
+                  )}
                   <button type="button" className={menuItem} onClick={close}>
                     <Bookmark /> 收藏
                   </button>
@@ -263,7 +332,62 @@ export function PostCard({
       </div>
 
       <ReportDialog ref={report} floor={post.floor} />
+      {post.edited_at !== null && manage.history && (
+        <HistoryDialog ref={history} floor={post.floor} revisions={historyFetcher.data} now={now} />
+      )}
     </li>
+  );
+}
+
+type Revision = {
+  rev: number;
+  title: string | null;
+  body: string;
+  editor: UserBrief;
+  created_at: number;
+};
+
+// Each version as it was before a change, newest first, in Markdown.
+function HistoryDialog({
+  ref,
+  floor,
+  revisions,
+  now,
+}: {
+  ref: Ref<HTMLDialogElement>;
+  floor: number;
+  revisions: Revision[] | undefined;
+  now: number;
+}) {
+  return (
+    <dialog
+      ref={ref}
+      className="m-auto max-h-[min(40rem,calc(100svh-2rem))] w-[min(36rem,calc(100%-2rem))] rounded-2xl border bg-popover p-0 text-popover-foreground shadow-xl backdrop:bg-black/30"
+    >
+      <div className="flex items-center border-b px-5 py-3">
+        <h2 className="font-semibold">#{floor} 的编辑记录</h2>
+        <form method="dialog" className="ml-auto">
+          <Button variant="ghost" size="icon-sm" aria-label="关闭">
+            <X />
+          </Button>
+        </form>
+      </div>
+      <ol className="divide-y overflow-y-auto">
+        {revisions === undefined && (
+          <li className="px-5 py-4 text-meta text-muted-foreground">加载中…</li>
+        )}
+        {revisions?.map((r) => (
+          <li key={r.rev} className="px-5 py-4">
+            <div className="flex items-center gap-2 text-meta text-muted-foreground">
+              <UserAvatar user={r.editor} className="size-5 text-2xs" />
+              {r.editor.display_name} · {stamp(r.created_at, now)} 修改，之前是：
+            </div>
+            {r.title !== null && <p className="mt-2 font-medium">标题：{r.title}</p>}
+            <pre className="mt-2 font-sans text-body leading-7 whitespace-pre-wrap">{r.body}</pre>
+          </li>
+        ))}
+      </ol>
+    </dialog>
   );
 }
 

@@ -1,12 +1,13 @@
 import { Bell, Bookmark, CircleCheck, Eye, Link2, MessageSquare, Reply } from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { data, useFetcher, useNavigate } from "react-router";
+import { data, redirect, useFetcher, useNavigate } from "react-router";
 import { apiContext } from "../api.server.ts";
 import type { PostItem } from "~/api-types";
 import { BoardBadge } from "~/components/board-badge";
 import { useComposer } from "~/components/composer";
 import { ThreadList } from "~/components/thread-list";
 import { Button } from "~/components/ui/button";
+import { useMe } from "~/forum";
 import { useNearView } from "~/near-view";
 import { stamp, unixNow } from "~/time";
 import type { Route } from "./+types/topic.ts";
@@ -56,9 +57,41 @@ export async function loader({ params, request, context }: Route.LoaderArgs) {
   };
 }
 
+// Changes to the floors on this page. They answer with the floor to show next, so the page can
+// open there with fresh data; a deleted thread leaves for its board.
+export async function action({ params, request, context }: Route.ActionArgs) {
+  const api = context.get(apiContext);
+  const form = await request.formData();
+  const text = (name: string) => {
+    const value = form.get(name);
+    return typeof value === "string" ? value : "";
+  };
+  const post = { id: text("post_id") };
+  const floor = Number(text("floor"));
+  if (text("intent") === "delete-thread") {
+    const res = await api.threads[":id"].$delete({ param: { id: params.id } });
+    if (res.ok) return redirect(`/b/${text("board")}`);
+    return { ok: false as const, message: (await res.json()).error.message };
+  }
+  const res =
+    text("intent") === "delete-post"
+      ? await api.posts[":id"].$delete({ param: post })
+      : await api.posts[":id"].$patch({
+          param: post,
+          json: { content: { markdown: text("markdown") } },
+        });
+  if (res.ok) return { ok: true as const, floor };
+  return { ok: false as const, message: (await res.json()).error.message };
+}
+
 export default function Topic({ loaderData }: Route.ComponentProps) {
-  // A jump to a floor that isn't on the page loads a new stretch starting there.
-  return <TopicPage key={`${loaderData.thread.id}:${loaderData.start}`} {...loaderData} />;
+  // Each load starts afresh: a jump to a floor that isn't on the page, or a change to one.
+  return (
+    <TopicPage
+      key={`${loaderData.thread.id}:${loaderData.start}:${loaderData.now}`}
+      {...loaderData}
+    />
+  );
 }
 
 function TopicPage({
@@ -71,6 +104,15 @@ function TopicPage({
 }: Route.ComponentProps["loaderData"]) {
   const openComposer = useComposer();
   const navigate = useNavigate();
+  const me = useMe();
+  const staff = me?.role === "moderator" || me?.role === "admin";
+  // Deletions: the page then reopens at the floor, with the change in it.
+  const changes = useFetcher<typeof action>();
+  useEffect(() => {
+    if (changes.state !== "idle" || !changes.data) return;
+    if (changes.data.ok) void navigate(`?floor=${changes.data.floor}`, { replace: true });
+    else alert(changes.data.message);
+  }, [changes.state, changes.data, navigate]);
   const later = useFetcher<PostItem[]>();
   const earlier = useFetcher<PostItem[]>();
   const [loaded, setLoaded] = useState({
@@ -205,7 +247,31 @@ function TopicPage({
               accepted={post.id === thread.solved_post_id}
               now={now}
               parent={posts.find((p) => p.id === post.reply_to?.id)}
+              manage={{
+                change: staff || (me?.id === post.author.id && !thread.locked),
+                history: staff || me?.id === post.author.id,
+                deleteThread:
+                  staff ||
+                  (me?.id === post.author.id && !thread.locked && thread.reply_count === 0),
+              }}
               onJump={jump}
+              onEdit={(markdown) =>
+                openComposer({
+                  thread: target,
+                  replyTo: null,
+                  edit: { postId: post.id, floor: post.floor, markdown },
+                })
+              }
+              onDelete={() => {
+                const question = post.floor === 1 ? "删除这个主题？" : `删除 #${post.floor}？`;
+                if (!confirm(question)) return;
+                void changes.submit(
+                  post.floor === 1
+                    ? { intent: "delete-thread", board: thread.board.slug }
+                    : { intent: "delete-post", post_id: post.id, floor: post.floor },
+                  { method: "post", defaultShouldRevalidate: false },
+                );
+              }}
               onReply={() =>
                 openComposer({
                   thread: target,
