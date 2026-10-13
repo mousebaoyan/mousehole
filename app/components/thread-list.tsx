@@ -38,7 +38,7 @@ export function ThreadList({
         aria-hidden="true"
         className={cn(COLUMNS, "border-b pb-2 text-xs text-muted-foreground max-md:hidden")}
       >
-        <span>话题</span>
+        <span>主题</span>
         <span />
         <span className="text-center">回复</span>
         <span className="text-center">浏览</span>
