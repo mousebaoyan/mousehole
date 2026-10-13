@@ -19,7 +19,7 @@ import { cn } from "cn";
 import { EmojiButton } from "~/components/emoji-button";
 import { Button } from "~/components/ui/button";
 
-export type ComposerTarget = {
+type ComposerTarget = {
   thread: { id: number; title: string };
   replyTo: { floor: number; name: string } | null;
 };
