@@ -226,9 +226,12 @@ export const threadsRoutes = createRouter()
           board: z.string().optional(),
           tag: z.string().optional(),
           view: z
-            .enum(["latest", "created", "hot", "unsolved", "bookmarked"])
+            .enum(["latest", "created", "hot", "unsolved", "bookmarked", "posted"])
             .default("latest")
-            .openapi({ description: "bookmarked 是自己收藏的，按收藏时间排，要登录" }),
+            .openapi({
+              description:
+                "要登录的：bookmarked 自己收藏的，按收藏时间排；posted 自己发过或回复过的，按最后回复排",
+            }),
           cursor: z.string().optional(),
         }),
       },
@@ -250,7 +253,8 @@ export const threadsRoutes = createRouter()
     }),
     async (c) => {
       const query = c.req.valid("query");
-      const viewer = query.view === "bookmarked" ? authorize(c, "read") : c.var.viewer;
+      const own = query.view === "bookmarked" || query.view === "posted";
+      const viewer = own ? authorize(c, "read") : c.var.viewer;
       const page = await listThreads(isMember(viewer, c.var.bot), viewer?.id ?? null, query);
       return c.json({ items: page.items.map(threadJson), next_cursor: page.next_cursor }, 200);
     },

@@ -17,7 +17,7 @@ export const PAGE_SIZE = 30;
 export const MAX_BODY = 30_000;
 export const FLOOR_BATCH = 20;
 
-export type ThreadView = "latest" | "created" | "hot" | "unsolved" | "bookmarked";
+export type ThreadView = "latest" | "created" | "hot" | "unsolved" | "bookmarked" | "posted";
 
 function threadNotFound() {
   return new AppError(404, "thread_not_found", "主题不存在");
@@ -188,6 +188,15 @@ export async function listThreads(
         .where("threads.solved_post_id", "is", null);
     }
     if (view === "bookmarked") query = query.where("mine.bookmarked_at", "is not", null);
+    if (view === "posted") {
+      query = query.where("threads.id", "in", (eb) =>
+        eb
+          .selectFrom("posts")
+          .select("posts.thread_id")
+          .where(sql<boolean>`posts.author_id = ${userId}`)
+          .where("posts.deleted_at", "is", null),
+      );
+    }
     if (pinFrom !== null) query = query.where("threads.pinned", "<", pinFrom);
     const time = view === "bookmarked" ? "mine.bookmarked_at" : "threads.last_post_at";
     query = query.orderBy(time, "desc").orderBy("threads.id", "desc");
