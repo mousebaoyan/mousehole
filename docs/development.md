@@ -10,6 +10,7 @@
 
 ```text
 app/                    页面（React Router）
+  api.server.ts         页面在进程内调用 /api/v1 用的客户端
   routes/               路由模块；只有这个页面用的组件放在路由文件旁边
   components/           两个以上页面共用的组件；ui/ 是 shadcn/ui 的组件
 server/
@@ -26,6 +27,7 @@ server/
 db/migrations/          SQL 迁移
 db/types.ts             kysely-codegen 从数据库生成的类型
 scripts/                bootstrap、mock-bot 等命令
+test/                   Vitest 的全局准备：测试用的数据库
 ```
 
 - 模块里的文件按需拆。小模块有 `routes.ts` 和 `service.ts` 就够了；查询多了再拆出 `queries.ts`，schema 多了再拆出 `schemas.ts`。出现新的领域才新建模块。
@@ -37,7 +39,7 @@ scripts/                bootstrap、mock-bot 等命令
 
 依赖只能单向：页面 → `/api/v1` → 接口（`routes.ts`）→ 服务（`service.ts`）→ 数据库。不能反过来，也不能跳层。
 
-- **页面**（React Router 的路由模块）：loader 和 action 在进程内调用 `/api/v1`，不直接调用服务，也不查数据库。这样网页能做的事，bot 一定也能做。
+- **页面**（React Router 的路由模块）：loader 和 action 在进程内调用 `/api/v1`，不直接调用服务，也不查数据库。这样网页能做的事，bot 一定也能做。调用方式是 `context.get(apiContext)` 拿到的 Hono `hc` 客户端：它带着访客自己的 Cookie 等请求头，经 `app.request()` 在进程内完成，类型来自接口定义。登录、退出这类会写 Cookie 的接口，action 要用 `cookiesFrom()` 把 Set-Cookie 转给浏览器。
 - **接口**（Hono + `@hono/zod-openapi`）：校验参数、认证和鉴权，然后调用服务、返回结果，不写业务逻辑。
 - **服务**：业务逻辑都在这里。一个业务动作一个函数，事务也在这里开。服务不碰 HTTP：不读请求头，不返回响应对象，参数是普通的值，出错就抛业务错误。
 - **数据库**：用 Kysely 访问，类型由 kysely-codegen 生成。
@@ -59,8 +61,9 @@ scripts/                bootstrap、mock-bot 等命令
 
 ## 2. 接口
 
-- 每个接口用 `createRoute` 定义请求和响应的 schema，OpenAPI 文档从这里生成，不另外手写。
+- 每个接口用 `createRoute` 定义请求和响应的 schema，OpenAPI 文档从这里生成，不另外手写。路由用 `platform/http.ts` 的 `createRouter()` 创建，参数校验失败统一返回 `400 invalid_request`，`message` 是 Zod 的中文提示。
 - 认证、代操作（`X-Act-As`）、操作人（`X-Operator`）、幂等、限流和审计日志都是公共的中间件或步骤，不在每个接口里各写一遍。规则见[接口 §2](api.md#2-bot-认证与代操作)。
+- `server/app.ts` 里的中间件也作用于页面请求。中间件要给响应加头（比如 Set-Cookie）时，写在 `await next()` 之后：页面由 React Router 返回它自己的 `Response`，`next()` 之前写的头会丢掉。
 - 错误码用英文 snake_case，发布后不再改；`message` 用中文，写给人看。新的错误码同时写进 api.md。
 - QQ 号只返回给成员、bot 和管理员，访客和冻结的账号看不到。头像一律用 `/avatars/{id}.webp`，不直接用带 QQ 号的头像地址。
 - 只返回调用方用得上的字段，正文默认只给 `html`（见[接口 · 约定](api.md#1-约定)）。
@@ -91,6 +94,6 @@ scripts/                bootstrap、mock-bot 等命令
 什么值得测见 [AGENTS.md · 测试](../AGENTS.md#测试)，这里只讲写法。
 
 - Vitest 写服务和接口测试；Playwright 只跑少数关键流程（登录、发帖、回复、后台设置）；k6 用于[总体设计 §11.4](design.md#114-验收) 的性能验收，不放进 CI。
-- 涉及数据库的测试连真实的 PostgreSQL 18（本地 docker compose 起的测试库），不 mock 数据库。每个测试自己准备数据，不依赖其他测试的执行顺序。
-- 接口测试用 `app.request()` 发请求，走完整的中间件（认证、代操作、幂等）。bot 的完整流程用 `scripts/mock-bot` 跑。
+- 涉及数据库的测试连真实的 PostgreSQL 18，不 mock 数据库。`test/` 在全局准备时迁移一个模板库，每个测试文件开始前从模板复制一个自己的库，所以测试文件之间可以并行。同一个文件里的测试共用一个库：每个测试自己准备数据，不依赖其他测试的执行顺序。
+- 接口测试用 `hono/testing` 的 `testClient(app)` 发请求，走完整的中间件（认证、代操作、幂等），类型和页面用的客户端一致。带 Cookie 的写请求要像浏览器一样带上 `Origin`，否则会被 CSRF 检查拦下。bot 的完整流程用 `scripts/mock-bot` 跑。
 - 过期、冷却这类逻辑，直接构造已经过期的数据来测，不 `sleep` 等待。
