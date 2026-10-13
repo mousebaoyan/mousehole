@@ -50,6 +50,18 @@ export function authorize(c: Context<AppEnv>, need: Scope) {
   return checkPermission(c.var.viewer, c.var.bot, need);
 }
 
+// Whether the viewer may also do what needs `need`, by the same rules as authorize: a moderator
+// editing someone else's post, say.
+export function can(c: Context<AppEnv>, need: Scope) {
+  try {
+    checkPermission(c.var.viewer, c.var.bot, need);
+    return true;
+  } catch (error) {
+    if (error instanceof AppError) return false;
+    throw error;
+  }
+}
+
 // For signed-in people only: login devices, bot tokens.
 export function requireWeb(c: Context<AppEnv>) {
   if (c.var.bot) throw new AppError(403, "forbidden", "只能在网页上操作");

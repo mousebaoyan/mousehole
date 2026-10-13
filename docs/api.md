@@ -188,7 +188,7 @@ token 由管理员在后台创建，只显示一次。每个 token 绑定一个 
 | GET | `/threads/counts` | 当前范围里新和未读的主题各有几个：`board`、`tag`，返回 `{ new, unread }` | 成员 |
 | POST | `/threads` | 发主题：`board`、`title`（4–80 个字）、`content`、`kind`（不带时用版块的默认类型）、`tags`（最多 5 个，只能用已有的）、`source`；只有版主能发的版块返回 `403 forbidden` | 成员 / `act` |
 | GET | `/threads/{id}` | 主题详情；楼层（包括主楼）用 `/threads/{id}/posts` 取 | 访客 |
-| PATCH | `/threads/{id}` | 作者可以改标题和标签；版主还可以改版块、置顶、精华、锁定、`status`（审核通过或隐藏） | 作者、版主 / `act`、`moderate` |
+| PATCH | `/threads/{id}` | 只改带了的字段：作者可以改 `title`、`tags`；版主还可以改 `board`（移动版块）、`pinned`（0–2）、`featured`、`locked`、`status`（审核通过或隐藏）。改标题记在主楼的编辑记录里；锁定后只有版主能改 | 作者、版主 / `act`、`moderate` |
 | DELETE | `/threads/{id}` | 删除主题；有人回复后作者不能删，只有版主能删 | 作者、版主 / `act`、`moderate` |
 | PUT | `/threads/{id}/solution` | 采纳答案：`{ post_id }` | 主题作者、版主 / `act`、`moderate` |
 | DELETE | `/threads/{id}/solution` | 取消采纳 | 同上 |
@@ -209,9 +209,9 @@ token 由管理员在后台创建，只显示一次。每个 token 绑定一个 
 | POST | `/threads/{id}/posts` | 回复：`content`、`reply_to_id`（回复同一主题里的哪一条，可选）、`source`；锁定的主题只有版主能回复，否则返回 `403 thread_locked` | 成员 / `act` |
 | GET | `/posts/{id}` | 单条回复 | 访客 |
 | GET | `/posts/{id}/replies` | 回复这一条的楼层，按楼层号升序，每次最多 20 层：`after=N` 取第 N 楼之后的，不足 20 层说明取完了 | 访客 |
-| PATCH | `/posts/{id}` | 作者修改 `content`，保留编辑记录；版主还可以改 `status`（审核通过或隐藏），可附 `reason` | 作者、版主 / `act`、`moderate` |
-| DELETE | `/posts/{id}` | 删除；楼层号保留，显示"该楼已删除" | 作者、版主 / `act`、`moderate` |
-| GET | `/posts/{id}/revisions` | 编辑记录 | 作者、版主 / `read` |
+| PATCH | `/posts/{id}` | 修改 `content`，旧的正文进编辑记录；版主也能改别人的，还可以改 `status`（审核通过或隐藏），可附 `reason`；锁定的主题只有版主能改 | 作者、版主 / `act`、`moderate` |
+| DELETE | `/posts/{id}` | 删除；楼层号保留，显示"该楼已删除"。主楼不能单独删除（`400`），要删就删整个主题 | 作者、版主 / `act`、`moderate` |
+| GET | `/posts/{id}/revisions` | 编辑记录，最近的在前：每次修改之前的 `body`，改标题时还有旧的 `title`，以及修改人 | 作者、版主 / `read` |
 | PUT | `/posts/{id}/reaction` | 表情回应：`{ emoji }`，取 `heart`（点赞）、`+1`、`laughing`、`open_mouth`、`clap`、`tada`、`hugs`、`thinking`、`sob`、`mouse` 之一；每人一个，已有就替换 | 成员 / `act` |
 | DELETE | `/posts/{id}/reaction` | 取消自己的回应 | 成员 / `act` |
 | GET | `/posts/{id}/reactions` | 谁回应了什么：可按 `emoji` 筛选，`cursor` 翻页 | 访客 |

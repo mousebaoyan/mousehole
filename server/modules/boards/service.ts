@@ -285,19 +285,10 @@ export async function findTags(names: string[]) {
 }
 
 // Kept with the threads they count, in the same transaction: public, undeleted threads only.
-export async function countThreads(
+export async function countBoard(
   trx: Transaction<DB>,
-  {
-    boardId,
-    tagIds,
-    threads,
-    posts,
-  }: {
-    boardId: number;
-    tagIds: number[];
-    threads: number;
-    posts: number;
-  },
+  boardId: number,
+  { threads, posts }: { threads: number; posts: number },
 ) {
   await trx
     .updateTable("boards")
@@ -307,11 +298,13 @@ export async function countThreads(
     }))
     .where("id", "=", boardId)
     .execute();
-  if (threads !== 0 && tagIds.length > 0) {
-    await trx
-      .updateTable("tags")
-      .set((eb) => ({ thread_count: eb("thread_count", "+", threads) }))
-      .where("id", "in", tagIds)
-      .execute();
-  }
+}
+
+export async function countTags(trx: Transaction<DB>, tagIds: number[], threads: number) {
+  if (tagIds.length === 0) return;
+  await trx
+    .updateTable("tags")
+    .set((eb) => ({ thread_count: eb("thread_count", "+", threads) }))
+    .where("id", "in", tagIds)
+    .execute();
 }
