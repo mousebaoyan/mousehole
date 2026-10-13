@@ -3,7 +3,7 @@ import { PenSquare } from "lucide-react";
 import { Link } from "react-router";
 import { ThreadFeed } from "~/components/thread-feed";
 import { buttonVariants } from "~/components/ui/button";
-import { boards, threads } from "~/draft-data";
+import { boards, listThreads, readFilter } from "~/draft-data";
 import type { Route } from "./+types/board.ts";
 
 export function meta({ loaderData }: Route.MetaArgs) {
@@ -13,12 +13,12 @@ export function meta({ loaderData }: Route.MetaArgs) {
 export function loader({ request, params }: Route.LoaderArgs) {
   const board = boards.find((b) => b.slug === params.slug);
   if (!board) throw data("版块不存在", { status: 404 });
-  const sort = new URL(request.url).searchParams.get("sort") ?? "latest";
-  return { board, sort, threads: threads.filter((t) => t.board === board.slug) };
+  const filter = readFilter(request.url);
+  return { board, ...filter, ...listThreads(board.slug, filter.tag, filter.view) };
 }
 
 export default function Board({ loaderData }: Route.ComponentProps) {
-  const { board, sort } = loaderData;
+  const { board } = loaderData;
   return (
     <>
       <header className="mb-5 flex items-start gap-4 px-1">
@@ -36,7 +36,7 @@ export default function Board({ loaderData }: Route.ComponentProps) {
           <PenSquare /> 发帖
         </Link>
       </header>
-      <ThreadFeed threads={loaderData.threads} sort={sort} showBoard={false} />
+      <ThreadFeed {...loaderData} />
     </>
   );
 }

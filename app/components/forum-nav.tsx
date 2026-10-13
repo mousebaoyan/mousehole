@@ -1,7 +1,8 @@
-import { Bookmark, CircleHelp, ExternalLink, Flame, Home } from "lucide-react";
-import { Link, NavLink, useLocation } from "react-router";
+import { Bookmark, ExternalLink, History, Home, MessagesSquare } from "lucide-react";
+import { Link, NavLink } from "react-router";
 import { cn } from "cn";
-import { boards } from "~/draft-data";
+import { boards, tags } from "~/draft-data";
+import { useMe } from "~/me";
 
 const item = ({ isActive }: { isActive: boolean }) =>
   cn(
@@ -9,30 +10,27 @@ const item = ({ isActive }: { isActive: boolean }) =>
     isActive && "bg-brand/15 font-medium text-foreground hover:bg-brand/20",
   );
 
-const feeds = [
-  { sort: null, label: "最新", icon: Home },
-  { sort: "hot", label: "热门", icon: Flame },
-  { sort: "unsolved", label: "待解答", icon: CircleHelp },
+// Where to look; how to sort and filter a list sits above the list itself.
+const mine = [
+  { to: "/my/posts", label: "我的帖子", icon: MessagesSquare },
+  { to: "/my/bookmarks", label: "收藏", icon: Bookmark },
+  { to: "/my/read", label: "已读", icon: History },
 ];
 
 export function ForumNav() {
-  const { pathname, search } = useLocation();
-  const sort = pathname === "/" ? new URLSearchParams(search).get("sort") : undefined;
+  const me = useMe();
   return (
     <nav className="flex flex-col gap-6 text-sm">
       <div className="flex flex-col gap-0.5">
-        {feeds.map((f) => (
-          <Link
-            key={f.label}
-            to={f.sort ? `/?sort=${f.sort}` : "/"}
-            className={item({ isActive: sort === f.sort })}
-          >
-            <f.icon className="size-4" /> {f.label}
-          </Link>
-        ))}
-        <NavLink to="/bookmarks" className={item}>
-          <Bookmark className="size-4" /> 收藏
+        <NavLink to="/" end className={item}>
+          <Home className="size-4" /> 全部主题
         </NavLink>
+        {me &&
+          mine.map((m) => (
+            <NavLink key={m.to} to={m.to} className={item}>
+              <m.icon className="size-4" /> {m.label}
+            </NavLink>
+          ))}
       </div>
       <div className="flex flex-col gap-0.5">
         <h2 className="px-2.5 pb-1 text-xs font-medium text-muted-foreground">版块</h2>
@@ -44,16 +42,16 @@ export function ForumNav() {
         ))}
       </div>
       <div className="flex flex-col gap-1.5 px-2.5">
-        <h2 className="pb-0.5 text-xs font-medium text-muted-foreground">常用标签</h2>
+        <h2 className="pb-0.5 text-xs font-medium text-muted-foreground">标签</h2>
         <div className="flex flex-wrap gap-1.5">
-          {["夏令营", "预推免", "简历", "机试", "导师", "定位"].map((t) => (
-            <a
+          {tags.map((t) => (
+            <Link
               key={t}
-              href={`/tags/${t}`}
+              to={`/?tag=${t}`}
               className="rounded-md bg-secondary px-2 py-0.5 text-xs text-secondary-foreground hover:bg-accent"
             >
               {t}
-            </a>
+            </Link>
           ))}
         </div>
       </div>

@@ -274,8 +274,9 @@ export interface ThreadTags {
 
 export interface ThreadUsers {
   bookmarked_at: Timestamp | null;
-  last_read_floor: Generated<number>;
+  last_read_at: Timestamp | null;
   notify_level: Generated<string>;
+  read_floors: Generated<string>;
   thread_id: number;
   user_id: number;
 }
@@ -298,6 +299,7 @@ export interface Users {
   bio: Generated<string>;
   created_at: Generated<Timestamp>;
   custom_name: string | null;
+  days_visited: Generated<number>;
   deleted_at: Timestamp | null;
   display_name: string;
   id: Generated<number>;
@@ -307,8 +309,10 @@ export interface Users {
   member_status: Generated<string>;
   notify_prefs: Generated<Json>;
   post_count: Generated<number>;
+  posts_read: Generated<number>;
   qq: number | null;
   qq_nickname: Generated<string>;
+  read_seconds: Generated<number>;
   restricted_until: Timestamp | null;
   restriction: string | null;
   role: Generated<string>;

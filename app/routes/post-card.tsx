@@ -43,17 +43,20 @@ const graphemes = new Intl.Segmenter("zh", { granularity: "grapheme" });
 const reportReasons = ["垃圾广告", "人身攻击", "违法违规", "其他"];
 
 // `parent` is the post this one replies to; `replies` are the posts that reply to this one.
+// `unread` is left out for guests, whose reading isn't tracked.
 export function PostCard({
   post,
   op,
   parent,
   replies,
+  unread,
   onReply,
 }: {
   post: Post;
   op: boolean;
   parent: Post | undefined;
   replies: Post[];
+  unread?: boolean;
   onReply: () => void;
 }) {
   const [allBoosts, setAllBoosts] = useState(false);
@@ -111,6 +114,15 @@ export function PostCard({
             <a href={`#floor-${post.floor}`} className="tabular-nums hover:text-foreground">
               #{post.floor}
             </a>
+            {unread !== undefined && (
+              <span
+                title={unread ? "未读" : undefined}
+                className={cn(
+                  "size-2 rounded-full bg-primary transition-opacity duration-1000",
+                  !unread && "opacity-0",
+                )}
+              />
+            )}
           </span>
         </div>
       </div>

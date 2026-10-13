@@ -8,12 +8,14 @@ import {
   MessagesSquare,
   Reply,
 } from "lucide-react";
+import { useEffect, useState } from "react";
 import { data } from "react-router";
 import { BoardBadge } from "~/components/board-badge";
 import { useComposer } from "~/components/composer";
 import { ThreadList } from "~/components/thread-list";
 import { Button } from "~/components/ui/button";
 import { boards, checkInPosts, threads, topicPosts } from "~/draft-data";
+import { useMe } from "~/me";
 import type { Route } from "./+types/topic.ts";
 import { FloorNav } from "./floor-timeline.tsx";
 import { PostCard } from "./post-card.tsx";
@@ -30,13 +32,17 @@ export function loader({ params }: Route.LoaderArgs) {
     thread,
     board,
     posts: thread.id === 8 ? checkInPosts : topicPosts,
+    // From thread_users.read_floors once reading is recorded.
+    readFloors: [1, 2, 3],
     suggested: threads.filter((t) => t.id !== thread.id && !t.pinned).slice(0, 5),
   };
 }
 
 export default function Topic({
-  loaderData: { thread, board, posts, suggested },
+  loaderData: { thread, board, posts, readFloors, suggested },
 }: Route.ComponentProps) {
+  const me = useMe();
+  const read = useReadFloors(me !== null, readFloors);
   const openComposer = useComposer();
   const target = { id: thread.id, title: thread.title };
 
@@ -81,6 +87,7 @@ export default function Topic({
               op={post.author.id === thread.author.id}
               parent={posts.find((p) => p.floor === post.replyTo)}
               replies={posts.filter((p) => p.replyTo === post.floor)}
+              unread={me ? !read.has(post.floor) : undefined}
               onReply={() =>
                 openComposer({
                   thread: target,
@@ -121,4 +128,37 @@ export default function Topic({
       </aside>
     </div>
   );
+}
+
+const TICK_MS = 500;
+// On screen this long, a floor counts as read and its dot fades.
+const READ_MS = 2000;
+// The sticky header covers the top of the window.
+const HEADER_PX = 64;
+
+// Ticks like Discourse's screen tracker, adding up how long each floor has been on screen while
+// the page is in front. The real page also sends what was read in batches; see design §8.9.
+function useReadFloors(tracked: boolean, initial: number[]) {
+  const [read, setRead] = useState(() => new Set(initial));
+  useEffect(() => {
+    if (!tracked) return undefined;
+    const shownMs = new Map<number, number>();
+    const timer = setInterval(() => {
+      if (document.visibilityState !== "visible") return;
+      const done: number[] = [];
+      for (const el of document.querySelectorAll<HTMLElement>("[data-floor]")) {
+        const { top, bottom } = el.getBoundingClientRect();
+        const shown = Math.min(bottom, innerHeight) - Math.max(top, HEADER_PX);
+        // Half of the floor, or half of the window for a floor taller than that.
+        if (shown < Math.min(bottom - top, innerHeight - HEADER_PX) / 2) continue;
+        const floor = Number(el.dataset.floor);
+        const ms = (shownMs.get(floor) ?? 0) + TICK_MS;
+        shownMs.set(floor, ms);
+        if (ms >= READ_MS) done.push(floor);
+      }
+      setRead((r) => (done.every((f) => r.has(f)) ? r : new Set([...r, ...done])));
+    }, TICK_MS);
+    return () => clearInterval(timer);
+  }, [tracked]);
+  return read;
 }
