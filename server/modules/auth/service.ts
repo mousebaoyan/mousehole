@@ -1,5 +1,5 @@
 import { randomInt } from "node:crypto";
-import type { NotNull, Transaction } from "kysely";
+import type { Kysely, NotNull, Transaction } from "kysely";
 import type { DB } from "../../../db/types.ts";
 import {
   STAFF,
@@ -16,6 +16,7 @@ import { rateLimit } from "../../platform/rate-limit.ts";
 import { getSettings } from "../../platform/settings.ts";
 import { hashToken, newToken } from "../../platform/tokens.ts";
 import { recordAudit } from "../audit/service.ts";
+import { deviceSummary } from "./device.ts";
 import { ensureBotUser, findMember, recordLogin, recordSeen } from "../users/service.ts";
 
 export const SESSION_TTL_MS = 90 * 24 * 60 * 60 * 1000;
@@ -24,15 +25,20 @@ const LINK_TTL_MS = 10 * 60 * 1000;
 const RENEW_AFTER_MS = 60 * 60 * 1000;
 const TOKEN_USE_WRITE_MS = 60 * 1000;
 const EMAIL_CODE_TTL_MS = 10 * 60 * 1000;
+const LOGIN_CODE_TTL_MS = 5 * 60 * 1000;
 const EMAIL_CODE_ATTEMPTS = 5;
 const MINUTE = 60 * 1000;
 const DAY = 24 * 60 * MINUTE;
 
 type Client = { ip: string | null; userAgent: string };
 
-export async function issueLoginLink(userId: number) {
+function sixDigits() {
+  return String(randomInt(1_000_000)).padStart(6, "0");
+}
+
+export async function issueLoginLink(userId: number, executor: Kysely<DB> = db) {
   const token = newToken();
-  await db
+  await executor
     .insertInto("login_tickets")
     .values({
       kind: "link",
@@ -74,9 +80,8 @@ export async function loginWithLink(token: string, client: Client) {
   });
 }
 
-// Every way of logging in ends here, so the ban check lives here too.
-async function startSession(trx: Transaction<DB>, userId: number, client: Client) {
-  const { restriction, restricted_until } = await trx
+async function assertNotBanned(executor: Kysely<DB>, userId: number) {
+  const { restriction, restricted_until } = await executor
     .selectFrom("users")
     .select(["restriction", "restricted_until"])
     .where("id", "=", userId)
@@ -87,6 +92,11 @@ async function startSession(trx: Transaction<DB>, userId: number, client: Client
       : "";
     throw new AppError(403, "banned", `账号已被封禁${until}`);
   }
+}
+
+// Every way of logging in ends here, so the ban check lives here too.
+async function startSession(trx: Transaction<DB>, userId: number, client: Client) {
+  await assertNotBanned(trx, userId);
   const token = newToken();
   await trx
     .insertInto("sessions")
@@ -275,7 +285,7 @@ export async function requestEmailCode(qq: number, ip: string | null) {
   rateLimit(`email:qq:${qq}:minute`, 1, MINUTE);
   rateLimit(`email:qq:${qq}:day`, 10, DAY);
 
-  const code = String(randomInt(1_000_000)).padStart(6, "0");
+  const code = sixDigits();
   const expires_at = new Date(Date.now() + EMAIL_CODE_TTL_MS);
   await db
     .insertInto("email_codes")
@@ -322,5 +332,117 @@ export async function loginWithEmailCode(qq: number, code: string, client: Clien
     const actor = { userId: member.id, operatorId: null, tokenId: null, ip: client.ip };
     await recordAudit(trx, actor, { action: "auth.login", data: { method: "email" } });
     return startSession(trx, member.id, client);
+  });
+}
+
+// A login code for this browser: it keeps `secret` in a cookie and polls with it while the
+// member sends `code` to the bot. Expired code tickets are cleared here, which keeps the table
+// small and their codes free.
+export async function createLoginCode(client: Client) {
+  await requireMethod("code");
+  rateLimit(`code:ip:${client.ip}`, 20, 10 * MINUTE);
+  await db
+    .deleteFrom("login_tickets")
+    .where("kind", "=", "code")
+    .where("expires_at", "<=", new Date())
+    .execute();
+
+  const secret = newToken();
+  const expires_at = new Date(Date.now() + LOGIN_CODE_TTL_MS);
+  // Six digits can collide with a live code; draw again.
+  for (;;) {
+    const code = sixDigits();
+    const created = await db
+      .insertInto("login_tickets")
+      .values({
+        kind: "code",
+        secret_hash: hashToken(secret),
+        code,
+        user_agent: client.userAgent,
+        ip: client.ip,
+        expires_at,
+      })
+      .onConflict((oc) => oc.column("code").doNothing())
+      .returning("id")
+      .executeTakeFirst();
+    if (created) return { secret, code, expires_at, hint: await codeHint(code) };
+  }
+}
+
+async function codeHint(code: string) {
+  return (await getSettings()).login.code_hint.replace("{code}", code);
+}
+
+// What the browser holding `secret` sees: nothing once expired, the code while waiting, and a
+// new session once a bot has confirmed it.
+export async function pollLoginCode(secret: string, client: Client) {
+  const ticket = await db
+    .selectFrom("login_tickets")
+    .select(["id", "code", "user_id", "expires_at"])
+    .where("kind", "=", "code")
+    .where("secret_hash", "=", hashToken(secret))
+    .where("expires_at", ">", new Date())
+    .$narrowType<{ code: NotNull }>()
+    .executeTakeFirst();
+  if (!ticket) return null;
+  if (ticket.user_id === null) {
+    const hint = await codeHint(ticket.code);
+    return { status: "pending" as const, code: ticket.code, expires_at: ticket.expires_at, hint };
+  }
+
+  return db.transaction().execute(async (trx) => {
+    // Deleting first makes a confirmed code good for one session only.
+    const used = await trx
+      .deleteFrom("login_tickets")
+      .where("id", "=", ticket.id)
+      .returning("user_id")
+      .$narrowType<{ user_id: NotNull }>()
+      .executeTakeFirst();
+    if (!used) return null;
+    const actor = { userId: used.user_id, operatorId: null, tokenId: null, ip: client.ip };
+    await recordAudit(trx, actor, { action: "auth.login", data: { method: "code" } });
+    return { status: "confirmed" as const, token: await startSession(trx, used.user_id, client) };
+  });
+}
+
+// A bot, acting as the member who sent the code, confirms it. Returns the waiting browser's
+// device, so the member notices if someone tricked them into sending a code.
+export async function confirmLoginCode(actor: Actor, code: string) {
+  await requireMethod("code");
+  rateLimit(`code:user:${actor.userId}`, 10, 10 * MINUTE);
+  return db.transaction().execute(async (trx) => {
+    await assertNotBanned(trx, actor.userId);
+    const ticket = await trx
+      .updateTable("login_tickets")
+      .set({ user_id: actor.userId })
+      .where("kind", "=", "code")
+      .where("code", "=", code)
+      .where("user_id", "is", null)
+      .where("expires_at", ">", new Date())
+      .returning("user_agent")
+      .executeTakeFirst();
+    if (!ticket) throw new AppError(404, "login_code_invalid", "口令无效或已过期");
+    await recordAudit(trx, actor, {
+      action: "auth.code_confirm",
+      target_type: "user",
+      target_id: actor.userId,
+    });
+    return { device: deviceSummary(ticket.user_agent) };
+  });
+}
+
+// A one-time login link for the member a bot acts as, to send them in a private chat.
+export async function issueLinkFor(actor: Actor) {
+  await requireMethod("link");
+  rateLimit(`link:user:${actor.userId}`, 10, 60 * MINUTE);
+  return db.transaction().execute(async (trx) => {
+    await assertNotBanned(trx, actor.userId);
+    const token = await issueLoginLink(actor.userId, trx);
+    await recordAudit(trx, actor, {
+      action: "auth.link_issue",
+      target_type: "user",
+      target_id: actor.userId,
+    });
+    return { token, expires_at: new Date(Date.now() + LINK_TTL_MS) };
   });
 }

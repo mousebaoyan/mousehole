@@ -120,10 +120,10 @@ token 由管理员在后台创建，只显示一次。每个 token 绑定一个 
 
 | 方法 | 路径 | 说明 | 权限 |
 | --- | --- | --- | --- |
-| POST | `/auth/code` | 申请登录口令，返回 `code`、`expires_at` 和提示文案，同时给这个浏览器设置一个 Cookie | 访客 |
-| GET | `/auth/code` | 浏览器轮询口令状态；确认后建立会话，返回当前用户 | 发起口令的浏览器 |
-| POST | `/bot/auth/code/confirm` | `{ code }`：以 `X-Act-As` 的身份登录发起口令的浏览器，返回该浏览器的设备摘要 | `auth` |
-| POST | `/bot/auth/links` | 给 `X-Act-As` 的成员签发一次性登录链接，10 分钟有效 | `auth` |
+| POST | `/auth/code` | 申请登录口令（6 位数字，5 分钟有效），返回 `code`、`expires_at` 和提示文案 `hint`，同时给这个浏览器设置 `login_code` Cookie；同一个 IP 10 分钟内最多 20 次 | 访客 |
+| GET | `/auth/code` | 浏览器轮询口令状态：等待中返回 `{ status: "pending", code, expires_at, hint }`；bot 确认后建立会话，返回 `{ status: "confirmed" }`；没有有效口令返回 `410 login_code_expired` | 发起口令的浏览器 |
+| POST | `/bot/auth/code/confirm` | `{ code }`：以 `X-Act-As` 的身份登录发起口令的浏览器，返回该浏览器的设备摘要 `{ device }`，例如 `Chrome · macOS`；口令无效、用过或过期返回 `404 login_code_invalid`；同一个人 10 分钟内最多确认 10 次 | `auth` |
+| POST | `/bot/auth/links` | 给 `X-Act-As` 的成员签发一次性登录链接，返回 `{ url, expires_at }`，10 分钟有效；同一个人每小时最多 10 次 | `auth` |
 | GET | `/auth/methods` | 开着的登录方式：`{ code, link, email }`；邮件服务没配置时 `email` 也是 `false` | 访客 |
 | POST | `/auth/link` | `{ token }`：使用登录链接，建立会话，返回 204；链接无效、用过或过期返回 `400 login_link_invalid` | 访客 |
 | POST | `/auth/email` | `{ qq }`：把验证码发到 `QQ号@qq.com`，返回 204；没同步过的 QQ 号返回 `403 not_member`；同一个 QQ 号 60 秒内只能发一次、每天最多 10 次，同一个 IP 10 分钟内最多 10 次；发信失败返回 `502 email_failed` | 访客 |
@@ -136,7 +136,7 @@ token 由管理员在后台创建，只显示一次。每个 token 绑定一个 
 | GET | `/me/export` | 导出自己的全部内容 | 已登录，冻结了也可以 |
 | DELETE | `/me` | 注销账号：`{ keep_content }`，`true` 保留内容、署名改为"已注销用户"，`false` 一并删除 | 已登录，冻结了也可以 |
 
-三种登录方式都可以在后台单独关闭，关闭后对应接口返回 `403 login_method_disabled`。封禁中的账号建立会话时返回 `403 banned`。冻结的账号可以登录，但只能使用上表中标明"冻结了也可以"的接口，其他和访客一样。
+三种登录方式都可以在后台单独关闭，关闭后对应接口返回 `403 login_method_disabled`。封禁中的账号建立会话时返回 `403 banned`，bot 确认口令、签发链接时也会提前拒绝。代表成员登录的两个 bot 接口必须带 `X-Act-As`，否则返回 `400 act_as_required`。冻结的账号可以登录，但只能使用上表中标明"冻结了也可以"的接口，其他和访客一样。
 
 ### 3.2 用户
 
