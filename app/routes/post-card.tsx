@@ -78,11 +78,7 @@ export function PostCard({
   }, [source.state, source.data, onEdit]);
   const me = useMe();
   const navigate = useNavigate();
-  const reaction = useReaction(post.reactions, post.my_reaction);
-  const reacting = useFetcher<{ ok: true } | { ok: false; message: string }>();
-  useEffect(() => {
-    if (reacting.state === "idle" && reacting.data?.ok === false) alert(reacting.data.message);
-  }, [reacting.state, reacting.data]);
+  const reaction = useReaction(post, threadId);
   const boosts = useBoosts(post, threadId);
   const boostButton = <BoostButton mine={boosts.mine} onSave={boosts.save} />;
   const replyTo = post.reply_to;
@@ -228,11 +224,7 @@ export function PostCard({
                     void navigate("/login");
                     return;
                   }
-                  reaction.setMine(emoji);
-                  void reacting.submit(
-                    { intent: "react", post_id: post.id, emoji: emoji ?? "" },
-                    { method: "post", action: `/t/${threadId}`, defaultShouldRevalidate: false },
-                  );
+                  reaction.choose(emoji);
                 }}
               />
             )}
