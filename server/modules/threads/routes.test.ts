@@ -266,6 +266,34 @@ describe("收藏和关注", () => {
   });
 });
 
+describe("我的帖子", () => {
+  test("自己发的和回复过的，按最后回复排；删掉的回复不算；要登录", async () => {
+    const board = await newBoard();
+    const poster = as(await login((await createUser()).id));
+    const created = await api.threads.$post(
+      { json: { board, title: "自己发的主题", content: { markdown: "正文" } } },
+      poster,
+    );
+    if (!created.ok) throw new Error(`status ${created.status}`);
+    const own = (await created.json()).id;
+    const answered = await newThread(board);
+    const withdrawn = await newThread(board);
+    const json = { content: { markdown: "回复" } };
+    await api.threads[":id"].posts.$post({ param: { id: String(answered) }, json }, poster);
+    const res = await api.threads[":id"].posts.$post(
+      { param: { id: String(withdrawn) }, json },
+      poster,
+    );
+    if (!res.ok) throw new Error(`status ${res.status}`);
+    await api.posts[":id"].$delete({ param: { id: String((await res.json()).id) } }, poster);
+
+    const posted = await api.threads.$get({ query: { view: "posted" } }, poster);
+    if (!posted.ok) throw new Error(`status ${posted.status}`);
+    expect((await posted.json()).items.map((t) => t.id)).toEqual([answered, own]);
+    expect((await api.threads.$get({ query: { view: "posted" } })).status).toBe(401);
+  });
+});
+
 function range(from: number, to: number) {
   return Array.from({ length: to - from + 1 }, (_, i) => from + i);
 }
