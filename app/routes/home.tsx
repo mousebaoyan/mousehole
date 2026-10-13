@@ -1,29 +1,30 @@
-import { Form } from "react-router";
-import { apiContext } from "../api.server.ts";
+import { ForumAside } from "~/components/forum-aside";
+import { ThreadFeed } from "~/components/thread-feed";
+import { threads } from "~/draft-data";
 import type { Route } from "./+types/home.ts";
 
 export function meta() {
-  return [{ title: "鼠洞" }];
+  return [{ title: "鼠洞 · 四非计算机保研鼠群的论坛" }];
 }
 
-export async function loader({ context }: Route.LoaderArgs) {
-  const res = await context.get(apiContext).me.$get();
-  return { me: res.ok ? await res.json() : null };
+export function loader({ request }: Route.LoaderArgs) {
+  const sort = new URL(request.url).searchParams.get("sort") ?? "latest";
+  const list =
+    sort === "unsolved"
+      ? threads.filter((t) => t.kind === "question" && !t.solved)
+      : sort === "hot"
+        ? threads.toSorted((a, b) => b.views - a.views)
+        : threads;
+  return { sort, threads: list };
 }
 
-export default function Home({ loaderData: { me } }: Route.ComponentProps) {
+export default function Home({ loaderData }: Route.ComponentProps) {
   return (
-    <main className="mx-auto max-w-3xl p-6">
-      <h1 className="text-2xl font-semibold">鼠洞</h1>
-      <p className="mt-2 text-muted-foreground">四非计算机保研鼠群的论坛，正在建设中。</p>
-      {me && (
-        <Form method="post" action="/logout" className="mt-6 flex items-center gap-3">
-          <span>已登录：{me.display_name}</span>
-          <button type="submit" className="text-sm text-muted-foreground underline">
-            退出
-          </button>
-        </Form>
-      )}
-    </main>
+    <div className="flex gap-8">
+      <div className="min-w-0 flex-1">
+        <ThreadFeed threads={loaderData.threads} sort={loaderData.sort} />
+      </div>
+      <ForumAside />
+    </div>
   );
 }

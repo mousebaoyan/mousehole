@@ -1,8 +1,13 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
+@plugin "@tailwindcss/typography";
 
-/* Colors follow the main site (mousebaoyan.cn): ink on white, blue for links and focus. */
+/* Like the main site: html[data-theme] is set before first paint from localStorage or the OS. */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+/* Colors come from the 鼠群 logo: near-white paper and slate ink, a sea teal for buttons and the
+   apricot sun for accents. */
 
 @theme inline {
   --font-sans:
@@ -27,6 +32,17 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
+  --color-brand: var(--brand);
+  --color-brand-strong: var(--brand-strong);
+  --color-link: var(--link);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --text-2xs: 0.6875rem;
+  --text-2xs--line-height: 1.4;
+  --text-meta: 0.8125rem;
+  --text-meta--line-height: 1.45;
+  --text-body: 0.9375rem;
+  --text-body--line-height: 1.6;
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -35,56 +51,76 @@
 }
 
 :root {
-  color-scheme: light dark;
+  color-scheme: light;
   --radius: 0.625rem;
-  --background: #ffffff;
-  --foreground: #14161b;
+  --background: #fefdfb;
+  --foreground: #1f2a28;
   --card: #ffffff;
-  --card-foreground: #14161b;
+  --card-foreground: #1f2a28;
   --popover: #ffffff;
-  --popover-foreground: #14161b;
-  --primary: #14161b;
+  --popover-foreground: #1f2a28;
+  --primary: #2b7a6b;
   --primary-foreground: #ffffff;
-  --secondary: #f3f4f6;
-  --secondary-foreground: #14161b;
-  --muted: #f3f4f6;
-  --muted-foreground: #5d6470;
-  --accent: #f1f3f6;
-  --accent-foreground: #14161b;
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: #d9dce1;
-  --input: #d9dce1;
-  --ring: #2563eb;
+  --secondary: #f5f2ec;
+  --secondary-foreground: #1f2a28;
+  --muted: #f5f2ec;
+  --muted-foreground: #686d66;
+  --accent: #f3efe8;
+  --accent-foreground: #1f2a28;
+  --destructive: #c2410c;
+  --border: #ebe6dd;
+  --input: #ded8cb;
+  --ring: #ef9f70;
+  --brand: #ef9f70;
+  --brand-strong: #a9532e;
+  --link: #23716a;
+  --success: #2d7a4c;
+  --warning: #9a5a0c;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0e0f12;
-    --foreground: #f3f4f6;
-    --card: #15171c;
-    --card-foreground: #f3f4f6;
-    --popover: #15171c;
-    --popover-foreground: #f3f4f6;
-    --primary: #f3f4f6;
-    --primary-foreground: #0e0f12;
-    --secondary: #1a1d23;
-    --secondary-foreground: #f3f4f6;
-    --muted: #1a1d23;
-    --muted-foreground: #a3a9b4;
-    --accent: #20232a;
-    --accent-foreground: #f3f4f6;
-    --destructive: oklch(0.704 0.191 22.216);
-    --border: #343843;
-    --input: #343843;
-    --ring: #5b8cff;
-  }
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --background: #161b1a;
+  --foreground: #ece7dc;
+  --card: #1b2120;
+  --card-foreground: #ece7dc;
+  --popover: #1f2624;
+  --popover-foreground: #ece7dc;
+  --primary: #2e8070;
+  --primary-foreground: #ffffff;
+  --secondary: #222927;
+  --secondary-foreground: #ece7dc;
+  --muted: #222927;
+  --muted-foreground: #a09f96;
+  --accent: #262e2c;
+  --accent-foreground: #ece7dc;
+  --destructive: #f2855a;
+  --border: #313a37;
+  --input: #3a4441;
+  --ring: #c9845f;
+  --brand: #c9845f;
+  --brand-strong: #eeb084;
+  --link: #7cc4b8;
+  --success: #6fcf97;
+  --warning: #e9b860;
 }
 
 @layer base {
   * {
     @apply border-border outline-ring/50;
   }
+  /* Desktop screens are read from further away, so everything sized in rem grows a little. */
+  html {
+    @variant lg {
+      font-size: 106.25%;
+    }
+  }
   body {
     @apply bg-background font-sans text-foreground antialiased;
+  }
+  /* Tailwind 4 resets buttons to the default cursor. */
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]) {
+    cursor: pointer;
   }
 }
