@@ -1,7 +1,7 @@
 import { mkdir, readFile, rename, stat, utimes, writeFile } from "node:fs/promises";
 import { sql, type Transaction } from "kysely";
 import type { DB } from "../../../db/types.ts";
-import type { Actor, UserRef } from "../../platform/access.ts";
+import type { Actor, UserRef, Viewer } from "../../platform/access.ts";
 import { readCapped } from "../../platform/body.ts";
 import { db } from "../../platform/db.ts";
 import { AppError } from "../../platform/errors.ts";
@@ -195,8 +195,9 @@ export async function findUserId(ref: UserRef) {
   return row.id;
 }
 
-// What the profile card and the user's page show; see design §6.1 and §9.
-export async function getUser(ref: UserRef) {
+// What the profile card and the user's page show; see design §6.1 and §9. `viewerId` is for
+// whether the reader follows and has endorsed them.
+export async function getUser(ref: UserRef, viewerId: number | null) {
   const row = await withPrimaryGroup()
     .select((eb) => [
       "users.id",
@@ -220,6 +221,16 @@ export async function getUser(ref: UserRef) {
       "users.posts_read",
       sql<number>`(SELECT count(*)::integer FROM thread_users
         WHERE thread_users.user_id = users.id AND last_read_at IS NOT NULL)`.as("threads_read"),
+      sql<number>`(SELECT count(*)::integer FROM user_follows
+        WHERE followee_id = users.id)`.as("followers"),
+      sql<number>`(SELECT count(*)::integer FROM user_follows
+        WHERE follower_id = users.id)`.as("following"),
+      sql<number>`(SELECT count(*)::integer FROM endorsements
+        WHERE endorsements.user_id = users.id)`.as("endorsements"),
+      sql<boolean>`EXISTS (SELECT 1 FROM user_follows
+        WHERE followee_id = users.id AND follower_id = ${viewerId})`.as("followed"),
+      sql<boolean>`EXISTS (SELECT 1 FROM endorsements
+        WHERE endorsements.user_id = users.id AND endorser_id = ${viewerId})`.as("endorsed"),
     ])
     .where((eb) => ("id" in ref ? eb("users.id", "=", ref.id) : eb("users.qq", "=", ref.qq)))
     // Only deleted accounts have no QQ number.
@@ -229,6 +240,48 @@ export async function getUser(ref: UserRef) {
   if (!row) throw userNotFound();
   const { avatar_version, ...user } = row;
   return { ...user, avatar_url: avatarUrl(user.id, avatar_version) };
+}
+
+// ---- Following and 认可; see design §8.7. Doing either again changes nothing.
+
+async function otherUser(viewer: Viewer, ref: UserRef, self: string) {
+  const id = await findUserId(ref);
+  if (id === viewer.id) throw new AppError(400, "invalid_request", self);
+  return id;
+}
+
+export async function setFollow(viewer: Viewer, ref: UserRef, follow: boolean) {
+  const id = await otherUser(viewer, ref, "不能关注自己");
+  if (follow) {
+    await db
+      .insertInto("user_follows")
+      .values({ follower_id: viewer.id, followee_id: id })
+      .onConflict((oc) => oc.doNothing())
+      .execute();
+  } else {
+    await db
+      .deleteFrom("user_follows")
+      .where("follower_id", "=", viewer.id)
+      .where("followee_id", "=", id)
+      .execute();
+  }
+}
+
+export async function setEndorsement(viewer: Viewer, ref: UserRef, endorse: boolean) {
+  const id = await otherUser(viewer, ref, "不能认可自己");
+  if (endorse) {
+    await db
+      .insertInto("endorsements")
+      .values({ user_id: id, endorser_id: viewer.id })
+      .onConflict((oc) => oc.doNothing())
+      .execute();
+  } else {
+    await db
+      .deleteFrom("endorsements")
+      .where("user_id", "=", id)
+      .where("endorser_id", "=", viewer.id)
+      .execute();
+  }
 }
 
 export async function getProfile(userId: number) {
