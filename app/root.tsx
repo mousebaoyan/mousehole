@@ -14,11 +14,12 @@ const themeScript = `try{document.documentElement.dataset.theme=localStorage.get
 
 export function Layout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="zh-CN">
+    // themeScript sets data-theme before hydration; this only silences that one attribute.
+    <html lang="zh-CN" suppressHydrationWarning>
       <head>
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <meta name="theme-color" content="#faf8f3" media="(prefers-color-scheme: light)" />
+        <meta name="theme-color" content="#fcfbf8" media="(prefers-color-scheme: light)" />
         <meta name="theme-color" content="#161b1a" media="(prefers-color-scheme: dark)" />
         <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />

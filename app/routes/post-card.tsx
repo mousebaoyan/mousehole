@@ -24,7 +24,7 @@ const BOOSTS_SHOWN = 6;
 
 const reportReasons = ["垃圾广告", "人身攻击", "违法违规", "其他"];
 
-export function PostCard({ post, op }: { post: Post; op: boolean }) {
+export function PostCard({ post, op, onReply }: { post: Post; op: boolean; onReply: () => void }) {
   const [boosting, setBoosting] = useState(false);
   const [allBoosts, setAllBoosts] = useState(false);
   const report = useRef<HTMLDialogElement>(null);
@@ -36,8 +36,10 @@ export function PostCard({ post, op }: { post: Post; op: boolean }) {
       id={`floor-${post.floor}`}
       data-floor={post.floor}
       className={cn(
-        "scroll-mt-20 rounded-2xl border border-transparent px-3 py-4 sm:px-4",
-        post.accepted && "border-success/30 bg-success/[0.04]",
+        // A faint rule above each post, starting under the name like the body does.
+        "relative scroll-mt-20 px-3 py-5 before:absolute before:top-0 before:right-3 before:left-3 before:h-px before:bg-border/70 first:before:hidden sm:px-4 sm:before:right-4 sm:before:left-[4.25rem]",
+        post.accepted &&
+          "my-2 rounded-2xl border border-success/30 bg-success/[0.04] before:hidden [&+li]:before:hidden",
       )}
     >
       {post.accepted && (
@@ -125,7 +127,7 @@ export function PostCard({ post, op }: { post: Post; op: boolean }) {
             <Rocket />
           </Button>
           <div className="ml-auto flex items-center text-muted-foreground">
-            <Button variant="ghost" size="sm">
+            <Button variant="ghost" size="sm" onClick={onReply}>
               <Reply /> 回复
             </Button>
             <Button variant="ghost" size="icon-sm" aria-label="复制链接" title="复制链接">

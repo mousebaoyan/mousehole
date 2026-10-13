@@ -1,21 +1,21 @@
 import {
-  AtSign,
-  Bold,
+  Bell,
+  Bookmark,
   CircleCheck,
-  Code,
   Eye,
-  ImagePlus,
   Link2,
   MessageSquare,
   MessagesSquare,
-  Quote,
+  Reply,
 } from "lucide-react";
+import { useState } from "react";
 import { data } from "react-router";
 import { BoardBadge } from "~/components/board-badge";
+import { ThreadRow } from "~/components/thread-row";
 import { Button } from "~/components/ui/button";
-import { Textarea } from "~/components/ui/textarea";
-import { boards, checkInPosts, threads, topicPosts } from "~/draft-data";
+import { boards, checkInPosts, threads, topicPosts, type Post } from "~/draft-data";
 import type { Route } from "./+types/topic.ts";
+import { Composer } from "./composer.tsx";
 import { FloorNav } from "./floor-timeline.tsx";
 import { PostCard } from "./post-card.tsx";
 
@@ -27,30 +27,31 @@ export function loader({ params }: Route.LoaderArgs) {
   const thread = threads.find((t) => t.id === Number(params.id));
   const board = boards.find((b) => b.slug === thread?.board);
   if (!thread || !board) throw data("主题不存在", { status: 404 });
-  return { thread, board, posts: thread.id === 8 ? checkInPosts : topicPosts };
+  return {
+    thread,
+    board,
+    posts: thread.id === 8 ? checkInPosts : topicPosts,
+    suggested: threads.filter((t) => t.id !== thread.id && !t.pinned).slice(0, 5),
+  };
 }
 
-const tools = [
-  { label: "粗体", icon: Bold },
-  { label: "引用", icon: Quote },
-  { label: "代码", icon: Code },
-  { label: "链接", icon: Link2 },
-  { label: "图片", icon: ImagePlus },
-  { label: "提及", icon: AtSign },
-];
+export default function Topic({
+  loaderData: { thread, board, posts, suggested },
+}: Route.ComponentProps) {
+  // undefined: closed; null: replying to the thread; a post: replying to that floor.
+  const [replyTo, setReplyTo] = useState<Post | null | undefined>(undefined);
 
-export default function Topic({ loaderData: { thread, board, posts } }: Route.ComponentProps) {
   return (
     <div className="flex gap-8">
       <article className="min-w-0 flex-1">
-        <header className="px-1 pb-5">
+        <header className="px-1 pb-4">
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-meta text-muted-foreground">
             <BoardBadge board={board} />
             {thread.tags.map((t) => (
               <span key={t}>#{t}</span>
             ))}
           </div>
-          <h1 className="mt-2 text-xl leading-snug font-semibold tracking-tight sm:text-2xl">
+          <h1 className="mt-2.5 text-xl leading-snug font-semibold tracking-tight sm:text-2xl">
             {thread.title}
           </h1>
           <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-meta text-muted-foreground tabular-nums">
@@ -73,39 +74,48 @@ export default function Topic({ loaderData: { thread, board, posts } }: Route.Co
           </div>
         </header>
 
-        <ol className="flex flex-col gap-3">
+        <ol className="flex flex-col">
           {posts.map((post) => (
-            <PostCard key={post.id} post={post} op={post.author.id === thread.author.id} />
+            <PostCard
+              key={post.id}
+              post={post}
+              op={post.author.id === thread.author.id}
+              onReply={() => setReplyTo(post)}
+            />
           ))}
         </ol>
 
-        <form className="mt-6 rounded-2xl border bg-card focus-within:ring-2 focus-within:ring-ring/30">
-          <div className="flex items-center gap-0.5 border-b px-2 py-1 text-muted-foreground">
-            {tools.map((t) => (
-              <Button
-                key={t.label}
-                type="button"
-                variant="ghost"
-                size="icon-sm"
-                aria-label={t.label}
-                title={t.label}
-              >
-                <t.icon />
-              </Button>
+        <div className="mt-4 flex flex-wrap items-center gap-2 border-t pt-5 sm:pl-[4.25rem]">
+          <Button size="lg" onClick={() => setReplyTo(null)}>
+            <Reply /> 回复
+          </Button>
+          <Button size="lg" variant="outline">
+            <Bookmark /> 收藏
+          </Button>
+          <Button size="lg" variant="outline">
+            <Bell /> 关注
+          </Button>
+          <Button size="icon-lg" variant="ghost" aria-label="复制链接" title="复制链接">
+            <Link2 />
+          </Button>
+        </div>
+
+        <section className="mt-12">
+          <h2 className="px-1 font-semibold">推荐主题</h2>
+          <ul className="mt-2">
+            {suggested.map((t) => (
+              <ThreadRow key={t.id} thread={t} />
             ))}
-          </div>
-          <Textarea
-            aria-label="回复内容"
-            className="min-h-28 resize-y border-0 px-4 py-3 shadow-none focus-visible:ring-0 dark:bg-transparent"
-          />
-          <div className="flex justify-end px-3 pb-3">
-            <Button type="button">回复</Button>
-          </div>
-        </form>
+          </ul>
+        </section>
+
+        {replyTo !== undefined && (
+          <Composer replyTo={replyTo} onClose={() => setReplyTo(undefined)} />
+        )}
       </article>
 
       <aside className="hidden w-56 shrink-0 xl:block">
-        <nav aria-label="楼层" className="sticky top-20 text-meta">
+        <nav aria-label="楼层" className="sticky top-20 rounded-2xl border bg-card p-3 text-meta">
           <FloorNav posts={posts} />
         </nav>
       </aside>
