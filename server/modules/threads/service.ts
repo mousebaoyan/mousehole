@@ -8,7 +8,7 @@ import { excerpt, renderMarkdown } from "../../platform/markdown.ts";
 import { recordAudit } from "../audit/service.ts";
 import { countBoard, countTags, findTags, getBoard, getTagId } from "../boards/service.ts";
 import { onebotToMarkdown, type Segment } from "../qq/onebot.ts";
-import { notifyPost, notifyThread } from "../notifications/service.ts";
+import { notifyOnPost, notifyPost, notifyThread } from "../notifications/service.ts";
 import { assertNotLinked, findLink, linkSource, type Source } from "../qq/service.ts";
 import { fetchUpload, linkUploads, showImages } from "../uploads/service.ts";
 import {
@@ -18,7 +18,14 @@ import {
   membersByQq,
   userBriefs,
 } from "../users/service.ts";
-import { postCreated, postDeleted, postUpdated, threadCreated, threadDeleted } from "./events.ts";
+import {
+  postCreated,
+  postDeleted,
+  postUpdated,
+  threadCreated,
+  threadDeleted,
+  threadSolved,
+} from "./events.ts";
 
 export const PAGE_SIZE = 30;
 // Longest Markdown a post may have.
@@ -322,11 +329,14 @@ export async function listUserPosts(members: boolean, authorId: number, cursor?:
 
 export async function getThread(id: number, members: boolean, userId: number | null) {
   const row = await selectThreads(members, userId)
-    .select(
+    .select([
       sql<[number, number][]>`(
         SELECT coalesce(json_agg(json_build_array(lower(r), upper(r) - 1) ORDER BY lower(r)), '[]')
         FROM unnest(mine.read_floors) r)`.as("read_floors"),
-    )
+      sql<number | null>`(SELECT floor FROM posts WHERE posts.id = threads.solved_post_id)`.as(
+        "solved_floor",
+      ),
+    ])
     .where("threads.id", "=", id)
     .executeTakeFirst();
   if (!row) throw threadNotFound();
@@ -906,9 +916,13 @@ export async function deletePost(
       .returning("reply_to_id")
       .executeTakeFirst();
     if (!deleted) throw new AppError(404, "post_not_found", "回复不存在");
+    // A deleted answer is no longer the accepted one.
     await trx
       .updateTable("threads")
-      .set((eb) => ({ reply_count: eb("reply_count", "-", 1) }))
+      .set((eb) => ({
+        reply_count: eb("reply_count", "-", 1),
+        solved_post_id: sql<number | null>`nullif(solved_post_id, ${postId}::integer)`,
+      }))
       .where("id", "=", post.thread_id)
       .execute();
     if (deleted.reply_to_id !== null) {
@@ -927,6 +941,63 @@ export async function deletePost(
       target_id: postId,
     });
   });
+}
+
+// ---- Accepted answers
+
+// The asker, or a moderator, picks the floor that answered a question; another pick replaces it,
+// null takes it back. The answerer hears of it.
+export async function setSolution(
+  actor: Actor,
+  viewer: Viewer,
+  staff: boolean,
+  members: boolean,
+  threadId: number,
+  postId: number | null,
+) {
+  const thread = await getThread(threadId, members, viewer.id);
+  assertMayChange(staff, viewer, thread.author_id, thread.locked);
+  if (thread.kind !== "question") {
+    throw new AppError(400, "invalid_request", "只有问答主题能采纳答案");
+  }
+  const answer =
+    postId === null
+      ? null
+      : await db
+          .selectFrom("posts")
+          .select(["id", "author_id"])
+          .where("id", "=", postId)
+          .where("thread_id", "=", threadId)
+          .where("floor", ">", 1)
+          .where("deleted_at", "is", null)
+          .executeTakeFirst();
+  if (answer === undefined) {
+    throw new AppError(400, "invalid_request", "只能采纳这个主题里没删的回复");
+  }
+  await db.transaction().execute(async (trx) => {
+    await trx
+      .updateTable("threads")
+      .set({ solved_post_id: answer?.id ?? null })
+      .where("id", "=", threadId)
+      .execute();
+    if (answer) {
+      await threadSolved(trx, answer.id);
+      await notifyOnPost(
+        trx,
+        "solved",
+        { id: answer.id, thread_id: threadId, author_id: answer.author_id },
+        viewer.id,
+        {},
+      );
+    }
+    await auditChange(trx, actor, thread.author_id, {
+      action: answer ? "thread.solve" : "thread.unsolve",
+      target_type: "thread",
+      target_id: threadId,
+      data: { post_id: answer?.id ?? null },
+    });
+  });
+  return getThread(threadId, members, viewer.id);
 }
 
 // ---- Reactions

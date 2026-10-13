@@ -98,6 +98,18 @@ export async function postCreated(trx: Transaction<DB>, postId: number) {
   });
 }
 
+// With the answer and who wrote it; the plugin may tell the group the question is answered.
+export async function threadSolved(trx: Transaction<DB>, answerId: number) {
+  const f = await floorOf(trx, answerId);
+  await recordEvent(trx, "thread.solved", {
+    thread: { id: f.thread_id, title: f.title },
+    post: { id: f.id, floor: f.floor, body: f.body },
+    answerer: f.author,
+    url: link(f.thread_id, f.floor),
+    qq_text: `【${f.board_name}】${f.title}\n已采纳 ${f.author.display_name} 的回答：${excerpt(f.html, QQ_EXCERPT)}\n${link(f.thread_id, f.floor)}`,
+  });
+}
+
 export async function postUpdated(trx: Transaction<DB>, postId: number, editorId: number) {
   const f = await floorOf(trx, postId);
   await recordEvent(trx, "post.updated", {

@@ -34,7 +34,7 @@
 // 主题和回复里的用户只带这几项；title 是主群里的专属头衔，没有为空字符串
 { "id": 7, "display_name": "鼠鼠", "role": "user", "level": 5, "title": "26届" }
 
-// 主题。匿名主题的 author 为 null；floor_count 是最大的楼层号；pinned：0 不置顶，1 版块内置顶，2 全站置顶；
+// 主题。匿名主题的 author 为 null；floor_count 是最大的楼层号；主题详情里的 solved_floor 是采纳的回答在第几楼；pinned：0 不置顶，1 版块内置顶，2 全站置顶；
 // posters 是作者以外、最近 20 层里最近回复的最多 4 个人；url 只在主题详情里有；
 // last_read_floor 是自己读过的最高一楼，没打开过为 0，只在登录时返回；主题详情里还有 read_floors，是读过的楼层区间，例如 [[1, 20], [480, 495]]，
 // 以及 bookmarked（是否收藏）和 notify_level（关注级别，见 /threads/{id}/subscription），也只在登录时返回
@@ -55,7 +55,7 @@
   "edited_at": null, "created_at": 1760000000 }
 
 // 通知。type：reply 回复了我的楼层，mention @了我，like 赞了我的楼层，boost 给我的楼层留了短评，
-// watching 关注的主题有新楼层，following 关注的人发了新主题。like、boost 按楼层，watching 按主题，
+// watching 关注的主题有新楼层，following 关注的人发了新主题，solved 我的回答被采纳。like、boost 按楼层，watching 按主题，
 // 未读期间合并成一条：actor 是最近的人，count 是次数。post 是新的那一层，点赞和短评是被赞的那一层；
 // excerpt 是它正文的前 80 个字；data 里点赞带最近的 emoji，短评带最近的 body
 { "id": 9001, "type": "like", "actor": { … }, "count": 3, "thread": { "id": 42, "title": "…" },
@@ -209,8 +209,8 @@ token 由管理员在后台创建，只显示一次。每个 token 绑定一个 
 | GET | `/threads/{id}` | 主题详情；楼层（包括主楼）用 `/threads/{id}/posts` 取 | 访客 |
 | PATCH | `/threads/{id}` | 只改带了的字段：作者可以改 `title`、`tags`；版主还可以改 `board`（移动版块）、`pinned`（0–2）、`featured`、`locked`、`status`（审核通过或隐藏）。改标题记在主楼的编辑记录里；锁定后只有版主能改 | 作者、版主 / `act`、`moderate` |
 | DELETE | `/threads/{id}` | 删除主题；有人回复后作者不能删，只有版主能删 | 作者、版主 / `act`、`moderate` |
-| PUT | `/threads/{id}/solution` | 采纳答案：`{ post_id }` | 主题作者、版主 / `act`、`moderate` |
-| DELETE | `/threads/{id}/solution` | 取消采纳 | 同上 |
+| PUT | `/threads/{id}/solution` | 采纳答案：`{ post_id }`，只能是问答主题里没删的回复（不含主楼），否则 `400`；再采纳别的就换掉。回答的人收到通知，产生 `thread.solved` 事件；锁定后只有版主能改。返回主题详情 | 主题作者、版主 / `act`、`moderate` |
+| DELETE | `/threads/{id}/solution` | 取消采纳；采纳的回答被删除时也自动取消 | 同上 |
 | PUT | `/threads/{id}/subscription` | 关注级别：`{ level }`，`watching` 每个新楼层都通知，`normal` 回复我、@我时通知，`muted` 都不通知；没设置过是 `normal`，发主题的人是 `watching` | 成员 / `act` |
 | PUT | `/threads/{id}/bookmark` | 收藏；已经收藏的不变，收藏列表里的位置也不变 | 成员 / `act` |
 | DELETE | `/threads/{id}/bookmark` | 取消收藏 | 成员 / `act` |
@@ -395,7 +395,7 @@ data: {"post":{…},"thread":{…},"author":{…},"qq_text":"……","url":"http
 | `post.created` | 新回复公开 | `post`（`id`、`floor`、`body`）、`thread`（`id`、`title`）、`author`、`reply_to`（被回复的那条：`id`、`floor`、`author`、`source`，没有为 `null`）、`source`、`url`、`qq_text` |
 | `post.updated` | 回复或主楼被编辑 | `post`、`thread`、`editor` |
 | `post.deleted` | 回复或主题被删除、隐藏；删除主题时是它的主楼 | `post_id`、`thread_id`、`floor`、`by`、`reason` |
-| `thread.solved` | 采纳答案 | `thread`、`post`、`answerer` |
+| `thread.solved` | 采纳答案 | `thread`（`id`、`title`）、`post`（`id`、`floor`、`body`）、`answerer`、`url`、`qq_text` |
 | `content.pending` | 先审后发的版块有新内容等待审核 | `thread`、`post`、`author` |
 | `notification.created` | 给某位成员产生通知，且他开启了这类通知的 QQ 提醒 | `user`、`type`、`actor`、`thread`、`post`、`url`、`qq_text` |
 | `member.activated` | 成员第一次登录 | `user` |
@@ -403,7 +403,7 @@ data: {"post":{…},"thread":{…},"author":{…},"qq_text":"……","url":"http
 
 - `qq_text` 是可以直接发到 QQ 的纯文本，例如"【保研问答】rank 30% 能冲夏令营吗\n鼠鼠：……\nhttps://bbs.mousebaoyan.cn/t/42"。
 - 事件里的用户对象是 `{ id, display_name, qq }`，插件可以直接 @ 或私聊。匿名内容（二期）的事件不带作者。`source` 是内容来自的 QQ 消息，没有为 `null`。
-- `notification.created`：每类通知的 QQ 提醒由本人在设置里开关；没设置过时，回复我和 @我 默认开，其余默认关。`qq_text` 例如"鼠鼠 回复了你：……\nrank 30% 能冲夏令营吗\nhttps://bbs.mousebaoyan.cn/t/42?floor=3"。
+- `notification.created`：每类通知的 QQ 提醒由本人在设置里开关；没设置过时，回复我、@我 和回答被采纳默认开，其余默认关。`qq_text` 例如"鼠鼠 回复了你：……\nrank 30% 能冲夏令营吗\nhttps://bbs.mousebaoyan.cn/t/42?floor=3"。
 - 审核可以挂在事件上：先发后审的版块监听 `thread.created`、`post.created`，先审后发的版块监听 `content.pending`，判定后调用 `PATCH` 修改 `status`。
 
 ## 6. 流程

@@ -1,4 +1,13 @@
-import { AtSign, BellRing, CheckCheck, Heart, Reply, Rocket, UserPlus } from "lucide-react";
+import {
+  AtSign,
+  BellRing,
+  CheckCheck,
+  CircleCheck,
+  Heart,
+  Reply,
+  Rocket,
+  UserPlus,
+} from "lucide-react";
 import { useRef } from "react";
 import {
   Form,
@@ -58,6 +67,7 @@ const ICONS: Record<string, typeof Reply> = {
   boost: Rocket,
   watching: BellRing,
   following: UserPlus,
+  solved: CircleCheck,
 };
 
 // What happened, in a sentence; merged ones count people or floors.
@@ -75,6 +85,8 @@ function headline(n: Item) {
       return `${many ? `${who} 等 ${n.count} 人` : who} 给你留了短评：${n.data.body}`;
     case "watching":
       return many ? `关注的主题有 ${n.count} 层新回复` : `${who} 回复了你关注的主题`;
+    case "solved":
+      return `${who} 采纳了你的回答`;
     default:
       return `${who} 发了新主题`;
   }

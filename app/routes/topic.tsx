@@ -125,6 +125,17 @@ export async function action({ params, request, context }: Route.ActionArgs) {
     if (res.ok) return { ok: true as const, saved: level };
     return { ok: false as const, message: (await res.json()).error.message };
   }
+  if (text("intent") === "accept" || text("intent") === "unaccept") {
+    const res =
+      text("intent") === "accept"
+        ? await api.threads[":id"].solution.$put({
+            param: thread,
+            json: { post_id: Number(text("post_id")) },
+          })
+        : await api.threads[":id"].solution.$delete({ param: thread });
+    if (res.ok) return { ok: true as const, floor };
+    return { ok: false as const, message: (await res.json()).error.message };
+  }
   if (text("intent") === "delete-thread") {
     const res = await api.threads[":id"].$delete({ param: thread });
     if (res.ok) return redirect(`/b/${text("board")}`);
@@ -300,6 +311,10 @@ function TopicPage({
                   staff ||
                   (me?.id === post.author.id && !thread.locked && thread.reply_count === 0),
                 moderate: staff,
+                accept:
+                  thread.kind === "question" &&
+                  post.floor > 1 &&
+                  (staff || (me?.id === thread.author.id && !thread.locked)),
               }}
               onJump={jump}
               onEdit={(markdown) =>
@@ -308,6 +323,14 @@ function TopicPage({
                   replyTo: null,
                   edit: { postId: post.id, floor: post.floor, markdown },
                 })
+              }
+              onAccept={() =>
+                void changes.submit(
+                  post.id === thread.solved_post_id
+                    ? { intent: "unaccept", floor: post.floor }
+                    : { intent: "accept", post_id: post.id, floor: post.floor },
+                  { method: "post", defaultShouldRevalidate: false },
+                )
               }
               onDelete={() => {
                 const question = post.floor === 1 ? "删除这个主题？" : `删除 #${post.floor}？`;
