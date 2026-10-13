@@ -18,6 +18,7 @@ import {
   membersByQq,
   userBriefs,
 } from "../users/service.ts";
+import { postCreated, postDeleted, postUpdated, threadCreated, threadDeleted } from "./events.ts";
 
 export const PAGE_SIZE = 30;
 // Longest Markdown a post may have.
@@ -555,6 +556,7 @@ export async function createThread(
         last_read_at: sql<Date>`now()`,
       })
       .execute();
+    await threadCreated(trx, opening.id);
     await notifyThread(trx, { id: thread.id, postId: opening.id, authorId: viewer.id, mentions });
     await auditBot(trx, actor, "thread.create", "thread", thread.id);
     return thread.id;
@@ -634,6 +636,7 @@ export async function createPost(
     await countBoard(trx, thread.board_id, { threads: 0, posts: 1 });
     await countUserPosts(trx, viewer.id, { threads: 0, posts: 1 });
     await addReadFloors(trx, viewer.id, threadId, [[numbered.floor_count, numbered.floor_count]]);
+    await postCreated(trx, post.id);
     await notifyPost(trx, { id: post.id, threadId, authorId: viewer.id, mentions }, replyToAuthor);
     await auditBot(trx, actor, "post.create", "post", post.id);
     return post.id;
@@ -703,6 +706,7 @@ export async function editPost(
       })
       .execute();
     await linkUploads(trx, postId, images);
+    await postUpdated(trx, postId, viewer.id);
     await auditChange(trx, actor, post.author_id, {
       action: "post.edit",
       target_type: "post",
@@ -868,6 +872,7 @@ export async function deleteThread(
       -1,
     );
     await countUserPosts(trx, thread.author_id, { threads: -1, posts: 0 });
+    await threadDeleted(trx, threadId, viewer.id);
     await auditChange(trx, actor, thread.author_id, {
       action: "thread.delete",
       target_type: "thread",
@@ -915,6 +920,7 @@ export async function deletePost(
     }
     await countBoard(trx, thread.board_id, { threads: 0, posts: -1 });
     await countUserPosts(trx, post.author_id, { threads: 0, posts: -1 });
+    await postDeleted(trx, postId, viewer.id);
     await auditChange(trx, actor, post.author_id, {
       action: "post.delete",
       target_type: "post",

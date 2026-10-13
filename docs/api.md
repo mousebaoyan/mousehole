@@ -298,7 +298,7 @@ token 由管理员在后台创建，只显示一次。每个 token 绑定一个 
 | GET | `/bot/messages/{chat_type}/{chat_id}/{message_id}` | 某条 QQ 消息对应的论坛内容：`{ kind, thread_id, post_id }`，`kind` 为 `source`（内容来自这条消息）或 `notice`（bot 发的帖子通知）；没有对应时返回 `404 message_not_linked` | `read` |
 | PUT | `/bot/messages/{chat_type}/{chat_id}/{message_id}` | 记录 bot 发出的帖子通知：`{ thread_id, post_id? }`；同一条消息再记一次就覆盖；这条消息已经是某条内容的来源时返回 `409 source_exists` | `act` |
 | GET | `/bot/events` | SSE 事件流，见第 5 节 | `events` |
-| GET | `/bot/events/batch` | 按游标拉取事件：`after`、`limit`，返回 JSON | `events` |
+| GET | `/bot/events/batch` | 按游标拉取事件：`after`、`limit`（1–500，默认 100）、`types`，返回 `{ items: [{ id, type, data, created_at }], next_after }`，`next_after` 是下次的 `after` | `events` |
 
 ## 4. 成员同步
 
@@ -384,16 +384,16 @@ data: {"post":{…},"thread":{…},"author":{…},"qq_text":"……","url":"http
 
 - 带 `Last-Event-ID`（或 `?after=`）时，先补发之后的事件，再实时推送；都不带时只推新事件。
 - 每 20 秒发一条心跳注释，防止代理断开连接。
-- 事件保留 7 天。游标早于最早的事件时返回 `410 cursor_expired`，并附上当前最新的事件 ID，插件可以从那里重新开始。
+- 事件保留 7 天。游标早于最早的事件时返回 `410 cursor_expired`，带 `latest_id`（当前最新的事件 ID），插件可以从那里重新开始。
 - 至少投递一次：网络中断可能导致重复投递，插件按事件 ID 去重，处理完再保存游标。
 - 用 `?types=thread.created,notification.created` 只订阅部分类型。
 
 | 类型 | 触发时机 | 主要字段 |
 | --- | --- | --- |
-| `thread.created` | 新主题公开（先审后发的版块在审核通过时） | `thread`、`board`、`author`、`source`、`url`、`qq_text` |
-| `post.created` | 新回复公开 | `post`、`thread`、`author`、`reply_to`（被回复的那条、它的作者和来源消息）、`source`、`url`、`qq_text` |
+| `thread.created` | 新主题公开（先审后发的版块在审核通过时） | `thread`（`id`、`title`、`kind`）、`board`（`slug`、`name`）、`author`、`source`、`url`、`qq_text` |
+| `post.created` | 新回复公开 | `post`（`id`、`floor`、`body`）、`thread`（`id`、`title`）、`author`、`reply_to`（被回复的那条：`id`、`floor`、`author`、`source`，没有为 `null`）、`source`、`url`、`qq_text` |
 | `post.updated` | 回复或主楼被编辑 | `post`、`thread`、`editor` |
-| `post.deleted` | 回复或主题被删除、隐藏 | `post_id`、`thread_id`、`by`、`reason` |
+| `post.deleted` | 回复或主题被删除、隐藏；删除主题时是它的主楼 | `post_id`、`thread_id`、`floor`、`by`、`reason` |
 | `thread.solved` | 采纳答案 | `thread`、`post`、`answerer` |
 | `content.pending` | 先审后发的版块有新内容等待审核 | `thread`、`post`、`author` |
 | `notification.created` | 给某位成员产生通知，且他开启了这类通知的 QQ 提醒 | `user`、`type`、`actor`、`thread`、`post`、`url`、`qq_text` |
@@ -401,7 +401,8 @@ data: {"post":{…},"thread":{…},"author":{…},"qq_text":"……","url":"http
 | `report.created` | 有新举报 | `report`、`post`、`boost`（举报的是短评时）、`reporter` |
 
 - `qq_text` 是可以直接发到 QQ 的纯文本，例如"【保研问答】rank 30% 能冲夏令营吗\n鼠鼠：……\nhttps://bbs.mousebaoyan.cn/t/42"。
-- 事件里的用户对象都带 `qq`，插件可以直接 @ 或私聊。匿名内容（二期）的事件不带作者。
+- 事件里的用户对象是 `{ id, display_name, qq }`，插件可以直接 @ 或私聊。匿名内容（二期）的事件不带作者。`source` 是内容来自的 QQ 消息，没有为 `null`。
+- `notification.created`：每类通知的 QQ 提醒由本人在设置里开关；没设置过时，回复我和 @我 默认开，其余默认关。`qq_text` 例如"鼠鼠 回复了你：……\nrank 30% 能冲夏令营吗\nhttps://bbs.mousebaoyan.cn/t/42?floor=3"。
 - 审核可以挂在事件上：先发后审的版块监听 `thread.created`、`post.created`，先审后发的版块监听 `content.pending`，判定后调用 `PATCH` 修改 `status`。
 
 ## 6. 流程

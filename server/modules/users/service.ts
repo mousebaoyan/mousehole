@@ -8,6 +8,7 @@ import { AppError } from "../../platform/errors.ts";
 import { processAvatar } from "../../platform/images.ts";
 import { log } from "../../platform/log.ts";
 import { recordAudit } from "../audit/service.ts";
+import { recordEvent } from "../events/service.ts";
 
 // For the bootstrap command: the first admin logs in before any group is synced.
 export async function ensureAdmin(qq: number) {
@@ -151,12 +152,19 @@ const SEEN = {
       < (now() AT TIME ZONE 'Asia/Shanghai')::date)::integer`,
 };
 
+// The first login activates the account, which the bot plugin hears of.
 export async function recordLogin(trx: Transaction<DB>, userId: number) {
-  await trx
+  const user = await trx
     .updateTable("users")
     .set((eb) => ({ activated_at: eb.fn.coalesce("activated_at", eb.val(new Date())), ...SEEN }))
     .where("id", "=", userId)
-    .execute();
+    .returning(["id", "display_name", "qq", sql<Date | null>`old.activated_at`.as("was")])
+    .executeTakeFirstOrThrow();
+  if (user.was === null) {
+    await recordEvent(trx, "member.activated", {
+      user: { id: user.id, display_name: user.display_name, qq: user.qq },
+    });
+  }
 }
 
 export async function recordSeen(userId: number) {

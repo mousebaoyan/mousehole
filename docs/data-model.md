@@ -111,7 +111,8 @@
   ORDER BY id LIMIT 100;
   ```
 
-- 事务提交后发 `NOTIFY mousehole_events`，SSE 连接收到通知再读取，不用轮询。
+- `pg_current_snapshot()` 的 `xmin` 看的是整个 PostgreSQL 实例里还在进行的事务，别的数据库里的也算，所以事件偶尔会被晚一会儿读到。读到的比实际有的少时（`id > 游标` 还有没满足上面条件的），事件流 200 毫秒后再读一次，不等下一个通知。
+- 事务提交后发 `NOTIFY mousehole_events`（在写事件的事务里调用 `pg_notify`，PostgreSQL 在提交时才发出），SSE 连接收到通知再读取，不用轮询。监听用连接池以外的一个连接，断了一秒后重连。
 - 事件保留 7 天，每天清理。
 
 ## 管理
