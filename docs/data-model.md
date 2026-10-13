@@ -114,7 +114,7 @@ CREATE TABLE login_tickets (
 
 CREATE TABLE email_codes (
   user_id     integer  PRIMARY KEY REFERENCES users (id), -- 每人同时只有一个有效验证码，重发时覆盖
-  code_hash   bytea    NOT NULL,
+  code        text     NOT NULL,            -- 6 位数字，存原文：位数太少，哈希挡不住穷举
   attempts    smallint NOT NULL DEFAULT 0,  -- 输错 5 次作废
   sent_at     timestamptz NOT NULL DEFAULT now(),
   expires_at  timestamptz NOT NULL          -- 10 分钟
