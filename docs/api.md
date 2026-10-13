@@ -18,7 +18,7 @@
 ### 主要对象（节选）
 
 ```jsonc
-// 用户。qq、member_status、activated 只返回给成员、bot 和管理员
+// 用户。qq、member_status、activated 只返回给成员、bot 和管理员；avatar_url 是论坛缓存的 QQ 头像，还没拉到时为 null
 { "id": 7, "display_name": "鼠鼠", "avatar_url": "/avatars/7.webp?v=3", "role": "user",
   "qq": 123456789, "card": "26-某某大学-CV", "level": 5, "level_name": "活跃", "title": "26届",
   "joined_at": 1740000000, "member_status": "member", "activated": true }

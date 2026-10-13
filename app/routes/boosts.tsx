@@ -19,7 +19,11 @@ type Boost = PostItem["boosts"][number];
 
 // The reader's own boost has no id here when it was just left; it is changed through the
 // rocket, never by id.
-type Shown = { id: number | null; user: { id: number; display_name: string }; body: string };
+type Shown = {
+  id: number | null;
+  user: { id: number; display_name: string; avatar_url: string | null };
+  body: string;
+};
 
 // The floor's boosts as loaded, or all of them once asked for, with the reader's own as it
 // stands: in its place when changed, last when new.
