@@ -1,6 +1,6 @@
 # 数据表
 
-> 状态：草案。开发时以 `server/db/schema.ts`（Drizzle）和迁移文件为准。下面的表按主题分组，不是建表顺序。
+> 状态：草案。开发时以 `db/migrations/` 里的 SQL 迁移为准，查询用的类型由 kysely-codegen 从数据库生成。下面的表按主题分组，不是建表顺序。
 
 ## 约定
 
@@ -11,8 +11,8 @@
 - 列表用游标分页，沿索引顺序取下一页；主题内按楼层号分页，第 N 页直接定位楼层范围，不用 OFFSET。
 - 正文列用 lz4 压缩，超过约 2KB 的长文会自动压缩。
 - 会话、登录链接、bot token 等令牌只存 SHA-256 哈希。
-- 连接：postgres.js 连接池最多 10 个连接，另用 1 个连接 LISTEN 事件通知。论坛账号设置 `statement_timeout = '5s'`、`idle_in_transaction_session_timeout = '30s'`。
-- 迁移由 drizzle-kit 生成 SQL，启动时执行，执行前先取 advisory lock。
+- 连接：`pg`（node-postgres）连接池最多 10 个连接，另用 1 个单独的连接 LISTEN 事件通知。论坛账号设置 `statement_timeout = '5s'`、`idle_in_transaction_session_timeout = '30s'`。
+- 迁移是按编号排列的 SQL 文件，启动时由 Kysely 的 Migrator 依次执行，执行前先取 advisory lock。改完表结构后用 kysely-codegen 重新生成类型，CI 检查生成的类型和迁移是否一致。
 
 ## 成员与账号
 

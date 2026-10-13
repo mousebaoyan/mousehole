@@ -6,7 +6,7 @@
 
 - **沉淀内容**：群里的问答、经验和通知存到论坛，长期保留，群被封也不会丢。
 - **和 QQ 群打通**：一个 QQ 号就是一个账号，资料和群里看到的一致。AstrBot 插件可以通过接口使用论坛的几乎全部功能，并指定以哪位群友的身份操作。
-- **轻量**：和其他服务共用一台服务器，论坛进程常驻内存 150MB 左右，支撑上千人的群和两位数并发。
+- **轻量**：和其他服务共用一台服务器，论坛进程空载约 100MB、高峰不超过 200MB，支撑上千人的群和两位数并发。
 
 暂不做：站内私信（QQ 里就能私聊）、联邦协议。
 
@@ -17,7 +17,7 @@
 | 名称 | 鼠洞 |
 | 仓库与域名 | `mousebaoyan/mousehole`，`bbs.mousebaoyan.cn` |
 | 实现方式 | 自研，借鉴 Discourse、Apache Answer、V2EX、贴吧和 NGA 的设计 |
-| 技术栈 | Nuxt 4 全栈，页面和接口在同一个 Node 进程 |
+| 技术栈 | React 19 + React Router 8 + Hono 全栈，TypeScript 7，页面和接口在同一个 Node 进程；依据见第 5 节 |
 | 数据库 | 复用服务器上 1Panel 的 PostgreSQL 18，新建独立的库和账号；暂不用 Redis |
 | 身份 | 一个 QQ 号就是一个账号；昵称、群名片、头像、群角色、群等级、头衔从 QQ 同步 |
 | 成员资格 | 在群里才是成员。退群或被踢后账号冻结，权限等同访客，发过的内容保留；重新进群自动恢复 |
@@ -54,7 +54,7 @@ AstrBot + 论坛插件
   ▼
 OpenResty（1Panel，TLS） ◀── 浏览器
   ▼
-mousehole 容器（Nuxt 4）── 图片目录（数据卷）
+mousehole 容器（Hono + React Router 8，Node 26）── 图片目录（数据卷）
   ├─ 页面：服务端渲染，浏览器端接管交互
   ├─ /api/v1：网页和 bot 共用的 JSON 接口
   ├─ SSE：网页实时更新、bot 事件流
@@ -63,29 +63,69 @@ mousehole 容器（Nuxt 4）── 图片目录（数据卷）
 1Panel 的 PostgreSQL 18（mousehole 库）
 ```
 
-- **一个进程**：页面和接口在同一个 Nuxt 进程里，服务端渲染页面时在进程内调用接口，不经过网络。
+- **一个进程**：Hono 是整个应用的 HTTP 服务器，`/api/v1` 由 Hono 处理，其余路径交给 React Router 渲染页面。服务端渲染页面时在进程内调用接口，不经过网络。
 - **接口是唯一入口**：业务逻辑都在服务层（`server/services`），网页和 bot 都通过 `/api/v1` 调用。网页能做的，bot 都能做。
 - **插件主动连接**：插件所在的机器可以在内网，只要能访问外网即可。插件主动调用接口、主动订阅事件流，论坛不会反向连接插件。
 - **论坛不依赖 bot**：bot 离线时论坛照常使用，新用户也能用邮箱验证码登录，只是群信息暂停同步。期间产生的事件留在论坛里，bot 恢复后补发。
 
 ## 5. 技术选型
 
+### 5.1 选型
+
 | 层 | 选型 | 说明 |
 | --- | --- | --- |
-| 框架 | Nuxt 4（Vue 3 + TypeScript），Node.js LTS | 服务端渲染，SEO 和 QQ 链接卡片都正常；服务端（Nitro）比 Next.js 轻 |
-| 数据库 | PostgreSQL 18（复用 1Panel 实例）+ Drizzle ORM + postgres.js | 上千人、存几年的数据量没有压力；备份跟着 1Panel 和服务器快照走 |
+| 运行时 | Node.js 26 LTS，pnpm | 2026 年 10 月 28 日转为 LTS，支持到 2029 年 4 月 |
+| 语言 | TypeScript 7 | Go 实现的编译器，类型检查快 8–12 倍 |
+| 前端 | React 19，开启 React Compiler | 编译时自动做组件级的性能优化，不用手写 memo |
+| 全栈框架 | React Router 8（框架模式） | 服务端渲染，SEO 和 QQ 链接卡片都正常；路由参数和 loader 数据都有生成的类型 |
+| HTTP 与接口 | Hono + `@hono/zod-openapi`（Zod 4）；用 `react-router-hono-server` 把 React Router 接进 Hono | Hono 是整个应用的 HTTP 服务器；接口定义同时用于校验请求和生成 OpenAPI 3.1 文档 |
+| 数据库 | PostgreSQL 18（复用 1Panel 实例）+ Kysely + `pg` | 迁移直接写 SQL，类型由 kysely-codegen 从数据库生成 |
 | 搜索 | PostgreSQL 全文检索（tsvector + GIN），中文在应用里二元切分 | 实例里没有中文分词扩展，这样做不用装任何扩展 |
 | 缓存 | 进程内缓存 | 单进程足够，暂不用 Redis。以后要跑多个进程时，缓存和限流换成 Redis，实时推送用 PostgreSQL 的 LISTEN/NOTIFY |
-| 校验与文档 | zod 定义请求和响应，生成 OpenAPI | 插件可以直接据此生成 Python 客户端 |
+| 样式与组件 | Tailwind CSS v4 + shadcn/ui（底层 Base UI） | 配色变量和深色模式沿用主站；组件代码复制进仓库，由我们自己维护 |
 | 正文 | Markdown（markdown-it），服务端渲染并过滤；Shiki 代码高亮 | 网页和 bot 发的内容走同一套渲染，高亮和主站一致 |
 | 图片 | sharp | 转 WebP、去 EXIF、限尺寸 |
 | 邮件 | nodemailer + SMTP | SMTP 在管理后台配置；建议用一个 QQ 邮箱发信，发往 qq.com 不容易进垃圾箱 |
-| 界面 | 自己写样式，沿用主站的配色变量和深色模式；弹窗、菜单等用 Reka UI | 和主站风格一致，不引入大型组件库 |
-| 实时 | SSE | 只需要服务端单向推送，经过反向代理也简单 |
+| 实时 | SSE（Hono 的 `streamSSE`） | 只需要服务端单向推送，经过反向代理也简单 |
+| 代码检查 | oxlint + tsgolint（含需要类型信息的规则）、Prettier | 基于 TypeScript 7，比 ESLint 快一个数量级 |
 | 测试 | Vitest（单元、接口）、Playwright（关键页面）、k6（压测） | 接口测试连真实的 PostgreSQL |
 | 部署 | GitHub Actions 构建镜像推到 GHCR，服务器用 docker compose 拉取运行 | 服务器不编译 |
 
-不单独起 Go 或 Rust 接口服务：公开页面需要服务端渲染，Node 进程本来就省不掉。再单独起一个接口服务，总内存差不多，却多一种语言和一个容器。
+### 5.2 选型依据
+
+代码全部由 AI 编写，所以首要标准是：AI 写出来的代码对不对，写错了能不能马上被发现。其次才是性能和内存。
+
+**React，不用 Vue**
+
+- **AI 写 React 更准**：[Web-Bench](https://arxiv.org/html/2505.07473v1) 用同样的题目测试各框架。同一个 Claude 模型写 React 得 60–65 分，写 Vue 得 30–40 分；全栈框架 Next 得 35–40 分，Nuxt 得 25 分。论文给的原因是 React 的训练数据最多，JSX 的信息密度高。
+- **类型检查**：TSX 就是 TypeScript，可以直接用 TypeScript 7 和基于它的 oxlint。Vue 的 vue-tsc 要等 TypeScript 7.1 提供编程接口（还没有日期，见 [vuejs/language-tools#5381](https://github.com/vuejs/language-tools/issues/5381)），在那之前只能用 TypeScript 6。类型错误是 AI 发现问题最主要的手段，检查越快、越完整越好。
+- **生态**：shadcn/ui 是 AI 生成界面最常用的组件体系；论坛要用的编辑器、表情选择、图片查看等组件，React 的选择也最多。
+- **性能不构成区别**：Vue 的服务端渲染更快，但在同样的内存限制下差距不大，两者的吞吐都远高于需要，见下表。
+
+**React Router 8，不用 Next.js、TanStack Start 或 Nuxt**
+
+本机实测条件：渲染同一个有 30 条帖子的列表页，每次请求都服务端渲染，V8 堆上限 128MB，Apple M4，Node 26。
+
+| 框架 | 空载内存 | 压测后内存 | 每秒请求数 | HTML 大小 |
+| --- | --- | --- | --- | --- |
+| React Router 8 + Hono | 71MB | 118–162MB | 560–590 | 32KB |
+| Nuxt 4.6 | 61–65MB | 129–163MB | 630–860 | 30KB |
+| Next.js 16.4 | 80–100MB | 132–171MB | 130–180 | 60KB |
+
+- **Next.js**：吞吐只有四分之一，HTML 大一倍（页面内容在 RSC 数据里重复了一遍），自己部署时有人报告过内存泄漏。服务端组件和客户端组件的边界，也是 AI 最容易写错的地方。
+- **TanStack Start**：类型安全最好，但还是 1.0 候选版，几天发一个版本。
+- **Nuxt**：Nuxt 5 会换用 Nitro v3 和 h3 v2，目前还在测试，现在写的服务端代码以后要迁移一次；Nitro 的 OpenAPI 生成也还是实验功能。
+- **React Router 8**：2026 年 6 月发布，改动刻意做得很小。之后每年一个大版本，和 Node LTS 对齐；采用开放治理，由 Shopify 团队维护。
+
+**Hono + `@hono/zod-openapi`**：bot 接口是最重要的功能。每个接口用 Zod 写一份定义，覆盖参数、请求头和每种状态码的响应。同一份定义既校验请求，又生成 OpenAPI 文档，所以两者不会对不上。页面的服务端代码在进程内调用这些接口，保证网页能做的 bot 都能做。
+
+**Kysely，不用 Drizzle 或 Prisma**：表结构用到了部分索引、`INCLUDE`、`fillfactor`、lz4 压缩、xid8 和 tsvector，Drizzle 和 Prisma 的建表语法都表达不全；Drizzle 1.0 也还是候选版。Kysely 只负责类型安全地写查询，迁移就是[数据表](data-model.md)里写好并验证过的 SQL。查询和 SQL 一一对应，方便用 `EXPLAIN` 调优。
+
+**一种语言、一个进程**：不另外起 Go 或 Rust 服务。服务端渲染本来就离不开 Node，拆成两个服务也省不了内存。同一份 Zod 定义前后端共用，类型从数据库一路打通到页面。
+
+### 5.3 以后容易换的
+
+Markdown 渲染、中文搜索、图片处理、发邮件、定时任务和编辑器都在服务层后面，替换时不影响接口和数据，现在不必纠结。
 
 ## 6. 身份、成员与权限
 
@@ -257,7 +297,7 @@ bot 把 QQ 群的信息推送给论坛。两种方式都支持，推荐一起用
 
 | 部分 | 内存 | 磁盘 |
 | --- | --- | --- |
-| mousehole 容器 | 常驻约 100–150MB；容器上限 384MB，V8 堆上限 256MB | 镜像约 200MB |
+| mousehole 容器 | 空载约 80–110MB（框架本身实测约 70MB），满负载约 150–200MB；V8 堆上限 192MB，容器上限 384MB，给图片处理留出余量 | 镜像约 200MB |
 | PostgreSQL | 共用现有实例的共享缓存；连接池最多 10 个连接，约增加 30–80MB | 每条回复平均 2–5KB（含 HTML、索引和检索数据），十万条约 200–500MB |
 | 图片 | 处理时短暂占用，同时最多处理 2 张 | 每张约 100–300KB；按每天 10 张算，每年约 1GB |
 
@@ -265,7 +305,7 @@ bot 把 QQ 群的信息推送给论坛。两种方式都支持，推荐一起用
 
 ### 11.2 做法
 
-- 未登录访客看到的页面用 Nitro 缓存（过期后先返回旧页面、后台刷新）：主题页 10 秒，列表页 30 秒。登录用户的页面实时渲染。
+- 未登录访客看到的页面在进程内缓存（过期后先返回旧页面、后台刷新）：主题页 10 秒，列表页 30 秒。登录用户的页面实时渲染。
 - 热门排序每 10 分钟在内存里算一次（只算最近 7 天的主题），不写库。
 - 浏览数先在内存里累计，每分钟批量写一次。
 - 数据库层面的优化见[数据表 · 约定](data-model.md#约定)。
@@ -278,7 +318,7 @@ bot 把 QQ 群的信息推送给论坛。两种方式都支持，推荐一起用
 
 ## 12. 部署与运维
 
-- **镜像**：GitHub Actions 运行测试并构建镜像，推到 `ghcr.io/mousebaoyan/mousehole`。服务器只拉镜像，不在服务器上编译。
+- **镜像**：基于 `node:26-slim`。GitHub Actions 运行测试并构建镜像，推到 `ghcr.io/mousebaoyan/mousehole`。服务器只拉镜像，不在服务器上编译。
 - **compose**：`mousehole` 服务加入 `1panel-network`，通过容器名连接 PostgreSQL；端口只监听 `127.0.0.1`；图片目录挂载为数据卷；配置健康检查（`/healthz`）和日志轮转。
 - **数据库**：在 1Panel 里新建 `mousehole` 库和同名账号，这个账号只有 `mousehole` 库的权限；连接串通过环境变量传入。
 - **迁移**：启动时自动执行，先取 advisory lock，防止重复执行。

@@ -14,7 +14,7 @@
 
 ## 技术栈
 
-Nuxt 4（Vue 3 + TypeScript）全栈，PostgreSQL 18 + Drizzle ORM，Docker 部署。
+React 19 + React Router 8 + Hono 全栈（TypeScript 7，Node.js 26），PostgreSQL 18 + Kysely，Docker 部署。选型依据见[总体设计 · 技术选型](docs/design.md#5-技术选型)。
 
 ## 相关项目
 
