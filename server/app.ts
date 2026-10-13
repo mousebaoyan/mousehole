@@ -10,6 +10,7 @@ import { membersRoutes } from "./modules/members/routes.ts";
 import { notificationsRoutes } from "./modules/notifications/routes.ts";
 import { qqRoutes } from "./modules/qq/routes.ts";
 import { reactionsRoutes } from "./modules/reactions/routes.ts";
+import { searchRoutes } from "./modules/search/routes.ts";
 import { threadsRoutes } from "./modules/threads/routes.ts";
 import { serveUpload, uploadsRoutes } from "./modules/uploads/routes.ts";
 import { serveAvatar, usersRoutes } from "./modules/users/routes.ts";
@@ -31,6 +32,7 @@ const api = createRouter()
   .route("/", reactionsRoutes)
   .route("/", notificationsRoutes)
   .route("/", eventsRoutes)
+  .route("/", searchRoutes)
   .route("/", adminRoutes);
 
 api.doc31("/openapi.json", { openapi: "3.1.0", info: { title: "鼠洞", version: "1" } });

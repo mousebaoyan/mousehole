@@ -10,6 +10,7 @@ export default [
     route("u/:id", "routes/user.tsx"),
     route("notifications", "routes/notifications.tsx"),
     route("settings", "routes/settings.tsx"),
+    route("search", "routes/search.tsx"),
   ]),
   layout("routes/login-layout.tsx", [
     route("login", "routes/login.tsx"),
