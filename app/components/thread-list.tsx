@@ -144,9 +144,9 @@ function ThreadRow({
       </div>
       <div className="relative flex gap-0.5 max-md:hidden">
         {[thread.author, ...thread.posters].map((p) => (
-          <span key={p.id} title={p.display_name}>
+          <Link key={p.id} to={`/u/${p.id}`} title={p.display_name} className="rounded-full">
             <UserAvatar user={p} className="size-7" />
-          </span>
+          </Link>
         ))}
       </div>
       <div className="flex flex-col items-end gap-1 md:items-center">

@@ -20,6 +20,7 @@ import { cn } from "cn";
 import { Dropdown, menuItem } from "~/components/disclosure";
 import { PROSE } from "~/components/prose";
 import { UserAvatar } from "~/components/user-avatar";
+import { UserCard } from "~/components/user-card";
 import { UserBadges } from "~/components/user-badges";
 import { Button, buttonVariants } from "~/components/ui/button";
 import { Textarea } from "~/components/ui/textarea";
@@ -115,9 +116,13 @@ export function PostCard({
         </div>
       )}
       <div className="flex items-center gap-3">
-        <UserAvatar user={post.author} className="size-10 max-sm:size-9" />
+        <UserCard user={post.author} className="flex rounded-full">
+          <UserAvatar user={post.author} className="size-10 max-sm:size-9" />
+        </UserCard>
         <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-1.5 gap-y-1">
-          <span className="mr-0.5 text-body font-semibold">{post.author.display_name}</span>
+          <UserCard user={post.author} className="mr-0.5 text-body font-semibold hover:underline">
+            {post.author.display_name}
+          </UserCard>
           <UserBadges user={post.author} op={op} />
           <span className="ml-auto flex items-center gap-2 text-xs whitespace-nowrap text-muted-foreground">
             {post.via === "qq" && (

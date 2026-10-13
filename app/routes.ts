@@ -7,6 +7,7 @@ export default [
     route("t/:id", "routes/topic.tsx"),
     route("new", "routes/new-thread.tsx"),
     route("my/:list", "routes/my-threads.tsx"),
+    route("u/:id", "routes/user.tsx"),
   ]),
   layout("routes/login-layout.tsx", [
     route("login", "routes/login.tsx"),
@@ -20,6 +21,7 @@ export default [
   route("t/:id/p/:post/reactions", "routes/topic-reactions.ts"),
   route("t/:id/p/:post/boosts", "routes/topic-boosts.ts"),
   route("t/:id/reply", "routes/topic-reply.ts"),
+  route("u/:id/card", "routes/user-card.ts"),
   route("preview", "routes/preview.ts"),
   route("mention", "routes/mention.ts"),
   route("login/code", "routes/login-code.ts"),
