@@ -1,4 +1,4 @@
-import { Bell, LogOut, Menu, PenSquare, Search, Settings, User, Wrench } from "lucide-react";
+import { Bell, LogOut, Menu, PenSquare, Search, Settings, User, Wrench, X } from "lucide-react";
 import { Form, Link, useLocation } from "react-router";
 import { Drawer, Dropdown, menuItem } from "~/components/disclosure";
 import { ForumNav } from "~/components/forum-nav";
@@ -21,15 +21,31 @@ export function SiteHeader({ me }: { me: Me | null }) {
           </Drawer>
           <Logo />
         </div>
-        <label className="hidden h-9 w-full items-center gap-2 rounded-full bg-secondary px-3.5 text-sm text-muted-foreground focus-within:ring-2 focus-within:ring-ring/40 md:flex">
+        {/* The browser's own clear button is hidden: it ignores the theme. Ours is a reset button,
+            shown in place of the shortcut hint once something is typed. */}
+        <form
+          action="/search"
+          className="hidden h-9 w-full items-center gap-2 rounded-full bg-secondary px-3.5 text-sm text-muted-foreground focus-within:ring-2 focus-within:ring-ring/40 md:flex"
+        >
           <Search className="size-4 shrink-0" />
           <input
             type="search"
+            name="q"
+            aria-label="搜索"
             placeholder="搜索主题、回复、用户"
-            className="w-full bg-transparent text-foreground outline-none placeholder:text-muted-foreground"
+            className="peer w-full bg-transparent text-foreground outline-none placeholder:text-muted-foreground [&::-webkit-search-cancel-button]:hidden"
           />
-          <kbd className="rounded border bg-background px-1.5 font-sans text-2xs">/</kbd>
-        </label>
+          <kbd className="rounded border bg-background px-1.5 font-sans text-2xs peer-[:not(:placeholder-shown)]:hidden">
+            /
+          </kbd>
+          <button
+            type="reset"
+            aria-label="清空"
+            className="-mr-1 rounded-full p-0.5 hover:bg-background hover:text-foreground peer-placeholder-shown:hidden"
+          >
+            <X className="size-3.5" />
+          </button>
+        </form>
         <div className="ml-auto flex items-center gap-1 md:justify-self-end">
           <Button variant="ghost" size="icon" className="md:hidden" aria-label="搜索">
             <Search />
