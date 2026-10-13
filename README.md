@@ -8,9 +8,9 @@
 
 | 文档 | 内容 |
 | --- | --- |
-| [总体设计](docs/design.md) | 目标、已定决策、架构、技术选型、身份与权限、登录、内容、性能、部署、安全与隐私、路线图 |
+| [总体设计](docs/design.md) | 目标、已定决策、架构、技术选型、成员资格与同步、登录、内容、管理后台、性能、部署、安全与隐私、路线图 |
 | [数据表](docs/data-model.md) | PostgreSQL 表结构、索引和查询约定 |
-| [接口](docs/api.md) | 接口清单、bot 代操作、幂等、QQ 消息映射、事件流、登录与同步流程 |
+| [接口](docs/api.md) | 接口清单、bot 代操作、幂等、成员同步、事件流、登录与部署流程 |
 
 ## 技术栈
 
@@ -19,3 +19,7 @@ Nuxt 4（Vue 3 + TypeScript）全栈，PostgreSQL 18 + Drizzle ORM，Docker 部�
 ## 相关项目
 
 - [鼠群官网](https://mousebaoyan.cn/)（[源码](https://github.com/mousebaoyan/mousebaoyan.github.io)）
+
+## 许可证
+
+[MIT](LICENSE)

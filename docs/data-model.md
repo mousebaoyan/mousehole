@@ -18,60 +18,72 @@
 
 ```sql
 CREATE TABLE users (
-  id                integer GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-  qq                bigint  UNIQUE,                 -- 只在注销后为 NULL
-  display_name      text    NOT NULL,               -- 自定义名 > 主群群名片 > QQ 昵称，相关字段变化时重算
-  custom_name       text,                           -- 本人设置的显示名；NULL 表示跟随 QQ
-  qq_nickname       text    NOT NULL DEFAULT '',
-  bio               text    NOT NULL DEFAULT '',
-  role              text    NOT NULL DEFAULT 'user'
+  id                integer  GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  qq                bigint   UNIQUE,                 -- 只在注销后为 NULL
+  display_name      text     NOT NULL,               -- 自定义名 > 主群群名片 > QQ 昵称，相关字段变化时重算
+  custom_name       text,                            -- 本人设置的显示名；NULL 表示跟随 QQ
+  qq_nickname       text     NOT NULL DEFAULT '',
+  bio               text     NOT NULL DEFAULT '',
+  level             smallint,                        -- 论坛等级：主群的群等级，不在主群时取其他群里最高的
+  role              text     NOT NULL DEFAULT 'user'
                     CHECK (role IN ('user', 'moderator', 'admin', 'bot')),
-  role_locked       boolean NOT NULL DEFAULT false, -- true：角色由管理员指定，同步不覆盖
-  member_status     text    NOT NULL DEFAULT 'member'
-                    CHECK (member_status IN ('member', 'former')),
-  restriction       text    CHECK (restriction IN ('mute', 'ban')),
-  restricted_until  timestamptz,                    -- restriction 不为空、本列为 NULL 表示永久
-  allow_proxy       boolean NOT NULL DEFAULT true,  -- 是否允许 bot 以本人身份操作
-  notify_prefs      jsonb   NOT NULL DEFAULT '{}',  -- 各类通知的站内、QQ 提醒开关
-  avatar_version    integer NOT NULL DEFAULT 0,     -- 头像缓存版本，拼在头像地址里
-  thread_count      integer NOT NULL DEFAULT 0,
-  post_count        integer NOT NULL DEFAULT 0,
-  like_received     integer NOT NULL DEFAULT 0,
-  activated_at      timestamptz,                    -- 第一次登录的时间；NULL 表示还没登录过
+  role_locked       boolean  NOT NULL DEFAULT false, -- true：角色由管理员指定，同步不覆盖
+  member_status     text     NOT NULL DEFAULT 'member'
+                    CHECK (member_status IN ('member', 'frozen')), -- frozen：不在任何启用的群里
+  restriction       text     CHECK (restriction IN ('mute', 'ban')),
+  restricted_until  timestamptz,                     -- restriction 不为空、本列为 NULL 表示永久
+  allow_proxy       boolean  NOT NULL DEFAULT true,  -- 是否允许 bot 以本人身份操作
+  notify_prefs      jsonb    NOT NULL DEFAULT '{}',  -- 各类通知的站内、QQ 提醒开关
+  avatar_version    integer  NOT NULL DEFAULT 0,     -- 头像缓存版本，拼在头像地址里
+  thread_count      integer  NOT NULL DEFAULT 0,
+  post_count        integer  NOT NULL DEFAULT 0,
+  like_received     integer  NOT NULL DEFAULT 0,
+  activated_at      timestamptz,                     -- 第一次登录的时间；NULL 表示还没登录过
   last_seen_at      timestamptz,
   created_at        timestamptz NOT NULL DEFAULT now(),
-  deleted_at        timestamptz                     -- 注销时间
+  deleted_at        timestamptz                      -- 注销时间
 );
 
 CREATE TABLE qq_groups (
-  id          bigint  PRIMARY KEY,                  -- QQ 群号
-  name        text    NOT NULL DEFAULT '',
-  is_primary  boolean NOT NULL DEFAULT false,       -- 主群：显示名优先取这个群的群名片
-  enabled     boolean NOT NULL DEFAULT true,        -- 停用后不再计入成员状态，例如被封的旧群
-  synced_at   timestamptz,                          -- 最近一次完整同步
-  created_at  timestamptz NOT NULL DEFAULT now()
+  id                bigint   PRIMARY KEY,            -- QQ 群号
+  name              text     NOT NULL DEFAULT '',
+  member_count      integer,
+  max_member_count  integer,
+  is_primary        boolean  NOT NULL DEFAULT false, -- 主群：显示名和等级优先取这个群的
+  enabled           boolean  NOT NULL DEFAULT true,  -- 停用后不再计入成员资格，例如被封的旧群
+  info_synced_at    timestamptz,                     -- 最近一次推送群资料
+  full_synced_at    timestamptz,                     -- 最近一次全量同步
+  delta_synced_at   timestamptz,                     -- 最近一次增量同步
+  shrink_held_at    timestamptz,                     -- 最近一次因名单骤减被拦下的全量
+  created_at        timestamptz NOT NULL DEFAULT now()
 );
 CREATE UNIQUE INDEX qq_groups_primary ON qq_groups (is_primary) WHERE is_primary;
 
 CREATE TABLE group_members (
-  group_id     bigint  NOT NULL REFERENCES qq_groups (id),
-  user_id      integer NOT NULL REFERENCES users (id),
-  card         text    NOT NULL DEFAULT '',         -- 群名片
-  role         text    NOT NULL DEFAULT 'member' CHECK (role IN ('owner', 'admin', 'member')),
-  title        text    NOT NULL DEFAULT '',         -- 群专属头衔
-  level        text    NOT NULL DEFAULT '',         -- 群等级
-  joined_at    timestamptz,
-  left_at      timestamptz,                         -- NULL 表示仍在群里
-  left_reason  text    CHECK (left_reason IN ('leave', 'kick', 'unknown')),
-  updated_at   timestamptz NOT NULL DEFAULT now(),
+  group_id      bigint   NOT NULL REFERENCES qq_groups (id),
+  user_id       integer  NOT NULL REFERENCES users (id),
+  card          text     NOT NULL DEFAULT '',        -- 群名片
+  role          text     NOT NULL DEFAULT 'member' CHECK (role IN ('owner', 'admin', 'member')),
+  title         text     NOT NULL DEFAULT '',        -- 专属头衔
+  level         smallint,                            -- 群等级
+  joined_at     timestamptz,
+  last_sent_at  timestamptz,                         -- 最后发言时间，按小时取整
+  left_at       timestamptz,                         -- NULL 表示仍在群里
+  left_reason   text     CHECK (left_reason IN ('leave', 'kick', 'unknown')),
+  observed_at   timestamptz NOT NULL,                -- 这行数据的读取时间，比它旧的推送会被忽略
   PRIMARY KEY (group_id, user_id)
 );
 CREATE INDEX group_members_user ON group_members (user_id);
 ```
 
-- `member_status`：在任意一个启用的群里（`left_at IS NULL`）为 `member`，否则为 `former`。成员变动或群的启用状态变化时重算。`left_reason` 只做记录，不影响发帖。
-- 角色：未锁定角色的用户，取所有启用群里最高的群角色，群主对应 `admin`，群管理员对应 `moderator`。
-- 注销：清空 QQ 号、资料和头像，显示名改为"已注销用户"。之后同步时，会为这个 QQ 号新建一个未激活账号。
+- **成员资格**：在任意一个启用的群里（`left_at IS NULL`）为 `member`，否则为 `frozen`。这个人的群成员记录变化、或者群的启用状态变化时重算。没有任何群成员记录的账号（只有首次部署命令创建的管理员）保持创建时的状态。
+- **角色**：未锁定角色的用户，取所在的启用群里最高的群角色，群主对应 `admin`，群管理员对应 `moderator`；冻结后变回 `user`。机器人（`is_robot`）同步为 `bot`。
+- **等级和显示名**：取主群的记录；不在主群时，取其他启用群里等级最高的那条。
+- **全量同步**：
+  - 名单里的人逐个合并：没带的字段保持原值；只有字段有变化、且推送的读取时间不早于这行的 `observed_at` 时才写入。
+  - 名单里没有、仍在群里、`observed_at` 又早于这次全量的成员，标记为退群（`left_reason = 'unknown'`）。
+  - 要标记的人数超过当前人数的 20% 时，这次只更新资料、记下 `shrink_held_at`；下一次全量仍然这样，就照常标记。
+- **注销**：清空 QQ 号、资料和头像，显示名改为"已注销用户"。之后同步时，会为这个 QQ 号新建一个未激活账号。
 
 ## 登录与 bot
 
@@ -295,7 +307,7 @@ CREATE UNIQUE INDEX notifications_merge ON notifications (user_id, group_key)
 
 - 关注级别：`watching` 每个新楼层都通知，`normal` 只在回复我、@我时通知，`muted` 都不通知。发主题时自动设为 `watching`。
 - 合并通知：未读期间再次触发同一个 `group_key`，只更新触发者、次数和时间，不新增行。
-- 已读超过 180 天的通知每天清理。
+- 冻结的账号不再产生新通知。已读超过 180 天的通知每天清理。
 
 ## 图片
 
@@ -356,7 +368,7 @@ CREATE TABLE events (
   ORDER BY id LIMIT 100;
   ```
 
-- 事务提交后发 `NOTIFY forum_events`，SSE 连接收到通知再读取，不用轮询。
+- 事务提交后发 `NOTIFY mousehole_events`，SSE 连接收到通知再读取，不用轮询。
 - 事件保留 7 天，每天清理。
 
 ## 管理
@@ -380,7 +392,7 @@ CREATE TABLE audit_logs (
   actor_id     integer REFERENCES users (id),      -- 以谁的身份
   operator_id  integer REFERENCES users (id),      -- 让 bot 操作的人
   token_id     integer REFERENCES api_tokens (id), -- 经由哪个 bot token；网页操作为 NULL
-  action       text    NOT NULL,                   -- 例如 thread.create、post.hide、user.mute、session.create
+  action       text    NOT NULL,                   -- 例如 thread.create、post.hide、user.mute、member.freeze
   target_type  text,
   target_id    integer,
   data         jsonb   NOT NULL DEFAULT '{}',      -- 变更前后的关键字段、来源消息、审核理由等
@@ -391,12 +403,13 @@ CREATE INDEX audit_logs_target ON audit_logs (target_type, target_id);
 CREATE INDEX audit_logs_actor ON audit_logs (actor_id, id DESC);
 
 CREATE TABLE settings (
-  key    text  PRIMARY KEY,
-  value  jsonb NOT NULL
+  key    text  PRIMARY KEY,   -- 例如 site、login、smtp、level_titles、qq_visibility
+  value  jsonb NOT NULL       -- 密码类的值用 APP_SECRET 加密（AES-256-GCM）后存储
 );
 ```
 
-审计日志记录：经由 bot 的所有写操作、所有管理和审核操作、登录，以及成员角色和状态的变化。网页上普通的点赞和回复不记，内容本身就是记录。
+- 审计日志记录：经由 bot 的所有写操作、所有管理和审核操作、登录，以及成员角色、冻结和恢复。网页上普通的点赞和回复不记，内容本身就是记录。
+- 设置在进程内缓存，后台修改后立即刷新，不用重启。
 
 ## 搜索
 
@@ -418,8 +431,9 @@ CREATE INDEX post_search_document ON post_search USING gin (document);
 | --- | --- |
 | `polls`、`poll_votes` | 投票帖 |
 | `points_ledger`、`check_ins` | 鼠币流水、签到 |
-| `badges`、`user_badges` | 徽章 |
+| `badges`、`user_badges` | 徽章，包括由群荣誉同步来的徽章 |
 | `anonymous_aliases` | 匿名编号：同一主题里同一个人的编号固定，例如"匿名鼠鼠 3" |
+| `group_notices`、`group_essences`、`group_files` | 同步来的群公告、精华消息、群文件目录 |
 
 ## 热点查询与索引
 
@@ -432,6 +446,8 @@ CREATE INDEX post_search_document ON post_search USING gin (document);
 | 主题第 N 页 | `posts_floor` |
 | 某一层的楼中楼 | `posts_sub` |
 | 用户的主题和回复 | `threads_author`、`posts_author` |
+| 全量同步时取出一个群的成员 | `group_members` 主键 |
+| 重算一个人的成员资格 | `group_members_user` |
 | 未读通知数 | `notifications_unread` |
 | 给关注者发通知 | `thread_users_watchers` |
 | 收藏列表 | `thread_users_bookmarks` |

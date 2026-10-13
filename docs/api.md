@@ -5,10 +5,10 @@
 ## 1. 约定
 
 - **地址**：`https://bbs.mousebaoyan.cn/api/v1`。下文的路径都省略 `/api/v1` 前缀。
-- **格式**：请求和响应都是 JSON，字段用 snake_case，时间是 Unix 秒。
+- **格式**：请求和响应都是 JSON，字段用 snake_case，时间是 Unix 秒。请求体较大时可以用 `Content-Encoding: gzip` 压缩。
 - **认证**：网页用 Cookie 会话；bot 用 `Authorization: Bearer <token>`。
 - **指代用户**：路径、请求头和请求体里的用户，可以写论坛用户 ID（`123`），也可以写 QQ 号（`qq:123456789`）。
-- **QQ 号**：返回给已登录的成员、bot 和管理员；访客看不到（站点设置可以改成公开）。
+- **QQ 号**：返回给已登录的成员、bot 和管理员；访客和冻结的账号看不到（站点设置可以改成公开）。
 - **分页**：列表返回 `{ "items": [...], "next_cursor": "..." }`，取下一页时带 `?cursor=`。主题里的楼层用 `?page=`，每页 30 层。
 - **错误**：HTTP 状态码加 `{ "error": { "code": "thread_locked", "message": "主题已锁定" } }`。`code` 固定不变，插件据此判断；`message` 给人看，以后可能调整。
 - **限流**：按 IP、用户和 token 分别限流，超出时返回 `429` 和 `Retry-After`。
@@ -19,7 +19,7 @@
 ```jsonc
 // 用户。qq、member_status、activated 只返回给成员、bot 和管理员
 { "id": 7, "display_name": "鼠鼠", "avatar_url": "/avatars/7.webp?v=3", "role": "user",
-  "qq": 123456789, "card": "26-某某大学-CV", "title": "26届", "level": "活跃",
+  "qq": 123456789, "card": "26-某某大学-CV", "level": 5, "level_name": "活跃", "title": "26届",
   "joined_at": 1740000000, "member_status": "member", "activated": true }
 
 // 主题。匿名主题的 author 为 null
@@ -49,7 +49,7 @@ token 由管理员在后台创建，只显示一次。一个 token 可以有多�
 | `act` | 以群友身份做普通操作：发帖、回复、编辑、删除、点赞、收藏、关注、举报、上传、读通知 |
 | `moderate` | 版主操作：审核（通过、隐藏）、置顶、精华、锁定、移动、处理举报、禁言、管理标签 |
 | `admin` | 管理员操作：封禁、设置角色、管理版块、站点设置、关联 QQ 群、查看操作日志 |
-| `sync` | 推送 QQ 群和成员数据 |
+| `sync` | 推送 QQ 群资料和成员数据 |
 | `auth` | 确认登录口令、签发登录链接 |
 | `events` | 订阅事件流 |
 
@@ -64,7 +64,7 @@ token 由管理员在后台创建，只显示一次。一个 token 可以有多�
 ### 2.3 规则
 
 - **权限取交集**：以 bot 自己的账号操作时，能做什么由 token 的范围决定；代表某位成员时，还要这位成员自己有这个权限。例如代表普通成员时，即使 token 有 `moderate`，也不能锁帖。
-- **只能代表成员**：被代表的人必须是已同步、未注销的成员，否则返回 `404 unknown_member`。有人刚进群、论坛还没同步到时，插件先推送进群事件。
+- **只能代表成员**：被代表的人必须是同步过、没注销的账号，否则返回 `404 unknown_member`。冻结的账号只能读，写操作返回 `403 member_frozen`。有人刚进群、论坛还没同步到时，插件先推送一条增量。
 - **代发开关**：成员关闭"允许代发"后，只有他本人让 bot 操作（`X-Operator` 就是本人）时才放行，否则写操作返回 `403 proxy_disabled`。读操作不受影响。
 - **操作人校验**：带 `X-Operator` 时，论坛会检查操作人有没有资格：代表别人操作时，操作人必须是版主或管理员；以 bot 账号执行管理操作时，操作人自己必须有这个权限。不通过返回 `403 operator_not_allowed`。没有操作人的场景（例如定时任务）可以不带这个头；后台可以设为必须带。
 - **来源标注**：代表成员发的内容，带来源消息时 `via` 为 `qq`，页面标"来自群聊"；否则为 `bot`，标"由机器人代发"。本人可以编辑和删除。
@@ -109,7 +109,7 @@ token 由管理员在后台创建，只显示一次。一个 token 可以有多�
 
 ## 3. 接口清单
 
-"权限"一栏写的是：网页用户需要的身份 / bot token 需要的范围。
+"权限"一栏写的是：网页用户需要的身份 / bot token 需要的范围。这里的"成员"指已登录、没被冻结的账号。
 
 ### 3.1 登录与账号
 
@@ -120,21 +120,23 @@ token 由管理员在后台创建，只显示一次。一个 token 可以有多�
 | POST | `/bot/auth/code/confirm` | `{ code }`：以 `X-Act-As` 的身份登录发起口令的浏览器，返回该浏览器的设备摘要 | `auth` |
 | POST | `/bot/auth/links` | 给 `X-Act-As` 的成员签发一次性登录链接，10 分钟有效 | `auth` |
 | POST | `/auth/link` | `{ token }`：使用登录链接，建立会话 | 访客 |
-| POST | `/auth/email` | `{ qq }`：把验证码发到 `QQ号@qq.com`。无论这个 QQ 号是否为成员都返回成功 | 访客 |
+| POST | `/auth/email` | `{ qq }`：把验证码发到 `QQ号@qq.com`；没同步过的 QQ 号返回 `403 not_member` | 访客 |
 | POST | `/auth/email/verify` | `{ qq, code }`：校验验证码，建立会话 | 访客 |
-| POST | `/auth/logout` | 退出当前会话 | 成员 |
-| GET | `/me` | 当前用户；bot 代表某人时返回这个人 | 成员 / `read` |
+| POST | `/auth/logout` | 退出当前会话 | 已登录 |
+| GET | `/me` | 当前用户；bot 代表某人时返回这个人 | 已登录 / `read` |
 | PATCH | `/me` | 修改显示名、简介、是否允许代发、提醒偏好 | 成员 / `act` |
-| GET | `/me/sessions` | 已登录的设备 | 成员 |
-| DELETE | `/me/sessions/{id}` | 让某个设备下线 | 成员 |
-| GET | `/me/export` | 导出自己的全部内容 | 成员 |
-| DELETE | `/me` | 注销账号：`{ keep_content }`，`true` 保留内容、署名改为"已注销用户"，`false` 一并删除 | 成员 |
+| GET | `/me/sessions` | 已登录的设备 | 已登录 |
+| DELETE | `/me/sessions/{id}` | 让某个设备下线 | 已登录 |
+| GET | `/me/export` | 导出自己的全部内容 | 已登录，冻结了也可以 |
+| DELETE | `/me` | 注销账号：`{ keep_content }`，`true` 保留内容、署名改为"已注销用户"，`false` 一并删除 | 已登录，冻结了也可以 |
+
+三种登录方式都可以在后台单独关闭，关闭后对应接口返回 `403 login_method_disabled`。冻结的账号可以登录，但只能使用上表中标明"冻结了也可以"的接口，其他和访客一样。
 
 ### 3.2 用户
 
 | 方法 | 路径 | 说明 | 权限 |
 | --- | --- | --- | --- |
-| GET | `/users/{user}` | 资料卡：显示名、头像、角色、QQ 号、群名片、群头衔、群等级、入群时间、统计 | 访客 |
+| GET | `/users/{user}` | 资料卡：显示名、头像、角色、QQ 号、群名片、群等级、专属头衔、入群时间、是否已冻结、统计 | 访客 |
 | GET | `/users/{user}/threads` | 发过的主题，不含匿名内容 | 访客 |
 | GET | `/users/{user}/posts` | 发过的回复，不含匿名内容 | 访客 |
 | PATCH | `/users/{user}` | 设置角色、锁定角色 | 管理员 / `admin` |
@@ -215,16 +217,22 @@ token 由管理员在后台创建，只显示一次。一个 token 可以有多�
 | POST | `/notifications/read` | 标为已读：`{ ids }` 或 `{ all: true }` | 成员 / `act` |
 | GET | `/stream` | SSE：当前用户的新通知和未读数 | 成员 |
 
-### 3.9 管理
+### 3.9 管理后台
 
 | 方法 | 路径 | 说明 | 权限 |
 | --- | --- | --- | --- |
+| GET | `/admin/overview` | 概览：成员数和已激活数、今日新帖、待审核和举报数、各群同步状态、事件流是否在线、数据库和图片占用 | 管理员 / `admin` |
+| GET | `/admin/settings` | 站点设置：站点信息、登录方式、SMTP、QQ 号可见范围、默认审核方式、等级名称等；密码类字段只返回是否已设置 | 管理员 / `admin` |
+| PATCH | `/admin/settings` | 修改站点设置，立即生效 | 管理员 / `admin` |
+| POST | `/admin/settings/test-email` | `{ qq }`：用当前 SMTP 设置发一封测试邮件 | 管理员 / `admin` |
+| GET | `/admin/groups` | 已关联的群和同步状态：最近一次增量、全量、群资料的时间，被拦下的全量 | 管理员 / `admin` |
+| POST | `/admin/groups` | 关联群：`{ group_id }` | 管理员 / `admin` |
+| PATCH | `/admin/groups/{group_id}` | 启用、停用、设为主群 | 管理员 / `admin` |
+| GET | `/admin/members` | 成员列表：按 QQ 号、名字、成员资格、角色筛选 | 版主 / `moderate` |
 | GET | `/admin/pending` | 待审核的主题和回复 | 版主 / `moderate` |
 | GET | `/admin/reports` | 举报列表：`status` | 版主 / `moderate` |
 | PATCH | `/admin/reports/{id}` | 处理举报：`{ status }`，可选 `resolved`、`dismissed` | 版主 / `moderate` |
 | GET | `/admin/audit-logs` | 操作日志，可以按操作人、对象、动作筛选 | 管理员 / `admin` |
-| GET | `/admin/settings` | 站点设置 | 管理员 / `admin` |
-| PATCH | `/admin/settings` | 修改站点设置 | 管理员 / `admin` |
 | GET、POST、DELETE | `/admin/tokens` | 管理 bot token | 管理员，只能在网页上操作 |
 
 审核通过或隐藏内容，用 `PATCH /threads/{id}` 或 `PATCH /posts/{id}` 修改 `status`。
@@ -233,16 +241,85 @@ token 由管理员在后台创建，只显示一次。一个 token 可以有多�
 
 | 方法 | 路径 | 说明 | 权限 |
 | --- | --- | --- | --- |
-| GET | `/bot/groups` | 已关联的 QQ 群 | `sync` |
-| PUT | `/bot/groups/{group_id}` | 关联或修改群：`name`、`is_primary`、`enabled` | `admin` |
-| PUT | `/bot/groups/{group_id}/members` | 完整成员名单：`[{ qq, nickname, card, role, title, level, join_time }]`；名单里没有的人记为已退群 | `sync` |
-| POST | `/bot/groups/{group_id}/member-events` | 成员变动：`{ type, qq, card?, time }`，`type` 为 `join`、`leave`、`kick`、`card`、`admin`、`unadmin` | `sync` |
+| GET | `/bot/groups` | 已关联且启用的群，附各自最近一次同步的时间 | `sync` |
+| PUT | `/bot/groups/{group_id}/info` | 推送群资料，见 4.4 | `sync` |
+| PUT | `/bot/groups/{group_id}/members` | 全量同步成员，见第 4 节 | `sync` |
+| PATCH | `/bot/groups/{group_id}/members` | 增量同步成员，见第 4 节 | `sync` |
 | GET | `/bot/messages/{chat_type}/{chat_id}/{message_id}` | 某条 QQ 消息对应的论坛主题或回复 | `read` |
 | PUT | `/bot/messages/{chat_type}/{chat_id}/{message_id}` | 记录 bot 发出的帖子通知：`{ thread_id, post_id? }` | `act` |
-| GET | `/bot/events` | SSE 事件流，见第 4 节 | `events` |
+| GET | `/bot/events` | SSE 事件流，见第 5 节 | `events` |
 | GET | `/bot/events/batch` | 按游标拉取事件：`after`、`limit`，返回 JSON | `events` |
 
-## 4. 事件流
+## 4. 成员同步
+
+推荐的同步频率见[总体设计 · 群信息同步](design.md#63-群信息同步)。
+
+### 4.1 全量和增量
+
+```http
+PATCH /api/v1/bot/groups/987654321/members
+Authorization: Bearer <bot token>
+Content-Type: application/json
+
+{
+  "observed_at": 1760000000,
+  "members": [
+    { "user_id": 123456789, "in_group": false, "left_reason": "kick" }
+  ]
+}
+```
+
+- **`observed_at`**：插件读到这些数据的时间。增量用 QQ 通知里的 `time`，全量用调用 `get_group_member_list` 的时间。论坛只接受比自己已有数据新的推送，到达顺序乱了也没关系。
+- **全量（`PUT`）**：`members` 是完整名单。名单里有的人视为在群里；名单里没有、而且论坛已有数据比这次全量旧的人，标记为退群，原因记为未知。
+- **增量（`PATCH`）**：只处理列出的人。`in_group: false` 表示退群，`true` 表示进群；不带 `in_group` 时只更新资料。没见过的 QQ 号会新建账号。
+- **字段**：没带的字段保持原值，所以频繁的推送可以只带少量字段。论坛只写有变化的行，并返回各类数量：
+
+```json
+{ "joined": 1, "left": 0, "updated": 3, "unchanged": 1996, "stale": 0, "held": false }
+```
+
+`stale` 是比论坛已有数据旧、因此被忽略的条数；`held` 为 `true` 表示这次全量因为名单骤减被拦下了，见 4.3。
+
+### 4.2 成员记录
+
+字段名和 NapCat `get_group_member_list` 返回的一致，可以原样转发，多出来的字段会被忽略。
+
+| 字段 | 说明 |
+| --- | --- |
+| `user_id` | QQ 号，必填 |
+| `nickname` | QQ 昵称 |
+| `card` | 群名片 |
+| `role` | `owner`、`admin` 或 `member` |
+| `title` | 专属头衔 |
+| `level` | 群等级，按数字解析 |
+| `join_time` | 入群时间，Unix 秒 |
+| `last_sent_time` | 最后发言时间，Unix 秒；论坛按小时取整后存 |
+| `is_robot` | 是否机器人 |
+| `in_group` | 仅增量：`true` 进群，`false` 退群 |
+| `left_reason` | 仅增量退群时：`leave` 主动退群，`kick` 被踢 |
+
+QQ 通知可以这样转成增量：
+
+| QQ 通知（OneBot v11） | 推送的记录 |
+| --- | --- |
+| `group_increase` | `{ user_id, in_group: true }`。资料可以等下一次全量补上，也可以先查一次成员信息一起带上 |
+| `group_decrease`，`sub_type` 为 `leave` | `{ user_id, in_group: false, left_reason: "leave" }` |
+| `group_decrease`，`sub_type` 为 `kick` | `{ user_id, in_group: false, left_reason: "kick" }` |
+| `group_admin`，`sub_type` 为 `set` 或 `unset` | `{ user_id, role: "admin" }` 或 `{ user_id, role: "member" }` |
+| `group_card` | `{ user_id, card: card_new }` |
+| 专属头衔变化 | `{ user_id, title }` |
+
+### 4.3 名单骤减保护
+
+- 一次全量要标记退群的人数超过当前成员数的 20% 时，这次只更新资料、不标记退群，返回 `held: true`，后台的同步状态里也会显示出来。
+- 下一次全量如果仍然缺这么多人，就照常标记：连续两次都这样，说明是真的。
+- 增量推送的退群不受这个限制。例如清理插件一次踢掉很多人时，照常生效。
+
+### 4.4 群资料
+
+`PUT /bot/groups/{group_id}/info`：把 `get_group_info` 的返回原样传入，再加上 `observed_at`。用到的字段是 `group_name`、`member_count`、`max_member_count`。
+
+## 5. 事件流
 
 ```text
 GET /api/v1/bot/events
@@ -276,9 +353,9 @@ data: {"post":{…},"thread":{…},"author":{…},"qq_text":"……","url":"http
 - 事件里的用户对象都带 `qq`，插件可以直接 @ 或私聊。匿名内容（二期）的事件不带作者。
 - 审核可以挂在事件上：先发后审的版块监听 `thread.created`、`post.created`，先审后发的版块监听 `content.pending`，判定后调用 `PATCH` 修改 `status`。
 
-## 5. 流程
+## 6. 流程
 
-### 5.1 口令登录
+### 6.1 口令登录
 
 ```mermaid
 sequenceDiagram
@@ -302,7 +379,7 @@ sequenceDiagram
 - 设备摘要用来防骗：有人骗别人替他发送口令时，被骗的人会收到"某某设备已登录"的回复，可以马上去设置页让它下线。
 - 提示文案在后台设置，例如"私聊机器人发送：登录 482913"。插件怎样识别口令，由插件决定。
 
-### 5.2 一次性链接登录
+### 6.2 一次性链接登录
 
 ```mermaid
 sequenceDiagram
@@ -323,13 +400,13 @@ sequenceDiagram
 
 链接必须点"确认登录"才生效。QQ 会提前抓取聊天里的链接来生成预览，如果打开链接就直接登录，链接会被预览抓取用掉。
 
-### 5.3 QQ 邮箱验证码
+### 6.3 QQ 邮箱验证码
 
 1. 浏览器 `POST /auth/email`，提交 QQ 号。
-2. 如果是已同步的成员，论坛生成 6 位验证码，发到 `QQ号@qq.com`，10 分钟有效；不是成员也返回成功，但不发邮件。
+2. 同步过的 QQ 号才会收到验证码，发到 `QQ号@qq.com`，10 分钟有效；没同步过的返回 `403 not_member`。冻结的账号也能收到，登录后只能管理自己的账号。
 3. 浏览器 `POST /auth/email/verify`，提交 QQ 号和验证码；校验通过就建立会话，输错 5 次作废。
 
-### 5.4 群里的提问转到论坛
+### 6.4 群里的提问转到论坛
 
 ```mermaid
 sequenceDiagram
@@ -347,7 +424,7 @@ sequenceDiagram
     P->>F: PUT /bot/messages/group/群号/7735，thread_id 为 42
 ```
 
-### 5.5 群里的回复同步到论坛
+### 6.5 群里的回复同步到论坛
 
 ```mermaid
 sequenceDiagram
@@ -363,7 +440,7 @@ sequenceDiagram
 
 反过来，论坛上有人回复了来自群聊的内容时，`post.created` 的 `reply_to.source` 带着原消息，插件可以在群里引用原消息，把这条回复转发回去。
 
-### 5.6 通知转到 QQ
+### 6.6 通知转到 QQ
 
 ```mermaid
 sequenceDiagram
@@ -375,14 +452,30 @@ sequenceDiagram
     P->>A: 私聊或在群里 @ 提醒，方式由插件决定
 ```
 
-### 5.7 成员同步
+### 6.7 成员同步
 
-- 插件启动时和每天定时推送完整名单：`PUT /bot/groups/{group_id}/members`。
-- 收到进群、退群、被踢、改群名片、设置或取消管理员的通知时，推送对应的成员变动。
-- 论坛据此更新显示名、角色和成员状态，变化写入审计日志，并刷新对应的头像缓存。
-- 完整名单比上次少了超过 20% 时，论坛先不处理缺少的人，只记日志，等下一次同步确认，防止接口异常返回不完整的名单。
+```mermaid
+sequenceDiagram
+    participant Q as NapCat
+    participant P as 插件
+    participant F as 论坛
+    Q--)P: 通知 group_decrease，有人被踢
+    P->>F: PATCH /bot/groups/群号/members，in_group 为 false
+    F-->>P: left 为 1，这个账号冻结
+    loop 每 10 分钟
+        P->>Q: get_group_member_list
+        P->>F: PUT /bot/groups/群号/members，完整名单
+        F-->>P: 只写有变化的行，返回各类数量
+    end
+```
 
-## 6. 示例
+### 6.8 首次部署
+
+1. 部署后在容器里运行 `bootstrap --qq 你的QQ号`，得到一次性登录链接。这个 QQ 号的账号设为管理员，并锁定角色。
+2. 打开链接登录后台：关联 QQ 群、设主群，创建 bot token（按插件需要选择范围），配置 SMTP 并发一封测试邮件。
+3. 把 token 配到插件里。插件推送第一次全量后，群成员就都能登录了。
+
+## 7. 示例
 
 以群友的身份发一个问答帖：
 
