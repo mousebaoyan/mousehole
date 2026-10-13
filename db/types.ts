@@ -259,9 +259,6 @@ export interface Threads {
   like_count: Generated<number>;
   locked: Generated<boolean>;
   pinned: Generated<number>;
-  /**
-   * floors, excluding the opening post
-   */
   reply_count: Generated<number>;
   solved_post_id: number | null;
   status: Generated<string>;
