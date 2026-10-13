@@ -93,7 +93,7 @@ export async function action({ params, request, context }: Route.ActionArgs) {
     const res = emoji
       ? await api.posts[":id"].reaction.$put({ param: post, json: { emoji } })
       : await api.posts[":id"].reaction.$delete({ param: post });
-    if (res.ok) return { ok: true as const, floor };
+    if (res.ok) return { ok: true as const, saved: emoji ?? null };
     return { ok: false as const, message: (await res.json()).error.message };
   }
   if (text("intent") === "boost") {

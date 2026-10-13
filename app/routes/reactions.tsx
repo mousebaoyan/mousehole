@@ -5,6 +5,7 @@ import { cn } from "cn";
 import type { UserBrief } from "~/api-types";
 import { useDismiss } from "~/components/disclosure";
 import { UserAvatar } from "~/components/user-avatar";
+import { useSavedValue } from "~/saved-value";
 
 export const REACTIONS = [
   { key: "heart", emoji: "❤️", label: "赞" },
@@ -34,17 +35,30 @@ function tabClass(active: boolean) {
   );
 }
 
-// The reader's reaction shows at once; the counts the page was loaded with follow it. Saving it
-// happens alongside, and a failure puts it back.
-export function useReaction(base: Reactions, initial: string | null) {
-  const [mine, setMine] = useState(initial);
-  const counts: Reactions = { ...base };
-  if (initial !== null) counts[initial] = (counts[initial] ?? 1) - 1;
+// The reader's reaction shows at once, and the counts the floor was loaded with follow it; a
+// failed save puts it back.
+export function useReaction(
+  post: { id: number; reactions: Reactions; my_reaction: string | null },
+  threadId: number,
+) {
+  const { value: mine, save } = useSavedValue(
+    post.my_reaction,
+    `/t/${threadId}`,
+    "emoji",
+    (emoji) => emoji || null,
+  );
+  const counts: Reactions = { ...post.reactions };
+  if (post.my_reaction !== null) counts[post.my_reaction] = (counts[post.my_reaction] ?? 1) - 1;
   if (mine !== null) counts[mine] = (counts[mine] ?? 0) + 1;
   const sorted = Object.entries(counts)
     .filter(([, n]) => n > 0)
     .toSorted(([, a], [, b]) => b - a);
-  return { sorted, mine, setMine };
+  return {
+    sorted,
+    mine,
+    choose: (emoji: ReactionKey | null) =>
+      save({ intent: "react", post_id: post.id, emoji: emoji ?? "" }),
+  };
 }
 
 type Reactor = { user: UserBrief; emoji: string };
