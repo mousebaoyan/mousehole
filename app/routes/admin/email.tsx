@@ -4,7 +4,7 @@ import { apiContext } from "../../api.server.ts";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import type { Route } from "./+types/email.ts";
-import { Field, readForm, Result, Section } from "./parts.tsx";
+import { Field, readForm, Result, Section } from "~/components/form-parts";
 
 export function meta() {
   return [{ title: "邮件 · 管理后台" }];

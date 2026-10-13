@@ -250,6 +250,49 @@ export async function getUser(ref: UserRef, viewerId: number | null) {
   return { ...user, avatar_url: avatarUrl(user.id, avatar_version) };
 }
 
+// ---- One's own settings: see design §6.1 and §9.
+
+export async function getSettings(userId: number) {
+  return db
+    .selectFrom("users")
+    .select([
+      "custom_name",
+      "bio",
+      "allow_proxy",
+      sql<Record<string, { site?: boolean; qq?: boolean }>>`notify_prefs`.as("notify_prefs"),
+    ])
+    .where("id", "=", userId)
+    .executeTakeFirstOrThrow();
+}
+
+// Only what is given changes; each notification type given replaces what was saved for it.
+export async function updateSettings(
+  userId: number,
+  change: {
+    bio?: string;
+    allow_proxy?: boolean;
+    notify_prefs?: Record<string, { site: boolean; qq: boolean }>;
+  },
+) {
+  const { notify_prefs, ...rest } = change;
+  if (Object.keys(change).length === 0) return;
+  await db
+    .updateTable("users")
+    .set({
+      ...rest,
+      ...(notify_prefs && {
+        notify_prefs: sql`notify_prefs || ${JSON.stringify(notify_prefs)}::jsonb`,
+      }),
+    })
+    .where("id", "=", userId)
+    .execute();
+}
+
+// Written by members, which then works out the display name from it.
+export async function saveCustomName(trx: Transaction<DB>, userId: number, name: string | null) {
+  await trx.updateTable("users").set({ custom_name: name }).where("id", "=", userId).execute();
+}
+
 // ---- Following and 认可; see design §8.7. Doing either again changes nothing.
 
 async function otherUser(viewer: Viewer, ref: UserRef, self: string) {

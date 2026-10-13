@@ -127,8 +127,11 @@ export function deriveAccount(
     level: account.level,
     display_name: account.display_name,
   };
-  // Accounts no group knows of, like the bootstrap admin, keep what they were created with.
-  if (memberships.length === 0) return current;
+  // Accounts no group knows of, like the bootstrap admin, keep what they were created with,
+  // or a name they chose.
+  if (memberships.length === 0) {
+    return { ...current, display_name: account.custom_name ?? current.display_name };
+  }
 
   const active = memberships.filter((m) => m.enabled && m.left_at === null);
   // The primary group speaks for the account; otherwise the group where its level is highest.

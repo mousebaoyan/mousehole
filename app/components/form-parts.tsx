@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { data } from "react-router";
 import { cn } from "cn";
 
-// Shared by the admin pages.
+// Pieces of the forms on the settings and admin pages.
 
 export function Section({
   title,
@@ -36,6 +36,34 @@ export function Field({
       <span className="font-medium">{label}</span>
       {children}
       {hint && <span className="text-meta text-muted-foreground">{hint}</span>}
+    </label>
+  );
+}
+
+// A checkbox with its label and what it means.
+export function Check({
+  name,
+  label,
+  hint,
+  checked,
+}: {
+  name: string;
+  label: string;
+  hint?: string;
+  checked: boolean;
+}) {
+  return (
+    <label className="flex items-start gap-3 py-1.5 text-sm">
+      <input
+        type="checkbox"
+        name={name}
+        defaultChecked={checked}
+        className="mt-0.5 size-4 accent-primary"
+      />
+      <span>
+        {label}
+        {hint && <span className="block text-meta text-muted-foreground">{hint}</span>}
+      </span>
     </label>
   );
 }

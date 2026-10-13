@@ -6,7 +6,7 @@ import { Button, buttonVariants } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { NativeSelect } from "~/components/ui/native-select";
 import type { Route } from "./+types/boards.ts";
-import { Badge, choice, Field, readForm, Result, Section } from "./parts.tsx";
+import { Badge, choice, Field, readForm, Result, Section } from "~/components/form-parts";
 
 export function meta() {
   return [{ title: "版块 · 管理后台" }];

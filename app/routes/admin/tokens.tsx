@@ -5,7 +5,7 @@ import { apiContext } from "../../api.server.ts";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import type { Route } from "./+types/tokens.ts";
-import { Badge, Field, readForm, Result, Section, Time } from "./parts.tsx";
+import { Badge, Field, readForm, Result, Section, Time } from "~/components/form-parts";
 
 export function meta() {
   return [{ title: "bot · 管理后台" }];
