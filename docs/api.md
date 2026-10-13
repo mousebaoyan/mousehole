@@ -245,8 +245,8 @@ token 由管理员在后台创建，只显示一次。每个 token 绑定一个 
 
 | 方法 | 路径 | 说明 | 权限 |
 | --- | --- | --- | --- |
-| GET | `/search` | `q`、`board`、`tag`、`author`、`kind`、`cursor`；返回主题和高亮片段 | 访客 |
-| GET | `/search/similar` | `text`：一段提问原文；返回最相似的 5 个主题和得分 | 访客 |
+| GET | `/search` | `q`（最多 100 个字）、`board`、`tag`、`author`、`cursor`；每个主题一条，带最相关的那一层（`post`：`id`、`floor`）和命中处前后的纯文本 `snippet`；按相关度排，旧的逐渐靠后，每页 20 个。只有一个汉字时只搜标题 | 访客 |
+| GET | `/search/similar` | `text`：一段提问原文（最多 2000 个字）；返回最相似的 5 个主题和 0 到 1 之间的得分 `score` | 访客 |
 
 ### 3.7 上传
 

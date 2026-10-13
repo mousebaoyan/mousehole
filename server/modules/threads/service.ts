@@ -10,6 +10,7 @@ import { countBoard, countTags, findTags, getBoard, getTagId } from "../boards/s
 import { onebotToMarkdown, type Segment } from "../qq/onebot.ts";
 import { notifyOnPost, notifyPost, notifyThread } from "../notifications/service.ts";
 import { assertNotLinked, findLink, linkSource, type Source } from "../qq/service.ts";
+import { indexPost, unindexPost } from "../search/service.ts";
 import { fetchUpload, linkUploads, showImages } from "../uploads/service.ts";
 import {
   countLikes,
@@ -325,6 +326,13 @@ export async function listUserPosts(members: boolean, authorId: number, cursor?:
   };
 }
 
+// These threads as lists show them, for search results; ones the viewer can't see are left out.
+export async function threadsByIds(members: boolean, userId: number | null, ids: number[]) {
+  if (ids.length === 0) return new Map<number, Awaited<ReturnType<typeof withUsers>>[number]>();
+  const rows = await selectThreads(members, userId).where("threads.id", "in", ids).execute();
+  return new Map((await withUsers(rows)).map((t) => [t.id, t]));
+}
+
 // ---- One thread and its floors
 
 export async function getThread(id: number, members: boolean, userId: number | null) {
@@ -566,6 +574,7 @@ export async function createThread(
         last_read_at: sql<Date>`now()`,
       })
       .execute();
+    await indexPost(trx, opening.id);
     await threadCreated(trx, opening.id);
     await notifyThread(trx, { id: thread.id, postId: opening.id, authorId: viewer.id, mentions });
     await auditBot(trx, actor, "thread.create", "thread", thread.id);
@@ -646,6 +655,7 @@ export async function createPost(
     await countBoard(trx, thread.board_id, { threads: 0, posts: 1 });
     await countUserPosts(trx, viewer.id, { threads: 0, posts: 1 });
     await addReadFloors(trx, viewer.id, threadId, [[numbered.floor_count, numbered.floor_count]]);
+    await indexPost(trx, post.id);
     await postCreated(trx, post.id);
     await notifyPost(trx, { id: post.id, threadId, authorId: viewer.id, mentions }, replyToAuthor);
     await auditBot(trx, actor, "post.create", "post", post.id);
@@ -716,6 +726,7 @@ export async function editPost(
       })
       .execute();
     await linkUploads(trx, postId, images);
+    await indexPost(trx, postId);
     await postUpdated(trx, postId, viewer.id);
     await auditChange(trx, actor, post.author_id, {
       action: "post.edit",
@@ -779,6 +790,7 @@ export async function editThread(
       .forUpdate()
       .executeTakeFirstOrThrow();
 
+    let retitled: number | null = null;
     if (title !== undefined && title !== old.title) {
       // A new title is an edit of the opening post, kept in its history with the old title.
       const opening = await trx
@@ -798,6 +810,7 @@ export async function editThread(
           editor_id: viewer.id,
         })
         .execute();
+      retitled = opening.id;
     }
 
     if (tagIds !== null) {
@@ -841,6 +854,7 @@ export async function editThread(
     if (Object.values(columns).some((v) => v !== undefined)) {
       await trx.updateTable("threads").set(columns).where("id", "=", threadId).execute();
     }
+    if (retitled !== null) await indexPost(trx, retitled);
     await auditChange(trx, actor, thread.author_id, {
       action: "thread.update",
       target_type: "thread",
@@ -934,6 +948,7 @@ export async function deletePost(
     }
     await countBoard(trx, thread.board_id, { threads: 0, posts: -1 });
     await countUserPosts(trx, post.author_id, { threads: 0, posts: -1 });
+    await unindexPost(trx, postId);
     await postDeleted(trx, postId, viewer.id);
     await auditChange(trx, actor, post.author_id, {
       action: "post.delete",

@@ -1,12 +1,12 @@
 import { Bell, LogOut, Menu, PenSquare, Search, Settings, User, Wrench, X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Form, Link, useLocation, useParams } from "react-router";
 import { Drawer, Dropdown, menuItem } from "~/components/disclosure";
 import { ForumNav } from "~/components/forum-nav";
 import { Logo } from "~/components/logo";
 import { ThemeToggle } from "~/components/theme-toggle";
 import { UserAvatar } from "~/components/user-avatar";
-import { Button, buttonVariants } from "~/components/ui/button";
+import { buttonVariants } from "~/components/ui/button";
 
 type Me = { id: number; display_name: string; avatar_url: string | null; role: string };
 
@@ -22,9 +22,28 @@ function useUnread(initial: number, signedIn: boolean) {
   return live ?? initial;
 }
 
+// "/" anywhere but in a text field goes to the search box, as the hint in it says.
+function useSlashToSearch() {
+  const box = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      const typing =
+        e.target instanceof HTMLElement &&
+        (e.target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(e.target.tagName));
+      if (e.key !== "/" || typing || e.metaKey || e.ctrlKey || e.altKey) return;
+      e.preventDefault();
+      box.current?.focus();
+    }
+    addEventListener("keydown", onKey);
+    return () => removeEventListener("keydown", onKey);
+  }, []);
+  return box;
+}
+
 // `unread` is how many notifications the reader hasn't read.
 export function SiteHeader({ me, unread: loaded }: { me: Me | null; unread: number }) {
   const unread = useUnread(loaded, me !== null);
+  const searchBox = useSlashToSearch();
   const { pathname } = useLocation();
   // On a board's page, a new thread starts in that board.
   const { slug } = useParams();
@@ -46,6 +65,7 @@ export function SiteHeader({ me, unread: loaded }: { me: Me | null; unread: numb
         >
           <Search className="size-4 shrink-0" />
           <input
+            ref={searchBox}
             type="search"
             name="q"
             aria-label="搜索"
@@ -64,9 +84,13 @@ export function SiteHeader({ me, unread: loaded }: { me: Me | null; unread: numb
           </button>
         </form>
         <div className="ml-auto flex items-center gap-1 md:justify-self-end">
-          <Button variant="ghost" size="icon" className="md:hidden" aria-label="搜索">
+          <Link
+            to="/search"
+            aria-label="搜索"
+            className={buttonVariants({ variant: "ghost", size: "icon", className: "md:hidden" })}
+          >
             <Search />
-          </Button>
+          </Link>
           <ThemeToggle />
           {me ? (
             <>

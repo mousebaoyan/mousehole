@@ -192,16 +192,25 @@ const ENTITIES = { amp: "&", lt: "<", gt: ">", quot: '"', "#39": "'", "#x27": "'
 
 const graphemes = new Intl.Segmenter("zh", { granularity: "grapheme" });
 
-// Rendered HTML as plain text for previews: tags dropped, spaces collapsed, cut to `max`
-// characters as people see them.
+// Rendered HTML as plain text: tags dropped, the renderer's escapes undone, spaces collapsed.
+export function plainText(html: string) {
+  return (
+    html
+      // Blocks are kept apart by a space; inline tags just go.
+      .replaceAll(/<\/?(?:p|li|h[1-6]|blockquote|pre|br|hr|td|th)\b[^>]*>/g, " ")
+      .replaceAll(/<[^>]*>/g, "")
+      .replaceAll(
+        /&(amp|lt|gt|quot|#39|#x27);/g,
+        (_, name: keyof typeof ENTITIES) => ENTITIES[name],
+      )
+      .replaceAll(/\s+/g, " ")
+      .trim()
+  );
+}
+
+// The plain text cut to `max` characters as people see them, for previews.
 export function excerpt(html: string, max: number) {
-  const text = html
-    // Blocks are kept apart by a space; inline tags just go.
-    .replaceAll(/<\/?(?:p|li|h[1-6]|blockquote|pre|br|hr|td|th)\b[^>]*>/g, " ")
-    .replaceAll(/<[^>]*>/g, "")
-    .replaceAll(/&(amp|lt|gt|quot|#39|#x27);/g, (_, name: keyof typeof ENTITIES) => ENTITIES[name])
-    .replaceAll(/\s+/g, " ")
-    .trim();
+  const text = plainText(html);
   let count = 0;
   for (const { index } of graphemes.segment(text)) {
     if (count === max) return `${text.slice(0, index)}…`;
