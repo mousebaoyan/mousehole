@@ -9,7 +9,8 @@ import { Button, buttonVariants } from "~/components/ui/button";
 
 type Me = { id: number; display_name: string; avatar_url: string | null; role: string };
 
-export function SiteHeader({ me }: { me: Me | null }) {
+// `unread` is how many notifications the reader hasn't read.
+export function SiteHeader({ me, unread }: { me: Me | null; unread: number }) {
   const { pathname } = useLocation();
   // On a board's page, a new thread starts in that board.
   const { slug } = useParams();
@@ -69,10 +70,23 @@ export function SiteHeader({ me }: { me: Me | null }) {
                   <Wrench />
                 </Link>
               )}
-              <Button variant="ghost" size="icon" className="relative" aria-label="通知">
+              <Link
+                to="/notifications"
+                aria-label={unread > 0 ? `通知，${unread} 条未读` : "通知"}
+                title="通知"
+                className={buttonVariants({
+                  variant: "ghost",
+                  size: "icon",
+                  className: "relative",
+                })}
+              >
                 <Bell />
-                <span className="absolute top-1.5 right-1.5 size-2 rounded-full bg-brand ring-2 ring-background" />
-              </Button>
+                {unread > 0 && (
+                  <span className="absolute top-0.5 right-0 min-w-4 rounded-full bg-brand px-1 text-center text-2xs leading-4 font-semibold text-white tabular-nums ring-2 ring-background">
+                    {unread > 99 ? "99+" : unread}
+                  </span>
+                )}
+              </Link>
               <Link
                 to={slug ? `/new?board=${slug}` : "/new"}
                 className={buttonVariants({ className: "mx-1 hidden sm:inline-flex" })}
