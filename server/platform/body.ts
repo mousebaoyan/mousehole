@@ -16,12 +16,17 @@ function tooLarge(): never {
   throw new AppError(413, "payload_too_large", "请求体太大");
 }
 
-async function readCapped(stream: ReadableStream<Uint8Array>, maxSize: number) {
+// Reads a stream whole, giving up with `overflow` once it passes `maxSize` bytes.
+export async function readCapped(
+  stream: ReadableStream<Uint8Array>,
+  maxSize: number,
+  overflow: () => never,
+) {
   const chunks: Uint8Array[] = [];
   let size = 0;
   for await (const chunk of stream) {
     size += chunk.byteLength;
-    if (size > maxSize) tooLarge();
+    if (size > maxSize) overflow();
     chunks.push(chunk);
   }
   return Buffer.concat(chunks);
@@ -39,7 +44,7 @@ export const requestBody = createMiddleware(async (c, next) => {
   if (length !== null && !gzip) return next();
 
   // The size isn't known up front, or what counts is the unpacked size: read it all here.
-  const read = await readCapped(raw.body, maxSize);
+  const read = await readCapped(raw.body, maxSize, tooLarge);
   const body = gzip
     ? await gunzipAsync(read, { maxOutputLength: maxSize }).catch((error: unknown) => {
         if (error instanceof RangeError) tooLarge();

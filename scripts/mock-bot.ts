@@ -422,6 +422,70 @@ async function demo() {
       Fields.safeParse(field(replied.data, "reply_to")).data?.floor === 1,
     replied.data,
   );
+  // A question asked in the group, turned into a thread; the bot announces it, and a member
+  // answers by quoting the question.
+  const question = { chat_type: "group", chat_id: group, message_id: run * 10 + 1 };
+  const fromGroup = await call("/threads", {
+    method: "POST",
+    headers: asMember,
+    body: {
+      board: slug,
+      title: "群里的提问：夏令营要准备什么",
+      content: {
+        onebot: [
+          { type: "text", data: { text: "夏令营要准备**哪些材料**？" } },
+          { type: "image", data: { url: "https://gchat.qpic.cn/expired" } },
+        ],
+      },
+      source: question,
+    },
+  });
+  const fromGroupId = Number(field(fromGroup.data, "id"));
+  const twice = await call("/threads", {
+    method: "POST",
+    headers: asMember,
+    body: {
+      board: slug,
+      title: "群里的提问：再转一次",
+      content: { markdown: "x" },
+      source: question,
+    },
+  });
+  check(
+    "群消息转成主题；同一条消息再转返回已有的主题",
+    fromGroup.status === 201 &&
+      twice.status === 409 &&
+      field(twice.data, "thread_id") === fromGroupId,
+    `主题 ${fromGroupId}，再转 HTTP ${twice.status}`,
+  );
+  const noticeAt = `/bot/messages/group/${group}/${run * 10 + 2}`;
+  const notice = await call(noticeAt, { method: "PUT", body: { thread_id: fromGroupId } });
+  const lookedUp = await call(noticeAt);
+  check(
+    "记下帖子通知，再按消息查得到主题",
+    notice.status === 204 && field(lookedUp.data, "thread_id") === fromGroupId,
+    lookedUp.data,
+  );
+  const answer = await call(`/threads/${fromGroupId}/posts`, {
+    method: "POST",
+    headers: asMember,
+    body: {
+      content: {
+        onebot: [
+          { type: "reply", data: { id: String(question.message_id) } },
+          { type: "text", data: { text: "成绩单和推荐信" } },
+        ],
+      },
+      source: { ...question, message_id: run * 10 + 3 },
+    },
+  });
+  check(
+    "引用提问回答：记为回复主楼，标为来自群聊",
+    Fields.safeParse(field(answer.data, "reply_to")).data?.floor === 1 &&
+      field(answer.data, "via") === "qq",
+    answer.data,
+  );
+
   const hidden = await call(`/threads/${threadId}`, { token: null });
   check("访客打不开仅成员版块里的主题", hidden.status === 404, `HTTP ${hidden.status}`);
   const removed = await call(`/boards/${slug}`, { method: "DELETE" });

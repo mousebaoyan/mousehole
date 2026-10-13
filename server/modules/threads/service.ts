@@ -3,13 +3,18 @@ import type { DB } from "../../../db/types.ts";
 import { STAFF, type Actor, type Viewer } from "../../platform/access.ts";
 import { db } from "../../platform/db.ts";
 import { AppError } from "../../platform/errors.ts";
+import { log } from "../../platform/log.ts";
 import { renderMarkdown } from "../../platform/markdown.ts";
 import { recordAudit } from "../audit/service.ts";
 import { countBoard, countTags, findTags, getBoard, getTagId } from "../boards/service.ts";
-import { linkUploads, showImages } from "../uploads/service.ts";
-import { countUserPosts, userBriefs } from "../users/service.ts";
+import { onebotToMarkdown, type Segment } from "../qq/onebot.ts";
+import { assertNotLinked, findLink, linkSource, type Source } from "../qq/service.ts";
+import { fetchUpload, linkUploads, showImages } from "../uploads/service.ts";
+import { countUserPosts, membersByQq, userBriefs } from "../users/service.ts";
 
 export const PAGE_SIZE = 30;
+// Longest Markdown a post may have.
+export const MAX_BODY = 30_000;
 export const FLOOR_BATCH = 20;
 
 export type ThreadView = "latest" | "created" | "hot" | "unsolved";
@@ -310,18 +315,70 @@ async function auditBot(
   await recordAudit(trx, actor, { action, target_type: type, target_id: id });
 }
 
+// What a post says: Markdown, or a QQ message's segments that become Markdown. See docs/api.md
+// §2.5.
+export type Content = { markdown: string } | { onebot: Segment[] };
+
+// Images in a message are copied here now, before QQ's links expire; one that can't be fetched
+// becomes "[图片已失效]". A quoted message counts as replying to the floor it became, within the
+// same thread.
+async function resolveContent(
+  viewer: Viewer,
+  content: Content,
+  source: Source | undefined,
+  threadId: number | null,
+) {
+  if ("markdown" in content) return { markdown: content.markdown, replyToId: null };
+  const converted = await onebotToMarkdown(content.onebot, {
+    members: membersByQq,
+    image: (url) =>
+      fetchUpload(viewer.id, url).then(
+        (upload) => upload.url,
+        (error: unknown) => {
+          log("warn", "QQ image not copied", { error, url });
+          return null;
+        },
+      ),
+    quoted: async (messageId) => {
+      if (!source || threadId === null) return null;
+      const link = await findLink({ ...source, message_id: messageId });
+      return link?.thread_id === threadId ? link.post_id : null;
+    },
+  });
+  if (!converted.markdown) {
+    throw new AppError(400, "invalid_request", "content：消息里没有能转成正文的内容");
+  }
+  if (converted.markdown.length > MAX_BODY) {
+    throw new AppError(400, "invalid_request", "content：消息太长");
+  }
+  return converted;
+}
+
+function via(actor: Actor, source: Source | undefined) {
+  return source ? "qq" : actor.tokenId === null ? "web" : "bot";
+}
+
 export async function createThread(
   actor: Actor,
   viewer: Viewer,
   members: boolean,
-  input: { board: string; title: string; markdown: string; kind?: string; tags: string[] },
+  input: {
+    board: string;
+    title: string;
+    content: Content;
+    kind?: string;
+    tags: string[];
+    source?: Source;
+  },
 ) {
   const board = await getBoard(input.board, members);
   if (board.post_role === "moderator" && !STAFF.includes(viewer.role)) {
     throw new AppError(403, "forbidden", "这个版块只有版主能发主题");
   }
   const tagIds = await findTags(input.tags);
-  const { html, images } = await renderMarkdown(input.markdown, showImages);
+  if (input.source) await assertNotLinked(input.source);
+  const { markdown } = await resolveContent(viewer, input.content, input.source, null);
+  const { html, images } = await renderMarkdown(markdown, showImages);
 
   const id = await db.transaction().execute(async (trx) => {
     const thread = await trx
@@ -341,13 +398,14 @@ export async function createThread(
         thread_id: thread.id,
         floor: 1,
         author_id: viewer.id,
-        body: input.markdown,
+        body: markdown,
         html,
-        via: actor.tokenId === null ? "web" : "bot",
+        via: via(actor, input.source),
       })
       .returning("id")
       .executeTakeFirstOrThrow();
     await linkUploads(trx, opening.id, images);
+    if (input.source) await linkSource(trx, input.source, thread.id, opening.id);
     if (tagIds.length > 0) {
       await trx
         .insertInto("thread_tags")
@@ -374,20 +432,28 @@ export async function createPost(
   viewer: Viewer,
   members: boolean,
   threadId: number,
-  input: { markdown: string; reply_to_id?: number },
+  input: { content: Content; reply_to_id?: number; source?: Source },
 ) {
   const thread = await assertVisible(threadId, members);
   if (thread.locked && !STAFF.includes(viewer.role)) {
     throw new AppError(403, "thread_locked", "主题已锁定");
   }
-  const { html, images } = await renderMarkdown(input.markdown, showImages);
+  if (input.source) await assertNotLinked(input.source);
+  const { markdown, replyToId } = await resolveContent(
+    viewer,
+    input.content,
+    input.source,
+    threadId,
+  );
+  const replyTo = input.reply_to_id ?? replyToId ?? undefined;
+  const { html, images } = await renderMarkdown(markdown, showImages);
 
   const id = await db.transaction().execute(async (trx) => {
-    if (input.reply_to_id !== undefined) {
+    if (replyTo !== undefined) {
       const target = await trx
         .updateTable("posts")
         .set((eb) => ({ reply_count: eb("reply_count", "+", 1) }))
-        .where("id", "=", input.reply_to_id)
+        .where("id", "=", replyTo)
         .where("thread_id", "=", threadId)
         .where("deleted_at", "is", null)
         .returning("id")
@@ -413,15 +479,16 @@ export async function createPost(
       .values({
         thread_id: threadId,
         floor: numbered.floor_count,
-        reply_to_id: input.reply_to_id,
+        reply_to_id: replyTo,
         author_id: viewer.id,
-        body: input.markdown,
+        body: markdown,
         html,
-        via: actor.tokenId === null ? "web" : "bot",
+        via: via(actor, input.source),
       })
       .returning("id")
       .executeTakeFirstOrThrow();
     await linkUploads(trx, post.id, images);
+    if (input.source) await linkSource(trx, input.source, threadId, post.id);
     await trx
       .updateTable("thread_tags")
       .set({ last_post_at: numbered.last_post_at })

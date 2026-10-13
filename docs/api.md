@@ -95,11 +95,11 @@ token 由管理员在后台创建，只显示一次。每个 token 绑定一个 
 - 同一个 token 用同一个键在 7 天内再次请求时，直接返回第一次的结果，不会重复执行。
 - 第一次请求还在处理时（例如正在下载图片），重复请求返回 `409 idempotency_in_progress`，稍后重试即可。处理中超过 5 分钟视为中断，可以重新执行。第一次出了服务器错误（5xx）不算结果，重试会重新执行。
 - 同一个键用在别的接口上，返回 `422 idempotency_key_reused`。
-- 另外，如果创建请求带的 `source` 已经对应了论坛内容，返回 `409 source_exists` 并附上已有的对象，避免同一条群消息被转两次。
+- 另外，如果创建请求带的 `source` 已经对应了论坛内容，返回 `409 source_exists`，和 `error` 并列附上已有内容的 `thread_id` 和 `post_id`，避免同一条群消息被转两次。
 
 ### 2.5 内容格式
 
-发主题、回复和编辑时，`content` 三选一：
+发主题和回复时，`content` 三选一；编辑只接受 `markdown`：
 
 ```jsonc
 { "markdown": "正文……" }
@@ -113,12 +113,16 @@ token 由管理员在后台创建，只显示一次。每个 token 绑定一个 
 
 | 消息段 | 转换方式 |
 | --- | --- |
-| `text` | 原样显示，转义 Markdown 符号，保留换行 |
-| `image`、`mface` | 论坛立即下载转存（QQ 图片链接会过期）；下载失败时显示"[图片已失效]" |
+| `text` | 原样显示：转义 Markdown 符号（链接里的不转义，免得链接失效），行首的 `#`、`>`、`-`、`1.` 等不变成标题、引用和列表；保留换行 |
+| `image`、`mface` | 论坛立即下载转存（QQ 图片链接几小时就过期），只接受 QQ 的图片域名；下载失败时显示"[图片已失效]"。`mface` 的 `summary` 作为图片说明 |
 | `face` | QQ 经典表情；一期显示为"[表情]"，二期换成表情图 |
-| `at` | 已同步的成员转为 @论坛用户，并触发提醒；`all` 忽略；其他显示为"@昵称" |
-| `reply` | 被回复的消息对应论坛里的某一条时，记为回复那一条（`reply_to`）；否则忽略 |
-| 其他（`file`、`video`、`record`、`json` 等） | 显示为"[文件] 文件名"之类的占位文字 |
+| `at` | 已同步的成员转为 @论坛用户，并触发提醒；`all` 忽略；其他显示为"@昵称"（`name`，没有就是"@群友"），不显示 QQ 号 |
+| `reply` | 被回复的消息是同一个主题里某一条的来源时，记为回复那一条（`reply_to`，请求里带了 `reply_to_id` 时以它为准）；否则忽略 |
+| `file` | "[文件] 文件名" |
+| `video`、`record`、`forward`、`json` | "[视频]""[语音]""[聊天记录]""[卡片]" |
+| 其他 | "[消息]" |
+
+转换后没有内容（例如只有一个 `@全体成员`）返回 `400 invalid_request`。带 `source` 的内容标为来自群聊（`via: "qq"`）。
 
 `chat_log` 用来发"聊天记录帖"（`kind: "chatlog"`，二期），每条消息的 `message` 同样是 OneBot 消息段。插件把合并转发的节点展开后传进来即可。
 
@@ -235,7 +239,7 @@ token 由管理员在后台创建，只显示一次。每个 token 绑定一个 
 | 方法 | 路径 | 说明 | 权限 |
 | --- | --- | --- | --- |
 | POST | `/uploads` | 用 multipart 的 `file` 字段上传图片（JPEG、PNG、WebP、GIF、AVIF，最大 20MB），返回 `id`、`url`、`width`、`height`；`url` 是大图的地址，写进正文用它，同一张图再传返回同一个。不是能识别的图片返回 `400 invalid_image`；每人 10 分钟最多 30 张 | 成员 / `act` |
-| POST | `/uploads/fetch` | `{ url }`：论坛下载并转存，只接受 QQ 的图片域名 | `act` |
+| POST | `/uploads/fetch` | `{ url }`：论坛下载并转存，只接受 QQ 的图片域名（`multimedia.nt.qq.com.cn`、`gchat.qpic.cn`、`c2cpicdw.qpic.cn`、`gxh.vip.qq.com`），不跟随跳转，15 秒超时；下载失败返回 `502 fetch_failed` | `act` |
 
 一般不需要单独调用 `/uploads/fetch`：`content.onebot` 里的图片会自动转存。
 
@@ -278,8 +282,8 @@ token 由管理员在后台创建，只显示一次。每个 token 绑定一个 
 | PUT | `/bot/groups/{group_id}/info` | 推送群资料，见 4.4 | `sync` |
 | PUT | `/bot/groups/{group_id}/members` | 全量同步成员，见第 4 节 | `sync` |
 | PATCH | `/bot/groups/{group_id}/members` | 增量同步成员，见第 4 节 | `sync` |
-| GET | `/bot/messages/{chat_type}/{chat_id}/{message_id}` | 某条 QQ 消息对应的论坛主题或回复 | `read` |
-| PUT | `/bot/messages/{chat_type}/{chat_id}/{message_id}` | 记录 bot 发出的帖子通知：`{ thread_id, post_id? }` | `act` |
+| GET | `/bot/messages/{chat_type}/{chat_id}/{message_id}` | 某条 QQ 消息对应的论坛内容：`{ kind, thread_id, post_id }`，`kind` 为 `source`（内容来自这条消息）或 `notice`（bot 发的帖子通知）；没有对应时返回 `404 message_not_linked` | `read` |
+| PUT | `/bot/messages/{chat_type}/{chat_id}/{message_id}` | 记录 bot 发出的帖子通知：`{ thread_id, post_id? }`；同一条消息再记一次就覆盖；这条消息已经是某条内容的来源时返回 `409 source_exists` | `act` |
 | GET | `/bot/events` | SSE 事件流，见第 5 节 | `events` |
 | GET | `/bot/events/batch` | 按游标拉取事件：`after`、`limit`，返回 JSON | `events` |
 

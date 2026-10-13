@@ -2,7 +2,9 @@ import { createHash } from "node:crypto";
 import { mkdir, rename, rm, writeFile } from "node:fs/promises";
 import { sql, type Transaction } from "kysely";
 import type { DB } from "../../../db/types.ts";
+import { readCapped } from "../../platform/body.ts";
 import { db } from "../../platform/db.ts";
+import { AppError } from "../../platform/errors.ts";
 import { processImage } from "../../platform/images.ts";
 import type { ShownImage } from "../../platform/markdown.ts";
 
@@ -70,6 +72,44 @@ export async function storeUpload(userId: number, file: Buffer) {
     .where("sha256", "=", sha256)
     .executeTakeFirstOrThrow();
   return { ...row, url: uploadUrl(hex) };
+}
+
+export const MAX_UPLOAD = 20 * 1024 * 1024;
+
+// Where pictures sent in QQ chats and stickers are served from. Their links expire within hours,
+// which is why they are copied here as soon as a bot passes them on.
+const QQ_IMAGE_HOSTS = new Set([
+  "multimedia.nt.qq.com.cn",
+  "gchat.qpic.cn",
+  "c2cpicdw.qpic.cn",
+  "gxh.vip.qq.com",
+]);
+
+function fetchFailed(cause?: unknown) {
+  return new AppError(502, "fetch_failed", "图片下载失败，链接可能已经过期", { cause });
+}
+
+// Only QQ's image hosts, no redirects elsewhere, a time limit and a size limit: the address comes
+// from outside, and must not make this server fetch anything else.
+export async function fetchUpload(userId: number, url: string) {
+  const target = URL.parse(url);
+  if (
+    !target ||
+    (target.protocol !== "https:" && target.protocol !== "http:") ||
+    !QQ_IMAGE_HOSTS.has(target.hostname)
+  ) {
+    throw new AppError(400, "invalid_request", "url：只能转存 QQ 的图片");
+  }
+  const res = await fetch(target, { redirect: "error", signal: AbortSignal.timeout(15_000) }).catch(
+    (error: unknown) => {
+      throw fetchFailed(error);
+    },
+  );
+  if (!res.ok || !res.body) throw fetchFailed();
+  const data = await readCapped(res.body, MAX_UPLOAD, () => {
+    throw new AppError(413, "payload_too_large", "图片超过 20MB");
+  });
+  return storeUpload(userId, data);
 }
 
 // How the uploaded images among these addresses appear in a post: still images load their 960px

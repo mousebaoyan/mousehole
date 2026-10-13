@@ -6,6 +6,7 @@ import { authenticate, authRoutes, bearerToken } from "./modules/auth/routes.ts"
 import { tokenRoutes } from "./modules/auth/token-routes.ts";
 import { boardsRoutes } from "./modules/boards/routes.ts";
 import { membersRoutes } from "./modules/members/routes.ts";
+import { qqRoutes } from "./modules/qq/routes.ts";
 import { threadsRoutes } from "./modules/threads/routes.ts";
 import { serveUpload, uploadsRoutes } from "./modules/uploads/routes.ts";
 import { usersRoutes } from "./modules/users/routes.ts";
@@ -23,6 +24,7 @@ const api = createRouter()
   .route("/", boardsRoutes)
   .route("/", threadsRoutes)
   .route("/", uploadsRoutes)
+  .route("/", qqRoutes)
   .route("/", adminRoutes);
 
 api.doc31("/openapi.json", { openapi: "3.1.0", info: { title: "鼠洞", version: "1" } });
