@@ -30,6 +30,7 @@ import {
   SESSION_TTL_MS,
 } from "./service.ts";
 import { UserRefSchema } from "../users/schemas.ts";
+import { deviceSummary } from "./device.ts";
 
 const COOKIE = "session";
 // Held by the browser that asked for a login code, until the code is used or expires.
@@ -98,6 +99,7 @@ const SessionSchema = z
   .object({
     id: z.number(),
     user_agent: z.string(),
+    device: z.string().openapi({ example: "Chrome · macOS" }),
     ip: z.string().nullable(),
     created_at: z.number(),
     last_seen_at: z.number(),
@@ -370,6 +372,7 @@ export const authRoutes = createRouter()
       const sessions = await listSessions(viewer.id);
       const items = sessions.map((s) => ({
         ...s,
+        device: deviceSummary(s.user_agent),
         created_at: unix(s.created_at),
         last_seen_at: unix(s.last_seen_at),
         current: s.id === c.var.sessionId,

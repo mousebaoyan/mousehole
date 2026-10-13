@@ -4,7 +4,7 @@ import type { Actor } from "../../platform/access.ts";
 import { db } from "../../platform/db.ts";
 import { AppError } from "../../platform/errors.ts";
 import { recordAudit } from "../audit/service.ts";
-import { applyStanding, ensureMembers } from "../users/service.ts";
+import { applyStanding, ensureMembers, saveCustomName } from "../users/service.ts";
 import { deriveAccount, mergeRecord, shouldHold, type MemberRecord } from "./rules.ts";
 
 const WRITE_BATCH = 1000;
@@ -56,6 +56,14 @@ async function refreshAccounts(
     ...deriveAccount(account, byUser.get(account.id) ?? [], robots.get(account.id)),
   }));
   await applyStanding(trx, actor, standings);
+}
+
+// A name of one's own, or null to follow QQ again; the display name follows at once.
+export async function setCustomName(actor: Actor, userId: number, name: string | null) {
+  await db.transaction().execute(async (trx) => {
+    await saveCustomName(trx, userId, name);
+    await refreshAccounts(trx, actor, [userId]);
+  });
 }
 
 async function saveRows(trx: Transaction<DB>, rows: Insertable<GroupMembers>[]) {

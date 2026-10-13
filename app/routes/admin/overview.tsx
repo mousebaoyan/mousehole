@@ -1,6 +1,6 @@
 import { apiContext } from "../../api.server.ts";
 import type { Route } from "./+types/overview.ts";
-import { Section, Time } from "./parts.tsx";
+import { Section, Time } from "~/components/form-parts";
 
 export async function loader({ context }: Route.LoaderArgs) {
   const api = context.get(apiContext);

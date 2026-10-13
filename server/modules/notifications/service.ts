@@ -36,6 +36,16 @@ type Notice = {
 // Unless turned off, every type shows on the site; QQ reminders only come for these.
 const QQ_BY_DEFAULT = new Set<NotificationType>(["reply", "mention"]);
 
+// Someone's switches for every type, what they set over the defaults.
+export function notifyPrefs(saved: Record<string, { site?: boolean; qq?: boolean }>) {
+  return Object.fromEntries(
+    NOTIFICATION_TYPES.map((type) => [
+      type,
+      { site: saved[type]?.site ?? true, qq: saved[type]?.qq ?? QQ_BY_DEFAULT.has(type) },
+    ]),
+  );
+}
+
 // What happened, as the QQ reminder says it after the person's name.
 const SAID: Record<NotificationType, string> = {
   reply: "回复了你",

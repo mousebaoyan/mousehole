@@ -7,7 +7,7 @@ import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { NativeSelect } from "~/components/ui/native-select";
 import type { Route } from "./+types/tags.ts";
-import { choice, Field, readForm, Result, Section } from "./parts.tsx";
+import { choice, Field, readForm, Result, Section } from "~/components/form-parts";
 
 export function meta() {
   return [{ title: "标签 · 管理后台" }];

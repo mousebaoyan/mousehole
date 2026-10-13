@@ -159,8 +159,9 @@ token 由管理员在后台创建，只显示一次。每个 token 绑定一个 
 | POST | `/auth/email/verify` | `{ qq, code }`：校验验证码，建立会话，返回 204；不对、过期或输错 5 次作废都返回 `400 email_code_invalid`，`message` 说明是哪种 | 访客 |
 | POST | `/auth/logout` | 退出当前会话；没有登录时也返回成功 | 访客 |
 | GET | `/me` | 当前用户；bot 代表某人时返回这个人 | 已登录 / `read` |
-| PATCH | `/me` | 修改显示名、简介、是否允许代发、提醒偏好 | 成员 / `act` |
-| GET | `/me/sessions` | 已登录的设备 | 已登录 |
+| GET | `/me/settings` | 自己的设置：`custom_name`（自己起的名字，`null` 是跟着 QQ）、`bio`、`allow_proxy`、`notify_prefs`（每类通知的 `{ site, qq }` 开关，含默认值） | 已登录 / `read` |
+| PATCH | `/me` | 修改设置，只改带了的字段，返回改好的设置：`custom_name`（最多 24 个字，`null` 改回跟着 QQ，显示名随即重算）、`bio`（最多 60 个字）、`allow_proxy`、`notify_prefs`（带了的类型整体替换） | 成员 / `act` |
+| GET | `/me/sessions` | 已登录的设备：`user_agent`、`device`（例如"Chrome · macOS"）、`ip`、时间、是否当前设备 | 已登录 |
 | DELETE | `/me/sessions/{id}` | 让某个设备下线 | 已登录 |
 | GET | `/me/export` | 导出自己的全部内容 | 已登录，冻结了也可以 |
 | DELETE | `/me` | 注销账号：`{ keep_content }`，`true` 保留内容、署名改为"已注销用户"，`false` 一并删除 | 已登录，冻结了也可以 |

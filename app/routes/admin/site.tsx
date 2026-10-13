@@ -3,7 +3,7 @@ import { apiContext } from "../../api.server.ts";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import type { Route } from "./+types/site.ts";
-import { Field, readForm, Result, Section } from "./parts.tsx";
+import { Check, Field, readForm, Result, Section } from "~/components/form-parts";
 
 export function meta() {
   return [{ title: "站点 · 管理后台" }];
@@ -32,33 +32,6 @@ export async function action({ request, context }: Route.ActionArgs) {
   });
   if (res.ok) return { ok: true, message: "已保存，立即生效" };
   return { ok: false, message: (await res.json()).error.message };
-}
-
-function Check({
-  name,
-  label,
-  hint,
-  checked,
-}: {
-  name: string;
-  label: string;
-  hint?: string;
-  checked: boolean;
-}) {
-  return (
-    <label className="flex items-start gap-3 py-1.5 text-sm">
-      <input
-        type="checkbox"
-        name={name}
-        defaultChecked={checked}
-        className="mt-0.5 size-4 accent-primary"
-      />
-      <span>
-        {label}
-        {hint && <span className="block text-meta text-muted-foreground">{hint}</span>}
-      </span>
-    </label>
-  );
 }
 
 export default function Site({ loaderData: { login, bot }, actionData }: Route.ComponentProps) {

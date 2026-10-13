@@ -3,15 +3,19 @@ import { createRoute, z } from "@hono/zod-openapi";
 import type { Context } from "hono";
 import { AppError } from "../../platform/errors.ts";
 import { isMember } from "../../platform/access.ts";
-import { authorize, createRouter, errorResponse, unix } from "../../platform/http.ts";
+import { actorOf, authorize, createRouter, errorResponse, unix } from "../../platform/http.ts";
 import { UserBriefSchema, UserRefSchema } from "./schemas.ts";
+import { setCustomName } from "../members/service.ts";
+import { NOTIFICATION_TYPES, notifyPrefs } from "../notifications/service.ts";
 import {
   AVATARS_DIR,
   getProfile,
+  getSettings,
   getUser,
   searchUsers,
   setEndorsement,
   setFollow,
+  updateSettings,
 } from "./service.ts";
 
 const MeSchema = z
@@ -51,6 +55,24 @@ const UserSchema = UserBriefSchema.extend({
 }).openapi("User");
 
 const UserParam = z.object({ user: UserRefSchema });
+
+const Switches = z.object({ site: z.boolean(), qq: z.boolean() });
+
+const SettingsSchema = z
+  .object({
+    custom_name: z.string().nullable().openapi({ description: "自己起的名字；null 是跟着 QQ" }),
+    bio: z.string(),
+    allow_proxy: z.boolean().openapi({ description: "是否允许 bot 代自己发帖、回复等" }),
+    notify_prefs: z
+      .record(z.string(), Switches)
+      .openapi({ description: "每类通知的站内（site）和 QQ 提醒（qq）开关，含默认值" }),
+  })
+  .openapi("Settings");
+
+async function settingsJson(userId: number) {
+  const settings = await getSettings(userId);
+  return { ...settings, notify_prefs: notifyPrefs(settings.notify_prefs) };
+}
 
 const changed = {
   204: { description: "已更新" },
@@ -182,6 +204,63 @@ export const usersRoutes = createRouter()
     async (c) => {
       await setEndorsement(authorize(c, "act"), c.req.valid("param").user, false);
       return c.body(null, 204);
+    },
+  )
+  .openapi(
+    createRoute({
+      method: "get",
+      path: "/me/settings",
+      summary: "自己的设置：名字、简介、是否允许代发、通知开关",
+      responses: {
+        200: { description: "设置", content: { "application/json": { schema: SettingsSchema } } },
+        401: errorResponse("没有登录"),
+      },
+    }),
+    async (c) => c.json(await settingsJson(authorize(c, "read").id), 200),
+  )
+  .openapi(
+    createRoute({
+      method: "patch",
+      path: "/me",
+      summary: "修改自己的设置，只改带了的字段；notify_prefs 里带了的类型整体替换",
+      request: {
+        body: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: z.object({
+                custom_name: z
+                  .string()
+                  .trim()
+                  .min(1)
+                  .max(24)
+                  .regex(/^[^\n\r]*$/, "名字不能换行")
+                  .nullable()
+                  .optional()
+                  .openapi({ description: "最多 24 个字；null 是改回跟着 QQ" }),
+                bio: z.string().trim().max(60).optional(),
+                allow_proxy: z.boolean().optional(),
+                notify_prefs: z.partialRecord(z.enum(NOTIFICATION_TYPES), Switches).optional(),
+              }),
+            },
+          },
+        },
+      },
+      responses: {
+        200: {
+          description: "改好的设置",
+          content: { "application/json": { schema: SettingsSchema } },
+        },
+        403: errorResponse("不是成员"),
+      },
+    }),
+    async (c) => {
+      const viewer = authorize(c, "act");
+      const { custom_name, ...change } = c.req.valid("json");
+      await updateSettings(viewer.id, change);
+      if (custom_name !== undefined)
+        await setCustomName(actorOf(c, viewer), viewer.id, custom_name);
+      return c.json(await settingsJson(viewer.id), 200);
     },
   )
   .openapi(
