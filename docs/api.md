@@ -7,11 +7,11 @@
 - **地址**：`https://bbs.mousebaoyan.cn/api/v1`。下文的路径都省略 `/api/v1` 前缀。
 - **格式**：请求和响应都是 JSON，字段用 snake_case，时间是 Unix 秒。请求体较大时可以用 `Content-Encoding: gzip` 压缩；响应按 `Accept-Encoding` 用 Brotli 或 gzip 压缩。
 - **正文**：回复默认只带渲染好的 `html`；带 `?body=markdown` 时改为只带 Markdown 原文 `body`，插件转发到 QQ、网页编辑时用。
-- **认证**：网页用 Cookie 会话；bot 用 `Authorization: Bearer <token>`。
+- **认证**：网页用 Cookie 会话（名为 `session`，HttpOnly、SameSite=Lax，90 天有效，超过一小时没用过的会话在下次使用时续期）；bot 用 `Authorization: Bearer <token>`。
 - **指代用户**：路径、请求头和请求体里的用户，可以写论坛用户 ID（`123`），也可以写 QQ 号（`qq:123456789`）。
 - **QQ 号**：返回给已登录的成员、bot 和管理员；访客和冻结的账号看不到（站点设置可以改成公开）。
 - **分页**：列表返回 `{ "items": [...], "next_cursor": "..." }`，取下一页时带 `?cursor=`。主题里的楼层用 `?page=`，每页 30 层。
-- **错误**：HTTP 状态码加 `{ "error": { "code": "thread_locked", "message": "主题已锁定" } }`。`code` 固定不变，插件据此判断；`message` 给人看，以后可能调整。
+- **错误**：HTTP 状态码加 `{ "error": { "code": "thread_locked", "message": "主题已锁定" } }`。`code` 固定不变，插件据此判断；`message` 给人看，以后可能调整。各接口都可能返回的错误码：`invalid_request`（400，参数不对，`message` 指出哪个字段）、`unauthorized`（401，没有登录）、`not_found`（404）、`internal_error`（500）。
 - **限流**：按 IP、用户和 token 分别限流，超出时返回 `429` 和 `Retry-After`。
 - **CSRF**：网页的写请求校验 Origin；带 Bearer token 的请求不受影响。
 
@@ -120,10 +120,10 @@ token 由管理员在后台创建，只显示一次。一个 token 可以有多�
 | GET | `/auth/code` | 浏览器轮询口令状态；确认后建立会话，返回当前用户 | 发起口令的浏览器 |
 | POST | `/bot/auth/code/confirm` | `{ code }`：以 `X-Act-As` 的身份登录发起口令的浏览器，返回该浏览器的设备摘要 | `auth` |
 | POST | `/bot/auth/links` | 给 `X-Act-As` 的成员签发一次性登录链接，10 分钟有效 | `auth` |
-| POST | `/auth/link` | `{ token }`：使用登录链接，建立会话 | 访客 |
+| POST | `/auth/link` | `{ token }`：使用登录链接，建立会话，返回 204；链接无效、用过或过期返回 `400 login_link_invalid` | 访客 |
 | POST | `/auth/email` | `{ qq }`：把验证码发到 `QQ号@qq.com`；没同步过的 QQ 号返回 `403 not_member` | 访客 |
 | POST | `/auth/email/verify` | `{ qq, code }`：校验验证码，建立会话 | 访客 |
-| POST | `/auth/logout` | 退出当前会话 | 已登录 |
+| POST | `/auth/logout` | 退出当前会话；没有登录时也返回成功 | 访客 |
 | GET | `/me` | 当前用户；bot 代表某人时返回这个人 | 已登录 / `read` |
 | PATCH | `/me` | 修改显示名、简介、是否允许代发、提醒偏好 | 成员 / `act` |
 | GET | `/me/sessions` | 已登录的设备 | 已登录 |
@@ -472,7 +472,7 @@ sequenceDiagram
 
 ### 6.8 首次部署
 
-1. 部署后在容器里运行 `bootstrap --qq 你的QQ号`，得到一次性登录链接。这个 QQ 号的账号设为管理员，并锁定角色。
+1. 部署后在容器里运行 `node scripts/bootstrap.ts --qq 你的QQ号`（本地开发用 `pnpm bootstrap --qq 你的QQ号`），得到一次性登录链接，10 分钟内有效。这个 QQ 号的账号设为管理员，并锁定角色。
 2. 打开链接登录后台：关联 QQ 群、设主群，创建 bot token（按插件需要选择范围），配置 SMTP 并发一封测试邮件。
 3. 把 token 配到插件里。插件推送第一次全量后，群成员就都能登录了。
 
