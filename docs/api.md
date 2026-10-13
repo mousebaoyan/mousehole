@@ -53,6 +53,14 @@
   "boosts": [ { "id": 31, "user": { … }, "body": "学到了", "created_at": 1760000100 } ],
   "boost_count": 9, "my_boost": "已收藏",
   "edited_at": null, "created_at": 1760000000 }
+
+// 通知。type：reply 回复了我的楼层，mention @了我，like 赞了我的楼层，boost 给我的楼层留了短评，
+// watching 关注的主题有新楼层，following 关注的人发了新主题。like、boost 按楼层，watching 按主题，
+// 未读期间合并成一条：actor 是最近的人，count 是次数。post 是新的那一层，点赞和短评是被赞的那一层；
+// excerpt 是它正文的前 80 个字；data 里点赞带最近的 emoji，短评带最近的 body
+{ "id": 9001, "type": "like", "actor": { … }, "count": 3, "thread": { "id": 42, "title": "…" },
+  "post": { "id": 108, "floor": 3 }, "excerpt": "……", "data": { "emoji": "heart" },
+  "read": false, "created_at": 1760000000 }
 ```
 
 ## 2. bot 认证与代操作
@@ -252,9 +260,9 @@ token 由管理员在后台创建，只显示一次。每个 token 绑定一个 
 
 | 方法 | 路径 | 说明 | 权限 |
 | --- | --- | --- | --- |
-| GET | `/notifications` | 通知列表：`unread_only`、`cursor` | 成员 / `act` |
-| GET | `/notifications/unread-count` | 未读数 | 成员 / `act` |
-| POST | `/notifications/read` | 标为已读：`{ ids }` 或 `{ all: true }` | 成员 / `act` |
+| GET | `/notifications` | 通知列表，最新的在前，每页 30 条，合并的通知有新动静时排到前面：`unread_only`、`cursor` | 成员 / `act` |
+| GET | `/notifications/unread-count` | 未读数：`{ count }` | 成员 / `act` |
+| POST | `/notifications/read` | 标为已读：`{ ids }`（最多 100 条）或 `{ all: true }` | 成员 / `act` |
 | GET | `/stream` | SSE：当前用户的新通知和未读数 | 成员 |
 
 ### 3.9 管理后台
