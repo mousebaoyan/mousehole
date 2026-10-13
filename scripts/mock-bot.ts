@@ -8,10 +8,13 @@ import { createBotToken } from "../server/modules/auth/service.ts";
 import { SCOPES } from "../server/platform/access.ts";
 import { db } from "../server/platform/db.ts";
 import { env } from "../server/platform/env.ts";
+import { DEMO_THREADS } from "./demo-content.ts";
 
 const STATE_FILE = ".mock-bot.json";
 const GROUP = 100200300;
 const BOT_QQ = 900000000;
+// The demo group's members have QQ numbers from here on.
+const FIRST_QQ = 910000000;
 const MEMBERS = 30;
 
 const StateSchema = z.object({ token: z.string() });
@@ -168,7 +171,12 @@ async function setup(owner?: number) {
 
   await call("/admin/groups", { method: "POST", body: { group_id: GROUP } });
   await pushInfo(GROUP);
-  show(await pushFull(GROUP, fakeGroup(910000000, owner), true));
+  show(await pushFull(GROUP, fakeGroup(FIRST_QQ, owner), true));
+}
+
+// Acting as a member of the demo group by index.
+function asDemoMember(index: number) {
+  return { "x-act-as": `qq:${FIRST_QQ + index}` };
 }
 
 // True when created, false when it already existed.
@@ -194,6 +202,37 @@ async function seed() {
     }
   }
   console.log(`新建 ${created.boards} 个版块、${created.tags} 个标签，已有的跳过`);
+
+  const existing = await call(`/threads?board=${DEMO_THREADS[0].board}`);
+  if (Fields.array().parse(field(existing.data, "items")).length > 0) {
+    console.log("已经有主题了，不再发演示主题");
+    return;
+  }
+  for (const thread of DEMO_THREADS) {
+    const { replies, by, body, ...fields } = thread;
+    const posted = await call("/threads", {
+      method: "POST",
+      headers: asDemoMember(by),
+      body: { ...fields, content: { markdown: body } },
+    });
+    if (posted.status !== 201) throw new Error(`${thread.title}：${JSON.stringify(posted.data)}`);
+    const id = Number(field(posted.data, "id"));
+    // Post IDs by floor, for replies that answer an earlier floor.
+    const floors = Fields.array().parse(field((await call(`/threads/${id}/posts`)).data, "items"));
+    const ids = new Map(floors.map((p) => [p.floor, p.id]));
+    for (const reply of replies) {
+      const res = await call(`/threads/${id}/posts`, {
+        method: "POST",
+        headers: asDemoMember(reply.by),
+        body: {
+          content: { markdown: reply.body },
+          reply_to_id: reply.to === undefined ? undefined : ids.get(reply.to),
+        },
+      });
+      ids.set(Number(field(res.data, "floor")), field(res.data, "id"));
+    }
+  }
+  console.log(`发了 ${DEMO_THREADS.length} 个演示主题`);
 }
 
 function pushInfo(group: number) {
@@ -337,12 +376,17 @@ async function demo() {
   });
   check("普通群友不能让 bot 代表别人", sneaky.status === 403, sneaky.data);
 
-  const slug = `demo-${run}`;
+  // One board for every run: boards that ever had threads can't be deleted.
+  const slug = "demo";
   const board = await call("/boards", {
     method: "POST",
-    body: { slug, name: "演示版块", visibility: "members" },
+    body: { slug, name: "演示（仅成员）", visibility: "members" },
   });
-  check("bot 用 admin 范围新建仅成员版块", board.status === 201, board.data);
+  check(
+    "bot 用 admin 范围新建仅成员版块（已有就用现成的）",
+    board.status === 201 || board.status === 409,
+    `HTTP ${board.status}`,
+  );
   const asGuest = await call(`/boards/${slug}`, { token: null });
   const asBot = await call(`/boards/${slug}`);
   check(
@@ -398,7 +442,7 @@ function isCounts(data: unknown, expected: Record<string, unknown>) {
 
 const USAGE = `用法：pnpm mock-bot <命令>
   setup [--owner QQ号]   创建 token，关联演示群并推送 ${MEMBERS} 个假成员（--owner 让你当群主）
-  seed                   建演示用的版块和标签，已有的跳过
+  seed                   建演示用的版块、标签和主题，已有的跳过
   sync [--gzip]          再推一次演示群的完整名单
   join QQ号 / leave QQ号  增量：进群、退群
   link QQ号              给这位成员签发登录链接
@@ -423,7 +467,7 @@ switch (command) {
     show(
       await pushFull(
         GROUP,
-        fakeGroup(910000000, values.owner ? Number(values.owner) : undefined),
+        fakeGroup(FIRST_QQ, values.owner ? Number(values.owner) : undefined),
         values.gzip,
       ),
     );

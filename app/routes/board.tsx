@@ -1,7 +1,7 @@
 import { data } from "react-router";
 import { apiContext } from "../api.server.ts";
-import { ThreadFeed } from "~/components/thread-feed";
-import { listThreads, readFilter } from "~/draft-data";
+import { readFilter, ThreadFeed } from "~/components/thread-feed";
+import { unixNow } from "~/time";
 import type { Route } from "./+types/board.ts";
 
 export function meta({ loaderData }: Route.MetaArgs) {
@@ -9,11 +9,25 @@ export function meta({ loaderData }: Route.MetaArgs) {
 }
 
 export async function loader({ request, params, context }: Route.LoaderArgs) {
-  const res = await context.get(apiContext).boards[":slug"].$get({ param: { slug: params.slug } });
-  if (!res.ok) throw data("版块不存在", { status: 404 });
-  const board = await res.json();
-  const filter = readFilter(request.url);
-  return { board, ...filter, ...listThreads(board.slug, filter.tag, filter.view) };
+  const api = context.get(apiContext);
+  const { view, tag, cursor } = readFilter(request.url);
+  const [boardRes, res] = await Promise.all([
+    api.boards[":slug"].$get({ param: { slug: params.slug } }),
+    api.threads.$get({
+      query: { board: params.slug, view, tag: tag ?? undefined, cursor: cursor ?? undefined },
+    }),
+  ]);
+  if (!boardRes.ok) throw data("版块不存在", { status: 404 });
+  if (!res.ok) throw data((await res.json()).error.message, { status: res.status });
+  const page = await res.json();
+  return {
+    board: await boardRes.json(),
+    view,
+    tag,
+    threads: page.items,
+    next_cursor: page.next_cursor,
+    now: unixNow(),
+  };
 }
 
 export default function Board({ loaderData }: Route.ComponentProps) {
