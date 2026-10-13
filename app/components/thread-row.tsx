@@ -14,17 +14,19 @@ import { boards, type Thread } from "~/draft-data";
 export function ThreadRow({ thread, showBoard = true }: { thread: Thread; showBoard?: boolean }) {
   const board = boards.find((b) => b.slug === thread.board);
   return (
-    <li className="relative flex gap-3.5 rounded-xl px-3 py-3.5 before:absolute before:right-3 before:bottom-0 before:left-[3.9rem] before:h-px before:bg-border/60 last:before:hidden hover:bg-accent/60 sm:px-4 sm:before:left-[4.4rem]">
+    <li className="relative flex gap-3.5 rounded-xl px-3 py-3.5 before:absolute before:right-3 before:bottom-0 before:left-[3.9rem] before:h-px before:bg-border/70 last:before:hidden hover:bg-accent/60 sm:px-4 sm:before:left-[4.4rem] lg:gap-4 lg:py-4 lg:before:left-[4.75rem]">
       <UserAvatar user={thread.author} className="mt-0.5 size-10 max-sm:size-9" />
       <div className="min-w-0 flex-1">
         <Link
           to={`/t/${thread.id}`}
-          className="text-[15px] leading-snug font-medium text-foreground visited:text-foreground/70 after:absolute after:inset-0"
+          className="text-body leading-snug font-medium text-foreground visited:text-foreground/70 after:absolute after:inset-0 lg:text-base"
         >
-          {thread.pinned && <Pin className="mr-1 -mt-0.5 inline size-4 rotate-45 text-primary" />}
+          {thread.pinned && (
+            <Pin className="mr-1 -mt-0.5 inline size-4 rotate-45 text-brand-strong" />
+          )}
           {thread.title}
         </Link>
-        <div className="relative mt-1.5 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[13px] text-muted-foreground">
+        <div className="relative mt-1.5 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-meta text-muted-foreground">
           {showBoard && board && <BoardBadge board={board} />}
           {thread.kind === "question" &&
             (thread.solved ? (
@@ -42,7 +44,7 @@ export function ThreadRow({ thread, showBoard = true }: { thread: Thread; showBo
             </span>
           )}
           {thread.fromQQ && (
-            <span className="inline-flex items-center gap-1" title="从群聊转到论坛">
+            <span className="inline-flex items-center gap-1" title="由群聊转入">
               <MessagesSquare className="size-3.5" /> 群聊
             </span>
           )}
@@ -60,7 +62,7 @@ export function ThreadRow({ thread, showBoard = true }: { thread: Thread; showBo
             <UserAvatar key={p.id} user={p} className="size-7 ring-2 ring-background" />
           ))}
         </div>
-        <span className="flex min-w-10 items-center justify-end gap-1 text-[13px] text-muted-foreground tabular-nums">
+        <span className="flex min-w-10 items-center justify-end gap-1 text-meta text-muted-foreground tabular-nums">
           <MessageSquare className="size-3.5" />
           {thread.replies}
         </span>

@@ -31,7 +31,7 @@ export default function Board({ loaderData }: Route.ComponentProps) {
           <div className="flex-1">
             <h1 className="text-xl font-semibold">{board.name}</h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              {board.threads.toLocaleString()} 个主题 · 提问前先搜一搜，很多问题群友已经回答过
+              {board.description} · {board.threads.toLocaleString()} 个主题
             </p>
           </div>
           <Link to="/new" className={buttonVariants({ variant: "outline", size: "sm" })}>

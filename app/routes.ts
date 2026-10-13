@@ -6,8 +6,10 @@ export default [
     route("b/:slug", "routes/board.tsx"),
     route("t/:id", "routes/topic.tsx"),
   ]),
-  route("login", "routes/login.tsx"),
-  route("login/link", "routes/login-link.tsx"),
+  layout("routes/login-layout.tsx", [
+    route("login", "routes/login.tsx"),
+    route("login/link", "routes/login-link.tsx"),
+  ]),
   route("logout", "routes/logout.ts"),
   route("admin", "routes/admin.tsx"),
 ] satisfies RouteConfig;

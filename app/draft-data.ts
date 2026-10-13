@@ -1,14 +1,44 @@
 // Fake content for the style draft. Replaced by /api/v1 data once boards and threads exist.
 
-export type Board = { slug: string; name: string; color: string; threads: number };
+export type Board = {
+  slug: string;
+  name: string;
+  color: string;
+  description: string;
+  threads: number;
+};
 
 export const boards: Board[] = [
-  { slug: "announce", name: "公告", color: "#4f5663", threads: 6 },
-  { slug: "qa", name: "保研问答", color: "#2563eb", threads: 1284 },
-  { slug: "experience", name: "经验分享", color: "#1f9d63", threads: 356 },
-  { slug: "deadlines", name: "通知与截止日期", color: "#e8a21a", threads: 412 },
-  { slug: "schools", name: "院校交流", color: "#6e56cf", threads: 198 },
-  { slug: "chat", name: "闲聊", color: "#e8956b", threads: 731 },
+  { slug: "announce", name: "公告", color: "#55625f", description: "站务公告与规则", threads: 6 },
+  {
+    slug: "qa",
+    name: "保研问答",
+    color: "#e07b53",
+    description: "定位、材料、流程等问题",
+    threads: 1284,
+  },
+  {
+    slug: "experience",
+    name: "经验分享",
+    color: "#5e9a6f",
+    description: "夏令营、预推免与上岸复盘",
+    threads: 356,
+  },
+  {
+    slug: "deadlines",
+    name: "通知与截止日期",
+    color: "#d29b2f",
+    description: "各院校通知与报名截止时间",
+    threads: 412,
+  },
+  {
+    slug: "schools",
+    name: "院校交流",
+    color: "#5a7fa6",
+    description: "院校、导师与方向的选择",
+    threads: 198,
+  },
+  { slug: "chat", name: "闲聊", color: "#ad7a9f", description: "保研之外的日常", threads: 731 },
 ];
 
 export type User = {
@@ -194,6 +224,7 @@ export type Post = {
   fromQQ?: boolean;
   accepted?: boolean;
   reactions: { emoji: string; count: number; mine?: boolean }[];
+  boosts?: { user: User; text: string }[];
   replies?: { id: number; author: User; replyTo?: User; time: string; text: string }[];
   moreReplies?: number;
 };
@@ -209,6 +240,10 @@ export const topicPosts: Post[] = [
 <p>看了好几份上岸学长的简历，感觉别人都有一作或者竞赛。想问问：</p>
 <ol><li>大创只有结题报告，简历上怎么写才不显得单薄？</li><li>课程项目值得写吗，还是干脆不写？</li></ol>`,
     reactions: [{ emoji: "👀", count: 4 }],
+    boosts: [
+      { user: users.qi, text: "同问" },
+      { user: users.sea, text: "蹲一个回答" },
+    ],
   },
   {
     id: 102,
@@ -223,6 +258,16 @@ export const topicPosts: Post[] = [
     reactions: [
       { emoji: "👍", count: 18, mine: true },
       { emoji: "🎉", count: 3 },
+    ],
+    boosts: [
+      { user: users.ict, text: "清楚了，感谢！" },
+      { user: users.nj, text: "补充得很全面" },
+      { user: users.qi, text: "已收藏" },
+      { user: users.cat, text: "学到了 👍" },
+      { user: users.sea, text: "mark" },
+      { user: users.owner, text: "加精" },
+      { user: users.moon, text: "结构很清晰" },
+      { user: users.rex, text: "欢迎补充" },
     ],
     replies: [
       {
@@ -261,13 +306,35 @@ export const topicPosts: Post[] = [
   },
 ];
 
+const checkIns = [
+  "今天刷了两道机试题",
+  "背了 50 个单词",
+  "改完简历第三版",
+  "看完一篇论文",
+  "联系了一位导师",
+];
+const regulars = [users.cat, users.qi, users.moon, users.sea, users.ict, users.nj];
+
+// A long thread, to show the floor timeline.
+export const checkInPosts: Post[] = Array.from({ length: 64 }, (_, i) => ({
+  id: 1000 + i,
+  floor: i + 1,
+  author: i === 0 ? users.cat : (regulars[i % regulars.length] ?? users.cat),
+  time: `10月${String(1 + Math.floor(i / 5))}日`,
+  html:
+    i === 0
+      ? "<p>每天来这里打卡，记录当天完成的事情。</p>"
+      : `<p>打卡：${checkIns[i % checkIns.length] ?? ""}。</p>`,
+  reactions: i % 4 === 0 ? [{ emoji: "👍", count: 1 + (i % 7) }] : [],
+}));
+
 export const group = { name: "四非计算机保研鼠群", members: 1824, capacity: 2000 };
 
 export const adminOverview = {
   stats: [
     { label: "成员", value: "1,824", note: "已激活 312" },
     { label: "今日新帖", value: "37", note: "回复 214" },
-    { label: "待审核", value: "2", note: "先审后发的版块" },
+    { label: "待审核", value: "2", note: "最早 25 分钟前" },
     { label: "未处理举报", value: "1", note: "最早 3 小时前" },
   ],
   groups: [

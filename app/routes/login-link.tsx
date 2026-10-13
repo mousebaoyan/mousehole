@@ -1,5 +1,7 @@
 import { data, Form, redirect } from "react-router";
 import { apiContext, cookiesFrom } from "../api.server.ts";
+import { LogoMark } from "~/components/logo";
+import { Button } from "~/components/ui/button";
 import type { Route } from "./+types/login-link.ts";
 
 export function meta() {
@@ -18,24 +20,20 @@ export async function action({ request, context }: Route.ActionArgs) {
 
 export default function LoginLink({ actionData }: Route.ComponentProps) {
   return (
-    <main className="mx-auto max-w-sm p-6">
-      <h1 className="text-xl font-semibold">登录鼠洞</h1>
-      <p className="mt-2 text-muted-foreground">
-        这是机器人发给你的一次性登录链接，10 分钟内有效。
-      </p>
-      <Form method="post" className="mt-6">
-        <button
-          type="submit"
-          className="w-full rounded-lg bg-primary px-4 py-2.5 font-medium text-primary-foreground"
-        >
+    <>
+      <LogoMark className="size-12" />
+      <h1 className="mt-4 text-xl font-semibold">确认登录</h1>
+      <p className="mt-1 text-sm text-muted-foreground">确认后，此设备将登录鼠洞</p>
+      <Form method="post" className="mt-6 w-full max-w-xs">
+        <Button type="submit" size="lg" className="w-full">
           确认登录
-        </button>
+        </Button>
       </Form>
       {actionData && (
         <p role="alert" className="mt-4 text-sm text-destructive">
           {actionData.error}
         </p>
       )}
-    </main>
+    </>
   );
 }

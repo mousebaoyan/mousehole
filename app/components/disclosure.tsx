@@ -5,6 +5,9 @@ import { createPortal } from "react-dom";
 // would add ~40KB gzip of JavaScript, positioning library included, for every visitor.
 // Callers pass key={pathname} so a navigation closes them.
 
+export const menuItem =
+  "flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left hover:bg-accent [&_svg]:size-4 [&_svg]:text-muted-foreground";
+
 function useDismiss(open: boolean, close: () => void, inside?: RefObject<HTMLElement | null>) {
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -26,11 +29,14 @@ function useDismiss(open: boolean, close: () => void, inside?: RefObject<HTMLEle
 export function Dropdown({
   label,
   trigger,
+  triggerClassName,
   children,
 }: {
   label: string;
   trigger: ReactNode;
-  children: ReactNode;
+  triggerClassName: string;
+  // Gets `close` for items that act in place; links close the menu by navigating.
+  children: (close: () => void) => ReactNode;
 }) {
   const [open, setOpen] = useState(false);
   const root = useRef<HTMLDivElement>(null);
@@ -44,7 +50,7 @@ export function Dropdown({
         aria-expanded={open}
         aria-controls={id}
         onClick={() => setOpen(!open)}
-        className="flex rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className={triggerClassName}
       >
         {trigger}
       </button>
@@ -53,7 +59,7 @@ export function Dropdown({
           id={id}
           className="absolute top-full right-0 z-50 mt-2 flex w-48 flex-col rounded-xl border bg-popover p-1 text-sm text-popover-foreground shadow-lg"
         >
-          {children}
+          {children(() => setOpen(false))}
         </div>
       )}
     </div>
