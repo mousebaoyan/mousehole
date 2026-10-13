@@ -1,4 +1,4 @@
-import { sql, type RawBuilder, type Transaction } from "kysely";
+import { sql, type ExpressionBuilder, type RawBuilder, type Transaction } from "kysely";
 import type { DB, Json } from "../../../db/types.ts";
 import { STAFF, type Actor, type Viewer } from "../../platform/access.ts";
 import { db } from "../../platform/db.ts";
@@ -23,7 +23,18 @@ export const PAGE_SIZE = 30;
 export const MAX_BODY = 30_000;
 export const FLOOR_BATCH = 20;
 
-export type ThreadView = "latest" | "created" | "hot" | "unsolved" | "bookmarked" | "posted";
+export const VIEWS = [
+  "latest",
+  "created",
+  "hot",
+  "unsolved",
+  "new",
+  "unread",
+  "read",
+  "posted",
+  "bookmarked",
+] as const;
+export type ThreadView = (typeof VIEWS)[number];
 
 function threadNotFound() {
   return new AppError(404, "thread_not_found", "主题不存在");
@@ -38,12 +49,6 @@ function visibleThreads(members: boolean) {
     .where("threads.status", "=", "visible")
     .$if(!members, (qb) => qb.where("boards.visibility", "=", "public"));
 }
-
-// Microseconds since the epoch, exact for PostgreSQL timestamps, unlike a JavaScript Date.
-const LAST_POST_MICROS = sql<string>`(extract(epoch FROM threads.last_post_at) * 1000000)::bigint`;
-const BOOKMARK_MICROS = sql<
-  string | null
->`(extract(epoch FROM mine.bookmarked_at) * 1000000)::bigint`;
 
 // With the reader's own row in thread_users, which a guest doesn't have.
 function selectThreads(members: boolean, userId: number | null) {
@@ -73,8 +78,6 @@ function selectThreads(members: boolean, userId: number | null) {
       "mine.bookmarked_at",
       "mine.notify_level",
       sql<number | null>`upper(mine.read_floors) - 1`.as("last_read_floor"),
-      LAST_POST_MICROS.as("last_post_micros"),
-      BOOKMARK_MICROS.as("bookmark_micros"),
       // Topics first, then schools and majors.
       sql<string[]>`(
       SELECT coalesce(array_agg(tags.name ORDER BY
@@ -136,32 +139,64 @@ function badCursor(): never {
   throw new AppError(400, "invalid_request", "cursor 无效");
 }
 
-// Cursors: the last thread's ID for `created`, an offset for `hot`, otherwise the last thread's
-// activity time, or when it was bookmarked, and ID. The reader's own lists are empty for guests.
+// The reader's own, from their row in thread_users: new is this week's and never opened; unread
+// has floors past the highest one they read. See design §8.9.
+const NEW = sql<boolean>`threads.created_at > now() - interval '7 days'
+  AND mine.last_read_at IS NULL`;
+const UNREAD = sql<boolean>`mine.last_read_at IS NOT NULL
+  AND coalesce(upper(mine.read_floors) - 1, 0) < threads.floor_count`;
+
+// A board and a tag to narrow a list to; either may be left out.
+async function scopeOf(members: boolean, filter: { board?: string; tag?: string }) {
+  return {
+    board: filter.board === undefined ? null : await getBoard(filter.board, members),
+    tagId: filter.tag === undefined ? null : await getTagId(filter.tag),
+  };
+}
+
+function inScope({ board, tagId }: Awaited<ReturnType<typeof scopeOf>>) {
+  return (eb: ExpressionBuilder<DB, "threads">) =>
+    eb.and([
+      ...(board ? [eb("threads.board_id", "=", board.id)] : []),
+      ...(tagId === null
+        ? []
+        : [
+            eb.exists(
+              eb
+                .selectFrom("thread_tags")
+                .whereRef("thread_tags.thread_id", "=", "threads.id")
+                .where("thread_tags.tag_id", "=", tagId),
+            ),
+          ]),
+    ]);
+}
+
+// Cursors: the last thread's ID for `created`, an offset for `hot`, otherwise the time the list
+// is ordered by (last activity, or when the reader bookmarked or last read it) and the ID. The
+// reader's own lists are empty for guests.
 export async function listThreads(
   members: boolean,
   userId: number | null,
   filter: { board?: string; tag?: string; view: ThreadView; cursor?: string },
 ) {
   const { view, cursor } = filter;
-  const board = filter.board === undefined ? null : await getBoard(filter.board, members);
-  const tagId = filter.tag === undefined ? undefined : await getTagId(filter.tag);
+  const scope = await scopeOf(members, filter);
+  const { board, tagId } = scope;
+  const time =
+    view === "bookmarked"
+      ? "mine.bookmarked_at"
+      : view === "read"
+        ? "mine.last_read_at"
+        : "threads.last_post_at";
 
-  let query = selectThreads(members, userId).limit(PAGE_SIZE);
-  if (board) query = query.where("threads.board_id", "=", board.id);
-  if (tagId !== undefined) {
-    query = query.where((eb) =>
-      eb.exists(
-        eb
-          .selectFrom("thread_tags")
-          .whereRef("thread_tags.thread_id", "=", "threads.id")
-          .where("thread_tags.tag_id", "=", tagId),
-      ),
-    );
-  }
+  let query = selectThreads(members, userId)
+    // Microseconds, exact for PostgreSQL timestamps, unlike a JavaScript Date.
+    .select(sql<string>`(extract(epoch FROM ${sql.ref(time)}) * 1000000)::bigint`.as("micros"))
+    .where(inScope(scope))
+    .limit(PAGE_SIZE);
   // Pinned threads lead the first page of the latest list instead of taking their turn: site-wide
   // ones on the home page, the board's own ones as well on a board page. Tag lists don't pin.
-  const pinFrom = view === "latest" && tagId === undefined ? (board ? 1 : 2) : null;
+  const pinFrom = view === "latest" && tagId === null ? (board ? 1 : 2) : null;
   const pinned =
     pinFrom !== null && cursor === undefined
       ? await query
@@ -171,7 +206,7 @@ export async function listThreads(
           .execute()
       : [];
 
-  let next: (last: ThreadRow) => string;
+  let next: (last: { id: number; micros: string }) => string;
   if (view === "created") {
     query = query.orderBy("threads.id", "desc");
     if (cursor !== undefined) {
@@ -194,6 +229,9 @@ export async function listThreads(
         .where("threads.kind", "=", "question")
         .where("threads.solved_post_id", "is", null);
     }
+    if (view === "new") query = query.where(NEW);
+    if (view === "unread") query = query.where(UNREAD);
+    if (view === "read") query = query.where("mine.last_read_at", "is not", null);
     if (view === "bookmarked") query = query.where("mine.bookmarked_at", "is not", null);
     if (view === "posted") {
       query = query.where("threads.id", "in", (eb) =>
@@ -205,7 +243,6 @@ export async function listThreads(
       );
     }
     if (pinFrom !== null) query = query.where("threads.pinned", "<", pinFrom);
-    const time = view === "bookmarked" ? "mine.bookmarked_at" : "threads.last_post_at";
     query = query.orderBy(time, "desc").orderBy("threads.id", "desc");
     if (cursor !== undefined) {
       const [, micros, id] = /^(\d+)_(\d+)$/.exec(cursor) ?? badCursor();
@@ -220,8 +257,7 @@ export async function listThreads(
         ),
       );
     }
-    next = (last) =>
-      `${view === "bookmarked" ? last.bookmark_micros : last.last_post_micros}_${last.id}`;
+    next = (last) => `${last.micros}_${last.id}`;
   }
 
   const rows = await query.execute();
@@ -230,6 +266,24 @@ export async function listThreads(
     items: await withUsers([...pinned, ...rows]),
     next_cursor: rows.length === PAGE_SIZE && last ? next(last) : null,
   };
+}
+
+// For the list's tabs: how many threads in this board or tag are new and unread to the reader.
+export async function countUnread(
+  members: boolean,
+  userId: number,
+  filter: { board?: string; tag?: string },
+) {
+  return visibleThreads(members)
+    .leftJoin("thread_users as mine", (join) =>
+      join.onRef("mine.thread_id", "=", "threads.id").on("mine.user_id", "=", userId),
+    )
+    .select([
+      sql<number>`(count(*) FILTER (WHERE ${NEW}))::integer`.as("new"),
+      sql<number>`(count(*) FILTER (WHERE ${UNREAD}))::integer`.as("unread"),
+    ])
+    .where(inScope(await scopeOf(members, filter)))
+    .executeTakeFirstOrThrow();
 }
 
 // ---- One thread and its floors

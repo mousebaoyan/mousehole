@@ -9,20 +9,21 @@ const api = testClient(app).api.v1;
 
 type Who = { headers: Record<string, string> };
 
+let admin: Who = as("");
 let author: Who = as("");
 let reader: { id: number; who: Who } = { id: 0, who: as("") };
 
 beforeAll(async () => {
-  const admin = as(await login((await createUser("admin")).id));
+  admin = as(await login((await createUser("admin")).id));
   await api.boards.$post({ json: { slug: "reading", name: "阅读" } }, admin);
   author = as(await login((await createUser()).id));
   const user = await createUser();
   reader = { id: user.id, who: as(await login(user.id)) };
 });
 
-async function newThread(replies: number) {
+async function newThread(replies: number, board = "reading") {
   const res = await api.threads.$post(
-    { json: { board: "reading", title: "读一读这个主题", content: { markdown: "主楼" } } },
+    { json: { board, title: "读一读这个主题", content: { markdown: "主楼" } } },
     author,
   );
   if (!res.ok) throw new Error(`status ${res.status}`);
@@ -123,5 +124,51 @@ describe("阅读记录", () => {
     const res = await api.threads[":id"].$get({ param: { id: String(thread) } });
     expect(await res.json()).not.toHaveProperty("read_floors");
     expect((await report(thread, [[1, 1]], 5, { headers: {} })).status).toBe(401);
+  });
+});
+
+async function list(view: "new" | "unread" | "read") {
+  const res = await api.threads.$get({ query: { board: "lists", view } }, reader.who);
+  if (!res.ok) throw new Error(`status ${res.status}`);
+  return (await res.json()).items.map((t) => t.id);
+}
+
+async function counts() {
+  const res = await api.threads.counts.$get({ query: { board: "lists" } }, reader.who);
+  if (!res.ok) throw new Error(`status ${res.status}`);
+  return res.json();
+}
+
+describe("新、未读和已读", () => {
+  test("没打开过的是新，读过又有新楼层的是未读，已读按最后阅读时间排", async () => {
+    await api.boards.$post({ json: { slug: "lists", name: "列表" } }, admin);
+    const replied = await newThread(0, "lists");
+    const partly = await newThread(2, "lists");
+    const untouched = await newThread(0, "lists");
+    await report(replied, [[1, 1]], 5);
+    await report(partly, [[1, 1]], 5);
+    await api.threads[":id"].posts.$post(
+      { param: { id: String(replied) }, json: { content: { markdown: "新的一楼" } } },
+      author,
+    );
+
+    expect(await list("new")).toEqual([untouched]);
+    expect(await list("unread")).toEqual([replied, partly]);
+    expect(await list("read")).toEqual([partly, replied]);
+    expect(await counts()).toEqual({ new: 1, unread: 2 });
+
+    await report(replied, [[2, 2]], 5);
+    await db
+      .updateTable("threads")
+      .set({ created_at: sql<Date>`now() - interval '8 days'` })
+      .where("id", "=", untouched)
+      .execute();
+    expect(await counts()).toEqual({ new: 0, unread: 1 });
+    expect(await list("read")).toEqual([replied, partly]);
+  });
+
+  test("要登录", async () => {
+    expect((await api.threads.$get({ query: { view: "unread" } })).status).toBe(401);
+    expect((await api.threads.counts.$get({ query: {} })).status).toBe(401);
   });
 });

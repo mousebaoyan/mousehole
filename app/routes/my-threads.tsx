@@ -14,6 +14,7 @@ const LISTS = [
     title: "收藏",
     empty: "还没有收藏的主题，在主题底部点「收藏」就会出现在这里",
   },
+  { name: "read", view: "read", title: "已读", empty: "还没有读过的主题" },
 ] as const;
 
 function listOf(name: string) {

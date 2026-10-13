@@ -2,18 +2,20 @@ import { Check, ChevronDown, PenSquare } from "lucide-react";
 import { Fragment, useRef, type ReactNode } from "react";
 import { Link, useFetcher, useLocation } from "react-router";
 import { cn } from "cn";
-import type { ThreadItem } from "~/api-types";
+import type { Api, ThreadItem } from "~/api-types";
 import { Dropdown, menuItem } from "~/components/disclosure";
 import { ThreadList, ThreadRows } from "~/components/thread-list";
 import { buttonVariants } from "~/components/ui/button";
 import { useBoards, useTags, type Board } from "~/forum";
 import { useNearView } from "~/near-view";
 
-// New and unread join these once reading is recorded; see design §8.9.
+// New and unread are the reader's own (design §8.9): only for someone signed in, with how many.
 const VIEWS = [
-  { view: "latest", label: "最新" },
-  { view: "hot", label: "热门" },
-  { view: "unsolved", label: "待解答" },
+  { view: "latest", label: "最新", own: false },
+  { view: "new", label: "新", own: true },
+  { view: "unread", label: "未读", own: true },
+  { view: "hot", label: "热门", own: false },
+  { view: "unsolved", label: "待解答", own: false },
 ] as const;
 
 export type ThreadView = (typeof VIEWS)[number]["view"];
@@ -26,6 +28,17 @@ export function readFilter(url: string) {
     tag: params.get("tag"),
     cursor: params.get("cursor"),
   };
+}
+
+// For the first page of a list: the counts beside new and unread, null for guests.
+export async function readCounts(
+  api: Api,
+  scope: { board?: string; tag?: string },
+  cursor: string | null,
+) {
+  if (cursor !== null) return null;
+  const res = await api.threads.counts.$get({ query: scope });
+  return res.ok ? res.json() : null;
 }
 
 const KINDS = [
@@ -47,7 +60,9 @@ function listUrl(board: string | null, tag: string | null, view: ThreadView) {
 
 type Page = { threads: ThreadItem[]; next_cursor: string | null; now: number };
 
-// The board and tag filters stack, and both keep the current view.
+export type Counts = { new: number; unread: number };
+
+// The board and tag filters stack, and both keep the current view. `counts` is null for guests.
 export function ThreadFeed({
   threads,
   next_cursor,
@@ -55,7 +70,8 @@ export function ThreadFeed({
   view,
   tag,
   board,
-}: Page & { view: ThreadView; tag: string | null; board: Board | null }) {
+  counts,
+}: Page & { view: ThreadView; tag: string | null; board: Board | null; counts: Counts | null }) {
   const boards = useBoards();
   const tags = useTags();
   const { key } = useLocation();
@@ -144,19 +160,25 @@ export function ThreadFeed({
           aria-label="主题列表"
           className="-mx-1 flex overflow-x-auto px-1 [scrollbar-width:none] max-sm:w-full"
         >
-          {VIEWS.map((v) => (
-            <Link
-              key={v.view}
-              to={listUrl(slug, tag, v.view)}
-              aria-current={v.view === view ? "page" : undefined}
-              className={cn(
-                "shrink-0 rounded-full px-3.5 py-1.5 text-sm whitespace-nowrap text-muted-foreground hover:text-foreground",
-                v.view === view && "bg-secondary font-medium text-foreground",
-              )}
-            >
-              {v.label}
-            </Link>
-          ))}
+          {VIEWS.filter((v) => !v.own || counts).map((v) => {
+            const count = v.view === "new" || v.view === "unread" ? counts?.[v.view] : undefined;
+            return (
+              <Link
+                key={v.view}
+                to={listUrl(slug, tag, v.view)}
+                aria-current={v.view === view ? "page" : undefined}
+                className={cn(
+                  "shrink-0 rounded-full px-3.5 py-1.5 text-sm whitespace-nowrap text-muted-foreground hover:text-foreground",
+                  v.view === view && "bg-secondary font-medium text-foreground",
+                )}
+              >
+                {v.label}
+                {count !== undefined && count > 0 && (
+                  <span className="ml-1 text-primary tabular-nums">{count}</span>
+                )}
+              </Link>
+            );
+          })}
         </nav>
       </div>
       {threads.length === 0 ? (
