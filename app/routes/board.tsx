@@ -1,8 +1,5 @@
 import { data } from "react-router";
-import { PenSquare } from "lucide-react";
-import { Link } from "react-router";
 import { ThreadFeed } from "~/components/thread-feed";
-import { buttonVariants } from "~/components/ui/button";
 import { boards, listThreads, readFilter } from "~/draft-data";
 import type { Route } from "./+types/board.ts";
 
@@ -32,9 +29,6 @@ export default function Board({ loaderData }: Route.ComponentProps) {
             {board.description} · {board.threads.toLocaleString()} 个主题
           </p>
         </div>
-        <Link to="/new" className={buttonVariants({ variant: "outline", size: "sm" })}>
-          <PenSquare /> 发帖
-        </Link>
       </header>
       <ThreadFeed {...loaderData} />
     </>

@@ -4,6 +4,7 @@ import { Link, useLocation } from "react-router";
 import { cn } from "cn";
 import { Dropdown, menuItem } from "~/components/disclosure";
 import { ThreadList } from "~/components/thread-list";
+import { buttonVariants } from "~/components/ui/button";
 import { boards, tags, type Board, type Thread, type ThreadView } from "~/draft-data";
 import { useMe } from "~/me";
 
@@ -47,7 +48,7 @@ export function ThreadFeed({
   return (
     <section>
       <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-2 px-1">
-        <div className="flex gap-2">
+        <div className="flex gap-2 max-sm:w-full">
           <Dropdown
             key={`board-${key}`}
             label="按版块筛选"
@@ -100,6 +101,13 @@ export function ThreadFeed({
               </>
             )}
           </Dropdown>
+          {/* Wider screens have this in the header. */}
+          <Link
+            to="/new"
+            className={buttonVariants({ size: "sm", className: "ml-auto h-8 sm:hidden" })}
+          >
+            <PenSquare /> 发帖
+          </Link>
         </div>
         <nav
           aria-label="主题列表"
@@ -125,13 +133,6 @@ export function ThreadFeed({
         </nav>
       </div>
       <ThreadList threads={threads} showBoard={board === null} />
-      <Link
-        to="/new"
-        aria-label="发帖"
-        className="fixed right-5 bottom-6 z-30 flex size-13 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg sm:hidden"
-      >
-        <PenSquare className="size-5" />
-      </Link>
     </section>
   );
 }

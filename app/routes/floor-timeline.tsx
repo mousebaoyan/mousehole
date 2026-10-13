@@ -1,5 +1,6 @@
 import { CircleCheck } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
+import { useDismiss } from "~/components/disclosure";
 import type { Post } from "~/draft-data";
 
 // Up to this many floors a plain list fits beside the posts; beyond it, a timeline scrubber.
@@ -8,7 +9,8 @@ const LIST_MAX = 12;
 // Floors at or above this line of the viewport count as read past (header plus some air).
 const READ_LINE = 120;
 
-export function FloorNav({ posts }: { posts: Post[] }) {
+// `onJump` lets a popup close once the reader has picked a floor.
+export function FloorNav({ posts, onJump }: { posts: Post[]; onJump?: () => void }) {
   if (posts.length <= LIST_MAX) {
     return (
       <div className="flex flex-col gap-0.5">
@@ -16,6 +18,7 @@ export function FloorNav({ posts }: { posts: Post[] }) {
           <a
             key={p.id}
             href={`#floor-${p.floor}`}
+            onClick={onJump}
             className="flex items-center gap-2 rounded-md px-2 py-1 hover:bg-accent"
           >
             <span className="w-7 text-muted-foreground tabular-nums">#{p.floor}</span>
@@ -26,20 +29,44 @@ export function FloorNav({ posts }: { posts: Post[] }) {
       </div>
     );
   }
-  return <FloorTimeline posts={posts} />;
+  return <FloorTimeline posts={posts} onJump={onJump} />;
 }
 
-function jump(floor: number) {
-  document.getElementById(`floor-${floor}`)?.scrollIntoView();
+// Below the width that has room for the side column: a floating "3 / 52" that opens the same
+// navigation above it.
+export function FloorProgress({ posts }: { posts: Post[] }) {
+  const [open, setOpen] = useState(false);
+  const [current] = useCurrentFloor();
+  const root = useRef<HTMLDivElement>(null);
+  useDismiss(open, () => setOpen(false), root);
+  return (
+    <div ref={root} className="fixed right-4 bottom-6 z-20 xl:hidden">
+      {open && (
+        <nav
+          aria-label="楼层"
+          className="absolute right-0 bottom-full mb-2 w-56 rounded-2xl border bg-card p-3 text-meta shadow-lg"
+        >
+          <FloorNav posts={posts} onJump={() => setOpen(false)} />
+        </nav>
+      )}
+      <button
+        type="button"
+        aria-expanded={open}
+        aria-label={`第 ${current} 楼，共 ${posts.length} 楼，打开楼层导航`}
+        onClick={() => setOpen(!open)}
+        className="rounded-full border bg-card/95 px-4 py-2 text-meta font-medium tabular-nums shadow-lg backdrop-blur"
+      >
+        {current} / {posts.length}
+      </button>
+    </div>
+  );
 }
 
-function FloorTimeline({ posts }: { posts: Post[] }) {
-  const total = posts.length;
+// The last floor whose top has scrolled past the reading line; the last one at the bottom.
+function useCurrentFloor() {
   const [current, setCurrent] = useState(1);
-  const [dragging, setDragging] = useState<number | null>(null);
-  const shown = dragging ?? current;
-
-  useEffect(() => {
+  // Measured before paint, so a navigation opened mid-thread doesn't flash floor 1.
+  useLayoutEffect(() => {
     let frame = 0;
     function update() {
       frame = 0;
@@ -60,10 +87,23 @@ function FloorTimeline({ posts }: { posts: Post[] }) {
       cancelAnimationFrame(frame);
     };
   }, []);
+  return [current, setCurrent] as const;
+}
+
+function jump(floor: number) {
+  document.getElementById(`floor-${floor}`)?.scrollIntoView();
+}
+
+function FloorTimeline({ posts, onJump }: { posts: Post[]; onJump?: () => void }) {
+  const total = posts.length;
+  const [current, setCurrent] = useCurrentFloor();
+  const [dragging, setDragging] = useState<number | null>(null);
+  const shown = dragging ?? current;
 
   function go(floor: number) {
     setCurrent(floor);
     jump(floor);
+    onJump?.();
   }
 
   // The range moves the handle while it is dragged or keyed; the page follows on release.

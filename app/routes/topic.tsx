@@ -17,7 +17,7 @@ import { Button } from "~/components/ui/button";
 import { boards, checkInPosts, threads, topicPosts } from "~/draft-data";
 import { useMe } from "~/me";
 import type { Route } from "./+types/topic.ts";
-import { FloorNav } from "./floor-timeline.tsx";
+import { FloorNav, FloorProgress } from "./floor-timeline.tsx";
 import { PostCard } from "./post-card.tsx";
 
 export function meta({ loaderData }: Route.MetaArgs) {
@@ -126,6 +126,7 @@ export default function Topic({
           <FloorNav posts={posts} />
         </nav>
       </aside>
+      <FloorProgress posts={posts} />
     </div>
   );
 }

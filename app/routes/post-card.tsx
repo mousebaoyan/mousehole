@@ -111,7 +111,10 @@ export function PostCard({
               </button>
             )}
             {post.time}
-            <a href={`#floor-${post.floor}`} className="tabular-nums hover:text-foreground">
+            <a
+              href={`#floor-${post.floor}`}
+              className="-m-1.5 p-1.5 tabular-nums hover:text-foreground"
+            >
               #{post.floor}
             </a>
             {unread !== undefined && (
