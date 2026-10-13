@@ -1,4 +1,7 @@
+import { once } from "node:events";
+import { createServer } from "node:http";
 import { gzipSync } from "node:zlib";
+import { getRequestListener } from "@hono/node-server";
 import { describe, expect, test } from "vitest";
 import { nextQq } from "../../test/fixtures.ts";
 import { app } from "../app.ts";
@@ -59,5 +62,47 @@ describe("请求体", () => {
     const headers = await bot();
     const big = JSON.stringify({ group_id: 1, padding: "x".repeat(1024 * 1024) });
     expect((await send("/api/v1/admin/groups", "POST", headers, big)).status).toBe(413);
+  });
+
+  // Production serves Node's lightweight requests, which in-process tests never see, and leaves
+  // the global Request alone, as react-router-hono-server does.
+  test("经过 Node 服务器：不带请求体的 DELETE、分块传输的请求体都照常处理", async () => {
+    const headers = await bot();
+    const listener = getRequestListener(app.fetch, { overrideGlobalObjects: false });
+    const server = createServer(listener).listen(0);
+    await once(server, "listening");
+    const address = server.address();
+    if (address === null || typeof address === "string") throw new Error("Not listening on TCP");
+    const { port } = address;
+    const url = (path: string) => `http://localhost:${port}/api/v1${path}`;
+    // A stream has no known length, so it goes out with Transfer-Encoding: chunked.
+    const chunked = (text: string): RequestInit & { duplex: "half" } => ({
+      method: "POST",
+      headers,
+      body: new ReadableStream({
+        start(controller) {
+          controller.enqueue(new TextEncoder().encode(text));
+          controller.close();
+        },
+      }),
+      duplex: "half",
+    });
+    try {
+      // No body and no Content-Length: the route runs and refuses the bot.
+      const removed = await fetch(url("/admin/tokens/1"), { method: "DELETE", headers });
+      expect(removed.status).toBe(403);
+
+      const linked = await fetch(url("/admin/groups"), chunked(JSON.stringify({ group_id: 556 })));
+      expect(linked.status).toBe(204);
+
+      const padding = "x".repeat(1024 * 1024);
+      const big = await fetch(
+        url("/admin/groups"),
+        chunked(JSON.stringify({ group_id: 557, padding })),
+      );
+      expect(big.status).toBe(413);
+    } finally {
+      server.close();
+    }
   });
 });

@@ -1,6 +1,5 @@
 import { promisify } from "node:util";
 import { gunzip } from "node:zlib";
-import { bodyLimit } from "hono/body-limit";
 import { createMiddleware } from "hono/factory";
 import { AppError } from "./errors.ts";
 
@@ -16,24 +15,42 @@ function tooLarge(): never {
   throw new AppError(413, "payload_too_large", "请求体太大");
 }
 
+async function readCapped(stream: ReadableStream<Uint8Array>, maxSize: number) {
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  for await (const chunk of stream) {
+    size += chunk.byteLength;
+    if (size > maxSize) tooLarge();
+    chunks.push(chunk);
+  }
+  return Buffer.concat(chunks);
+}
+
 // Caps request bodies and unpacks `Content-Encoding: gzip`. The cap applies to the unpacked
 // size too, so a small compressed body can't expand without bound.
 export const requestBody = createMiddleware(async (c, next) => {
+  const raw = c.req.raw;
+  if (!raw.body) return next();
   const maxSize = limitFor(c.req.path);
-  if (c.req.header("content-encoding") !== "gzip") {
-    return bodyLimit({ maxSize, onError: tooLarge })(c, next);
-  }
+  const length = raw.headers.get("content-length");
+  const gzip = raw.headers.get("content-encoding") === "gzip";
+  if (Number(length) > maxSize) tooLarge();
+  if (length !== null && !gzip) return next();
 
-  // Read from the raw request: HonoRequest would cache the packed bytes for later json().
-  const packed = await c.req.raw.arrayBuffer();
-  if (packed.byteLength > maxSize) tooLarge();
-  const body = await gunzipAsync(packed, { maxOutputLength: maxSize }).catch((error: unknown) => {
-    if (error instanceof RangeError) tooLarge();
-    throw new AppError(400, "invalid_request", "gzip 请求体无法解压", { cause: error });
-  });
-  const headers = new Headers(c.req.raw.headers);
+  // The size isn't known up front, or what counts is the unpacked size: read it all here.
+  const read = await readCapped(raw.body, maxSize);
+  const body = gzip
+    ? await gunzipAsync(read, { maxOutputLength: maxSize }).catch((error: unknown) => {
+        if (error instanceof RangeError) tooLarge();
+        throw new AppError(400, "invalid_request", "gzip 请求体无法解压", { cause: error });
+      })
+    : read;
+  const headers = new Headers(raw.headers);
   headers.delete("content-encoding");
+  headers.delete("transfer-encoding");
   headers.set("content-length", String(body.byteLength));
-  c.req.raw = new Request(c.req.raw.url, { method: c.req.method, headers, body });
+  // From the URL, not the request: the Node server's lightweight requests can't be copied
+  // into a real Request.
+  c.req.raw = new Request(raw.url, { method: raw.method, headers, body });
   return next();
 });
