@@ -1,9 +1,8 @@
-import { Bell, Bookmark, CircleCheck, Eye, Link2, MessageSquare, Reply } from "lucide-react";
+import { Bell, Bookmark, Link2, Reply } from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { data, redirect, useFetcher, useNavigate } from "react-router";
 import { apiContext } from "../api.server.ts";
 import type { PostItem } from "~/api-types";
-import { BoardBadge } from "~/components/board-badge";
 import { useComposer } from "~/components/composer";
 import { ThreadList } from "~/components/thread-list";
 import { Button } from "~/components/ui/button";
@@ -13,6 +12,7 @@ import { stamp, unixNow } from "~/time";
 import type { Route } from "./+types/topic.ts";
 import { FloorNav, FloorProgress, useCurrentFloor, type Floors } from "./floor-timeline.tsx";
 import { PostCard } from "./post-card.tsx";
+import { TopicHeader } from "./topic-header.tsx";
 
 // Floors come 20 at a time; see design §9.
 const BATCH = 20;
@@ -68,8 +68,26 @@ export async function action({ params, request, context }: Route.ActionArgs) {
   };
   const post = { id: text("post_id") };
   const floor = Number(text("floor"));
+  const thread = { id: params.id };
+  if (text("intent") === "edit-thread") {
+    const res = await api.threads[":id"].$patch({
+      param: thread,
+      json: {
+        title: form.has("title") ? text("title") : undefined,
+        tags: form.has("tags_set")
+          ? form.getAll("tags").filter((t) => typeof t === "string")
+          : undefined,
+        board: form.has("board") ? text("board") : undefined,
+        pinned: form.has("pinned") ? Number(text("pinned")) : undefined,
+        featured: form.has("featured") ? text("featured") === "true" : undefined,
+        locked: form.has("locked") ? text("locked") === "true" : undefined,
+      },
+    });
+    if (res.ok) return { ok: true as const, floor };
+    return { ok: false as const, message: (await res.json()).error.message };
+  }
   if (text("intent") === "delete-thread") {
-    const res = await api.threads[":id"].$delete({ param: { id: params.id } });
+    const res = await api.threads[":id"].$delete({ param: thread });
     if (res.ok) return redirect(`/b/${text("board")}`);
     return { ok: false as const, message: (await res.json()).error.message };
   }
@@ -201,30 +219,12 @@ function TopicPage({
   return (
     <div className="flex gap-8">
       <article className="min-w-0 flex-1">
-        <header className="px-1 pb-4">
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-meta text-muted-foreground">
-            <BoardBadge board={thread.board} />
-            {thread.tags.map((t) => (
-              <span key={t}>#{t}</span>
-            ))}
-          </div>
-          <h1 className="mt-2.5 text-xl leading-snug font-semibold tracking-tight sm:text-2xl">
-            {thread.title}
-          </h1>
-          <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-meta text-muted-foreground tabular-nums">
-            {thread.solved_post_id !== null && (
-              <span className="inline-flex items-center gap-1 rounded-full bg-success/10 px-2 py-0.5 font-medium text-success">
-                <CircleCheck className="size-3.5" /> 已解决
-              </span>
-            )}
-            <span className="inline-flex items-center gap-1" title="浏览">
-              <Eye className="size-3.5" /> {thread.view_count.toLocaleString()}
-            </span>
-            <span className="inline-flex items-center gap-1" title="回复">
-              <MessageSquare className="size-3.5" /> {thread.reply_count}
-            </span>
-          </div>
-        </header>
+        <TopicHeader
+          thread={thread}
+          current={current}
+          editable={staff || (me?.id === thread.author.id && !thread.locked)}
+          staff={staff}
+        />
 
         {/* No browser scroll anchoring: floors put above are compensated for by hand. */}
         <ol className="flex flex-col [overflow-anchor:none]">
