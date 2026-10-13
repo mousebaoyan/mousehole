@@ -134,7 +134,7 @@ export function ThreadFeed({
           </Dropdown>
           {/* Wider screens have this in the header. */}
           <Link
-            to="/new"
+            to={slug === null ? "/new" : `/new?board=${slug}`}
             className={buttonVariants({ size: "sm", className: "ml-auto h-8 sm:hidden" })}
           >
             <PenSquare /> 发帖
