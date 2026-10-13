@@ -24,6 +24,7 @@ server/
     search/  notifications/  events/  moderation/  admin/
   platform/             和业务无关的基础设施：数据库连接、错误类型、日志、设置、邮件、图片处理
 db/migrations/          SQL 迁移
+db/types.ts             kysely-codegen 从数据库生成的类型
 scripts/                bootstrap、mock-bot 等命令
 ```
 
@@ -67,7 +68,7 @@ scripts/                bootstrap、mock-bot 等命令
 
 ## 3. 数据库
 
-- 改表只通过新增 SQL 迁移（`db/migrations/`，按编号执行）。改完运行 `pnpm db:codegen`，并更新 data-model.md。上线前可以直接改已有的迁移，上线后已经执行过的迁移不再修改。
+- 改表只通过新增 SQL 迁移（`db/migrations/`，按编号执行）。改完运行 `pnpm db:migrate` 和 `pnpm db:codegen`，并更新 data-model.md。上线前可以直接改已有的迁移（改完用 `docker compose down -v` 清掉本地数据库再迁移），上线后已经执行过的迁移不再修改。
 - 查询用 Kysely 的查询构建器；它写不出来的用 `sql` 模板，值一律走参数绑定，不拼接字符串。
 - 只查需要的列。列表用游标分页，主题内按楼层号定位，不用 OFFSET。列表要的关联数据一次查出来，不在循环里查库。
 - 新查询要有索引支撑，拿不准就看 `EXPLAIN`。新索引和用到它的查询在同一个改动里，并补进 data-model.md 的热点查询表。

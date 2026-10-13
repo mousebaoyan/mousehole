@@ -11,6 +11,20 @@ permissions:
 jobs:
   check:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: mousehole
+          POSTGRES_PASSWORD: mousehole
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 2s
+          --health-retries 30
+    env:
+      DATABASE_URL: postgres://mousehole:mousehole@localhost:5432/mousehole
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -21,4 +35,6 @@ jobs:
           cache: true
           require-lockfile: true
       - run: pnpm check
+      - run: pnpm db:migrate
+      - run: pnpm db:codegen --verify
       - run: pnpm build

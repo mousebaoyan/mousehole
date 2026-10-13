@@ -1,5 +1,7 @@
 import { OpenAPIHono } from "@hono/zod-openapi";
 import { Hono } from "hono";
+import { sql } from "kysely";
+import { db } from "./platform/db.ts";
 
 const api = new OpenAPIHono();
 
@@ -12,4 +14,9 @@ api.onError((error, c) => {
   return c.json({ error: { code: "internal_error", message: "服务器出错了，请稍后再试" } }, 500);
 });
 
-export const app = new Hono().get("/healthz", (c) => c.text("ok")).route("/api/v1", api);
+export const app = new Hono()
+  .get("/healthz", async (c) => {
+    await sql`select 1`.execute(db);
+    return c.text("ok");
+  })
+  .route("/api/v1", api);

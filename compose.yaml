@@ -1,0 +1,14 @@
+# Local development database. Production reuses the PostgreSQL 18 instance in 1Panel.
+services:
+  postgres:
+    image: postgres:18
+    environment:
+      POSTGRES_USER: mousehole
+      POSTGRES_PASSWORD: mousehole
+    ports:
+      - 127.0.0.1:5432:5432
+    volumes:
+      - postgres:/var/lib/postgresql
+
+volumes:
+  postgres:
