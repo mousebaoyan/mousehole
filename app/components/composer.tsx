@@ -1,27 +1,22 @@
+import { ChevronDown, ChevronUp, Maximize2, Minimize2, Reply, X } from "lucide-react";
 import {
-  AtSign,
-  Bold,
-  ChevronDown,
-  ChevronUp,
-  Code,
-  Eye,
-  ImagePlus,
-  Link2,
-  Maximize2,
-  Minimize2,
-  Quote,
-  Reply,
-  X,
-} from "lucide-react";
-import { createContext, use, useRef, useState, type ReactNode, type RefObject } from "react";
-import { Link } from "react-router";
+  createContext,
+  use,
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+  type RefObject,
+} from "react";
+import { Link, useFetcher, useNavigate } from "react-router";
 import { cn } from "cn";
-import { EmojiButton } from "~/components/emoji-button";
+import { MarkdownEditor } from "~/components/markdown-editor";
 import { Button } from "~/components/ui/button";
+import { useMe } from "~/forum";
 
 type ComposerTarget = {
   thread: { id: number; title: string };
-  replyTo: { floor: number; name: string } | null;
+  replyTo: { id: number; floor: number; name: string } | null;
 };
 
 type Draft = ComposerTarget & { text: string; collapsed: boolean };
@@ -32,21 +27,54 @@ export function useComposer() {
   return use(ComposerContext);
 }
 
+// What is being written for each thread stays in the browser until it is posted or discarded,
+// so a closed tab or another thread's reply loses nothing.
+function draftKey(threadId: number) {
+  return `reply-draft:${threadId}`;
+}
+
 // Lives in the forum layout, so a reply being written stays docked while the reader moves
-// to other pages, and is gone only when closed.
+// to other pages, and is gone only when posted or closed.
 export function ComposerProvider({ children }: { children: ReactNode }) {
   const [draft, setDraft] = useState<Draft | null>(null);
   const textarea = useRef<HTMLTextAreaElement>(null);
+  const me = useMe();
+  const navigate = useNavigate();
 
   function focus() {
     requestAnimationFrame(() => textarea.current?.focus());
   }
 
   function open(target: ComposerTarget) {
+    if (!me) {
+      void navigate("/login");
+      return;
+    }
     const sameThread = draft?.thread.id === target.thread.id;
-    if (draft?.text.trim() && !sameThread && !confirm("放弃正在编辑的回复？")) return;
-    setDraft({ ...target, text: sameThread ? draft.text : "", collapsed: false });
+    const text = sameThread ? draft.text : (localStorage.getItem(draftKey(target.thread.id)) ?? "");
+    setDraft({ ...target, text, collapsed: false });
     focus();
+  }
+
+  function setText(text: string) {
+    if (!draft) return;
+    setDraft({ ...draft, text });
+    if (text.trim()) localStorage.setItem(draftKey(draft.thread.id), text);
+    else localStorage.removeItem(draftKey(draft.thread.id));
+  }
+
+  function discard() {
+    if (!draft) return;
+    if (draft.text.trim() && !confirm("放弃这条回复？")) return;
+    localStorage.removeItem(draftKey(draft.thread.id));
+    setDraft(null);
+  }
+
+  function posted(floor: number) {
+    if (!draft) return;
+    localStorage.removeItem(draftKey(draft.thread.id));
+    setDraft(null);
+    void navigate(`/t/${draft.thread.id}?floor=${floor}`);
   }
 
   return (
@@ -56,11 +84,13 @@ export function ComposerProvider({ children }: { children: ReactNode }) {
         <Composer
           draft={draft}
           textarea={textarea}
-          onChange={(change) => {
-            setDraft({ ...draft, ...change });
-            if (change.collapsed === false) focus();
+          onText={setText}
+          onCollapse={(collapsed) => {
+            setDraft({ ...draft, collapsed });
+            if (!collapsed) focus();
           }}
-          onClose={() => setDraft(null)}
+          onDiscard={discard}
+          onPosted={posted}
         />
       )}
     </ComposerContext>
@@ -70,15 +100,6 @@ export function ComposerProvider({ children }: { children: ReactNode }) {
 const HEIGHT_KEY = "composer-height";
 const MIN_HEIGHT = 240;
 const COLLAPSED_HEIGHT = 48;
-
-const tools = [
-  { label: "粗体", icon: Bold },
-  { label: "引用", icon: Quote },
-  { label: "代码", icon: Code },
-  { label: "链接", icon: Link2 },
-  { label: "图片", icon: ImagePlus },
-  { label: "提及", icon: AtSign },
-];
 
 function clampHeight(height: number) {
   return Math.round(Math.min(Math.max(height, MIN_HEIGHT), innerHeight * 0.85));
@@ -90,21 +111,38 @@ function clampHeight(height: number) {
 function Composer({
   draft,
   textarea,
-  onChange,
-  onClose,
+  onText,
+  onCollapse,
+  onDiscard,
+  onPosted,
 }: {
   draft: Draft;
   textarea: RefObject<HTMLTextAreaElement | null>;
-  onChange: (change: Partial<Draft>) => void;
-  onClose: () => void;
+  onText: (text: string) => void;
+  onCollapse: (collapsed: boolean) => void;
+  onDiscard: () => void;
+  onPosted: (floor: number) => void;
 }) {
   const [height, setHeight] = useState(() =>
     clampHeight(Number(localStorage.getItem(HEIGHT_KEY)) || 360),
   );
   const [full, setFull] = useState(false);
-  const [preview, setPreview] = useState(false);
   const drag = useRef<{ y: number; height: number } | null>(null);
+  const reply = useFetcher<{ ok: true; floor: number } | { ok: false; message: string }>();
   const { thread, replyTo, text, collapsed } = draft;
+  const busy = reply.state !== "idle";
+
+  useEffect(() => {
+    if (reply.state === "idle" && reply.data?.ok) onPosted(reply.data.floor);
+  }, [reply.state, reply.data, onPosted]);
+
+  function send() {
+    if (!text.trim() || busy) return;
+    void reply.submit(
+      { markdown: text, ...(replyTo && { reply_to_id: replyTo.id }) },
+      { method: "post", action: `/t/${thread.id}/reply`, defaultShouldRevalidate: false },
+    );
+  }
 
   function resize(next: number) {
     const clamped = clampHeight(next);
@@ -172,38 +210,32 @@ function Composer({
           </Link>
           <div className="ml-auto flex shrink-0 items-center text-muted-foreground">
             {!collapsed && (
-              <>
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  className="md:hidden"
-                  aria-label="预览"
-                  aria-pressed={preview}
-                  onClick={() => setPreview(!preview)}
-                >
-                  <Eye />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  aria-label={full ? "还原" : "全屏"}
-                  title={full ? "还原" : "全屏"}
-                  onClick={() => setFull(!full)}
-                >
-                  {full ? <Minimize2 /> : <Maximize2 />}
-                </Button>
-              </>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                aria-label={full ? "还原" : "全屏"}
+                title={full ? "还原" : "全屏"}
+                onClick={() => setFull(!full)}
+              >
+                {full ? <Minimize2 /> : <Maximize2 />}
+              </Button>
             )}
             <Button
               variant="ghost"
               size="icon-sm"
               aria-label={collapsed ? "展开" : "收起"}
               title={collapsed ? "展开" : "收起"}
-              onClick={() => onChange({ collapsed: !collapsed })}
+              onClick={() => onCollapse(!collapsed)}
             >
               {collapsed ? <ChevronUp /> : <ChevronDown />}
             </Button>
-            <Button variant="ghost" size="icon-sm" aria-label="关闭" title="关闭" onClick={onClose}>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              aria-label="关闭"
+              title="关闭"
+              onClick={onDiscard}
+            >
               <X />
             </Button>
           </div>
@@ -211,62 +243,23 @@ function Composer({
 
         {!collapsed && (
           <>
-            <div className="grid min-h-0 flex-1 border-t md:grid-cols-2">
-              <div className={cn("flex min-h-0 flex-col md:border-r", preview && "max-md:hidden")}>
-                <div className="flex items-center gap-0.5 border-b px-2 py-1 text-muted-foreground">
-                  {tools.map((t) => (
-                    <Button
-                      key={t.label}
-                      type="button"
-                      variant="ghost"
-                      size="icon-sm"
-                      aria-label={t.label}
-                      title={t.label}
-                    >
-                      <t.icon />
-                    </Button>
-                  ))}
-                  <EmojiButton
-                    target={textarea}
-                    onChange={(value) => onChange({ text: value })}
-                    side="top"
-                  />
-                </div>
-                <textarea
-                  ref={textarea}
-                  value={text}
-                  onChange={(e) => onChange({ text: e.target.value })}
-                  aria-label="回复内容"
-                  placeholder="支持 Markdown，可粘贴或拖入图片"
-                  className="min-h-0 flex-1 resize-none bg-transparent px-4 py-3 text-body leading-7 outline-none placeholder:text-muted-foreground"
-                />
-              </div>
-              {/* Draft only: the real preview is rendered by the server, the same as published posts. */}
-              <div
-                className={cn(
-                  "min-h-0 overflow-y-auto bg-secondary/40 px-4 py-3 text-body leading-7",
-                  !preview && "max-md:hidden",
-                )}
-              >
-                {text.trim() ? (
-                  text.split(/\n{2,}/).map((p, i) => (
-                    <p key={i} className="mb-3 whitespace-pre-wrap">
-                      {p}
-                    </p>
-                  ))
-                ) : (
-                  <p className="text-muted-foreground">预览</p>
-                )}
-              </div>
-            </div>
-
-            <footer className="flex items-center gap-2 border-t px-4 py-2.5">
-              <Button>
-                <Reply /> 回复
+            <MarkdownEditor
+              value={text}
+              onChange={onText}
+              onSubmit={send}
+              label="回复内容"
+              textarea={textarea}
+              className="flex-1 border-t"
+            />
+            <footer className="flex items-center gap-3 border-t px-4 py-2.5">
+              <Button onClick={send} disabled={busy || !text.trim()}>
+                <Reply /> {busy ? "发送中…" : "回复"}
               </Button>
-              <Button variant="ghost" onClick={onClose}>
-                取消
-              </Button>
+              {reply.data && !reply.data.ok && (
+                <p role="alert" className="min-w-0 truncate text-meta text-destructive">
+                  {reply.data.message}
+                </p>
+              )}
             </footer>
           </>
         )}

@@ -20,6 +20,7 @@ import { useFetcher } from "react-router";
 import { cn } from "cn";
 import { Dropdown, menuItem, useDismiss } from "~/components/disclosure";
 import { EmojiButton } from "~/components/emoji-button";
+import { PROSE } from "~/components/prose";
 import { UserAvatar } from "~/components/user-avatar";
 import { UserBadges } from "~/components/user-badges";
 import { Button, buttonVariants } from "~/components/ui/button";
@@ -28,10 +29,6 @@ import type { PostItem, UserBrief } from "~/api-types";
 import { useMe } from "~/forum";
 import { stamp } from "~/time";
 import { LikeButton, ReactionSummary, useReaction } from "./reactions.tsx";
-
-// Shared by posts and the previews of the posts they reply to or that reply to them.
-const PROSE =
-  "prose prose-neutral mt-2 max-w-none text-body leading-7 dark:prose-invert prose-p:my-2 prose-a:font-normal prose-a:text-link prose-a:no-underline hover:prose-a:underline prose-blockquote:border-brand/50 prose-blockquote:font-normal prose-blockquote:text-muted-foreground prose-blockquote:not-italic prose-code:before:content-none prose-code:after:content-none prose-pre:bg-secondary prose-pre:text-foreground prose-li:my-0.5 [&_blockquote_p]:before:content-none [&_blockquote_p]:after:content-none";
 
 // Busy posts can collect dozens of boosts; past this many they fold behind a counter.
 const BOOSTS_SHOWN = 6;

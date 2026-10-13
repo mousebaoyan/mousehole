@@ -209,7 +209,7 @@ function TopicPage({
               onReply={() =>
                 openComposer({
                   thread: target,
-                  replyTo: { floor: post.floor, name: post.author.display_name },
+                  replyTo: { id: post.id, floor: post.floor, name: post.author.display_name },
                 })
               }
             />
