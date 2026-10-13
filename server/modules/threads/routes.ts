@@ -41,6 +41,7 @@ import {
   recordView,
   setBookmark,
   setNotifyLevel,
+  setSolution,
   VIEWS,
   type ThreadView,
 } from "./service.ts";
@@ -73,6 +74,7 @@ const ThreadSchema = z
 
 const ThreadDetailSchema = ThreadSchema.extend({
   url: z.string(),
+  solved_floor: z.number().nullable().openapi({ description: "采纳的回答在第几楼" }),
   read_floors: z
     .array(z.tuple([z.number(), z.number()]))
     .optional()
@@ -142,6 +144,7 @@ function threadDetailJson(t: Thread, signedIn: boolean) {
   return {
     ...threadJson(t, signedIn),
     url: `${env.PUBLIC_URL}/t/${t.id}`,
+    solved_floor: t.solved_floor,
     ...(signedIn && {
       read_floors: t.read_floors,
       bookmarked: t.bookmarked_at !== null,
@@ -764,6 +767,58 @@ export const threadsRoutes = createRouter()
       const members = isMember(viewer, c.var.bot);
       await recordReading(viewer, members, c.req.valid("param").id, floors, seconds);
       return c.body(null, 204);
+    },
+  )
+  .openapi(
+    createRoute({
+      method: "put",
+      path: "/threads/{id}/solution",
+      summary: "采纳答案：问答主题里没删的一层回复；再采纳别的就换掉",
+      request: { params: IdParam, body: json(z.object({ post_id: z.number().int() })) },
+      responses: {
+        200: threadResponse,
+        400: errorResponse("不是问答主题，或者这一层不能采纳"),
+        403: errorResponse("不是主题作者或版主，或者主题已锁定"),
+        404: errorResponse("主题不存在"),
+      },
+    }),
+    async (c) => {
+      const viewer = authorize(c, "act");
+      const thread = await setSolution(
+        actorOf(c, viewer),
+        viewer,
+        can(c, "moderate"),
+        isMember(viewer, c.var.bot),
+        c.req.valid("param").id,
+        c.req.valid("json").post_id,
+      );
+      return c.json(threadDetailJson(thread, true), 200);
+    },
+  )
+  .openapi(
+    createRoute({
+      method: "delete",
+      path: "/threads/{id}/solution",
+      summary: "取消采纳",
+      request: { params: IdParam },
+      responses: {
+        200: threadResponse,
+        400: errorResponse("不是问答主题"),
+        403: errorResponse("不是主题作者或版主，或者主题已锁定"),
+        404: errorResponse("主题不存在"),
+      },
+    }),
+    async (c) => {
+      const viewer = authorize(c, "act");
+      const thread = await setSolution(
+        actorOf(c, viewer),
+        viewer,
+        can(c, "moderate"),
+        isMember(viewer, c.var.bot),
+        c.req.valid("param").id,
+        null,
+      );
+      return c.json(threadDetailJson(thread, true), 200);
     },
   )
   .openapi(

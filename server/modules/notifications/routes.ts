@@ -9,7 +9,7 @@ const NotificationSchema = z
     id: z.number(),
     type: z.string().openapi({
       description:
-        "reply 回复了我的楼层，mention @了我，like 赞了我的楼层，boost 给我的楼层留了短评，watching 关注的主题有新楼层，following 关注的人发了新主题",
+        "reply 回复了我的楼层，mention @了我，like 赞了我的楼层，boost 给我的楼层留了短评，watching 关注的主题有新楼层，following 关注的人发了新主题，solved 我的回答被采纳",
     }),
     actor: UserBriefSchema.nullable().openapi({ description: "最近触发的人" }),
     count: z.number().openapi({ description: "合并了几次：点赞、短评按楼层，新楼层按主题" }),

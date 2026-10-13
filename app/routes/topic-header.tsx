@@ -12,7 +12,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import { useEffect, useRef, useState, type Ref } from "react";
-import { useFetcher, useNavigate } from "react-router";
+import { Link, useFetcher, useNavigate } from "react-router";
 import { BoardBadge } from "~/components/board-badge";
 import { Dropdown, menuItem } from "~/components/disclosure";
 import { TagPicker } from "~/components/tag-picker";
@@ -89,10 +89,14 @@ export function TopicHeader({
         </>
       )}
       <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-meta text-muted-foreground tabular-nums">
-        {thread.solved_post_id !== null && (
-          <span className="inline-flex items-center gap-1 rounded-full bg-success/10 px-2 py-0.5 font-medium text-success">
-            <CircleCheck className="size-3.5" /> 已解决
-          </span>
+        {thread.solved_floor !== null && (
+          <Link
+            to={`?floor=${thread.solved_floor}`}
+            title="看采纳的回答"
+            className="inline-flex items-center gap-1 rounded-full bg-success/10 px-2 py-0.5 font-medium text-success hover:bg-success/15"
+          >
+            <CircleCheck className="size-3.5" /> 已解决 · #{thread.solved_floor}
+          </Link>
         )}
         {thread.pinned > 0 && (
           <span className="inline-flex items-center gap-1 text-brand-strong">

@@ -10,7 +10,7 @@ import { userBriefs } from "../users/service.ts";
 
 // What people are told of; see design §8.6. reply: someone replied to my floor; mention: @ me;
 // like and boost: on my floor; watching: a new floor in a thread I watch; following: a new thread
-// by someone I follow.
+// by someone I follow; solved: my answer was accepted.
 export const NOTIFICATION_TYPES = [
   "reply",
   "mention",
@@ -18,6 +18,7 @@ export const NOTIFICATION_TYPES = [
   "boost",
   "watching",
   "following",
+  "solved",
 ] as const;
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
 
@@ -34,7 +35,7 @@ type Notice = {
 };
 
 // Unless turned off, every type shows on the site; QQ reminders only come for these.
-const QQ_BY_DEFAULT = new Set<NotificationType>(["reply", "mention"]);
+const QQ_BY_DEFAULT = new Set<NotificationType>(["reply", "mention", "solved"]);
 
 // Someone's switches for every type, what they set over the defaults.
 export function notifyPrefs(saved: Record<string, { site?: boolean; qq?: boolean }>) {
@@ -54,6 +55,7 @@ const SAID: Record<NotificationType, string> = {
   boost: "给你留了短评",
   watching: "回复了你关注的主题",
   following: "发了新主题",
+  solved: "采纳了你的回答",
 };
 
 // Characters of the floor in a QQ reminder.
@@ -208,10 +210,11 @@ export async function notifyThread(
   );
 }
 
-// Someone liked or boosted a floor: its author hears of it, merged with others on that floor.
+// Something happened to a floor: liked, boosted, accepted as the answer. Its author hears of it;
+// likes and boosts merge with others on that floor.
 export async function notifyOnPost(
   trx: Transaction<DB>,
-  type: "like" | "boost",
+  type: "like" | "boost" | "solved",
   post: { id: number; thread_id: number; author_id: number },
   actorId: number,
   data: Record<string, string>,

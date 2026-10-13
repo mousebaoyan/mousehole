@@ -11,6 +11,7 @@ export const EVENT_TYPES = [
   "post.created",
   "post.updated",
   "post.deleted",
+  "thread.solved",
   "notification.created",
   "member.activated",
 ] as const;

@@ -75,7 +75,7 @@
 - 关注级别：`watching` 每个新楼层都通知，`normal` 只在回复我、@我时通知，`muted` 都不通知。发主题时自动设为 `watching`。
 - 收藏是 `thread_users.bookmarked_at`，重复收藏保留第一次的时间。主题的查询都 left join 读者自己的那行（访客没有），详情里的收藏和关注级别、收藏列表都从这里来。
 - 关注用户（`user_follows`）和认可（`endorsements`）每对人一行，不能对自己。关注数、粉丝数、认可数不冗余存，资料卡里直接数，各是一段索引范围。
-- 通知的 `type`：`reply`、`mention`、`like`、`boost`、`watching`、`following`，含义见[接口](api.md)的通知对象。都和触发它的写入在同一个事务里插入。
+- 通知的 `type`：`reply`、`mention`、`like`、`boost`、`watching`、`following`、`solved`，含义见[接口](api.md)的通知对象。都和触发它的写入在同一个事务里插入。
 - 一条新楼层只给每人一条通知，按先后取第一个适用的：被回复的那一层的作者（`reply`）、@到的人（`mention`）、关注这个主题的人（`watching`）。新主题通知 @到的人和作者的粉丝（`following`）。
 - 合并通知：`like:{楼层 ID}`、`boost:{楼层 ID}`、`watching:{主题 ID}` 是 `group_key`，未读期间再次触发只更新触发者、次数、`data` 和时间，不新增行；`post_id` 留着第一次的，点进去从最早没看的那层开始。
 - 不通知：自己做的事、冻结和注销的账号、把这个主题设为 `muted` 的人、在 `users.notify_prefs` 里关掉了这类站内通知的人。`notify_prefs` 形如 `{ "like": { "site": false, "qq": true } }`，站内通知没写的按开着算。

@@ -19,6 +19,7 @@ const TYPES = [
   { type: "boost", label: "短评" },
   { type: "watching", label: "关注的主题有新回复" },
   { type: "following", label: "关注的人发新主题" },
+  { type: "solved", label: "回答被采纳" },
 ] as const;
 
 export async function loader({ context }: Route.LoaderArgs) {

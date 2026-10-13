@@ -36,7 +36,8 @@ const reportReasons = ["垃圾广告", "人身攻击", "违法违规", "其他"]
 // the reader opens it. The floors that reply to this one are fetched the same way.
 // `manage` holds what the reader may do to this floor besides replying: change it (edit or
 // delete), read its edit history, delete the whole thread from its opening post, remove other
-// people's boosts. `unread` is left out for guests, whose reading isn't tracked.
+// people's boosts, accept it as the answer. `unread` is left out for guests, whose reading isn't
+// tracked.
 export function PostCard({
   post,
   threadId,
@@ -49,6 +50,7 @@ export function PostCard({
   onReply,
   onJump,
   onEdit,
+  onAccept,
   onDelete,
 }: {
   post: PostItem;
@@ -58,10 +60,17 @@ export function PostCard({
   unread: boolean | undefined;
   now: number;
   parent: PostItem | undefined;
-  manage: { change: boolean; history: boolean; deleteThread: boolean; moderate: boolean };
+  manage: {
+    change: boolean;
+    history: boolean;
+    deleteThread: boolean;
+    moderate: boolean;
+    accept: boolean;
+  };
   onReply: () => void;
   onJump: (floor: number) => void;
   onEdit: (markdown: string) => void;
+  onAccept: () => void;
   onDelete: () => void;
 }) {
   const [parentOpen, setParentOpen] = useState(false);
@@ -265,6 +274,18 @@ export function PostCard({
                       }}
                     >
                       <Pencil /> 编辑
+                    </button>
+                  )}
+                  {manage.accept && (
+                    <button
+                      type="button"
+                      className={menuItem}
+                      onClick={() => {
+                        close();
+                        onAccept();
+                      }}
+                    >
+                      <CircleCheck /> {accepted ? "取消采纳" : "采纳为答案"}
                     </button>
                   )}
                   {(post.floor === 1 ? manage.deleteThread : manage.change) && (
