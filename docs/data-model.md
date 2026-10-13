@@ -56,7 +56,8 @@
 - 主楼就是 `floor = 1` 的那条。
 - 列表里的参与者：作者加最近 20 层里最近回复的 4 个人。列表查询时按 `posts_floor` 倒着取，每个主题最多读 20 行，不另存。
 - 发楼层：在同一个事务里先 `UPDATE threads SET floor_count = floor_count + 1 ... RETURNING floor_count` 分配楼层号，再插入回复，并更新计数和最后回复。这条 UPDATE 会锁住主题行，同一主题的并发回复因此按顺序拿到楼层号。
-- 删除只设 `deleted_at`，楼层号保留，页面显示"该楼已删除"，指向某一楼的链接不会错位。
+- 删除只设 `deleted_at`，楼层号保留，页面显示"该楼已删除"，指向某一楼的链接不会错位。删除回复时主题的回复数、被回复那条的 `reply_count`、版块和作者的回复数都减一；删除主题时版块、标签和作者的主题数减一，版块的回复数减去这个主题的回复数。
+- 编辑：`UPDATE posts ... RETURNING edit_count, old.body` 一步拿到新的版本号和旧正文，再插入 `post_revisions`，并发编辑不会撞号。改标题也算主楼的一次编辑，旧标题存在 `post_revisions.title`。
 - "最新发布"排序直接按 `id DESC` 走主键，不用单独建索引。
 - 计数：`threads.reply_count` 和 `boards.post_count`、`users.post_count` 只算回复（不含主楼），`users.thread_count` 算发过的主题，都和发帖在同一个事务里更新。
 - 列表翻页的游标是最后一个主题的 `last_post_at`（微秒，JavaScript 的 Date 只到毫秒）和 ID，"最新发布"是 ID。

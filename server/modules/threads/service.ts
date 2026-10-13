@@ -5,7 +5,7 @@ import { db } from "../../platform/db.ts";
 import { AppError } from "../../platform/errors.ts";
 import { renderMarkdown } from "../../platform/markdown.ts";
 import { recordAudit } from "../audit/service.ts";
-import { countThreads, findTags, getBoard, getTagId } from "../boards/service.ts";
+import { countBoard, countTags, findTags, getBoard, getTagId } from "../boards/service.ts";
 import { countUserPosts, userBriefs } from "../users/service.ts";
 
 export const PAGE_SIZE = 30;
@@ -36,6 +36,7 @@ function selectThreads(members: boolean) {
     "threads.kind",
     "threads.title",
     "threads.author_id",
+    "threads.board_id",
     "threads.pinned",
     "threads.featured",
     "threads.locked",
@@ -286,6 +287,7 @@ export async function listReplies(postId: number, members: boolean, after: numbe
   const rows = await selectPosts()
     .where("posts.thread_id", "=", post.thread_id)
     .where("posts.reply_to_id", "=", postId)
+    .where("posts.deleted_at", "is", null)
     .where("posts.floor", ">", after)
     .orderBy("posts.floor")
     .limit(FLOOR_BATCH)
@@ -355,7 +357,8 @@ export async function createThread(
         )
         .execute();
     }
-    await countThreads(trx, { boardId: board.id, tagIds, threads: 1, posts: 0 });
+    await countBoard(trx, board.id, { threads: 1, posts: 0 });
+    await countTags(trx, tagIds, 1);
     await countUserPosts(trx, viewer.id, { threads: 1, posts: 0 });
     await auditBot(trx, actor, "thread.create", "thread", thread.id);
     return thread.id;
@@ -420,12 +423,293 @@ export async function createPost(
       .set({ last_post_at: numbered.last_post_at })
       .where("thread_id", "=", threadId)
       .execute();
-    await countThreads(trx, { boardId: thread.board_id, tagIds: [], threads: 0, posts: 1 });
+    await countBoard(trx, thread.board_id, { threads: 0, posts: 1 });
     await countUserPosts(trx, viewer.id, { threads: 0, posts: 1 });
     await auditBot(trx, actor, "post.create", "post", post.id);
     return post.id;
   });
   return getPost(id, members);
+}
+
+// ---- Changing and removing
+
+function forbidden(message: string) {
+  return new AppError(403, "forbidden", message);
+}
+
+// Authors change their own content; moderators anyone's. A locked thread is moderators' only.
+function assertMayChange(staff: boolean, viewer: Viewer, authorId: number, locked: boolean) {
+  if (staff) return;
+  if (authorId !== viewer.id) throw forbidden("只能修改自己发的内容");
+  if (locked) throw new AppError(403, "thread_locked", "主题已锁定");
+}
+
+// Moderators changing other people's content, and bots changing anyone's, go to the audit log.
+async function auditChange(
+  trx: Transaction<DB>,
+  actor: Actor,
+  authorId: number,
+  entry: Parameters<typeof recordAudit>[2],
+) {
+  if (actor.tokenId === null && actor.userId === authorId) return;
+  await recordAudit(trx, actor, entry);
+}
+
+// The old text goes into the post's edit history.
+export async function editPost(
+  actor: Actor,
+  viewer: Viewer,
+  staff: boolean,
+  members: boolean,
+  postId: number,
+  markdown: string,
+) {
+  const post = await getPost(postId, members);
+  if (post.deleted_at !== null) throw new AppError(404, "post_not_found", "回复不存在");
+  const thread = await assertVisible(post.thread_id, members);
+  assertMayChange(staff, viewer, post.author_id, thread.locked);
+  if (markdown === post.body) return post;
+  const { html } = await renderMarkdown(markdown);
+
+  await db.transaction().execute(async (trx) => {
+    const edited = await trx
+      .updateTable("posts")
+      .set((eb) => ({
+        body: markdown,
+        html,
+        edit_count: eb("edit_count", "+", 1),
+        edited_at: sql<Date>`now()`,
+      }))
+      .where("id", "=", postId)
+      .returning(["edit_count", sql<string>`old.body`.as("old_body")])
+      .executeTakeFirstOrThrow();
+    await trx
+      .insertInto("post_revisions")
+      .values({
+        post_id: postId,
+        rev: edited.edit_count,
+        body: edited.old_body,
+        editor_id: viewer.id,
+      })
+      .execute();
+    await auditChange(trx, actor, post.author_id, {
+      action: "post.edit",
+      target_type: "post",
+      target_id: postId,
+    });
+  });
+  return getPost(postId, members);
+}
+
+export async function listRevisions(
+  viewer: Viewer,
+  staff: boolean,
+  members: boolean,
+  postId: number,
+) {
+  const post = await getPost(postId, members);
+  if (!staff && post.author_id !== viewer.id) throw forbidden("只有作者和版主能看编辑记录");
+  const rows = await db
+    .selectFrom("post_revisions")
+    .select(["rev", "title", "body", "editor_id", "created_at"])
+    .where("post_id", "=", postId)
+    .orderBy("rev", "desc")
+    .execute();
+  const user = await userBriefs(rows.map((r) => r.editor_id));
+  return rows.map(({ editor_id, ...rev }) => ({ ...rev, editor: user(editor_id) }));
+}
+
+export type ThreadChange = {
+  title?: string;
+  tags?: string[];
+  board?: string;
+  pinned?: number;
+  featured?: boolean;
+  locked?: boolean;
+};
+
+// Authors may retitle and retag; moving, pinning, featuring and locking are for moderators.
+export async function editThread(
+  actor: Actor,
+  viewer: Viewer,
+  staff: boolean,
+  members: boolean,
+  threadId: number,
+  change: ThreadChange,
+) {
+  const { title, tags, board: slug, ...moderation } = change;
+  const thread = await getThread(threadId, members);
+  assertMayChange(staff, viewer, thread.author_id, thread.locked);
+  if (!staff && (slug !== undefined || Object.keys(moderation).length > 0)) {
+    throw forbidden("只有版主能移动、置顶、加精和锁定主题");
+  }
+  const board = slug === undefined ? null : await getBoard(slug, members);
+  const tagIds = tags === undefined ? null : await findTags(tags);
+
+  await db.transaction().execute(async (trx) => {
+    const old = await trx
+      .selectFrom("threads")
+      .select(["title", "board_id", "reply_count", "last_post_at"])
+      .where("id", "=", threadId)
+      .forUpdate()
+      .executeTakeFirstOrThrow();
+
+    if (title !== undefined && title !== old.title) {
+      // A new title is an edit of the opening post, kept in its history with the old title.
+      const opening = await trx
+        .updateTable("posts")
+        .set((eb) => ({ edit_count: eb("edit_count", "+", 1), edited_at: sql<Date>`now()` }))
+        .where("thread_id", "=", threadId)
+        .where("floor", "=", 1)
+        .returning(["id", "edit_count", "body"])
+        .executeTakeFirstOrThrow();
+      await trx
+        .insertInto("post_revisions")
+        .values({
+          post_id: opening.id,
+          rev: opening.edit_count,
+          title: old.title,
+          body: opening.body,
+          editor_id: viewer.id,
+        })
+        .execute();
+    }
+
+    if (tagIds !== null) {
+      const current = await trx
+        .selectFrom("thread_tags")
+        .select("tag_id")
+        .where("thread_id", "=", threadId)
+        .execute();
+      const had = current.map((r) => r.tag_id);
+      const removed = had.filter((id) => !tagIds.includes(id));
+      const added = tagIds.filter((id) => !had.includes(id));
+      if (removed.length > 0) {
+        await trx
+          .deleteFrom("thread_tags")
+          .where("thread_id", "=", threadId)
+          .where("tag_id", "in", removed)
+          .execute();
+      }
+      if (added.length > 0) {
+        await trx
+          .insertInto("thread_tags")
+          .values(
+            added.map((tag_id) => ({
+              thread_id: threadId,
+              tag_id,
+              last_post_at: old.last_post_at,
+            })),
+          )
+          .execute();
+      }
+      await countTags(trx, removed, -1);
+      await countTags(trx, added, 1);
+    }
+
+    if (board && board.id !== old.board_id) {
+      await countBoard(trx, old.board_id, { threads: -1, posts: -old.reply_count });
+      await countBoard(trx, board.id, { threads: 1, posts: old.reply_count });
+    }
+
+    const columns = { title, board_id: board?.id, ...moderation };
+    if (Object.values(columns).some((v) => v !== undefined)) {
+      await trx.updateTable("threads").set(columns).where("id", "=", threadId).execute();
+    }
+    await auditChange(trx, actor, thread.author_id, {
+      action: "thread.update",
+      target_type: "thread",
+      target_id: threadId,
+      data: change,
+    });
+  });
+  return getThread(threadId, members);
+}
+
+// Authors can take back a thread nobody has replied to; moderators can remove any.
+export async function deleteThread(
+  actor: Actor,
+  viewer: Viewer,
+  staff: boolean,
+  members: boolean,
+  threadId: number,
+) {
+  const thread = await getThread(threadId, members);
+  assertMayChange(staff, viewer, thread.author_id, thread.locked);
+  if (!staff && thread.reply_count > 0) {
+    throw forbidden("已经有人回复了，不能删除；需要的话请联系版主");
+  }
+  await db.transaction().execute(async (trx) => {
+    await trx
+      .updateTable("threads")
+      .set({ deleted_at: sql<Date>`now()` })
+      .where("id", "=", threadId)
+      .execute();
+    const tags = await trx
+      .selectFrom("thread_tags")
+      .select("tag_id")
+      .where("thread_id", "=", threadId)
+      .execute();
+    await countBoard(trx, thread.board_id, { threads: -1, posts: -thread.reply_count });
+    await countTags(
+      trx,
+      tags.map((t) => t.tag_id),
+      -1,
+    );
+    await countUserPosts(trx, thread.author_id, { threads: -1, posts: 0 });
+    await auditChange(trx, actor, thread.author_id, {
+      action: "thread.delete",
+      target_type: "thread",
+      target_id: threadId,
+    });
+  });
+}
+
+// The floor keeps its number and shows as deleted. The opening post goes with its thread.
+export async function deletePost(
+  actor: Actor,
+  viewer: Viewer,
+  staff: boolean,
+  members: boolean,
+  postId: number,
+) {
+  const post = await getPost(postId, members);
+  if (post.deleted_at !== null) throw new AppError(404, "post_not_found", "回复不存在");
+  if (post.floor === 1) {
+    throw new AppError(400, "invalid_request", "主楼不能单独删除，可以删除整个主题");
+  }
+  const thread = await assertVisible(post.thread_id, members);
+  assertMayChange(staff, viewer, post.author_id, thread.locked);
+
+  await db.transaction().execute(async (trx) => {
+    const deleted = await trx
+      .updateTable("posts")
+      .set({ deleted_at: sql<Date>`now()` })
+      .where("id", "=", postId)
+      .where("deleted_at", "is", null)
+      .returning("reply_to_id")
+      .executeTakeFirst();
+    if (!deleted) throw new AppError(404, "post_not_found", "回复不存在");
+    await trx
+      .updateTable("threads")
+      .set((eb) => ({ reply_count: eb("reply_count", "-", 1) }))
+      .where("id", "=", post.thread_id)
+      .execute();
+    if (deleted.reply_to_id !== null) {
+      await trx
+        .updateTable("posts")
+        .set((eb) => ({ reply_count: eb("reply_count", "-", 1) }))
+        .where("id", "=", deleted.reply_to_id)
+        .execute();
+    }
+    await countBoard(trx, thread.board_id, { threads: 0, posts: -1 });
+    await countUserPosts(trx, post.author_id, { threads: 0, posts: -1 });
+    await auditChange(trx, actor, post.author_id, {
+      action: "post.delete",
+      target_type: "post",
+      target_id: postId,
+    });
+  });
 }
 
 // ---- Views

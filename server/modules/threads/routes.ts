@@ -4,6 +4,7 @@ import { env } from "../../platform/env.ts";
 import {
   actorOf,
   authorize,
+  can,
   clientIp,
   createRouter,
   errorResponse,
@@ -14,10 +15,15 @@ import { rateLimit } from "../../platform/rate-limit.ts";
 import {
   createPost,
   createThread,
+  deletePost,
+  deleteThread,
+  editPost,
+  editThread,
   getPost,
   getThread,
   listPosts,
   listReplies,
+  listRevisions,
   listThreads,
   recordView,
 } from "./service.ts";
@@ -136,6 +142,23 @@ const Markdown = z
 
 // Only Markdown for now; QQ message segments come with the bot's message conversion.
 const Content = z.object({ markdown: Markdown });
+
+const Title = z.string().trim().min(4).max(80);
+
+const Tags = z
+  .array(z.string())
+  .max(5)
+  .transform((t) => [...new Set(t)]);
+
+const RevisionSchema = z
+  .object({
+    rev: z.number().openapi({ description: "第几次修改，从 1 开始" }),
+    title: z.string().nullable().openapi({ description: "改标题时的旧标题" }),
+    body: z.string().openapi({ description: "这次修改之前的 Markdown" }),
+    editor: UserBriefSchema,
+    created_at: z.number(),
+  })
+  .openapi("Revision");
 
 function json<T extends z.ZodType>(schema: T) {
   return { required: true, content: { "application/json": { schema } } };
@@ -275,14 +298,10 @@ export const threadsRoutes = createRouter()
         body: json(
           z.object({
             board: z.string(),
-            title: z.string().trim().min(4).max(80),
+            title: Title,
             content: Content,
             kind: z.enum(["discussion", "question"]).optional(),
-            tags: z
-              .array(z.string())
-              .max(5)
-              .default([])
-              .transform((t) => [...new Set(t)]),
+            tags: Tags.default([]),
           }),
         ),
       },
@@ -330,6 +349,138 @@ export const threadsRoutes = createRouter()
         { markdown: content.markdown, reply_to_id },
       );
       return c.json(postJson(post, "html"), 201);
+    },
+  )
+  .openapi(
+    createRoute({
+      method: "patch",
+      path: "/threads/{id}",
+      summary: "修改主题：作者可以改标题和标签；版主还可以移动版块、置顶、加精、锁定",
+      request: {
+        params: IdParam,
+        body: json(
+          z.object({
+            title: Title.optional(),
+            tags: Tags.optional(),
+            board: z.string().optional(),
+            pinned: z.number().int().min(0).max(2).optional(),
+            featured: z.boolean().optional(),
+            locked: z.boolean().optional(),
+          }),
+        ),
+      },
+      responses: {
+        200: threadResponse,
+        403: errorResponse("不是作者或版主，或者主题已锁定"),
+        404: errorResponse("主题不存在"),
+      },
+    }),
+    async (c) => {
+      const viewer = authorize(c, "act");
+      const thread = await editThread(
+        actorOf(c, viewer),
+        viewer,
+        can(c, "moderate"),
+        isMember(viewer, c.var.bot),
+        c.req.valid("param").id,
+        c.req.valid("json"),
+      );
+      return c.json(threadDetailJson(thread), 200);
+    },
+  )
+  .openapi(
+    createRoute({
+      method: "delete",
+      path: "/threads/{id}",
+      summary: "删除主题；有人回复后作者不能删，只有版主能删",
+      request: { params: IdParam },
+      responses: {
+        204: { description: "已删除" },
+        403: errorResponse("不是作者或版主，或者已经有人回复"),
+        404: errorResponse("主题不存在"),
+      },
+    }),
+    async (c) => {
+      const viewer = authorize(c, "act");
+      const members = isMember(viewer, c.var.bot);
+      const id = c.req.valid("param").id;
+      await deleteThread(actorOf(c, viewer), viewer, can(c, "moderate"), members, id);
+      return c.body(null, 204);
+    },
+  )
+  .openapi(
+    createRoute({
+      method: "patch",
+      path: "/posts/{id}",
+      summary: "修改回复或主楼的正文，旧的正文进编辑记录",
+      request: { params: IdParam, body: json(z.object({ content: Content })) },
+      responses: {
+        200: postResponse,
+        403: errorResponse("不是作者或版主，或者主题已锁定"),
+        404: errorResponse("回复不存在"),
+      },
+    }),
+    async (c) => {
+      const viewer = authorize(c, "act");
+      const post = await editPost(
+        actorOf(c, viewer),
+        viewer,
+        can(c, "moderate"),
+        isMember(viewer, c.var.bot),
+        c.req.valid("param").id,
+        c.req.valid("json").content.markdown,
+      );
+      return c.json(postJson(post, "html"), 200);
+    },
+  )
+  .openapi(
+    createRoute({
+      method: "delete",
+      path: "/posts/{id}",
+      summary: "删除回复；楼层号保留，显示为已删除。主楼不能单独删除",
+      request: { params: IdParam },
+      responses: {
+        204: { description: "已删除" },
+        400: errorResponse("这是主楼"),
+        403: errorResponse("不是作者或版主，或者主题已锁定"),
+        404: errorResponse("回复不存在"),
+      },
+    }),
+    async (c) => {
+      const viewer = authorize(c, "act");
+      const members = isMember(viewer, c.var.bot);
+      const id = c.req.valid("param").id;
+      await deletePost(actorOf(c, viewer), viewer, can(c, "moderate"), members, id);
+      return c.body(null, 204);
+    },
+  )
+  .openapi(
+    createRoute({
+      method: "get",
+      path: "/posts/{id}/revisions",
+      summary: "编辑记录，最近的在前",
+      request: { params: IdParam },
+      responses: {
+        200: {
+          description: "每次修改之前的版本",
+          content: {
+            "application/json": { schema: z.object({ items: z.array(RevisionSchema) }) },
+          },
+        },
+        403: errorResponse("不是作者或版主"),
+        404: errorResponse("回复不存在"),
+      },
+    }),
+    async (c) => {
+      const viewer = authorize(c, "read");
+      const revisions = await listRevisions(
+        viewer,
+        can(c, "moderate"),
+        isMember(viewer, c.var.bot),
+        c.req.valid("param").id,
+      );
+      const items = revisions.map((r) => ({ ...r, created_at: unix(r.created_at) }));
+      return c.json({ items }, 200);
     },
   )
   .openapi(
