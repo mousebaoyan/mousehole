@@ -224,6 +224,7 @@ function selectPosts() {
       "posts.via",
       "posts.reply_count",
       "posts.like_count",
+      "posts.boost_count",
       sql<Record<string, number>>`posts.reactions`.as("reactions"),
       "posts.edited_at",
       "posts.created_at",
@@ -820,6 +821,14 @@ export async function countReaction(
       .execute();
   }
   await countLikes(trx, post.author_id, likes);
+}
+
+export async function countBoosts(trx: Transaction<DB>, postId: number, boosts: number) {
+  await trx
+    .updateTable("posts")
+    .set((eb) => ({ boost_count: eb("boost_count", "+", boosts) }))
+    .where("id", "=", postId)
+    .execute();
 }
 
 // ---- Views

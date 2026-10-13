@@ -9,6 +9,7 @@ const api = testClient(app).api.v1;
 let author = { id: 0, who: as("") };
 let fan = as("");
 let other = as("");
+let moderator = as("");
 let thread = 0;
 let opening = 0;
 
@@ -19,6 +20,7 @@ beforeAll(async () => {
   author = { id: user.id, who: as(await login(user.id)) };
   fan = as(await login((await createUser()).id));
   other = as(await login((await createUser()).id));
+  moderator = as(await login((await createUser("moderator")).id));
   const res = await api.threads.$post(
     { json: { board: "r", title: "求点赞的主题", content: { markdown: "主楼" } } },
     author.who,
@@ -98,5 +100,57 @@ describe("表情回应", () => {
     if (!hearts.ok) throw new Error(`status ${hearts.status}`);
     const { items } = await hearts.json();
     expect(items.map((r) => r.emoji)).toEqual(["heart"]);
+  });
+});
+
+function boost(body: string | null, who: { headers: Record<string, string> }) {
+  const param = { id: String(opening) };
+  return body === null
+    ? api.posts[":id"].boost.$delete({ param }, who)
+    : api.posts[":id"].boost.$put({ param, json: { body } }, who);
+}
+
+async function floor(who: { headers: Record<string, string> }) {
+  const res = await api.posts[":id"].$get({ param: { id: String(opening) }, query: {} }, who);
+  if (!res.ok) throw new Error(`status ${res.status}`);
+  return res.json();
+}
+
+describe("短评", () => {
+  test("每人每层一条，再留就改掉原来的；不超过 16 个字，emoji 算一个", async () => {
+    expect((await boost("学到了", fan)).status).toBe(200);
+    expect((await boost("同问", other)).status).toBe(200);
+    expect((await boost("学到了，收藏", fan)).status).toBe(200);
+    expect(await floor(fan)).toMatchObject({
+      boost_count: 2,
+      my_boost: "学到了，收藏",
+      boosts: [{ body: "学到了，收藏" }, { body: "同问" }],
+    });
+
+    expect((await boost("🐭".repeat(16), author.who)).status).toBe(200);
+    expect((await boost("一二三四五六七八九十一二三四五六七", author.who)).status).toBe(400);
+    expect((await boost("  ", author.who)).status).toBe(400);
+  });
+
+  test("自己能删自己的；版主能删任何人的，记进操作日志", async () => {
+    expect((await boost(null, author.who)).status).toBe(204);
+    expect((await boost(null, author.who)).status).toBe(404);
+
+    const { boosts } = await floor(other);
+    const theirs = boosts.find((b) => b.body === "同问");
+    if (!theirs) throw new Error("boost missing");
+    const param = { id: String(theirs.id) };
+    expect((await api.boosts[":id"].$delete({ param, json: {} }, fan)).status).toBe(403);
+    const removed = await api.boosts[":id"].$delete({ param, json: { reason: "灌水" } }, moderator);
+    expect(removed.status).toBe(204);
+
+    expect(await floor(other)).toMatchObject({ boost_count: 1, my_boost: null });
+    const log = await db
+      .selectFrom("audit_logs")
+      .select("data")
+      .where("action", "=", "boost.delete")
+      .where("target_id", "=", theirs.id)
+      .executeTakeFirstOrThrow();
+    expect(log.data).toMatchObject({ body: "同问", reason: "灌水" });
   });
 });

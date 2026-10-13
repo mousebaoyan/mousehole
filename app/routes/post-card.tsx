@@ -2,7 +2,6 @@ import {
   ArrowDown,
   ArrowUp,
   Bookmark,
-  Check,
   ChevronDown,
   ChevronUp,
   CircleCheck,
@@ -13,15 +12,13 @@ import {
   MessagesSquare,
   Pencil,
   Reply,
-  Rocket,
   Trash2,
   X,
 } from "lucide-react";
 import { useEffect, useRef, useState, type Ref } from "react";
 import { useFetcher, useNavigate } from "react-router";
 import { cn } from "cn";
-import { Dropdown, menuItem, useDismiss } from "~/components/disclosure";
-import { EmojiButton } from "~/components/emoji-button";
+import { Dropdown, menuItem } from "~/components/disclosure";
 import { PROSE } from "~/components/prose";
 import { UserAvatar } from "~/components/user-avatar";
 import { UserBadges } from "~/components/user-badges";
@@ -30,22 +27,16 @@ import { Textarea } from "~/components/ui/textarea";
 import type { PostItem, UserBrief } from "~/api-types";
 import { useMe } from "~/forum";
 import { stamp } from "~/time";
+import { BoostButton, BoostChip, useBoosts } from "./boosts.tsx";
 import { LikeButton, ReactionSummary, useReaction } from "./reactions.tsx";
-
-// Busy posts can collect dozens of boosts; past this many they fold behind a counter.
-const BOOSTS_SHOWN = 6;
-
-const BOOST_MAX = 16;
-
-// Counts what people see as characters, so an emoji is one.
-const graphemes = new Intl.Segmenter("zh", { granularity: "grapheme" });
 
 const reportReasons = ["垃圾广告", "人身攻击", "违法违规", "其他"];
 
 // `parent` is the floor this one replies to when it is on the page; otherwise it is fetched when
 // the reader opens it. The floors that reply to this one are fetched the same way.
 // `manage` holds what the reader may do to this floor besides replying: change it (edit or
-// delete), read its edit history, delete the whole thread from its opening post.
+// delete), read its edit history, delete the whole thread from its opening post, remove other
+// people's boosts.
 export function PostCard({
   post,
   threadId,
@@ -65,13 +56,12 @@ export function PostCard({
   accepted: boolean;
   now: number;
   parent: PostItem | undefined;
-  manage: { change: boolean; history: boolean; deleteThread: boolean };
+  manage: { change: boolean; history: boolean; deleteThread: boolean; moderate: boolean };
   onReply: () => void;
   onJump: (floor: number) => void;
   onEdit: (markdown: string) => void;
   onDelete: () => void;
 }) {
-  const [allBoosts, setAllBoosts] = useState(false);
   const [parentOpen, setParentOpen] = useState(false);
   const [repliesOpen, setRepliesOpen] = useState(false);
   const parentFetcher = useFetcher<PostItem>();
@@ -94,9 +84,8 @@ export function PostCard({
   useEffect(() => {
     if (reacting.state === "idle" && reacting.data?.ok === false) alert(reacting.data.message);
   }, [reacting.state, reacting.data]);
-  // Boosts are kept on this page until their API exists.
-  const boosts: { user: UserBrief; text: string }[] = [];
-  const shownBoosts = allBoosts ? boosts : boosts.slice(0, BOOSTS_SHOWN);
+  const boosts = useBoosts(post, threadId);
+  const boostButton = <BoostButton mine={boosts.mine} onSave={boosts.save} />;
   const replyTo = post.reply_to;
   const target = parent ?? parentFetcher.data;
 
@@ -230,11 +219,7 @@ export function PostCard({
               {post.reply_count} 个回复 {repliesOpen ? <ChevronUp /> : <ChevronDown />}
             </Button>
           )}
-          {boosts.length === 0 && (
-            <div className="text-muted-foreground">
-              <BoostButton />
-            </div>
-          )}
+          {boosts.shown.length === 0 && <div className="text-muted-foreground">{boostButton}</div>}
           <div className="ml-auto flex items-center text-muted-foreground">
             {me?.id !== post.author.id && (
               <LikeButton
@@ -310,32 +295,30 @@ export function PostCard({
         </div>
 
         {/* Boosts, with the rocket at the end; the boost input floats from this row. */}
-        {boosts.length > 0 && (
+        {boosts.shown.length > 0 && (
           <ul className="relative mt-2 flex flex-wrap items-center gap-1.5">
-            {shownBoosts.map((b) => (
-              <li
+            {boosts.shown.map((b) => (
+              <BoostChip
                 key={b.user.id}
-                title={b.user.display_name}
-                className="inline-flex items-center gap-1.5 rounded-full bg-secondary py-0.5 pr-2.5 pl-0.5 text-meta"
-              >
-                <UserAvatar user={b.user} className="size-5 text-2xs" />
-                {b.text}
-              </li>
+                boost={b}
+                threadId={threadId}
+                removable={manage.moderate && b.user.id !== me?.id}
+              />
             ))}
-            {!allBoosts && boosts.length > BOOSTS_SHOWN && (
+            {boosts.hidden > 0 && (
               <li>
                 <button
                   type="button"
-                  onClick={() => setAllBoosts(true)}
-                  className="h-6 rounded-full px-2 text-meta text-muted-foreground hover:bg-accent hover:text-foreground"
+                  disabled={boosts.loadingAll}
+                  onClick={boosts.loadAll}
+                  aria-label={`还有 ${boosts.hidden} 条短评`}
+                  className="h-6 rounded-full px-2 text-meta text-muted-foreground tabular-nums hover:bg-accent hover:text-foreground"
                 >
-                  +{boosts.length - BOOSTS_SHOWN}
+                  +{boosts.hidden}
                 </button>
               </li>
             )}
-            <li className="text-muted-foreground">
-              <BoostButton />
-            </li>
+            <li className="text-muted-foreground">{boostButton}</li>
           </ul>
         )}
 
@@ -453,86 +436,6 @@ function PostPreview({
           />
         )}
       </div>
-    </div>
-  );
-}
-
-// Floats over the content below instead of pushing it down, like linux.do's. It is placed
-// against the action row rather than the button, so it fits on narrow screens.
-function BoostButton() {
-  const [open, setOpen] = useState(false);
-  const [text, setText] = useState("");
-  const root = useRef<HTMLDivElement>(null);
-  const input = useRef<HTMLInputElement>(null);
-  const me = useMe();
-  useDismiss(open, () => setOpen(false), root);
-  const length = [...graphemes.segment(text)].length;
-
-  useEffect(() => {
-    if (open) input.current?.focus();
-  }, [open]);
-
-  return (
-    <div ref={root}>
-      <Button
-        variant="ghost"
-        size="icon-sm"
-        aria-label="短评"
-        title="短评"
-        aria-expanded={open}
-        onClick={() => setOpen(!open)}
-      >
-        <Rocket />
-      </Button>
-      {open && (
-        <form
-          className="absolute top-full left-0 z-30 mt-2 flex w-[min(24rem,100%)] items-center gap-1 rounded-full border bg-popover py-1 pr-1 pl-1.5 shadow-lg animate-in fade-in zoom-in-95"
-          onSubmit={(e) => {
-            e.preventDefault();
-            setText("");
-            setOpen(false);
-          }}
-        >
-          {me && <UserAvatar user={me} className="size-7" />}
-          <input
-            ref={input}
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            aria-label="短评"
-            placeholder="短评…"
-            className="min-w-0 flex-1 bg-transparent px-1.5 text-sm outline-none placeholder:text-muted-foreground"
-          />
-          {length > BOOST_MAX - 4 && (
-            <span
-              className={cn(
-                "text-xs tabular-nums",
-                length > BOOST_MAX ? "text-destructive" : "text-muted-foreground",
-              )}
-            >
-              {length}/{BOOST_MAX}
-            </span>
-          )}
-          <EmojiButton target={input} onChange={setText} side="bottom" />
-          <Button
-            type="submit"
-            size="icon-sm"
-            className="rounded-full"
-            aria-label="发送"
-            disabled={length === 0 || length > BOOST_MAX}
-          >
-            <Check />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            className="rounded-full"
-            aria-label="取消"
-            onClick={() => setOpen(false)}
-          >
-            <X />
-          </Button>
-        </form>
-      )}
     </div>
   );
 }

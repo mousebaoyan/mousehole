@@ -1,10 +1,28 @@
 import { createRoute, z } from "@hono/zod-openapi";
 import { isMember } from "../../platform/access.ts";
-import { authorize, createRouter, errorResponse, unix } from "../../platform/http.ts";
+import { actorOf, authorize, createRouter, errorResponse, unix } from "../../platform/http.ts";
 import { UserBriefSchema } from "../users/schemas.ts";
-import { listReactions, react, REACTIONS } from "./service.ts";
+import { BoostSchema, boostJson } from "./schemas.ts";
+import {
+  BOOST_MAX,
+  boostLength,
+  deleteOwnBoost,
+  listBoosts,
+  listReactions,
+  react,
+  REACTIONS,
+  removeBoost,
+  setBoost,
+} from "./service.ts";
 
 const IdParam = z.object({ id: z.coerce.number().int() });
+
+const BoostBody = z
+  .string()
+  .trim()
+  .refine((s) => s.length > 0, "短评不能为空")
+  .refine((s) => boostLength(s) <= BOOST_MAX, `短评不超过 ${BOOST_MAX} 个字`)
+  .openapi({ description: `不超过 ${BOOST_MAX} 个字，emoji 算一个` });
 
 const changed = {
   204: { description: "已更新" },
@@ -88,5 +106,99 @@ export const reactionsRoutes = createRouter()
         },
         200,
       );
+    },
+  )
+  .openapi(
+    createRoute({
+      method: "put",
+      path: "/posts/{id}/boost",
+      summary: "留下短评：每人每层一条，已有就改成新的",
+      request: {
+        params: IdParam,
+        body: {
+          required: true,
+          content: { "application/json": { schema: z.object({ body: BoostBody }) } },
+        },
+      },
+      responses: {
+        200: {
+          description: "短评",
+          content: { "application/json": { schema: BoostSchema } },
+        },
+        403: errorResponse("不是成员"),
+        404: errorResponse("回复不存在"),
+      },
+    }),
+    async (c) => {
+      const viewer = authorize(c, "act");
+      const members = isMember(viewer, c.var.bot);
+      const boost = await setBoost(
+        viewer,
+        members,
+        c.req.valid("param").id,
+        c.req.valid("json").body,
+      );
+      return c.json(boostJson(boost), 200);
+    },
+  )
+  .openapi(
+    createRoute({
+      method: "delete",
+      path: "/posts/{id}/boost",
+      summary: "删除自己在这一层的短评",
+      request: { params: IdParam },
+      responses: { 204: { description: "已删除" }, 404: errorResponse("没有留过短评") },
+    }),
+    async (c) => {
+      await deleteOwnBoost(authorize(c, "act"), c.req.valid("param").id);
+      return c.body(null, 204);
+    },
+  )
+  .openapi(
+    createRoute({
+      method: "get",
+      path: "/posts/{id}/boosts",
+      summary: "这一层的全部短评，先留的在前",
+      request: { params: IdParam },
+      responses: {
+        200: {
+          description: "短评",
+          content: { "application/json": { schema: z.object({ items: z.array(BoostSchema) }) } },
+        },
+        404: errorResponse("回复不存在"),
+      },
+    }),
+    async (c) => {
+      const members = isMember(c.var.viewer, c.var.bot);
+      const boosts = await listBoosts(members, c.req.valid("param").id);
+      return c.json({ items: boosts.map(boostJson) }, 200);
+    },
+  )
+  .openapi(
+    createRoute({
+      method: "delete",
+      path: "/boosts/{id}",
+      summary: "版主删除任意短评，可附理由，记进操作日志",
+      request: {
+        params: IdParam,
+        body: {
+          required: false,
+          content: {
+            "application/json": {
+              schema: z.object({ reason: z.string().trim().max(200).optional() }),
+            },
+          },
+        },
+      },
+      responses: {
+        204: { description: "已删除" },
+        403: errorResponse("不是版主"),
+        404: errorResponse("短评不存在"),
+      },
+    }),
+    async (c) => {
+      const viewer = authorize(c, "moderate");
+      await removeBoost(actorOf(c, viewer), c.req.valid("param").id, c.req.valid("json").reason);
+      return c.body(null, 204);
     },
   );
