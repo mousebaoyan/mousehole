@@ -51,7 +51,7 @@
 - 所有回复都是楼层，没有楼中楼。`reply_to_id` 记回复的是同一主题里的哪一条，`reply_count` 冗余有几条回复它，和发帖在同一个事务里更新。
 - 主楼就是 `floor = 1` 的那条。
 - 发楼层：在同一个事务里先 `UPDATE threads SET floor_count = floor_count + 1 ... RETURNING floor_count` 分配楼层号，再插入回复，并更新计数和最后回复。这条 UPDATE 会锁住主题行，同一主题的并发回复因此按顺序拿到楼层号。
-- 删除只设 `deleted_at`，楼层号保留，页面显示"该楼已删除"，页码不会错位。
+- 删除只设 `deleted_at`，楼层号保留，页面显示"该楼已删除"，指向某一楼的链接不会错位。
 - "最新发布"排序直接按 `id DESC` 走主键，不用单独建索引。
 
 ## 互动与通知
@@ -127,7 +127,7 @@
 | 首页"最新" | `threads_latest` |
 | 首页"待解答" | `threads_unsolved` |
 | 标签页 | `thread_tags_list` |
-| 主题第 N 页 | `posts_floor` |
+| 主题里某一楼之后或之前的 20 层 | `posts_floor` |
 | 回复某一条的楼层 | `posts_reply_to` |
 | 用户的主题和回复 | `threads_author`、`posts_author` |
 | 全量同步时取出一个群的成员 | `group_members` 主键 |
