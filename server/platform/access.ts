@@ -63,3 +63,8 @@ export function checkPermission(viewer: Viewer | null, bot: Bot | null, need: Sc
   }
   return viewer;
 }
+
+// Who may see members-only boards and what is in them; everyone else gets the public site.
+export function isMember(viewer: Viewer | null, bot: Bot | null) {
+  return viewer?.member_status === "member" && (bot === null || bot.scopes.includes("read"));
+}

@@ -37,6 +37,56 @@ const SCHOOLS = [
 ];
 const FIELDS = ["CV", "NLP", "系统", "安全", "理论", "图形学"];
 
+// The boards and tags the style draft showed, for local development.
+const DEMO_BOARDS = [
+  {
+    slug: "announce",
+    name: "公告",
+    color: "#55625f",
+    description: "站务公告与规则",
+    post_role: "moderator",
+  },
+  {
+    slug: "qa",
+    name: "保研问答",
+    color: "#e07b53",
+    description: "定位、材料、流程等问题",
+    default_kind: "question",
+  },
+  {
+    slug: "experience",
+    name: "经验分享",
+    color: "#5e9a6f",
+    description: "夏令营、预推免与上岸复盘",
+  },
+  {
+    slug: "deadlines",
+    name: "通知与截止日期",
+    color: "#d29b2f",
+    description: "各院校通知与报名截止时间",
+  },
+  { slug: "schools", name: "院校交流", color: "#5a7fa6", description: "院校、导师与方向的选择" },
+  { slug: "chat", name: "闲聊", color: "#ad7a9f", description: "保研之外的日常" },
+];
+
+const DEMO_TAGS = {
+  topic: [
+    "夏令营",
+    "预推免",
+    "九推",
+    "简历",
+    "机试",
+    "面试",
+    "导师",
+    "定位",
+    "科研",
+    "经验",
+    "必读",
+  ],
+  school: ["南京大学", "复旦大学", "上海交通大学", "浙江大学", "中科院计算所"],
+  major: ["系统", "CV", "NLP", "安全"],
+};
+
 // A group as NapCat's get_group_member_list would return it: the first QQ owns it, the next two
 // are admins, and the bot is in it too.
 function fakeGroup(firstQq: number, owner?: number) {
@@ -121,6 +171,31 @@ async function setup(owner?: number) {
   show(await pushFull(GROUP, fakeGroup(910000000, owner), true));
 }
 
+// True when created, false when it already existed.
+function isCreated(what: string, res: { status: number; data: unknown }) {
+  if (res.status === 201) return true;
+  if (res.status === 409) return false;
+  throw new Error(`${what}：${res.status} ${JSON.stringify(res.data)}`);
+}
+
+// Creates what is missing and leaves the rest alone, so it can run again.
+async function seed() {
+  const created = { boards: 0, tags: 0 };
+  for (const board of DEMO_BOARDS) {
+    if (isCreated(board.name, await call("/boards", { method: "POST", body: board }))) {
+      created.boards++;
+    }
+  }
+  for (const [kind, names] of Object.entries(DEMO_TAGS)) {
+    for (const name of names) {
+      if (isCreated(name, await call("/tags", { method: "POST", body: { name, kind } }))) {
+        created.tags++;
+      }
+    }
+  }
+  console.log(`新建 ${created.boards} 个版块、${created.tags} 个标签，已有的跳过`);
+}
+
 function pushInfo(group: number) {
   return call(`/bot/groups/${group}/info`, {
     method: "PUT",
@@ -148,7 +223,7 @@ function pushDelta(group: number, members: unknown[], observedAt = now()) {
   });
 }
 
-// The whole M1 flow against a fresh group and fresh QQ numbers, so every count is known.
+// The whole flow so far against a fresh group and fresh QQ numbers, so every count is known.
 async function demo() {
   const results: [string, boolean, string][] = [];
   const check = (name: string, ok: boolean, detail: unknown) => {
@@ -262,6 +337,22 @@ async function demo() {
   });
   check("普通群友不能让 bot 代表别人", sneaky.status === 403, sneaky.data);
 
+  const slug = `demo-${run}`;
+  const board = await call("/boards", {
+    method: "POST",
+    body: { slug, name: "演示版块", visibility: "members" },
+  });
+  check("bot 用 admin 范围新建仅成员版块", board.status === 201, board.data);
+  const asGuest = await call(`/boards/${slug}`, { token: null });
+  const asBot = await call(`/boards/${slug}`);
+  check(
+    "访客看不到仅成员版块，有 read 范围的 bot 看得到",
+    asGuest.status === 404 && asBot.status === 200,
+    `访客 ${asGuest.status}，bot ${asBot.status}`,
+  );
+  const removed = await call(`/boards/${slug}`, { method: "DELETE" });
+  check("删除空版块", removed.status === 204, `HTTP ${removed.status}`);
+
   const failed = results.filter(([, ok]) => !ok).length;
   console.log(`\n${results.length - failed}/${results.length} 项通过${failed ? "，有失败项" : ""}`);
   return failed === 0;
@@ -277,11 +368,12 @@ function isCounts(data: unknown, expected: Record<string, unknown>) {
 
 const USAGE = `用法：pnpm mock-bot <命令>
   setup [--owner QQ号]   创建 token，关联演示群并推送 ${MEMBERS} 个假成员（--owner 让你当群主）
+  seed                   建演示用的版块和标签，已有的跳过
   sync [--gzip]          再推一次演示群的完整名单
   join QQ号 / leave QQ号  增量：进群、退群
   link QQ号              给这位成员签发登录链接
   code 口令 QQ号          以这位成员的身份确认登录口令
-  demo                   在新的群里跑一遍 M1 的完整流程，逐项检查`;
+  demo                   在新的群里跑一遍 bot 的完整流程，逐项检查`;
 
 const { positionals, values } = parseArgs({
   allowPositionals: true,
@@ -293,6 +385,9 @@ const qq = (i: number) => Number(rest[i]);
 switch (command) {
   case "setup":
     await setup(values.owner ? Number(values.owner) : undefined);
+    break;
+  case "seed":
+    await seed();
     break;
   case "sync":
     show(

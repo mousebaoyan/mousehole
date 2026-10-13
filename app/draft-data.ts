@@ -1,45 +1,4 @@
-// Fake content for the style draft. Replaced by /api/v1 data once boards and threads exist.
-
-export type Board = {
-  slug: string;
-  name: string;
-  color: string;
-  description: string;
-  threads: number;
-};
-
-export const boards: Board[] = [
-  { slug: "announce", name: "公告", color: "#55625f", description: "站务公告与规则", threads: 6 },
-  {
-    slug: "qa",
-    name: "保研问答",
-    color: "#e07b53",
-    description: "定位、材料、流程等问题",
-    threads: 1284,
-  },
-  {
-    slug: "experience",
-    name: "经验分享",
-    color: "#5e9a6f",
-    description: "夏令营、预推免与上岸复盘",
-    threads: 356,
-  },
-  {
-    slug: "deadlines",
-    name: "通知与截止日期",
-    color: "#d29b2f",
-    description: "各院校通知与报名截止时间",
-    threads: 412,
-  },
-  {
-    slug: "schools",
-    name: "院校交流",
-    color: "#5a7fa6",
-    description: "院校、导师与方向的选择",
-    threads: 198,
-  },
-  { slug: "chat", name: "闲聊", color: "#ad7a9f", description: "保研之外的日常", threads: 731 },
-];
+// Fake threads and posts for the style draft, until the thread API replaces them.
 
 export type User = {
   id: number;
@@ -218,8 +177,6 @@ export const threads: Thread[] = [
   },
 ];
 
-export const tags = ["夏令营", "预推免", "九推", "简历", "机试", "面试", "导师", "定位", "科研"];
-
 const VIEWS = ["latest", "new", "unread", "hot", "unsolved"] as const;
 export type ThreadView = (typeof VIEWS)[number];
 
@@ -228,7 +185,7 @@ export function readFilter(url: string) {
   const params = new URL(url).searchParams;
   return {
     view: VIEWS.find((v) => v === params.get("view")) ?? "latest",
-    tag: tags.find((t) => t === params.get("tag")) ?? null,
+    tag: params.get("tag"),
   };
 }
 

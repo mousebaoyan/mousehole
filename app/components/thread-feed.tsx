@@ -1,12 +1,12 @@
 import { Check, ChevronDown, PenSquare } from "lucide-react";
-import type { ReactNode } from "react";
+import { Fragment, type ReactNode } from "react";
 import { Link, useLocation } from "react-router";
 import { cn } from "cn";
 import { Dropdown, menuItem } from "~/components/disclosure";
 import { ThreadList } from "~/components/thread-list";
 import { buttonVariants } from "~/components/ui/button";
-import { boards, tags, type Board, type Thread, type ThreadView } from "~/draft-data";
-import { useMe } from "~/me";
+import type { Thread, ThreadView } from "~/draft-data";
+import { useBoards, useMe, useTags, type Board } from "~/forum";
 
 // New and unread depend on what the reader has read, so only members see them.
 const VIEWS: { view: ThreadView; label: string; mine?: boolean }[] = [
@@ -15,6 +15,12 @@ const VIEWS: { view: ThreadView; label: string; mine?: boolean }[] = [
   { view: "unread", label: "未读", mine: true },
   { view: "hot", label: "热门" },
   { view: "unsolved", label: "待解答" },
+];
+
+const KINDS = [
+  { kind: "topic", label: "话题" },
+  { kind: "school", label: "院校" },
+  { kind: "major", label: "方向" },
 ];
 
 const FILTER =
@@ -43,6 +49,8 @@ export function ThreadFeed({
   board: Board | null;
 }) {
   const me = useMe();
+  const boards = useBoards();
+  const tags = useTags();
   const { key } = useLocation();
   const slug = board === null ? null : board.slug;
   return (
@@ -93,11 +101,27 @@ export function ThreadFeed({
                 <Choice to={listUrl(slug, null, view)} chosen={tag === null}>
                   全部标签
                 </Choice>
-                {tags.map((t) => (
-                  <Choice key={t} to={listUrl(slug, t, view)} chosen={t === tag}>
-                    #{t}
-                  </Choice>
-                ))}
+                {KINDS.map((k) => {
+                  const group = tags.filter((t) => t.kind === k.kind);
+                  return (
+                    group.length > 0 && (
+                      <Fragment key={k.kind}>
+                        <div className="px-2.5 pt-2 pb-1 text-xs text-muted-foreground">
+                          {k.label}
+                        </div>
+                        {group.map((t) => (
+                          <Choice
+                            key={t.id}
+                            to={listUrl(slug, t.name, view)}
+                            chosen={t.name === tag}
+                          >
+                            #{t.name}
+                          </Choice>
+                        ))}
+                      </Fragment>
+                    )
+                  );
+                })}
               </>
             )}
           </Dropdown>

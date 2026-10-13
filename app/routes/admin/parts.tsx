@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { data } from "react-router";
 import { cn } from "cn";
 
 // Shared by the admin pages.
@@ -39,6 +40,14 @@ export function Field({
   );
 }
 
+export function Badge({ children }: { children: ReactNode }) {
+  return (
+    <span className="rounded bg-secondary px-1.5 py-px text-2xs text-muted-foreground">
+      {children}
+    </span>
+  );
+}
+
 // What an action said: saved, or why not.
 export function Result({ result }: { result: { ok: boolean; message: string } | undefined }) {
   if (!result) return null;
@@ -73,4 +82,11 @@ export async function readForm(request: Request) {
     const value = form.get(name);
     return typeof value === "string" ? value.trim() : "";
   };
+}
+
+// A <select>'s value as one of its options, typed for the API client.
+export function choice<T extends string>(options: readonly { value: T }[], value: string) {
+  const option = options.find((o) => o.value === value);
+  if (!option) throw data("表单有误", { status: 400 });
+  return option.value;
 }

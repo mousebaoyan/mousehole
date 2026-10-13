@@ -36,7 +36,7 @@
 | `pnpm db:migrate` | 执行迁移 |
 | `pnpm db:codegen` | 改完迁移后重新生成数据库类型 |
 | `pnpm bootstrap --qq <QQ号>` | 生成管理员的一次性登录链接，本地登录后台用 |
-| `pnpm mock-bot <命令>` | 模拟 bot 插件：`setup` 建 token 并推送演示群，`demo` 跑一遍 bot 的完整流程；不带命令列出全部 |
+| `pnpm mock-bot <命令>` | 模拟 bot 插件：`setup` 建 token 并推送演示群，`seed` 建演示用的版块和标签，`demo` 跑一遍 bot 的完整流程；不带命令列出全部 |
 
 ## 语言
 

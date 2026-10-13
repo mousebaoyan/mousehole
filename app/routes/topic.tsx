@@ -14,8 +14,8 @@ import { BoardBadge } from "~/components/board-badge";
 import { useComposer } from "~/components/composer";
 import { ThreadList } from "~/components/thread-list";
 import { Button } from "~/components/ui/button";
-import { boards, checkInPosts, threads, topicPosts } from "~/draft-data";
-import { useMe } from "~/me";
+import { checkInPosts, threads, topicPosts } from "~/draft-data";
+import { useBoards, useMe } from "~/forum";
 import type { Route } from "./+types/topic.ts";
 import { FloorNav, FloorProgress } from "./floor-timeline.tsx";
 import { PostCard } from "./post-card.tsx";
@@ -26,11 +26,9 @@ export function meta({ loaderData }: Route.MetaArgs) {
 
 export function loader({ params }: Route.LoaderArgs) {
   const thread = threads.find((t) => t.id === Number(params.id));
-  const board = boards.find((b) => b.slug === thread?.board);
-  if (!thread || !board) throw data("主题不存在", { status: 404 });
+  if (!thread) throw data("主题不存在", { status: 404 });
   return {
     thread,
-    board,
     posts: thread.id === 8 ? checkInPosts : topicPosts,
     // From thread_users.read_floors once reading is recorded.
     readFloors: [1, 2, 3],
@@ -39,9 +37,10 @@ export function loader({ params }: Route.LoaderArgs) {
 }
 
 export default function Topic({
-  loaderData: { thread, board, posts, readFloors, suggested },
+  loaderData: { thread, posts, readFloors, suggested },
 }: Route.ComponentProps) {
   const me = useMe();
+  const board = useBoards().find((b) => b.slug === thread.board);
   const read = useReadFloors(me !== null, readFloors);
   const openComposer = useComposer();
   const target = { id: thread.id, title: thread.title };
@@ -51,7 +50,7 @@ export default function Topic({
       <article className="min-w-0 flex-1">
         <header className="px-1 pb-4">
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-meta text-muted-foreground">
-            <BoardBadge board={board} />
+            {board && <BoardBadge board={board} />}
             {thread.tags.map((t) => (
               <span key={t}>#{t}</span>
             ))}

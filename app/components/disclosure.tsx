@@ -66,7 +66,7 @@ export function Dropdown({
         <div
           id={id}
           className={cn(
-            "absolute top-full z-50 mt-2 flex w-48 flex-col rounded-xl border bg-popover p-1 text-sm text-popover-foreground shadow-lg",
+            "absolute top-full z-50 mt-2 flex max-h-[min(24rem,70svh)] w-48 flex-col overflow-y-auto rounded-xl border bg-popover p-1 text-sm text-popover-foreground shadow-lg",
             align === "start" ? "left-0" : "right-0",
           )}
         >

@@ -23,6 +23,14 @@
   "qq": 123456789, "card": "26-某某大学-CV", "level": 5, "level_name": "活跃", "title": "26届",
   "joined_at": 1740000000, "member_status": "member", "activated": true }
 
+// 版块。visibility：public 公开，members 仅成员；post_role：谁能发主题，user 成员、moderator 版主；
+// default_kind：发主题时默认的类型，discussion 讨论、question 问答
+{ "id": 2, "slug": "qa", "name": "保研问答", "description": "定位、材料、流程等问题", "color": "#e07b53",
+  "visibility": "public", "post_role": "user", "default_kind": "question", "thread_count": 1284 }
+
+// 标签。kind：topic 话题、school 院校、major 方向
+{ "id": 1, "name": "夏令营", "kind": "topic", "thread_count": 42 }
+
 // 主题。匿名主题的 author 为 null；floor_count 是最大的楼层号；
 // last_read_floor 是自己读过的最高一楼，没打开过为 0，只在登录时返回；主题详情里还有 read_floors，是读过的楼层区间，例如 [[1, 20], [480, 495]]；
 // posters 是列表里显示的参与者，作者在前，再按最近回复排最多 4 个人，只在列表里返回
@@ -155,15 +163,16 @@ token 由管理员在后台创建，只显示一次。每个 token 绑定一个 
 
 | 方法 | 路径 | 说明 | 权限 |
 | --- | --- | --- | --- |
-| GET | `/boards` | 版块列表；访客看不到仅成员版块 | 访客 |
-| GET | `/boards/{slug}` | 版块信息 | 访客 |
-| POST | `/boards` | 新建版块 | 管理员 / `admin` |
-| PATCH | `/boards/{slug}` | 修改版块，包括颜色、可见范围和审核方式 | 管理员 / `admin` |
-| DELETE | `/boards/{slug}` | 删除空版块 | 管理员 / `admin` |
-| GET | `/tags` | 标签列表，可按类别（话题、院校、方向）筛选 | 访客 |
-| POST | `/tags` | 新建标签 | 版主 / `moderate` |
-| PATCH | `/tags/{id}` | 改名、改类别、合并到另一个标签 | 版主 / `moderate` |
-| DELETE | `/tags/{id}` | 删除标签 | 版主 / `moderate` |
+| GET | `/boards` | 版块列表，按后台排好的顺序；访客看不到仅成员版块 | 访客 |
+| GET | `/boards/{slug}` | 版块信息；访客看仅成员版块返回 `404 board_not_found` | 访客 |
+| POST | `/boards` | 新建版块：`slug`（小写字母、数字和短横线，建好后不能改）、`name`，以及可选的 `description`、`color`、`visibility`、`post_role`、`default_kind`；排在最后。地址重复返回 `409 board_exists` | 管理员 / `admin` |
+| PATCH | `/boards/{slug}` | 修改版块，只改带了的字段；`position` 把版块移到第几位（从 0 开始），其他版块依次顺延 | 管理员 / `admin` |
+| DELETE | `/boards/{slug}` | 删除版块；有过主题（包括已删除的）的版块返回 `409 board_not_empty` | 管理员 / `admin` |
+| GET | `/tags` | 标签列表：话题、院校、方向依次排列，同一类里用得多的在前 | 访客 |
+| POST | `/tags` | 新建标签：`{ name, kind }`；重名返回 `409 tag_exists` | 版主 / `moderate` |
+| PATCH | `/tags/{id}` | 改名、改类别；新名字已有标签在用时返回 `409 tag_exists` | 版主 / `moderate` |
+| POST | `/tags/{id}/merge` | `{ into }`：合并到另一个标签，主题都改用那个标签，这个标签删除 | 版主 / `moderate` |
+| DELETE | `/tags/{id}` | 删除标签，主题上的这个标签一并去掉 | 版主 / `moderate` |
 
 ### 3.4 主题
 
