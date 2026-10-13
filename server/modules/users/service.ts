@@ -223,3 +223,23 @@ export async function userBriefs(ids: number[]) {
     return user;
   };
 }
+
+// For @ in the editor: members whose name contains the text, names starting with it first, then
+// the recently active.
+export async function searchUsers(text: string) {
+  const pattern = text.replaceAll(/[\\%_]/g, "\\$&");
+  const rows = await db
+    .selectFrom("users")
+    .select("id")
+    .where("display_name", "ilike", `%${pattern}%`)
+    .where("role", "<>", "bot")
+    .where("member_status", "=", "member")
+    .where("deleted_at", "is", null)
+    .orderBy(sql`display_name ILIKE ${`${pattern}%`}`, "desc")
+    .orderBy(sql`last_seen_at DESC NULLS LAST`)
+    .orderBy("id")
+    .limit(8)
+    .execute();
+  const user = await userBriefs(rows.map((r) => r.id));
+  return rows.map((r) => user(r.id));
+}

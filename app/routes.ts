@@ -18,6 +18,7 @@ export default [
   route("t/:id/p/:post/revisions", "routes/topic-revisions.ts"),
   route("t/:id/reply", "routes/topic-reply.ts"),
   route("preview", "routes/preview.ts"),
+  route("mention", "routes/mention.ts"),
   route("login/code", "routes/login-code.ts"),
   route("logout", "routes/logout.ts"),
   route("admin", "routes/admin/layout.tsx", [
