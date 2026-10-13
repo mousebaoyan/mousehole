@@ -35,12 +35,13 @@ const reportReasons = ["垃圾广告", "人身攻击", "违法违规", "其他"]
 // the reader opens it. The floors that reply to this one are fetched the same way.
 // `manage` holds what the reader may do to this floor besides replying: change it (edit or
 // delete), read its edit history, delete the whole thread from its opening post, remove other
-// people's boosts.
+// people's boosts. `unread` is left out for guests, whose reading isn't tracked.
 export function PostCard({
   post,
   threadId,
   op,
   accepted,
+  unread,
   now,
   parent,
   manage,
@@ -53,6 +54,7 @@ export function PostCard({
   threadId: number;
   op: boolean;
   accepted: boolean;
+  unread: boolean | undefined;
   now: number;
   parent: PostItem | undefined;
   manage: { change: boolean; history: boolean; deleteThread: boolean; moderate: boolean };
@@ -175,6 +177,15 @@ export function PostCard({
             >
               #{post.floor}
             </a>
+            {unread !== undefined && (
+              <span
+                title={unread ? "未读" : undefined}
+                className={cn(
+                  "-ml-1 size-2 rounded-full bg-primary transition-opacity duration-1000",
+                  !unread && "opacity-0",
+                )}
+              />
+            )}
           </span>
         </div>
       </div>

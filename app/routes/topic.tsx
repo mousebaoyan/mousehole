@@ -14,6 +14,7 @@ import { FloorNav, FloorProgress, useCurrentFloor, type Floors } from "./floor-t
 import { BookmarkButton, NOTIFY_LEVELS, NotifyButton } from "./follow-buttons.tsx";
 import { PostCard } from "./post-card.tsx";
 import { REACTIONS } from "./reactions.tsx";
+import { useReading } from "./reading.ts";
 import { TopicHeader } from "./topic-header.tsx";
 
 // Floors come 20 at a time; see design §9.
@@ -141,15 +142,19 @@ export async function action({ params, request, context }: Route.ActionArgs) {
 }
 
 export default function Topic({ loaderData }: Route.ComponentProps) {
+  // Out here, so what was read carries over the page's fresh starts.
+  const read = useReading(loaderData.thread.id, loaderData.thread.read_floors);
   // Each load starts afresh: a jump to a floor that isn't on the page, or a change to one.
   return (
     <TopicPage
       key={`${loaderData.thread.id}:${loaderData.start}:${loaderData.now}`}
       {...loaderData}
+      read={read}
     />
   );
 }
 
+// `read` is null for guests, whose reading isn't tracked.
 function TopicPage({
   thread,
   posts: initial,
@@ -157,7 +162,8 @@ function TopicPage({
   moreAfter,
   suggested,
   now,
-}: Route.ComponentProps["loaderData"]) {
+  read,
+}: Route.ComponentProps["loaderData"] & { read: Set<number> | null }) {
   const openComposer = useComposer();
   const navigate = useNavigate();
   const me = useMe();
@@ -283,6 +289,7 @@ function TopicPage({
               threadId={thread.id}
               op={post.author.id === thread.author.id}
               accepted={post.id === thread.solved_post_id}
+              unread={read === null ? undefined : !read.has(post.floor)}
               now={now}
               parent={posts.find((p) => p.id === post.reply_to?.id)}
               manage={{
