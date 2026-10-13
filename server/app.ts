@@ -9,6 +9,7 @@ import { usersRoutes } from "./modules/users/routes.ts";
 import { db } from "./platform/db.ts";
 import { env } from "./platform/env.ts";
 import { createRouter, handleError, type AppEnv } from "./platform/http.ts";
+import { requestBody } from "./platform/body.ts";
 import { idempotency } from "./platform/idempotency.ts";
 
 const api = createRouter()
@@ -31,7 +32,7 @@ export const app = new Hono<AppEnv>()
   // A cross-site page can make the browser send our cookie, but not a bearer token.
   .use((c, next) => (bearerToken(c) ? next() : checkOrigin(c, next)))
   .use(authenticate)
-  .use("/api/v1/*", idempotency)
+  .use("/api/v1/*", requestBody, idempotency)
   .get("/healthz", async (c) => {
     await sql`select 1`.execute(db);
     return c.text("ok");

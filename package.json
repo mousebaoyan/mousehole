@@ -18,7 +18,8 @@
     "db:migrate": "node --env-file-if-exists=.env scripts/migrate.ts",
     "db:codegen": "kysely-codegen",
     "test": "vitest run",
-    "bootstrap": "node --env-file-if-exists=.env scripts/bootstrap.ts"
+    "bootstrap": "node --env-file-if-exists=.env scripts/bootstrap.ts",
+    "mock-bot": "node --env-file-if-exists=.env scripts/mock-bot.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.9.0",
