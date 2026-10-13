@@ -12,6 +12,7 @@ import {
 } from "../../platform/http.ts";
 import { renderMarkdown } from "../../platform/markdown.ts";
 import { rateLimit } from "../../platform/rate-limit.ts";
+import { UserBriefSchema } from "../users/schemas.ts";
 import {
   createPost,
   createThread,
@@ -30,16 +31,6 @@ import {
 
 // Longest Markdown a post may have.
 const MAX_BODY = 30_000;
-
-const UserBriefSchema = z
-  .object({
-    id: z.number(),
-    display_name: z.string(),
-    role: z.string(),
-    level: z.number().nullable(),
-    title: z.string().openapi({ description: "主群里的专属头衔，没有为空字符串" }),
-  })
-  .openapi("UserBrief");
 
 const ThreadSchema = z
   .object({

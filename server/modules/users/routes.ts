@@ -1,6 +1,7 @@
 import { createRoute, z } from "@hono/zod-openapi";
 import { authorize, createRouter, errorResponse } from "../../platform/http.ts";
-import { getProfile } from "./service.ts";
+import { UserBriefSchema } from "./schemas.ts";
+import { getProfile, searchUsers } from "./service.ts";
 
 const MeSchema = z
   .object({
@@ -13,19 +14,41 @@ const MeSchema = z
   })
   .openapi("Me");
 
-export const usersRoutes = createRouter().openapi(
-  createRoute({
-    method: "get",
-    path: "/me",
-    summary: "当前用户；bot 代表某人时返回这个人",
-    responses: {
-      200: { description: "当前用户", content: { "application/json": { schema: MeSchema } } },
-      401: errorResponse("没有登录"),
-      403: errorResponse("bot token 没有 read 范围"),
+export const usersRoutes = createRouter()
+  .openapi(
+    createRoute({
+      method: "get",
+      path: "/users",
+      summary: "按名字找成员，最多 8 个：名字以它开头的在前，再按最近活跃；编辑器的 @ 补全用",
+      request: { query: z.object({ q: z.string().trim().min(1).max(20) }) },
+      responses: {
+        200: {
+          description: "找到的成员",
+          content: {
+            "application/json": { schema: z.object({ items: z.array(UserBriefSchema) }) },
+          },
+        },
+        401: errorResponse("没有登录"),
+      },
+    }),
+    async (c) => {
+      authorize(c, "read");
+      return c.json({ items: await searchUsers(c.req.valid("query").q) }, 200);
     },
-  }),
-  async (c) => {
-    const { activated_at, ...profile } = await getProfile(authorize(c, "read").id);
-    return c.json({ ...profile, activated: activated_at !== null }, 200);
-  },
-);
+  )
+  .openapi(
+    createRoute({
+      method: "get",
+      path: "/me",
+      summary: "当前用户；bot 代表某人时返回这个人",
+      responses: {
+        200: { description: "当前用户", content: { "application/json": { schema: MeSchema } } },
+        401: errorResponse("没有登录"),
+        403: errorResponse("bot token 没有 read 范围"),
+      },
+    }),
+    async (c) => {
+      const { activated_at, ...profile } = await getProfile(authorize(c, "read").id);
+      return c.json({ ...profile, activated: activated_at !== null }, 200);
+    },
+  );
