@@ -13,7 +13,8 @@ app/                    页面（React Router）
   routes/               路由模块；只有这个页面用的组件放在路由文件旁边
   components/           两个以上页面共用的组件；ui/ 是 shadcn/ui 的组件
 server/
-  app.ts                组装 Hono 应用：挂上中间件和各模块的路由
+  main.ts               进程入口：用 react-router-hono-server 把 Hono 应用和 React Router 接在一起
+  app.ts                组装 Hono 应用：挂上中间件和各模块的路由；接口测试直接对它发请求
   modules/              业务模块，一个领域一个目录
     members/            例：群、成员同步、冻结与恢复
       routes.ts         接口定义：createRoute 和处理函数
@@ -29,6 +30,7 @@ scripts/                bootstrap、mock-bot 等命令
 - 模块里的文件按需拆。小模块有 `routes.ts` 和 `service.ts` 就够了；查询多了再拆出 `queries.ts`，schema 多了再拆出 `schemas.ts`。出现新的领域才新建模块。
 - 按领域分，不按调用方分。bot 用的接口放在它操作的领域里，比如成员同步在 `members`，口令确认在 `auth`。
 - 文件名用小写加短横线。测试和被测的文件放在一起，命名为 `*.test.ts`。
+- `scripts/` 里的命令不经过打包，由 Node 直接运行 TypeScript。所以相对 import 一律写上 `.ts`、`.tsx` 后缀，也不用 enum 这类需要编译的语法；这两条由 oxlint 和 tsconfig 检查。
 
 ### 1.2 依赖方向
 
