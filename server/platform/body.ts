@@ -6,8 +6,9 @@ import { AppError } from "./errors.ts";
 const MB = 1024 * 1024;
 const gunzipAsync = promisify(gunzip);
 
-// A full member list is the largest JSON a bot sends; uploads will get their own limit.
+// Images up to 20MB; a full member list is the largest JSON a bot sends.
 function limitFor(path: string) {
+  if (path === "/api/v1/uploads") return 20 * MB;
   return /^\/api\/v1\/bot\/groups\/[^/]+\/members$/.test(path) ? 4 * MB : MB;
 }
 

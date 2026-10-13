@@ -1,9 +1,22 @@
 import { describe, expect, test } from "vitest";
 import { env } from "./env.ts";
-import { renderMarkdown } from "./markdown.ts";
+import { renderMarkdown, type ShownImage } from "./markdown.ts";
+
+// Stands in for the uploads: only /uploads/ addresses are known images.
+async function images(srcs: string[]) {
+  return new Map<string, ShownImage>(
+    srcs
+      .filter((s) => s.startsWith("/uploads/"))
+      .map((s) => [s, { src: s.replace(".webp", "-960.webp"), href: s, width: 960, height: 540 }]),
+  );
+}
+
+function render(source: string) {
+  return renderMarkdown(source, images);
+}
 
 async function html(source: string) {
-  return (await renderMarkdown(source)).html;
+  return (await render(source)).html;
 }
 
 describe("Markdown 渲染", () => {
@@ -30,15 +43,19 @@ describe("Markdown 渲染", () => {
     expect(await html(`[x](${env.PUBLIC_URL}/t/2) [y](/t/3)`)).not.toContain("rel=");
   });
 
-  test("只显示上传的图片，别处的图片变成链接", async () => {
-    expect(await html("![图](/uploads/ab/abc-960.webp)")).toContain('<img src="/uploads/');
+  test("只显示上传的图片，写明大小，点开是大图；别处的图片变成链接", async () => {
+    const { html: shown, images: used } = await render('![图"](/uploads/ab/abc.webp)');
+    expect(shown).toContain(
+      '<a href="/uploads/ab/abc.webp"><img src="/uploads/ab/abc-960.webp" alt="图&quot;" width="960" height="540" loading="lazy"></a>',
+    );
+    expect(used).toEqual(["/uploads/ab/abc.webp"]);
     const out = await html("![图](https://example.com/a.png)");
     expect(out).not.toContain("<img");
     expect(out).toContain('<a href="https://example.com/a.png"');
   });
 
   test("提及：链接到 /u/ID、文字以 @ 开头的才算，去重", async () => {
-    const { html: out, mentions } = await renderMarkdown(
+    const { html: out, mentions } = await render(
       "[@鼠鼠](/u/7) [@鼠鼠](/u/7) [@阿柒](/u/8) [主页](/u/9)",
     );
     expect(mentions).toEqual([7, 8]);

@@ -86,7 +86,9 @@
 表：`uploads`、`post_uploads`。
 
 - 每张图存两个文件：`data/uploads/{哈希前两位}/{哈希}.webp` 是大图（长边不超过 2048px），同目录的 `{哈希}-960.webp` 是正文里显示的一档（宽度不超过 960px）；动图只存大图。地址里带内容哈希，可以永久缓存。
-- 上传后 24 小时内没有被任何 `post_uploads` 引用的图片，每天清理。
+- 动图（`uploads.animated`）保留每一帧，只存大图。`width`、`height` 是大图的尺寸，页面上的尺寸按 960 宽等比算出来，写进渲染好的 HTML。
+- 发帖和编辑时，正文里用到的图片记进 `post_uploads`（编辑时先删后加）。
+- 上传后 24 小时内没有被任何 `post_uploads` 引用的图片，每天清理，文件一起删掉。
 - 头像统一转成 96px，缓存在 `data/avatars/{用户ID}.webp`，不进数据库，只用 `users.avatar_version` 控制刷新。
 
 ## QQ 消息映射与事件

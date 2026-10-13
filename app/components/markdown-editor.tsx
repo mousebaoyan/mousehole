@@ -1,8 +1,9 @@
-import { AtSign, Bold, Code, Eye, Link2, PenLine, Quote } from "lucide-react";
-import { useEffect, useState, type RefObject } from "react";
+import { AtSign, Bold, Code, Eye, ImagePlus, Link2, PenLine, Quote } from "lucide-react";
+import { useEffect, useRef, useState, type RefObject } from "react";
 import { useFetcher } from "react-router";
 import { cn } from "cn";
 import type { UserBrief } from "~/api-types";
+import { browserApi } from "~/browser-api";
 import { EmojiButton } from "~/components/emoji-button";
 import { PROSE } from "~/components/prose";
 import { Button } from "~/components/ui/button";
@@ -57,6 +58,12 @@ const link: Edit = (text, start, end) => {
     select: [from, from + "https://".length],
   };
 };
+
+const MAX_IMAGE = 20 * 1024 * 1024;
+
+function imageFiles(list: FileList) {
+  return [...list].filter((f) => f.type.startsWith("image/"));
+}
 
 const TOOLS = [
   { label: "粗体", icon: Bold, edit: wrap("**", "**", "粗体") },
@@ -138,6 +145,8 @@ export function MarkdownEditor({
   const [chosen, setChosen] = useState(0);
   const people = useFetcher<UserBrief[]>();
   const suggestions = mention?.query ? (people.data ?? []) : [];
+  const fileInput = useRef<HTMLInputElement>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
 
   // Rendered once typing pauses. Nothing here changes data, so nothing else reloads.
   useEffect(() => {
@@ -178,6 +187,35 @@ export function MarkdownEditor({
     });
   }
 
+  // Each image gets a placeholder at the caret, replaced by the image once it is uploaded. The
+  // text box holds the latest text, which may have changed while the image was on its way.
+  async function upload(files: File[]) {
+    setUploadError(null);
+    for (const file of files) {
+      const el = textarea.current;
+      if (!el) return;
+      if (file.size > MAX_IMAGE) {
+        setUploadError(`${file.name} 超过 20MB`);
+        continue;
+      }
+      const caret = el.selectionEnd;
+      // On a line of its own.
+      const placeholder = `${caret === 0 || el.value[caret - 1] === "\n" ? "" : "\n"}![上传中：${file.name}…]()`;
+      change(
+        el.value.slice(0, caret) + placeholder + el.value.slice(caret),
+        caret + placeholder.length,
+      );
+      const res = await browserApi.uploads.$post({ form: { file } });
+      const alt = file.name.replace(/\.[^.]*$/, "").replaceAll(/[[\]]/g, "");
+      if (res.ok) {
+        onChange(el.value.replace(placeholder, `![${alt}](${(await res.json()).url})`));
+      } else {
+        onChange(el.value.replace(placeholder, ""));
+        setUploadError(`${file.name}：${(await res.json()).error.message}`);
+      }
+    }
+  }
+
   // Brackets in a name would end the link text early.
   function pick(user: UserBrief) {
     const el = textarea.current;
@@ -212,6 +250,27 @@ export function MarkdownEditor({
               <t.icon />
             </Button>
           ))}
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            aria-label="图片"
+            title="图片"
+            onClick={() => fileInput.current?.click()}
+          >
+            <ImagePlus />
+          </Button>
+          <input
+            ref={fileInput}
+            type="file"
+            accept="image/*"
+            multiple
+            hidden
+            onChange={(e) => {
+              if (e.target.files) void upload(imageFiles(e.target.files));
+              e.target.value = "";
+            }}
+          />
           <EmojiButton target={textarea} onChange={onChange} side="top" />
           <Button
             type="button"
@@ -233,6 +292,19 @@ export function MarkdownEditor({
             setMention(findMention(e.currentTarget, value, e.currentTarget.selectionStart))
           }
           onBlur={() => setMention(null)}
+          onPaste={(e) => {
+            const pasted = imageFiles(e.clipboardData.files);
+            if (pasted.length === 0) return;
+            e.preventDefault();
+            void upload(pasted);
+          }}
+          onDragOver={(e) => e.preventDefault()}
+          onDrop={(e) => {
+            const dropped = imageFiles(e.dataTransfer.files);
+            if (dropped.length === 0) return;
+            e.preventDefault();
+            void upload(dropped);
+          }}
           onKeyDown={(e) => {
             if (suggestions.length > 0) {
               const move = { ArrowDown: 1, ArrowUp: -1 }[e.key];
@@ -262,9 +334,14 @@ export function MarkdownEditor({
             }
           }}
           aria-label={label}
-          placeholder="支持 Markdown，@ 提及群友"
+          placeholder="支持 Markdown，@ 提及群友，可以粘贴或拖入图片"
           className="min-h-0 flex-1 resize-none bg-transparent px-4 py-3 text-body leading-7 outline-none placeholder:text-muted-foreground"
         />
+        {uploadError !== null && (
+          <p role="alert" className="border-t px-4 py-1.5 text-meta text-destructive">
+            {uploadError}
+          </p>
+        )}
         {suggestions.length > 0 && (
           <ul
             aria-label="提及"

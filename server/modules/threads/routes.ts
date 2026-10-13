@@ -12,6 +12,7 @@ import {
 } from "../../platform/http.ts";
 import { renderMarkdown } from "../../platform/markdown.ts";
 import { rateLimit } from "../../platform/rate-limit.ts";
+import { showImages } from "../uploads/service.ts";
 import { UserBriefSchema } from "../users/schemas.ts";
 import {
   createPost,
@@ -492,7 +493,7 @@ export const threadsRoutes = createRouter()
     async (c) => {
       const viewer = authorize(c, "act");
       rateLimit(`preview:${viewer.id}`, 120, 60_000);
-      const { html } = await renderMarkdown(c.req.valid("json").markdown);
+      const { html } = await renderMarkdown(c.req.valid("json").markdown, showImages);
       return c.json({ html }, 200);
     },
   );

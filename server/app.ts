@@ -7,6 +7,7 @@ import { tokenRoutes } from "./modules/auth/token-routes.ts";
 import { boardsRoutes } from "./modules/boards/routes.ts";
 import { membersRoutes } from "./modules/members/routes.ts";
 import { threadsRoutes } from "./modules/threads/routes.ts";
+import { serveUpload, uploadsRoutes } from "./modules/uploads/routes.ts";
 import { usersRoutes } from "./modules/users/routes.ts";
 import { db } from "./platform/db.ts";
 import { env } from "./platform/env.ts";
@@ -21,6 +22,7 @@ const api = createRouter()
   .route("/", membersRoutes)
   .route("/", boardsRoutes)
   .route("/", threadsRoutes)
+  .route("/", uploadsRoutes)
   .route("/", adminRoutes);
 
 api.doc31("/openapi.json", { openapi: "3.1.0", info: { title: "鼠洞", version: "1" } });
@@ -33,6 +35,8 @@ const checkOrigin = csrf({ origin: env.PUBLIC_URL });
 
 // Mounted into the outer server, so the middleware here also runs for page requests.
 export const app = new Hono<AppEnv>()
+  // Before the session lookup: images don't need to know who is looking.
+  .get("/uploads/:dir{[0-9a-f]{2}}/:file{[0-9a-f]{64}(?:-960)?\\.webp}", serveUpload)
   // A cross-site page can make the browser send our cookie, but not a bearer token.
   .use((c, next) => (bearerToken(c) ? next() : checkOrigin(c, next)))
   .use(authenticate)
