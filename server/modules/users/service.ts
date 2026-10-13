@@ -139,21 +139,39 @@ export async function findMember(ref: UserRef) {
     .executeTakeFirst();
 }
 
+// Seen now; the first visit on a new day in Beijing time adds a day visited.
+const SEEN = {
+  last_seen_at: sql<Date>`now()`,
+  days_visited: sql<number>`days_visited + (last_seen_at IS NULL
+    OR (last_seen_at AT TIME ZONE 'Asia/Shanghai')::date
+      < (now() AT TIME ZONE 'Asia/Shanghai')::date)::integer`,
+};
+
 export async function recordLogin(trx: Transaction<DB>, userId: number) {
   await trx
     .updateTable("users")
-    .set((eb) => ({
-      activated_at: eb.fn.coalesce("activated_at", eb.val(new Date())),
-      last_seen_at: new Date(),
-    }))
+    .set((eb) => ({ activated_at: eb.fn.coalesce("activated_at", eb.val(new Date())), ...SEEN }))
     .where("id", "=", userId)
     .execute();
 }
 
 export async function recordSeen(userId: number) {
-  await db
+  await db.updateTable("users").set(SEEN).where("id", "=", userId).execute();
+}
+
+// Reading reports count as being seen too.
+export async function countReading(
+  trx: Transaction<DB>,
+  userId: number,
+  { posts, seconds }: { posts: number; seconds: number },
+) {
+  await trx
     .updateTable("users")
-    .set({ last_seen_at: new Date() })
+    .set((eb) => ({
+      posts_read: eb("posts_read", "+", posts),
+      read_seconds: eb("read_seconds", "+", seconds),
+      ...SEEN,
+    }))
     .where("id", "=", userId)
     .execute();
 }

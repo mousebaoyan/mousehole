@@ -201,7 +201,7 @@ token 由管理员在后台创建，只显示一次。每个 token 绑定一个 
 | PUT | `/threads/{id}/subscription` | 关注级别：`{ level }`，`watching` 每个新楼层都通知，`normal` 回复我、@我时通知，`muted` 都不通知；没设置过是 `normal`，发主题的人是 `watching` | 成员 / `act` |
 | PUT | `/threads/{id}/bookmark` | 收藏；已经收藏的不变，收藏列表里的位置也不变 | 成员 / `act` |
 | DELETE | `/threads/{id}/bookmark` | 取消收藏 | 成员 / `act` |
-| POST | `/threads/{id}/read` | 记录阅读：`{ floors: [[1, 20], [480, 495]], seconds: 95 }`，读过的楼层区间（含两端）并入已读，`seconds` 计入阅读时间，单次最多算 120 秒。网页批量发送，见[总体设计 §8.9](design.md#89-阅读记录) | 成员 |
+| POST | `/threads/{id}/read` | 记录阅读：`{ floors: [[1, 20], [480, 495]], seconds: 95 }`，读过的楼层区间（含两端）并入已读，超出楼层数的部分不算；`seconds` 计入阅读时间，单次最多算 120 秒。只有网页上报，见[总体设计 §8.9](design.md#89-阅读记录)，bot 调用返回 `403` | 登录用户 |
 | GET | `/threads/{id}/stream` | SSE：这个主题的新回复、编辑和删除 | 访客 |
 
 主楼正文用 `PATCH /posts/{主楼 ID}` 修改。
