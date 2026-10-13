@@ -1,5 +1,5 @@
 import { Bell, LogOut, Menu, PenSquare, Search, Settings, User, Wrench, X } from "lucide-react";
-import { Form, Link, useLocation } from "react-router";
+import { Form, Link, useLocation, useParams } from "react-router";
 import { Drawer, Dropdown, menuItem } from "~/components/disclosure";
 import { ForumNav } from "~/components/forum-nav";
 import { Logo } from "~/components/logo";
@@ -11,6 +11,8 @@ type Me = { id: number; display_name: string; role: string };
 
 export function SiteHeader({ me }: { me: Me | null }) {
   const { pathname } = useLocation();
+  // On a board's page, a new thread starts in that board.
+  const { slug } = useParams();
   return (
     <header className="sticky top-0 z-40 border-b border-border/70 bg-background/80 backdrop-blur-md">
       {/* The outer columns share the leftover width, so the search box sits in the middle. */}
@@ -72,7 +74,7 @@ export function SiteHeader({ me }: { me: Me | null }) {
                 <span className="absolute top-1.5 right-1.5 size-2 rounded-full bg-brand ring-2 ring-background" />
               </Button>
               <Link
-                to="/new"
+                to={slug ? `/new?board=${slug}` : "/new"}
                 className={buttonVariants({ className: "mx-1 hidden sm:inline-flex" })}
               >
                 <PenSquare /> 发帖
