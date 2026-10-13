@@ -18,6 +18,7 @@ import { floorExtras } from "../reactions/service.ts";
 import { showImages } from "../uploads/service.ts";
 import { UserBriefSchema } from "../users/schemas.ts";
 import {
+  countUnread,
   createPost,
   createThread,
   deletePost,
@@ -36,6 +37,8 @@ import {
   recordView,
   setBookmark,
   setNotifyLevel,
+  VIEWS,
+  type ThreadView,
 } from "./service.ts";
 
 const ThreadSchema = z
@@ -102,7 +105,7 @@ const PostSchema = z
   })
   .openapi("Post");
 
-type ThreadItem = Awaited<ReturnType<typeof listThreads>>["items"][number];
+type ThreadItem = Omit<Awaited<ReturnType<typeof listThreads>>["items"][number], "micros">;
 type Thread = Awaited<ReturnType<typeof getThread>>;
 type Post = Awaited<ReturnType<typeof getPost>>;
 type Extras = Awaited<ReturnType<typeof floorExtras>>;
@@ -228,6 +231,9 @@ const postResponse = {
   content: { "application/json": { schema: PostSchema } },
 };
 
+// Lists of the reader's own, for someone signed in.
+const OWN_VIEWS = new Set<ThreadView>(["new", "unread", "read", "posted", "bookmarked"]);
+
 export const threadsRoutes = createRouter()
   .openapi(
     createRoute({
@@ -238,13 +244,10 @@ export const threadsRoutes = createRouter()
         query: z.object({
           board: z.string().optional(),
           tag: z.string().optional(),
-          view: z
-            .enum(["latest", "created", "hot", "unsolved", "bookmarked", "posted"])
-            .default("latest")
-            .openapi({
-              description:
-                "要登录的：bookmarked 自己收藏的，按收藏时间排；posted 自己发过或回复过的，按最后回复排",
-            }),
+          view: z.enum(VIEWS).default("latest").openapi({
+            description:
+              "latest 按最后回复，created 按发布时间，hot 热门，unsolved 待解答；要登录的：new 最近 7 天发布、自己没打开过，unread 读过、之后有新楼层，read 读过的、按最后阅读时间，posted 自己发过或回复过的，bookmarked 自己收藏的、按收藏时间",
+          }),
           cursor: z.string().optional(),
         }),
       },
@@ -266,11 +269,34 @@ export const threadsRoutes = createRouter()
     }),
     async (c) => {
       const query = c.req.valid("query");
-      const own = query.view === "bookmarked" || query.view === "posted";
-      const viewer = own ? authorize(c, "read") : c.var.viewer;
+      const viewer = OWN_VIEWS.has(query.view) ? authorize(c, "read") : c.var.viewer;
       const page = await listThreads(isMember(viewer, c.var.bot), viewer?.id ?? null, query);
       const items = page.items.map((t) => threadJson(t, viewer !== null));
       return c.json({ items, next_cursor: page.next_cursor }, 200);
+    },
+  )
+  // Before /threads/{id}, which would take "counts" for an ID.
+  .openapi(
+    createRoute({
+      method: "get",
+      path: "/threads/counts",
+      summary: "当前范围里新和未读的主题各有几个，列表的标签页用",
+      request: { query: z.object({ board: z.string().optional(), tag: z.string().optional() }) },
+      responses: {
+        200: {
+          description: "数量",
+          content: {
+            "application/json": { schema: z.object({ new: z.number(), unread: z.number() }) },
+          },
+        },
+        401: errorResponse("没有登录"),
+        404: errorResponse("版块或标签不存在"),
+      },
+    }),
+    async (c) => {
+      const viewer = authorize(c, "read");
+      const members = isMember(viewer, c.var.bot);
+      return c.json(await countUnread(members, viewer.id, c.req.valid("query")), 200);
     },
   )
   .openapi(

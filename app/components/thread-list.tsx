@@ -19,6 +19,9 @@ function count(n: number) {
   return COUNT.format(n).toLowerCase();
 }
 
+// Threads published this recently and never opened are new; see design §8.9.
+const NEW_SECONDS = 7 * 86_400;
+
 // Hotter colors for bigger numbers: one, two, three, then four or more digits.
 const HEAT = ["", "text-link", "text-warning", "font-semibold text-destructive"];
 
@@ -80,6 +83,13 @@ function ThreadRow({
   showBoard: boolean;
 }) {
   const active = ago(thread.last_post_at, now);
+  // Members' reading is tracked; guests have the browser's history of visited links.
+  const lastRead = thread.last_read_floor;
+  // The first floor not read yet, past the highest one read.
+  const next =
+    lastRead !== undefined && lastRead > 0 && lastRead < thread.floor_count ? lastRead + 1 : null;
+  const unread = next === null ? 0 : thread.floor_count - next + 1;
+  const fresh = lastRead === 0 && now - thread.created_at < NEW_SECONDS;
   return (
     <li
       className={cn(
@@ -89,8 +99,13 @@ function ThreadRow({
     >
       <div className="min-w-0">
         <Link
-          to={`/t/${thread.id}`}
-          className="text-body leading-snug font-medium text-foreground after:absolute after:inset-0 visited:text-foreground/65 lg:text-base"
+          to={next === null ? `/t/${thread.id}` : `/t/${thread.id}?floor=${next}`}
+          className={cn(
+            "text-body leading-snug font-medium text-foreground after:absolute after:inset-0 lg:text-base",
+            lastRead === undefined
+              ? "visited:text-foreground/65"
+              : lastRead >= thread.floor_count && "text-foreground/65",
+          )}
         >
           {thread.pinned > 0 && (
             <Pin
@@ -107,6 +122,17 @@ function ThreadRow({
           )}
           {thread.featured && (
             <Sparkles aria-label="精华" className="ml-1.5 -mt-0.5 inline size-4 text-warning" />
+          )}
+          {fresh && (
+            <span className="ml-2 inline-block size-2 rounded-full bg-primary align-middle">
+              <span className="sr-only">新主题</span>
+            </span>
+          )}
+          {unread > 0 && (
+            <span className="ml-2 inline-block rounded-full bg-primary px-1.5 align-middle text-2xs font-semibold text-primary-foreground tabular-nums">
+              {unread}
+              <span className="sr-only">层没读过</span>
+            </span>
           )}
         </Link>
         <div className="relative mt-1.5 flex flex-wrap items-center gap-x-2.5 gap-y-1">
