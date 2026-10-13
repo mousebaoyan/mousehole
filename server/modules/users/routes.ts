@@ -76,7 +76,7 @@ const SettingsSchema = z
       .record(z.string(), Switches)
       .openapi({ description: "每类通知的站内（site）和 QQ 提醒（qq）开关，含默认值" }),
   })
-  .openapi("Settings");
+  .openapi("MySettings");
 
 async function settingsJson(userId: number) {
   const settings = await getSettings(userId);
