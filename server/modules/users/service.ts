@@ -180,6 +180,57 @@ export async function countReading(
     .execute();
 }
 
+function userNotFound() {
+  return new AppError(404, "user_not_found", "用户不存在");
+}
+
+export async function findUserId(ref: UserRef) {
+  const row = await db
+    .selectFrom("users")
+    .select("id")
+    .where((eb) => ("id" in ref ? eb("id", "=", ref.id) : eb("qq", "=", ref.qq)))
+    .where("deleted_at", "is", null)
+    .executeTakeFirst();
+  if (!row) throw userNotFound();
+  return row.id;
+}
+
+// What the profile card and the user's page show; see design §6.1 and §9.
+export async function getUser(ref: UserRef) {
+  const row = await withPrimaryGroup()
+    .select((eb) => [
+      "users.id",
+      "users.display_name",
+      "users.avatar_version",
+      "users.role",
+      "users.level",
+      eb.fn.coalesce("group_members.title", eb.val("")).as("title"),
+      "group_members.card",
+      "group_members.joined_at",
+      "group_members.last_sent_at",
+      "users.bio",
+      "users.qq",
+      "users.member_status",
+      "users.activated_at",
+      "users.thread_count",
+      "users.post_count",
+      "users.like_received",
+      "users.days_visited",
+      "users.read_seconds",
+      "users.posts_read",
+      sql<number>`(SELECT count(*)::integer FROM thread_users
+        WHERE thread_users.user_id = users.id AND last_read_at IS NOT NULL)`.as("threads_read"),
+    ])
+    .where((eb) => ("id" in ref ? eb("users.id", "=", ref.id) : eb("users.qq", "=", ref.qq)))
+    // Only deleted accounts have no QQ number.
+    .where("users.deleted_at", "is", null)
+    .$narrowType<{ qq: number }>()
+    .executeTakeFirst();
+  if (!row) throw userNotFound();
+  const { avatar_version, ...user } = row;
+  return { ...user, avatar_url: avatarUrl(user.id, avatar_version) };
+}
+
 export async function getProfile(userId: number) {
   const { avatar_version, ...profile } = await db
     .selectFrom("users")
@@ -218,10 +269,9 @@ export async function countUserPosts(
     .execute();
 }
 
-// How people appear next to their posts: the title is their custom one in the primary group.
-// Returns a lookup for the IDs asked for.
-export async function userBriefs(ids: number[]) {
-  const rows = await db
+// Users with their membership of the primary group, which their title and card come from.
+function withPrimaryGroup() {
+  return db
     .selectFrom("users")
     .leftJoin("qq_groups", (join) => join.on("qq_groups.is_primary", "=", true))
     .leftJoin("group_members", (join) =>
@@ -229,7 +279,13 @@ export async function userBriefs(ids: number[]) {
         .onRef("group_members.group_id", "=", "qq_groups.id")
         .onRef("group_members.user_id", "=", "users.id")
         .on("group_members.left_at", "is", null),
-    )
+    );
+}
+
+// How people appear next to their posts: the title is their custom one in the primary group.
+// Returns a lookup for the IDs asked for.
+export async function userBriefs(ids: number[]) {
+  const rows = await withPrimaryGroup()
     .select((eb) => [
       "users.id",
       "users.display_name",

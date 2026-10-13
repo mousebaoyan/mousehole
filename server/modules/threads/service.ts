@@ -4,7 +4,7 @@ import { STAFF, type Actor, type Viewer } from "../../platform/access.ts";
 import { db } from "../../platform/db.ts";
 import { AppError } from "../../platform/errors.ts";
 import { log } from "../../platform/log.ts";
-import { renderMarkdown } from "../../platform/markdown.ts";
+import { excerpt, renderMarkdown } from "../../platform/markdown.ts";
 import { recordAudit } from "../audit/service.ts";
 import { countBoard, countTags, findTags, getBoard, getTagId } from "../boards/service.ts";
 import { onebotToMarkdown, type Segment } from "../qq/onebot.ts";
@@ -22,6 +22,8 @@ export const PAGE_SIZE = 30;
 // Longest Markdown a post may have.
 export const MAX_BODY = 30_000;
 export const FLOOR_BATCH = 20;
+// Characters of a reply shown where it is listed away from its thread.
+const EXCERPT = 140;
 
 export const VIEWS = [
   "latest",
@@ -177,7 +179,7 @@ function inScope({ board, tagId }: Awaited<ReturnType<typeof scopeOf>>) {
 export async function listThreads(
   members: boolean,
   userId: number | null,
-  filter: { board?: string; tag?: string; view: ThreadView; cursor?: string },
+  filter: { board?: string; tag?: string; author?: number; view: ThreadView; cursor?: string },
 ) {
   const { view, cursor } = filter;
   const scope = await scopeOf(members, filter);
@@ -194,6 +196,7 @@ export async function listThreads(
     .select(sql<string>`(extract(epoch FROM ${sql.ref(time)}) * 1000000)::bigint`.as("micros"))
     .where(inScope(scope))
     .limit(PAGE_SIZE);
+  if (filter.author !== undefined) query = query.where("threads.author_id", "=", filter.author);
   // Pinned threads lead the first page of the latest list instead of taking their turn: site-wide
   // ones on the home page, the board's own ones as well on a board page. Tag lists don't pin.
   const pinFrom = view === "latest" && tagId === null ? (board ? 1 : 2) : null;
@@ -284,6 +287,33 @@ export async function countUnread(
     ])
     .where(inScope(await scopeOf(members, filter)))
     .executeTakeFirstOrThrow();
+}
+
+// Someone's replies, newest first, with the thread each is in; the cursor is the last one's ID.
+export async function listUserPosts(members: boolean, authorId: number, cursor?: number) {
+  let query = visibleThreads(members)
+    .innerJoin("posts", "posts.thread_id", "threads.id")
+    .select([
+      "posts.id",
+      "posts.floor",
+      "posts.html",
+      "posts.like_count",
+      "posts.created_at",
+      "threads.id as thread_id",
+      "threads.title",
+    ])
+    .where("posts.author_id", "=", authorId)
+    .where("posts.floor", ">", 1)
+    .where("posts.deleted_at", "is", null)
+    .orderBy("posts.id", "desc")
+    .limit(PAGE_SIZE);
+  if (cursor !== undefined) query = query.where("posts.id", "<", cursor);
+  const rows = await query.execute();
+  const last = rows.at(-1);
+  return {
+    items: rows.map(({ html, ...r }) => ({ ...r, excerpt: excerpt(html, EXCERPT) })),
+    next_cursor: rows.length === PAGE_SIZE && last ? String(last.id) : null,
+  };
 }
 
 // ---- One thread and its floors
