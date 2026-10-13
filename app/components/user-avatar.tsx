@@ -9,15 +9,26 @@ const tints = [
   "bg-stone-200 text-stone-700 dark:bg-stone-400/25 dark:text-stone-200",
 ];
 
-// Until avatars are cached from QQ, show the first letter on a tint picked by user id. Letters
-// rather than characters: group cards often start with a year, as in "26-南京大学-CV".
+// The copy of the QQ avatar. Until there is one, the first letter on a tint picked by user id;
+// letters rather than characters, as group cards often start with a year: "26-南京大学-CV".
 export function UserAvatar({
   user,
   className,
 }: {
-  user: { id: number; display_name: string };
+  user: { id: number; display_name: string; avatar_url: string | null };
   className?: string;
 }) {
+  if (user.avatar_url !== null) {
+    return (
+      <img
+        src={user.avatar_url}
+        alt=""
+        loading="lazy"
+        decoding="async"
+        className={cn("size-9 shrink-0 rounded-full bg-muted object-cover", className)}
+      />
+    );
+  }
   return (
     <span
       aria-hidden="true"

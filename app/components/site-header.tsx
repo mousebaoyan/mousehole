@@ -7,7 +7,7 @@ import { ThemeToggle } from "~/components/theme-toggle";
 import { UserAvatar } from "~/components/user-avatar";
 import { Button, buttonVariants } from "~/components/ui/button";
 
-type Me = { id: number; display_name: string; role: string };
+type Me = { id: number; display_name: string; avatar_url: string | null; role: string };
 
 export function SiteHeader({ me }: { me: Me | null }) {
   const { pathname } = useLocation();

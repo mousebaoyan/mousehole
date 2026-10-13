@@ -1,8 +1,12 @@
+import { mkdir, readFile, rename, stat, utimes, writeFile } from "node:fs/promises";
 import { sql, type Transaction } from "kysely";
 import type { DB } from "../../../db/types.ts";
 import type { Actor, UserRef } from "../../platform/access.ts";
+import { readCapped } from "../../platform/body.ts";
 import { db } from "../../platform/db.ts";
 import { AppError } from "../../platform/errors.ts";
+import { processAvatar } from "../../platform/images.ts";
+import { log } from "../../platform/log.ts";
 import { recordAudit } from "../audit/service.ts";
 
 // For the bootstrap command: the first admin logs in before any group is synced.
@@ -177,11 +181,12 @@ export async function countReading(
 }
 
 export async function getProfile(userId: number) {
-  return db
+  const { avatar_version, ...profile } = await db
     .selectFrom("users")
-    .select(["id", "display_name", "role", "qq", "member_status", "activated_at"])
+    .select(["id", "display_name", "avatar_version", "role", "qq", "member_status", "activated_at"])
     .where("id", "=", userId)
     .executeTakeFirstOrThrow();
+  return { ...profile, avatar_url: avatarUrl(userId, avatar_version) };
 }
 
 // Member counts for the admin overview; bots and deleted accounts aside.
@@ -228,13 +233,19 @@ export async function userBriefs(ids: number[]) {
     .select((eb) => [
       "users.id",
       "users.display_name",
+      "users.avatar_version",
       "users.role",
       "users.level",
       eb.fn.coalesce("group_members.title", eb.val("")).as("title"),
     ])
     .where("users.id", "=", sql<number>`any(${[...new Set(ids)]}::integer[])`)
     .execute();
-  const users = new Map(rows.map((r) => [r.id, r]));
+  const users = new Map(
+    rows.map(({ avatar_version, ...r }) => [
+      r.id,
+      { ...r, avatar_url: avatarUrl(r.id, avatar_version) },
+    ]),
+  );
   return (id: number) => {
     const user = users.get(id);
     if (!user) throw new Error(`User ${id} was not looked up`);
@@ -282,4 +293,79 @@ export async function countLikes(trx: Transaction<DB>, userId: number, likes: nu
     .set((eb) => ({ like_received: eb("like_received", "+", likes) }))
     .where("id", "=", userId)
     .execute();
+}
+
+// ---- Avatars: copies of QQ avatars, so pages don't carry links with QQ numbers in them. See
+// design §6.1.
+
+export const AVATARS_DIR = "data/avatars";
+// Each copy is fetched again once it is this old. The job runs hourly, so new members don't wait.
+const AVATAR_TTL_MS = 23 * 3600_000;
+const MAX_AVATAR = 1024 * 1024;
+
+// The version changes with the picture, so the address can be cached for good. None before the
+// first copy is made.
+function avatarUrl(id: number, version: number) {
+  return version === 0 ? null : `/avatars/${id}.webp?v=${version}`;
+}
+
+async function fetchAvatar(qq: number) {
+  const res = await fetch(`https://q1.qlogo.cn/g?b=qq&nk=${qq}&s=100`, {
+    redirect: "error",
+    signal: AbortSignal.timeout(10_000),
+  });
+  if (!res.ok || !res.body) throw new Error(`QQ avatar request answered ${res.status}`);
+  const data = await readCapped(res.body, MAX_AVATAR, () => {
+    throw new Error("QQ avatar too large");
+  });
+  return processAvatar(data);
+}
+
+async function modifiedAt(path: string) {
+  return stat(path).then(
+    (s) => s.mtimeMs,
+    (error: unknown) => {
+      if (error instanceof Error && "code" in error && error.code === "ENOENT") return null;
+      throw error;
+    },
+  );
+}
+
+// One at a time: a daily trickle to QQ rather than a burst. A picture that didn't change only
+// has its copy's time renewed; one that couldn't be fetched is tried again next hour.
+export async function refreshAvatars() {
+  const users = await db
+    .selectFrom("users")
+    .select(["id", "qq"])
+    .where("qq", "is not", null)
+    .where("deleted_at", "is", null)
+    .$narrowType<{ qq: number }>()
+    .execute();
+  await mkdir(AVATARS_DIR, { recursive: true });
+  const failed: { id: number; error: unknown }[] = [];
+  for (const { id, qq } of users) {
+    const path = `${AVATARS_DIR}/${id}.webp`;
+    const checked = await modifiedAt(path);
+    if (checked !== null && Date.now() - checked < AVATAR_TTL_MS) continue;
+    try {
+      const avatar = await fetchAvatar(qq);
+      if (checked !== null && avatar.equals(await readFile(path))) {
+        const now = new Date();
+        await utimes(path, now, now);
+        continue;
+      }
+      await writeFile(`${path}.tmp`, avatar);
+      await rename(`${path}.tmp`, path);
+      await db
+        .updateTable("users")
+        .set((eb) => ({ avatar_version: eb("avatar_version", "+", 1) }))
+        .where("id", "=", id)
+        .execute();
+    } catch (error) {
+      failed.push({ id, error });
+    }
+  }
+  if (failed.length > 0) {
+    log("warn", "Some avatars could not be refreshed", { count: failed.length, first: failed[0] });
+  }
 }

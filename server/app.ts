@@ -10,7 +10,7 @@ import { qqRoutes } from "./modules/qq/routes.ts";
 import { reactionsRoutes } from "./modules/reactions/routes.ts";
 import { threadsRoutes } from "./modules/threads/routes.ts";
 import { serveUpload, uploadsRoutes } from "./modules/uploads/routes.ts";
-import { usersRoutes } from "./modules/users/routes.ts";
+import { serveAvatar, usersRoutes } from "./modules/users/routes.ts";
 import { db } from "./platform/db.ts";
 import { env } from "./platform/env.ts";
 import { createRouter, handleError, type AppEnv } from "./platform/http.ts";
@@ -41,6 +41,7 @@ const checkOrigin = csrf({ origin: env.PUBLIC_URL });
 export const app = new Hono<AppEnv>()
   // Before the session lookup: images don't need to know who is looking.
   .get("/uploads/:dir{[0-9a-f]{2}}/:file{[0-9a-f]{64}(?:-960)?\\.webp}", serveUpload)
+  .get("/avatars/:file{[0-9]+\\.webp}", serveAvatar)
   // A cross-site page can make the browser send our cookie, but not a bearer token.
   .use((c, next) => (bearerToken(c) ? next() : checkOrigin(c, next)))
   .use(authenticate)
