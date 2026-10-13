@@ -103,6 +103,8 @@ token 由管理员在后台创建，只显示一次。每个 token 绑定一个 
 { "chat_log": [ { "qq": 123456789, "name": "鼠鼠", "time": 1760000000, "message": [ … ] } ] } // 二期
 ```
 
+`markdown` 最长 30000 个字符，写法见[总体设计 §8.2](design.md#82-正文)。
+
 `onebot` 是 OneBot v11 的消息段数组，由论坛负责转换：
 
 | 消息段 | 转换方式 |
@@ -199,6 +201,7 @@ token 由管理员在后台创建，只显示一次。每个 token 绑定一个 
 | 方法 | 路径 | 说明 | 权限 |
 | --- | --- | --- | --- |
 | GET | `/threads/{id}/posts` | 楼层列表，按楼层号升序，每次最多 20 层：`after=N` 取第 N 楼之后的（默认 0，从主楼开始），`before=N` 取第 N 楼之前的，二选一；不足 20 层说明这个方向到头了。每层带 `reply_to`（回复的是哪一条，没有为 `null`）和 `reply_count`（有几条回复它） | 访客 |
+| POST | `/preview` | `{ markdown }`：渲染成发布后的 HTML，返回 `{ html }`，编辑器预览用；每人每分钟最多 120 次 | 成员 / `act` |
 | POST | `/threads/{id}/posts` | 回复：`content`、`reply_to_id`（回复同一主题里的哪一条，可选）、`source` | 成员 / `act` |
 | GET | `/posts/{id}` | 单条回复 | 访客 |
 | GET | `/posts/{id}/replies` | 回复这一条的楼层，按楼层号排序：`cursor` | 访客 |
