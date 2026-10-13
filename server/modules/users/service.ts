@@ -243,3 +243,17 @@ export async function searchUsers(text: string) {
   const user = await userBriefs(rows.map((r) => r.id));
   return rows.map((r) => user(r.id));
 }
+
+// Forum members by QQ number, for @ in messages from QQ.
+export async function membersByQq(qqs: number[]) {
+  const rows =
+    qqs.length === 0
+      ? []
+      : await db
+          .selectFrom("users")
+          .select(["id", "qq", "display_name"])
+          .where("qq", "in", qqs)
+          .where("deleted_at", "is", null)
+          .execute();
+  return new Map(rows.flatMap((r) => (r.qq === null ? [] : [[r.qq, r] as const])));
+}

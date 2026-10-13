@@ -27,11 +27,9 @@ import {
   listReplies,
   listRevisions,
   listThreads,
+  MAX_BODY,
   recordView,
 } from "./service.ts";
-
-// Longest Markdown a post may have.
-const MAX_BODY = 30_000;
 
 const ThreadSchema = z
   .object({
@@ -132,8 +130,26 @@ const Markdown = z
   .max(MAX_BODY)
   .refine((s) => s.trim().length > 0, "正文不能为空");
 
-// Only Markdown for now; QQ message segments come with the bot's message conversion.
-const Content = z.object({ markdown: Markdown });
+const MarkdownContent = z.object({ markdown: Markdown });
+
+const Content = z.union([
+  MarkdownContent,
+  z.object({
+    onebot: z
+      .array(z.object({ type: z.string(), data: z.record(z.string(), z.unknown()) }))
+      .min(1)
+      .max(200)
+      .openapi({ description: "OneBot v11 消息段，论坛转换成 Markdown" }),
+  }),
+]);
+
+const Source = z
+  .object({
+    chat_type: z.enum(["group", "private"]),
+    chat_id: z.number().int().positive(),
+    message_id: z.number().int(),
+  })
+  .openapi("Source", { description: "内容来自哪条 QQ 消息" });
 
 const Title = z.string().trim().min(4).max(80);
 
@@ -294,6 +310,7 @@ export const threadsRoutes = createRouter()
             content: Content,
             kind: z.enum(["discussion", "question"]).optional(),
             tags: Tags.default([]),
+            source: Source.optional(),
           }),
         ),
       },
@@ -302,15 +319,13 @@ export const threadsRoutes = createRouter()
         400: errorResponse("标签不存在等"),
         403: errorResponse("不是成员，或者这个版块只有版主能发主题"),
         404: errorResponse("版块不存在"),
+        409: errorResponse("这条 QQ 消息已经转到论坛了，附上已有的 thread_id 和 post_id"),
       },
     }),
     async (c) => {
       const viewer = authorize(c, "act");
-      const { content, ...input } = c.req.valid("json");
-      const thread = await createThread(actorOf(c, viewer), viewer, isMember(viewer, c.var.bot), {
-        ...input,
-        markdown: content.markdown,
-      });
+      const members = isMember(viewer, c.var.bot);
+      const thread = await createThread(actorOf(c, viewer), viewer, members, c.req.valid("json"));
       return c.json(threadDetailJson(thread), 201);
     },
   )
@@ -321,24 +336,30 @@ export const threadsRoutes = createRouter()
       summary: "回复；reply_to_id 是回复同一主题里的哪一条",
       request: {
         params: IdParam,
-        body: json(z.object({ content: Content, reply_to_id: z.number().int().optional() })),
+        body: json(
+          z.object({
+            content: Content,
+            reply_to_id: z.number().int().optional(),
+            source: Source.optional(),
+          }),
+        ),
       },
       responses: {
         201: postResponse,
         400: errorResponse("回复的那一层不在这个主题里"),
         403: errorResponse("不是成员，或者主题已锁定"),
         404: errorResponse("主题不存在"),
+        409: errorResponse("这条 QQ 消息已经转到论坛了，附上已有的 thread_id 和 post_id"),
       },
     }),
     async (c) => {
       const viewer = authorize(c, "act");
-      const { content, reply_to_id } = c.req.valid("json");
       const post = await createPost(
         actorOf(c, viewer),
         viewer,
         isMember(viewer, c.var.bot),
         c.req.valid("param").id,
-        { markdown: content.markdown, reply_to_id },
+        c.req.valid("json"),
       );
       return c.json(postJson(post, "html"), 201);
     },
@@ -405,7 +426,7 @@ export const threadsRoutes = createRouter()
       method: "patch",
       path: "/posts/{id}",
       summary: "修改回复或主楼的正文，旧的正文进编辑记录",
-      request: { params: IdParam, body: json(z.object({ content: Content })) },
+      request: { params: IdParam, body: json(z.object({ content: MarkdownContent })) },
       responses: {
         200: postResponse,
         403: errorResponse("不是作者或版主，或者主题已锁定"),
