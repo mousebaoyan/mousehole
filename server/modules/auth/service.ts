@@ -1,3 +1,4 @@
+import { randomInt } from "node:crypto";
 import type { NotNull, Transaction } from "kysely";
 import type { DB } from "../../../db/types.ts";
 import {
@@ -10,6 +11,9 @@ import {
 } from "../../platform/access.ts";
 import { db } from "../../platform/db.ts";
 import { AppError } from "../../platform/errors.ts";
+import { sendMail } from "../../platform/mail.ts";
+import { rateLimit } from "../../platform/rate-limit.ts";
+import { getSettings } from "../../platform/settings.ts";
 import { hashToken, newToken } from "../../platform/tokens.ts";
 import { recordAudit } from "../audit/service.ts";
 import { ensureBotUser, findMember, recordLogin, recordSeen } from "../users/service.ts";
@@ -19,6 +23,10 @@ const LINK_TTL_MS = 10 * 60 * 1000;
 // Sliding renewal rewrites the session row at most this often.
 const RENEW_AFTER_MS = 60 * 60 * 1000;
 const TOKEN_USE_WRITE_MS = 60 * 1000;
+const EMAIL_CODE_TTL_MS = 10 * 60 * 1000;
+const EMAIL_CODE_ATTEMPTS = 5;
+const MINUTE = 60 * 1000;
+const DAY = 24 * 60 * MINUTE;
 
 type Client = { ip: string | null; userAgent: string };
 
@@ -36,7 +44,20 @@ export async function issueLoginLink(userId: number) {
   return token;
 }
 
+// Email login also needs a mail server; without one it is off rather than failing on send.
+export async function loginMethods() {
+  const { login, smtp } = await getSettings();
+  return { code: login.code, link: login.link, email: login.email && smtp.host !== "" };
+}
+
+async function requireMethod(method: "code" | "link" | "email") {
+  if (!(await loginMethods())[method]) {
+    throw new AppError(403, "login_method_disabled", "这种登录方式已关闭，请换一种");
+  }
+}
+
 export async function loginWithLink(token: string, client: Client) {
+  await requireMethod("link");
   return db.transaction().execute(async (trx) => {
     const ticket = await trx
       .deleteFrom("login_tickets")
@@ -53,7 +74,19 @@ export async function loginWithLink(token: string, client: Client) {
   });
 }
 
+// Every way of logging in ends here, so the ban check lives here too.
 async function startSession(trx: Transaction<DB>, userId: number, client: Client) {
+  const { restriction, restricted_until } = await trx
+    .selectFrom("users")
+    .select(["restriction", "restricted_until"])
+    .where("id", "=", userId)
+    .executeTakeFirstOrThrow();
+  if (restriction === "ban" && (!restricted_until || restricted_until > new Date())) {
+    const until = restricted_until
+      ? `，到 ${restricted_until.toLocaleString("zh-CN", { timeZone: "Asia/Shanghai" })} 解封`
+      : "";
+    throw new AppError(403, "banned", `账号已被封禁${until}`);
+  }
   const token = newToken();
   await trx
     .insertInto("sessions")
@@ -229,5 +262,65 @@ export async function revokeBotToken(actor: Actor, id: number) {
       .executeTakeFirst();
     if (revoked.numUpdatedRows === 0n) throw new AppError(404, "not_found", "token 不存在或已吊销");
     await recordAudit(trx, actor, { action: "token.revoke", target_type: "token", target_id: id });
+  });
+}
+
+// Sends a 6-digit code to the member's QQ mailbox, after the code is stored and outside any
+// transaction. A new request overwrites the last code.
+export async function requestEmailCode(qq: number, ip: string | null) {
+  await requireMethod("email");
+  rateLimit(`email:ip:${ip}`, 10, 10 * MINUTE);
+  const member = await findMember({ qq });
+  if (!member) throw new AppError(403, "not_member", "这个 QQ 号不在群里，或者还没有同步到论坛");
+  rateLimit(`email:qq:${qq}:minute`, 1, MINUTE);
+  rateLimit(`email:qq:${qq}:day`, 10, DAY);
+
+  const code = String(randomInt(1_000_000)).padStart(6, "0");
+  const expires_at = new Date(Date.now() + EMAIL_CODE_TTL_MS);
+  await db
+    .insertInto("email_codes")
+    .values({ user_id: member.id, code, expires_at })
+    .onConflict((oc) =>
+      oc.column("user_id").doUpdateSet({ code, attempts: 0, sent_at: new Date(), expires_at }),
+    )
+    .execute();
+  await sendMail(
+    `${qq}@qq.com`,
+    `鼠洞登录验证码：${code}`,
+    `你的鼠洞登录验证码是 ${code}，10 分钟内有效。\n\n如果不是你本人操作，请忽略这封邮件。`,
+  );
+}
+
+export async function loginWithEmailCode(qq: number, code: string, client: Client) {
+  await requireMethod("email");
+  const member = await findMember({ qq });
+  // Each check spends an attempt, counted in the same statement that reads the code.
+  const stored =
+    member &&
+    (await db
+      .updateTable("email_codes")
+      .set((eb) => ({ attempts: eb("attempts", "+", 1) }))
+      .where("user_id", "=", member.id)
+      .where("expires_at", ">", new Date())
+      .where("attempts", "<", EMAIL_CODE_ATTEMPTS)
+      .returning(["code", "attempts"])
+      .executeTakeFirst());
+  if (!member || !stored) {
+    throw new AppError(400, "email_code_invalid", "验证码无效、已过期或输错太多次，请重新获取");
+  }
+  if (stored.code !== code) {
+    const left = EMAIL_CODE_ATTEMPTS - stored.attempts;
+    throw new AppError(
+      400,
+      "email_code_invalid",
+      left > 0 ? `验证码不对，还能再试 ${left} 次` : "验证码输错太多次，已作废，请重新获取",
+    );
+  }
+
+  return db.transaction().execute(async (trx) => {
+    await trx.deleteFrom("email_codes").where("user_id", "=", member.id).execute();
+    const actor = { userId: member.id, operatorId: null, tokenId: null, ip: client.ip };
+    await recordAudit(trx, actor, { action: "auth.login", data: { method: "email" } });
+    return startSession(trx, member.id, client);
   });
 }

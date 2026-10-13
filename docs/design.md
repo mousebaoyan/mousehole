@@ -304,7 +304,7 @@ bot 把 QQ 群的信息推送给论坛。两种方式都支持，推荐一起用
 | bot | 创建 token、选择权限范围、查看最后使用时间、吊销 |
 | 操作日志 | 按操作人、对象、动作筛选 |
 
-- **环境变量**：只有 `DATABASE_URL`、`PUBLIC_URL`、`APP_SECRET` 三个。其余设置都存在数据库里；SMTP 密码这类敏感信息用 `APP_SECRET` 加密后再存，页面上只显示"已设置"。
+- **环境变量**：只有 `DATABASE_URL`、`PUBLIC_URL`、`APP_SECRET` 三个。`APP_SECRET` 是 32 字节随机值的 base64，用 `openssl rand -base64 32` 生成，直接作为 AES-256-GCM 的密钥。其余设置都存在数据库里；SMTP 密码这类敏感信息用 `APP_SECRET` 加密后再存，页面上只显示"已设置"。
 - **首次部署**：成员要靠 bot 同步，bot token 却要在后台创建，所以第一个管理员要另外进来：在容器里运行 `bootstrap` 命令，给你的 QQ 号生成一次性的管理员登录链接。登录后在后台关联 QQ 群、创建 bot token、配置邮件，之后的成员都由 bot 同步。步骤见[接口 · 首次部署](api.md#68-首次部署)。
 
 ## 11. 性能与资源

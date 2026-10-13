@@ -26,6 +26,7 @@ jobs:
     env:
       DATABASE_URL: postgres://mousehole:mousehole@localhost:5432/mousehole
       PUBLIC_URL: http://localhost:5173
+      APP_SECRET: bG9jYWwtZGV2ZWxvcG1lbnQta2V5LW5vdC1zZWNyZXQ=
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
