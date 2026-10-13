@@ -3,6 +3,7 @@ import { csrf } from "hono/csrf";
 import { sql } from "kysely";
 import { adminRoutes } from "./modules/admin/routes.ts";
 import { authenticate, authRoutes, bearerToken } from "./modules/auth/routes.ts";
+import { tokenRoutes } from "./modules/auth/token-routes.ts";
 import { membersRoutes } from "./modules/members/routes.ts";
 import { usersRoutes } from "./modules/users/routes.ts";
 import { db } from "./platform/db.ts";
@@ -12,6 +13,7 @@ import { idempotency } from "./platform/idempotency.ts";
 
 const api = createRouter()
   .route("/", authRoutes)
+  .route("/", tokenRoutes)
   .route("/", usersRoutes)
   .route("/", membersRoutes)
   .route("/", adminRoutes);

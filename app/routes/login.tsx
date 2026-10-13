@@ -6,21 +6,33 @@ import {
   MessageCircle,
   Smartphone,
 } from "lucide-react";
-import { Form, redirect, useNavigation } from "react-router";
+import { useEffect, useState } from "react";
+import { data, Form, redirect, useFetcher, useNavigation, useRevalidator } from "react-router";
 import { apiContext, cookiesFrom } from "../api.server.ts";
 import { LogoMark } from "~/components/logo";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import type { Route } from "./+types/login.ts";
+import type { action as codeAction } from "./login-code.ts";
 
 export function meta() {
   return [{ title: "登录 · 鼠洞" }];
 }
 
+// Also the code login's poll: it shows this browser's code until a bot confirms it, then logs in.
 export async function loader({ context }: Route.LoaderArgs) {
-  const res = await context.get(apiContext).auth.methods.$get();
-  return { methods: await res.json() };
+  const api = context.get(apiContext);
+  const methods = await (await api.auth.methods.$get()).json();
+  if (!methods.code) return { methods, code: null, codeError: null };
+  const res = await api.auth.code.$get();
+  if (res.status === 410) {
+    return data({ methods, code: null, codeError: null }, { headers: cookiesFrom(res) });
+  }
+  if (!res.ok) return { methods, code: null, codeError: (await res.json()).error.message };
+  const state = await res.json();
+  if (state.status === "confirmed") return redirect("/", { headers: cookiesFrom(res) });
+  return { methods, code: state, codeError: null };
 }
 
 // The QQ mailbox form: one step sends the code, the next logs in with it.
@@ -32,7 +44,7 @@ export async function action({ request, context }: Route.ActionArgs) {
   };
   const api = context.get(apiContext);
   const qq = Number(field("qq"));
-  if (form.get("intent") === "send") {
+  if (field("intent") === "send") {
     const res = await api.auth.email.$post({ json: { qq } });
     if (res.ok) return { qq, sent: true, error: null };
     return { qq, sent: false, error: (await res.json()).error.message };
@@ -42,7 +54,8 @@ export async function action({ request, context }: Route.ActionArgs) {
   return { qq, sent: true, error: (await res.json()).error.message };
 }
 
-export default function Login({ loaderData: { methods }, actionData }: Route.ComponentProps) {
+export default function Login({ loaderData, actionData }: Route.ComponentProps) {
+  const { methods } = loaderData;
   const first = methods.code ? "code" : methods.email ? "email" : "link";
   return (
     <>
@@ -70,17 +83,7 @@ export default function Login({ loaderData: { methods }, actionData }: Route.Com
           </TabsList>
 
           <TabsContent value="code" className="pt-4">
-            <p className="text-sm text-muted-foreground">私聊机器人发送</p>
-            <div className="mt-2 rounded-xl bg-secondary py-4 text-center">
-              <span className="text-sm text-muted-foreground">登录 </span>
-              <span className="font-mono text-3xl font-semibold tracking-[0.2em]">482913</span>
-            </div>
-            <div className="mt-3 flex items-center justify-between text-meta text-muted-foreground">
-              <span className="inline-flex items-center gap-1.5">
-                <LoaderCircle className="size-3.5 animate-spin" /> 等待确认
-              </span>
-              <span className="tabular-nums">04:32</span>
-            </div>
+            <CodeLogin code={loaderData.code} error={loaderData.codeError} />
           </TabsContent>
 
           <TabsContent value="email" className="pt-4">
@@ -110,6 +113,78 @@ export default function Login({ loaderData: { methods }, actionData }: Route.Com
       >
         加入鼠群
       </a>
+    </>
+  );
+}
+
+type CodeState = Route.ComponentProps["loaderData"]["code"];
+
+// Shows this browser's code and polls until a bot confirms it. With no live code (first visit,
+// or the last one expired) it asks for one, unless asking just failed.
+function CodeLogin({ code, error }: { code: CodeState; error: string | null }) {
+  const fetcher = useFetcher<typeof codeAction>();
+  const { revalidate } = useRevalidator();
+  // Unknown while rendering on the server, so the countdown appears once mounted.
+  const [now, setNow] = useState<number | null>(null);
+  const askFailed = fetcher.data?.error;
+
+  useEffect(() => {
+    if (!code && !error && !askFailed && fetcher.state === "idle") {
+      void fetcher.submit(null, { method: "post", action: "/login/code" });
+    }
+  }, [code, error, askFailed, fetcher]);
+
+  useEffect(() => {
+    if (!code) return undefined;
+    let ticks = 0;
+    const timer = setInterval(() => {
+      setNow(Date.now());
+      if (++ticks % 2 === 0 && document.visibilityState === "visible") void revalidate();
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [code, revalidate]);
+
+  const message = error ?? askFailed;
+  if (message) {
+    return (
+      <div className="flex flex-col items-start gap-3">
+        <p role="alert" className="text-sm text-destructive">
+          {message}
+        </p>
+        <Button
+          variant="outline"
+          onClick={() => void fetcher.submit(null, { method: "post", action: "/login/code" })}
+        >
+          重新获取
+        </Button>
+      </div>
+    );
+  }
+  if (!code) {
+    return (
+      <p className="flex items-center gap-1.5 py-8 text-sm text-muted-foreground">
+        <LoaderCircle className="size-4 animate-spin" /> 正在获取口令
+      </p>
+    );
+  }
+
+  const left = now === null ? null : Math.max(0, code.expires_at - Math.floor(now / 1000));
+  return (
+    <>
+      <p className="text-sm text-muted-foreground">{code.hint}</p>
+      <div className="mt-2 rounded-xl bg-secondary py-4 text-center font-mono text-3xl font-semibold tracking-[0.2em]">
+        {code.code}
+      </div>
+      <div className="mt-3 flex items-center justify-between text-meta text-muted-foreground">
+        <span className="inline-flex items-center gap-1.5">
+          <LoaderCircle className="size-3.5 animate-spin" /> 等待确认
+        </span>
+        {left !== null && (
+          <span className="tabular-nums">
+            {Math.floor(left / 60)}:{String(left % 60).padStart(2, "0")}
+          </span>
+        )}
+      </div>
     </>
   );
 }

@@ -10,6 +10,7 @@ export default [
     route("login", "routes/login.tsx"),
     route("login/link", "routes/login-link.tsx"),
   ]),
+  route("login/code", "routes/login-code.ts"),
   route("logout", "routes/logout.ts"),
   route("admin", "routes/admin.tsx"),
 ] satisfies RouteConfig;
