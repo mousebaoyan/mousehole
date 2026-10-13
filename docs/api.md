@@ -236,8 +236,8 @@ token 由管理员在后台创建，只显示一次。每个 token 绑定一个 
 | PATCH | `/admin/settings` | 修改站点设置，立即生效 | 管理员 / `admin` |
 | POST | `/admin/settings/test-email` | `{ qq }`：用当前 SMTP 设置发一封测试邮件 | 管理员 / `admin` |
 | GET | `/admin/groups` | 已关联的群和同步状态：最近一次增量、全量、群资料的时间，被拦下的全量 | 管理员 / `admin` |
-| POST | `/admin/groups` | 关联群：`{ group_id }` | 管理员 / `admin` |
-| PATCH | `/admin/groups/{group_id}` | 启用、停用、设为主群 | 管理员 / `admin` |
+| POST | `/admin/groups` | 关联群：`{ group_id }`；第一个关联的群自动成为主群；已关联返回 `409 group_exists` | 管理员 / `admin` |
+| PATCH | `/admin/groups/{group_id}` | 启用、停用、设为主群：`{ enabled?, is_primary?: true }`；相关成员的成员资格、显示名和等级随即重算 | 管理员 / `admin` |
 | GET | `/admin/members` | 成员列表：按 QQ 号、名字、成员资格、角色筛选 | 版主 / `moderate` |
 | GET | `/admin/pending` | 待审核的主题和回复 | 版主 / `moderate` |
 | GET | `/admin/reports` | 举报列表：`status` | 版主 / `moderate` |
@@ -281,7 +281,8 @@ Content-Type: application/json
 }
 ```
 
-- **`observed_at`**：插件读到这些数据的时间。增量用 QQ 通知里的 `time`，全量用调用 `get_group_member_list` 的时间。论坛只接受比自己已有数据新的推送，到达顺序乱了也没关系。
+- **`observed_at`**：插件读到这些数据的时间。增量用 QQ 通知里的 `time`，全量用调用 `get_group_member_list` 的时间。论坛只接受比自己已有数据新的推送，到达顺序乱了也没关系；早于最近一次全量的推送也一并忽略，因为那次全量已经反映了之前的变化。比服务器时间晚 10 分钟以上的 `observed_at` 返回 `400 invalid_request`：时钟错了会让之后正常的推送都显得过期。
+- **群**：推送到还没在后台关联的群返回 `404 group_not_linked`。停用的群照常接收推送，只是不算成员资格。
 - **全量（`PUT`）**：`members` 是完整名单。名单里有的人视为在群里；名单里没有、而且论坛已有数据比这次全量旧的人，标记为退群，原因记为未知。
 - **增量（`PATCH`）**：只处理列出的人。`in_group: false` 表示退群，`true` 表示进群；不带 `in_group` 时只更新资料。没见过的 QQ 号会新建账号。
 - **字段**：没带的字段保持原值，所以频繁的推送可以只带少量字段。论坛只写有变化的行，并返回各类数量：
@@ -329,7 +330,7 @@ QQ 通知可以这样转成增量：
 
 ### 4.4 群资料
 
-`PUT /bot/groups/{group_id}/info`：把 `get_group_info` 的返回原样传入，再加上 `observed_at`。用到的字段是 `group_name`、`member_count`、`max_member_count`。
+`PUT /bot/groups/{group_id}/info`：把 `get_group_info` 的返回原样传入，再加上 `observed_at`。用到的字段是 `group_name`、`member_count`、`max_member_count`。返回 `{ "stale": false }`；比已有的群资料旧时不写入，返回 `true`。
 
 ## 5. 事件流
 

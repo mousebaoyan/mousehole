@@ -1,6 +1,6 @@
-import type { Transaction } from "kysely";
+import { sql, type Transaction } from "kysely";
 import type { DB } from "../../../db/types.ts";
-import type { UserRef } from "../../platform/access.ts";
+import type { Actor, UserRef } from "../../platform/access.ts";
 import { db } from "../../platform/db.ts";
 import { AppError } from "../../platform/errors.ts";
 import { recordAudit } from "../audit/service.ts";
@@ -36,6 +36,98 @@ export async function ensureBotUser(trx: Transaction<DB>, qq: number, name: stri
     .executeTakeFirst();
   if (!row) throw new AppError(409, "bot_qq_taken", "这个 QQ 号是登录过的群友，不能用作 bot");
   return row.id;
+}
+
+// Accounts for the QQ numbers a member sync mentions: creates the missing ones and keeps QQ
+// nicknames current. Returns the IDs, and who got a new nickname (their display name may change).
+export async function ensureMembers(
+  trx: Transaction<DB>,
+  people: { qq: number; nickname: string | undefined }[],
+) {
+  await trx
+    .insertInto("users")
+    .values(
+      people.map((p) => ({
+        qq: p.qq,
+        display_name: p.nickname || String(p.qq),
+        qq_nickname: p.nickname ?? "",
+      })),
+    )
+    .onConflict((oc) => oc.column("qq").doNothing())
+    .execute();
+
+  const named = people.filter((p) => p.nickname !== undefined);
+  const renamed = named.length
+    ? await sql<{ id: number }>`
+        UPDATE users SET qq_nickname = v.nickname
+        FROM (VALUES ${sql.join(named.map((p) => sql`(${p.qq}::bigint, ${p.nickname})`))})
+          AS v (qq, nickname)
+        WHERE users.qq = v.qq AND users.qq_nickname <> v.nickname
+        RETURNING users.id`.execute(trx)
+    : { rows: [] };
+
+  const rows = await trx
+    .selectFrom("users")
+    .select(["id", "qq"])
+    .where(
+      "qq",
+      "in",
+      people.map((p) => p.qq),
+    )
+    .execute();
+  return {
+    ids: new Map(rows.map((r) => [r.qq, r.id])),
+    renamed: renamed.rows.map((r) => r.id),
+  };
+}
+
+export type Standing = {
+  id: number;
+  member_status: string;
+  role: string;
+  level: number | null;
+  display_name: string;
+};
+
+// Writes what member sync derived, only where it changed, and logs freezes, restores and role
+// changes.
+export async function applyStanding(trx: Transaction<DB>, actor: Actor | null, rows: Standing[]) {
+  if (rows.length === 0) return;
+  const changed = await sql<{
+    id: number;
+    old_status: string;
+    new_status: string;
+    old_role: string;
+    new_role: string;
+  }>`
+    UPDATE users SET member_status = v.member_status, role = v.role, level = v.level,
+      display_name = v.display_name
+    FROM (VALUES ${sql.join(
+      rows.map(
+        (r) =>
+          sql`(${r.id}::integer, ${r.member_status}, ${r.role}, ${r.level}::smallint, ${r.display_name})`,
+      ),
+    )}) AS v (id, member_status, role, level, display_name)
+    WHERE users.id = v.id
+      AND (users.member_status, users.role, users.level, users.display_name)
+        IS DISTINCT FROM (v.member_status, v.role, v.level, v.display_name)
+    RETURNING users.id, old.member_status AS old_status, new.member_status AS new_status,
+      old.role AS old_role, new.role AS new_role`.execute(trx);
+
+  for (const row of changed.rows) {
+    const target = { target_type: "user", target_id: row.id };
+    if (row.old_status !== row.new_status) {
+      const action = row.new_status === "frozen" ? "member.freeze" : "member.restore";
+      await recordAudit(trx, actor, { action, ...target });
+    }
+    if (row.old_role !== row.new_role) {
+      await recordAudit(trx, actor, {
+        action: "member.role",
+        ...target,
+        data: { from: row.old_role, to: row.new_role },
+      });
+    }
+  }
 }
 
 export async function findMember(ref: UserRef) {

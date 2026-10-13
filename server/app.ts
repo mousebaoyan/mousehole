@@ -2,13 +2,14 @@ import { Hono } from "hono";
 import { csrf } from "hono/csrf";
 import { sql } from "kysely";
 import { authenticate, authRoutes, bearerToken } from "./modules/auth/routes.ts";
+import { membersRoutes } from "./modules/members/routes.ts";
 import { usersRoutes } from "./modules/users/routes.ts";
 import { db } from "./platform/db.ts";
 import { env } from "./platform/env.ts";
 import { createRouter, handleError, type AppEnv } from "./platform/http.ts";
 import { idempotency } from "./platform/idempotency.ts";
 
-const api = createRouter().route("/", authRoutes).route("/", usersRoutes);
+const api = createRouter().route("/", authRoutes).route("/", usersRoutes).route("/", membersRoutes);
 
 api.doc31("/openapi.json", { openapi: "3.1.0", info: { title: "鼠洞", version: "1" } });
 
