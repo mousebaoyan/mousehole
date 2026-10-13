@@ -8,6 +8,7 @@ export default [
     route("new", "routes/new-thread.tsx"),
     route("my/:list", "routes/my-threads.tsx"),
     route("u/:id", "routes/user.tsx"),
+    route("notifications", "routes/notifications.tsx"),
   ]),
   layout("routes/login-layout.tsx", [
     route("login", "routes/login.tsx"),
