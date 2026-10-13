@@ -20,7 +20,10 @@ import {
   endSession,
   listBotTokens,
   listSessions,
+  loginMethods,
+  loginWithEmailCode,
   loginWithLink,
+  requestEmailCode,
   resolveBot,
   resolveSession,
   revokeBotToken,
@@ -118,7 +121,75 @@ const BotTokenSchema = z
   })
   .openapi("BotToken");
 
+const Qq = z.number().int().min(10000).max(99_999_999_999);
+
 export const authRoutes = createRouter()
+  .openapi(
+    createRoute({
+      method: "get",
+      path: "/auth/methods",
+      summary: "开着的登录方式；邮件服务没配置时邮箱登录也算关闭",
+      responses: {
+        200: {
+          description: "每种方式是否可用",
+          content: {
+            "application/json": {
+              schema: z.object({ code: z.boolean(), link: z.boolean(), email: z.boolean() }),
+            },
+          },
+        },
+      },
+    }),
+    async (c) => c.json(await loginMethods(), 200),
+  )
+  .openapi(
+    createRoute({
+      method: "post",
+      path: "/auth/email",
+      summary: "把登录验证码发到 QQ号@qq.com",
+      request: {
+        body: { required: true, content: { "application/json": { schema: z.object({ qq: Qq }) } } },
+      },
+      responses: {
+        204: { description: "已发送，10 分钟内有效" },
+        403: errorResponse("这个 QQ 号没有同步过，或者邮箱登录已关闭"),
+        429: errorResponse("同一个 QQ 号 60 秒内只能发一次，每天最多 10 次"),
+        502: errorResponse("邮件发送失败"),
+        503: errorResponse("邮件服务还没有配置"),
+      },
+    }),
+    async (c) => {
+      await requestEmailCode(c.req.valid("json").qq, clientIp(c));
+      return c.body(null, 204);
+    },
+  )
+  .openapi(
+    createRoute({
+      method: "post",
+      path: "/auth/email/verify",
+      summary: "用邮件验证码登录",
+      request: {
+        body: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: z.object({ qq: Qq, code: z.string().regex(/^\d{6}$/, "应为 6 位数字") }),
+            },
+          },
+        },
+      },
+      responses: {
+        204: { description: "已登录，会话写在 Cookie 里" },
+        400: errorResponse("验证码不对、已过期或输错太多次"),
+        403: errorResponse("账号已被封禁，或者邮箱登录已关闭"),
+      },
+    }),
+    async (c) => {
+      const { qq, code } = c.req.valid("json");
+      setSessionCookie(c, await loginWithEmailCode(qq, code, client(c)));
+      return c.body(null, 204);
+    },
+  )
   .openapi(
     createRoute({
       method: "post",

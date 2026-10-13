@@ -64,6 +64,7 @@ test/                   Vitest 的全局准备：测试用的数据库
 - 每个接口用 `createRoute` 定义请求和响应的 schema，OpenAPI 文档从这里生成，不另外手写。路由用 `platform/http.ts` 的 `createRouter()` 创建，参数校验失败统一返回 `400 invalid_request`，`message` 是 Zod 的中文提示。
 - 认证、代操作（`X-Act-As`）、操作人（`X-Operator`）、幂等、限流和审计日志都是公共的中间件或步骤，不在每个接口里各写一遍。规则见[接口 §2](api.md#2-bot-认证与代操作)。
   - 处理函数开头调用 `authorize(c, 范围)` 拿到当前用户，范围就是 bot token 的范围（`read`、`act`、`moderate` 等）。它统一检查 token 范围、冻结、代发开关、角色和操作人，规则是 `platform/access.ts` 里的纯函数。没调用它的接口 bot 只能当访客用；只给网页用的接口调用 `requireWeb(c)`。
+  - 限流调用 `platform/rate-limit.ts` 的 `rateLimit(键, 次数, 窗口)`，键用原值拼成，例如 `email:qq:123456:minute`；超出时抛 `429`，带 `Retry-After`。
   - 写操作的服务函数接收 `actorOf(c, viewer)` 得到的 `Actor`（以谁的身份、操作人、token、IP），需要审计时在同一个事务里调用 `recordAudit`。
 - `server/app.ts` 里的中间件也作用于页面请求。中间件要给响应加头（比如 Set-Cookie）时，写在 `await next()` 之后：页面由 React Router 返回它自己的 `Response`，`next()` 之前写的头会丢掉。
 - 错误码用英文 snake_case，发布后不再改；`message` 用中文，写给人看。新的错误码同时写进 api.md。

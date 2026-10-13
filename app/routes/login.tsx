@@ -6,33 +6,67 @@ import {
   MessageCircle,
   Smartphone,
 } from "lucide-react";
+import { Form, redirect, useNavigation } from "react-router";
+import { apiContext, cookiesFrom } from "../api.server.ts";
 import { LogoMark } from "~/components/logo";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
+import type { Route } from "./+types/login.ts";
 
 export function meta() {
   return [{ title: "登录 · 鼠洞" }];
 }
 
-export default function Login() {
+export async function loader({ context }: Route.LoaderArgs) {
+  const res = await context.get(apiContext).auth.methods.$get();
+  return { methods: await res.json() };
+}
+
+// The QQ mailbox form: one step sends the code, the next logs in with it.
+export async function action({ request, context }: Route.ActionArgs) {
+  const form = await request.formData();
+  const field = (name: string) => {
+    const value = form.get(name);
+    return typeof value === "string" ? value.trim() : "";
+  };
+  const api = context.get(apiContext);
+  const qq = Number(field("qq"));
+  if (form.get("intent") === "send") {
+    const res = await api.auth.email.$post({ json: { qq } });
+    if (res.ok) return { qq, sent: true, error: null };
+    return { qq, sent: false, error: (await res.json()).error.message };
+  }
+  const res = await api.auth.email.verify.$post({ json: { qq, code: field("code") } });
+  if (res.ok) return redirect("/", { headers: cookiesFrom(res) });
+  return { qq, sent: true, error: (await res.json()).error.message };
+}
+
+export default function Login({ loaderData: { methods }, actionData }: Route.ComponentProps) {
+  const first = methods.code ? "code" : methods.email ? "email" : "link";
   return (
     <>
       <LogoMark className="size-12" />
       <h1 className="mt-4 text-xl font-semibold">登录鼠洞</h1>
       <p className="mt-1 text-sm text-muted-foreground">仅限鼠群成员，使用 QQ 号登录</p>
       <div className="mt-6 w-full max-w-sm rounded-2xl border bg-card p-5 shadow-sm sm:p-6">
-        <Tabs defaultValue="code">
+        <Tabs defaultValue={actionData ? "email" : first}>
           <TabsList className="w-full">
-            <TabsTrigger value="code">
-              <MessageSquareCode /> 口令
-            </TabsTrigger>
-            <TabsTrigger value="email">
-              <Mail /> QQ 邮箱
-            </TabsTrigger>
-            <TabsTrigger value="link">
-              <Link2 /> 链接
-            </TabsTrigger>
+            {methods.code && (
+              <TabsTrigger value="code">
+                <MessageSquareCode /> 口令
+              </TabsTrigger>
+            )}
+            {methods.email && (
+              <TabsTrigger value="email">
+                <Mail /> QQ 邮箱
+              </TabsTrigger>
+            )}
+            {methods.link && (
+              <TabsTrigger value="link">
+                <Link2 /> 链接
+              </TabsTrigger>
+            )}
           </TabsList>
 
           <TabsContent value="code" className="pt-4">
@@ -49,16 +83,8 @@ export default function Login() {
             </div>
           </TabsContent>
 
-          <TabsContent value="email" className="flex flex-col gap-3 pt-4">
-            <div className="flex gap-2">
-              <Input inputMode="numeric" placeholder="QQ 号" />
-              <Button variant="outline" className="shrink-0">
-                发送验证码
-              </Button>
-            </div>
-            <Input inputMode="numeric" placeholder="验证码" maxLength={6} />
-            <Button className="w-full">登录</Button>
-            <p className="text-meta text-muted-foreground">验证码发送至 QQ 邮箱，10 分钟内有效</p>
+          <TabsContent value="email" className="pt-4">
+            <EmailLogin state={actionData} />
           </TabsContent>
 
           <TabsContent value="link" className="pt-4">
@@ -85,5 +111,59 @@ export default function Login() {
         加入鼠群
       </a>
     </>
+  );
+}
+
+function EmailLogin({ state }: { state: Route.ComponentProps["actionData"] }) {
+  const busy = useNavigation().state !== "idle";
+  return (
+    <Form method="post" className="flex flex-col gap-3">
+      <div className="flex gap-2">
+        <Input
+          name="qq"
+          inputMode="numeric"
+          autoComplete="username"
+          placeholder="QQ 号"
+          aria-label="QQ 号"
+          defaultValue={state?.qq || undefined}
+          required
+        />
+        <Button
+          type="submit"
+          name="intent"
+          value="send"
+          variant="outline"
+          className="shrink-0"
+          disabled={busy}
+        >
+          {state?.sent ? "重新发送" : "发送验证码"}
+        </Button>
+      </div>
+      {state?.sent && (
+        <>
+          <Input
+            name="code"
+            inputMode="numeric"
+            autoComplete="one-time-code"
+            placeholder="6 位验证码"
+            aria-label="验证码"
+            maxLength={6}
+          />
+          <Button type="submit" name="intent" value="verify" className="w-full" disabled={busy}>
+            登录
+          </Button>
+        </>
+      )}
+      {state?.error && (
+        <p role="alert" className="text-meta text-destructive">
+          {state.error}
+        </p>
+      )}
+      <p className="text-meta text-muted-foreground">
+        {state?.sent
+          ? `验证码已发送至 ${state.qq}@qq.com，10 分钟内有效`
+          : "验证码发送至 QQ 邮箱，10 分钟内有效"}
+      </p>
+    </Form>
   );
 }

@@ -12,7 +12,7 @@
 - **QQ 号**：返回给已登录的成员、bot 和管理员；访客和冻结的账号看不到（站点设置可以改成公开）。
 - **分页**：列表返回 `{ "items": [...], "next_cursor": "..." }`，取下一页时带 `?cursor=`。主题里的楼层用 `?page=`，每页 30 层。
 - **错误**：HTTP 状态码加 `{ "error": { "code": "thread_locked", "message": "主题已锁定" } }`。`code` 固定不变，插件据此判断；`message` 给人看，以后可能调整。各接口都可能返回的错误码：`invalid_request`（400，参数不对，`message` 指出哪个字段）、`unauthorized`（401，没有登录）、`forbidden`（403，没有权限）、`not_found`（404）、`internal_error`（500）。
-- **限流**：按 IP、用户和 token 分别限流，超出时返回 `429` 和 `Retry-After`。
+- **限流**：按 IP、用户和 token 分别限流，超出时返回 `429 rate_limited` 和 `Retry-After`（秒）。
 - **CSRF**：网页的写请求校验 Origin；带 Bearer token 的请求不受影响。
 
 ### 主要对象（节选）
@@ -124,9 +124,10 @@ token 由管理员在后台创建，只显示一次。每个 token 绑定一个 
 | GET | `/auth/code` | 浏览器轮询口令状态；确认后建立会话，返回当前用户 | 发起口令的浏览器 |
 | POST | `/bot/auth/code/confirm` | `{ code }`：以 `X-Act-As` 的身份登录发起口令的浏览器，返回该浏览器的设备摘要 | `auth` |
 | POST | `/bot/auth/links` | 给 `X-Act-As` 的成员签发一次性登录链接，10 分钟有效 | `auth` |
+| GET | `/auth/methods` | 开着的登录方式：`{ code, link, email }`；邮件服务没配置时 `email` 也是 `false` | 访客 |
 | POST | `/auth/link` | `{ token }`：使用登录链接，建立会话，返回 204；链接无效、用过或过期返回 `400 login_link_invalid` | 访客 |
-| POST | `/auth/email` | `{ qq }`：把验证码发到 `QQ号@qq.com`；没同步过的 QQ 号返回 `403 not_member` | 访客 |
-| POST | `/auth/email/verify` | `{ qq, code }`：校验验证码，建立会话 | 访客 |
+| POST | `/auth/email` | `{ qq }`：把验证码发到 `QQ号@qq.com`，返回 204；没同步过的 QQ 号返回 `403 not_member`；同一个 QQ 号 60 秒内只能发一次、每天最多 10 次，同一个 IP 10 分钟内最多 10 次；发信失败返回 `502 email_failed` | 访客 |
+| POST | `/auth/email/verify` | `{ qq, code }`：校验验证码，建立会话，返回 204；不对、过期或输错 5 次作废都返回 `400 email_code_invalid`，`message` 说明是哪种 | 访客 |
 | POST | `/auth/logout` | 退出当前会话；没有登录时也返回成功 | 访客 |
 | GET | `/me` | 当前用户；bot 代表某人时返回这个人 | 已登录 / `read` |
 | PATCH | `/me` | 修改显示名、简介、是否允许代发、提醒偏好 | 成员 / `act` |
@@ -135,7 +136,7 @@ token 由管理员在后台创建，只显示一次。每个 token 绑定一个 
 | GET | `/me/export` | 导出自己的全部内容 | 已登录，冻结了也可以 |
 | DELETE | `/me` | 注销账号：`{ keep_content }`，`true` 保留内容、署名改为"已注销用户"，`false` 一并删除 | 已登录，冻结了也可以 |
 
-三种登录方式都可以在后台单独关闭，关闭后对应接口返回 `403 login_method_disabled`。冻结的账号可以登录，但只能使用上表中标明"冻结了也可以"的接口，其他和访客一样。
+三种登录方式都可以在后台单独关闭，关闭后对应接口返回 `403 login_method_disabled`。封禁中的账号建立会话时返回 `403 banned`。冻结的账号可以登录，但只能使用上表中标明"冻结了也可以"的接口，其他和访客一样。
 
 ### 3.2 用户
 
@@ -233,7 +234,7 @@ token 由管理员在后台创建，只显示一次。每个 token 绑定一个 
 | --- | --- | --- | --- |
 | GET | `/admin/overview` | 概览：成员数和已激活数、今日新帖、待审核和举报数、各群同步状态、事件流是否在线、数据库和图片占用 | 管理员 / `admin` |
 | GET | `/admin/settings` | 站点设置：站点信息、登录方式、SMTP、QQ 号可见范围、默认审核方式、等级名称等；密码类字段只返回是否已设置 | 管理员 / `admin` |
-| PATCH | `/admin/settings` | 修改站点设置，立即生效 | 管理员 / `admin` |
+| PATCH | `/admin/settings` | 修改站点设置，立即生效：只改带了的分组和字段；SMTP 密码不带就不变，传空字符串清空 | 管理员 / `admin` |
 | POST | `/admin/settings/test-email` | `{ qq }`：用当前 SMTP 设置发一封测试邮件 | 管理员 / `admin` |
 | GET | `/admin/groups` | 已关联的群和同步状态：最近一次增量、全量、群资料的时间，被拦下的全量 | 管理员 / `admin` |
 | POST | `/admin/groups` | 关联群：`{ group_id }`；第一个关联的群自动成为主群；已关联返回 `409 group_exists` | 管理员 / `admin` |

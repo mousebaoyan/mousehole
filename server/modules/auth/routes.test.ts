@@ -5,43 +5,14 @@ import { describe, expect, test } from "vitest";
 import { app } from "../../app.ts";
 import type { Scope } from "../../platform/access.ts";
 import { db } from "../../platform/db.ts";
-import { env } from "../../platform/env.ts";
+import { as, createUser, login, nextQq, sessionCookie } from "../../../test/fixtures.ts";
 import { issueLoginLink } from "./service.ts";
 
 const api = testClient(app).api.v1;
 
-let lastQq = 10000;
-
-async function createUser(role: "user" | "moderator" | "admin" = "user") {
-  const { id } = await db
-    .insertInto("users")
-    .values({ qq: ++lastQq, display_name: "鼠鼠", role })
-    .returning("id")
-    .executeTakeFirstOrThrow();
-  return id;
-}
-
-// Browsers send Origin with every POST and DELETE; the CSRF check relies on it.
-function as(cookie: string) {
-  return { headers: { cookie, origin: env.PUBLIC_URL } };
-}
-
-function sessionCookie(res: Response) {
-  return res.headers
-    .getSetCookie()
-    .find((c) => c.startsWith("session="))
-    ?.split(";")[0];
-}
-
-async function login(userId: number) {
-  const res = await api.auth.link.$post({ json: { token: await issueLoginLink(userId) } });
-  expect(res.status).toBe(204);
-  return sessionCookie(res) ?? "";
-}
-
 describe("登录链接", () => {
   test("只能用一次", async () => {
-    const token = await issueLoginLink(await createUser());
+    const token = await issueLoginLink((await createUser()).id);
     expect((await api.auth.link.$post({ json: { token } })).status).toBe(204);
 
     const again = await api.auth.link.$post({ json: { token } });
@@ -50,7 +21,7 @@ describe("登录链接", () => {
   });
 
   test("过期后不能用", async () => {
-    const userId = await createUser();
+    const userId = (await createUser()).id;
     const token = await issueLoginLink(userId);
     await db
       .updateTable("login_tickets")
@@ -62,7 +33,7 @@ describe("登录链接", () => {
   });
 
   test("第一次登录激活账号，并写入审计日志", async () => {
-    const userId = await createUser();
+    const userId = (await createUser()).id;
     const cookie = await login(userId);
 
     expect(await (await api.me.$get({}, as(cookie))).json()).toMatchObject({
@@ -87,7 +58,7 @@ describe("会话", () => {
   });
 
   test("过期的会话视为没有登录，并清掉 Cookie", async () => {
-    const userId = await createUser();
+    const userId = (await createUser()).id;
     const cookie = await login(userId);
     await db
       .updateTable("sessions")
@@ -101,7 +72,7 @@ describe("会话", () => {
   });
 
   test("超过一小时没用的会话在使用时续期 90 天", async () => {
-    const userId = await createUser();
+    const userId = (await createUser()).id;
     const cookie = await login(userId);
     expect(sessionCookie(await api.me.$get({}, as(cookie)))).toBeUndefined();
 
@@ -128,7 +99,7 @@ describe("会话", () => {
   test("页面请求也会续期", async () => {
     // Pages are rendered by React Router, which returns its own Response object.
     const server = new Hono().route("/", app).get("/page", () => new Response("page"));
-    const userId = await createUser();
+    const userId = (await createUser()).id;
     const cookie = await login(userId);
     await db
       .updateTable("sessions")
@@ -140,17 +111,17 @@ describe("会话", () => {
   });
 
   test("退出后会话失效", async () => {
-    const cookie = await login(await createUser());
+    const cookie = await login((await createUser()).id);
 
     expect((await api.auth.logout.$post({}, as(cookie))).status).toBe(204);
     expect((await api.me.$get({}, as(cookie))).status).toBe(401);
   });
 
   test("只能让自己的设备下线", async () => {
-    const owner = await createUser();
+    const owner = (await createUser()).id;
     const ownerCookie = await login(owner);
     const otherDevice = await login(owner);
-    const stranger = await login(await createUser());
+    const stranger = await login((await createUser()).id);
 
     const res = await api.me.sessions.$get({}, as(ownerCookie));
     if (!res.ok) throw new Error(`status ${res.status}`);
@@ -171,9 +142,9 @@ function bearer(token: string, headers: Record<string, string> = {}) {
 }
 
 async function createToken(scopes: Scope[] = ["read", "act"]) {
-  const admin = await login(await createUser("admin"));
+  const admin = await login((await createUser("admin")).id);
   const res = await api.admin.tokens.$post(
-    { json: { name: "测试 bot", bot_qq: ++lastQq, scopes } },
+    { json: { name: "测试 bot", bot_qq: nextQq(), scopes } },
     as(admin),
   );
   if (!res.ok) throw new Error(`status ${res.status}`);
@@ -202,8 +173,10 @@ describe("bot token", () => {
     const { token } = await createToken();
     const member = await createUser();
 
-    expect((await meAs(token, { "X-Act-As": `qq:${lastQq}` })).body).toMatchObject({ id: member });
-    expect((await meAs(token, { "X-Act-As": String(member) })).body).toMatchObject({ id: member });
+    const byQq = await meAs(token, { "X-Act-As": `qq:${member.qq}` });
+    expect(byQq.body).toMatchObject({ id: member.id });
+    const byId = await meAs(token, { "X-Act-As": String(member.id) });
+    expect(byId.body).toMatchObject({ id: member.id });
     expect(await meAs(token, { "X-Act-As": "qq:1" })).toMatchObject({
       status: 404,
       body: { error: { code: "unknown_member" } },
@@ -216,9 +189,9 @@ describe("bot token", () => {
 
   test("普通成员只能让 bot 代表自己，版主可以代表别人", async () => {
     const { token } = await createToken();
-    const member = String(await createUser());
-    const other = String(await createUser());
-    const moderator = String(await createUser("moderator"));
+    const member = String((await createUser()).id);
+    const other = String((await createUser()).id);
+    const moderator = String((await createUser("moderator")).id);
 
     expect(await meAs(token, { "X-Act-As": member, "X-Operator": other })).toMatchObject({
       status: 403,
@@ -255,11 +228,12 @@ describe("bot token", () => {
   });
 
   test("登录过的群友不能用作 bot", async () => {
-    const admin = await login(await createUser("admin"));
-    await login(await createUser());
+    const admin = await login((await createUser("admin")).id);
+    const taken = await createUser();
+    await login(taken.id);
 
     const res = await api.admin.tokens.$post(
-      { json: { name: "误填", bot_qq: lastQq, scopes: ["read"] } },
+      { json: { name: "误填", bot_qq: taken.qq, scopes: ["read"] } },
       as(admin),
     );
     expect(res.status).toBe(409);

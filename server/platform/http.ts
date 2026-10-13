@@ -32,6 +32,8 @@ export function createRouter() {
 
 export function handleError(error: Error, c: Context) {
   if (error instanceof AppError) {
+    if (error.retryAfter !== undefined) c.header("Retry-After", String(error.retryAfter));
+    if (error.status >= 500) log("warn", error.message, { code: error.code, error: error.cause });
     return c.json({ error: { code: error.code, message: error.message } }, error.status);
   }
   if (error instanceof HTTPException) return error.getResponse();
