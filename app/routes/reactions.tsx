@@ -1,6 +1,6 @@
 import { Heart } from "lucide-react";
 import { useRef, useState } from "react";
-import { useFetcher } from "react-router";
+import { Link, useFetcher } from "react-router";
 import { cn } from "cn";
 import type { UserBrief } from "~/api-types";
 import { useDismiss } from "~/components/disclosure";
@@ -121,15 +121,20 @@ export function ReactionSummary({
           <ul className="max-h-72 overflow-y-auto py-1">
             {!list.data && <li className="px-3 py-2 text-muted-foreground">加载中…</li>}
             {reactors.map((r) => (
-              <li key={r.user.id} className="flex items-center gap-3 px-3 py-2">
-                <UserAvatar user={r.user} className="size-8" />
-                <div className="min-w-0 flex-1">
-                  <div className="truncate font-medium">{r.user.display_name}</div>
-                  {r.user.level !== null && (
-                    <div className="truncate text-xs text-muted-foreground">LV{r.user.level}</div>
-                  )}
-                </div>
-                <span className="text-lg">{emojiOf(r.emoji)}</span>
+              <li key={r.user.id}>
+                <Link
+                  to={`/u/${r.user.id}`}
+                  className="flex items-center gap-3 px-3 py-2 hover:bg-accent"
+                >
+                  <UserAvatar user={r.user} className="size-8" />
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate font-medium">{r.user.display_name}</div>
+                    {r.user.level !== null && (
+                      <div className="truncate text-xs text-muted-foreground">LV{r.user.level}</div>
+                    )}
+                  </div>
+                  <span className="text-lg">{emojiOf(r.emoji)}</span>
+                </Link>
               </li>
             ))}
           </ul>
