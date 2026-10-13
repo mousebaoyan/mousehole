@@ -168,7 +168,7 @@ export async function listNotifications(userId: number, unreadOnly: boolean, cur
       sql<Record<string, string>>`notifications.data`.as("data"),
       "notifications.read_at",
       "notifications.created_at",
-      sql<string>`(extract(epoch FROM notifications.created_at) * 1000000)::bigint`.as("micros"),
+      sql<number>`(extract(epoch FROM notifications.created_at) * 1000000)::bigint`.as("micros"),
       "threads.id as thread_id",
       "threads.title",
       "posts.id as post_id",

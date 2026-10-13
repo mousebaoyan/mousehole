@@ -194,7 +194,7 @@ export async function listThreads(
 
   let query = selectThreads(members, userId)
     // Microseconds, exact for PostgreSQL timestamps, unlike a JavaScript Date.
-    .select(sql<string>`(extract(epoch FROM ${sql.ref(time)}) * 1000000)::bigint`.as("micros"))
+    .select(sql<number>`(extract(epoch FROM ${sql.ref(time)}) * 1000000)::bigint`.as("micros"))
     .where(inScope(scope))
     .limit(PAGE_SIZE);
   if (filter.author !== undefined) query = query.where("threads.author_id", "=", filter.author);
@@ -210,7 +210,7 @@ export async function listThreads(
           .execute()
       : [];
 
-  let next: (last: { id: number; micros: string }) => string;
+  let next: (last: { id: number; micros: number }) => string;
   if (view === "created") {
     query = query.orderBy("threads.id", "desc");
     if (cursor !== undefined) {
