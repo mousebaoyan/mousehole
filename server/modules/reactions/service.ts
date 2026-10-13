@@ -3,6 +3,7 @@ import type { Actor, Viewer } from "../../platform/access.ts";
 import { db } from "../../platform/db.ts";
 import { AppError } from "../../platform/errors.ts";
 import { recordAudit } from "../audit/service.ts";
+import { notifyOnPost } from "../notifications/service.ts";
 import { countBoosts, countReaction, getPost } from "../threads/service.ts";
 import { userBriefs } from "../users/service.ts";
 
@@ -59,6 +60,9 @@ export async function react(
         .execute();
     }
     await countReaction(trx, postId, { from: previous, to: emoji });
+    if (previous === null && emoji !== null) {
+      await notifyOnPost(trx, "like", post, viewer.id, { emoji });
+    }
   });
 }
 
@@ -114,7 +118,10 @@ export async function setBoost(viewer: Viewer, members: boolean, postId: number,
       .returning(["id", "post_id", "user_id", "body", "created_at"])
       .returning(sql<number | null>`old.id`.as("replaced"))
       .executeTakeFirstOrThrow();
-    if (replaced === null) await countBoosts(trx, postId, 1);
+    if (replaced === null) {
+      await countBoosts(trx, postId, 1);
+      await notifyOnPost(trx, "boost", post, viewer.id, { body });
+    }
     return saved;
   });
   const [boost] = await withBoostUsers([row]);

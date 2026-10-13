@@ -8,6 +8,7 @@ import { excerpt, renderMarkdown } from "../../platform/markdown.ts";
 import { recordAudit } from "../audit/service.ts";
 import { countBoard, countTags, findTags, getBoard, getTagId } from "../boards/service.ts";
 import { onebotToMarkdown, type Segment } from "../qq/onebot.ts";
+import { notifyPost, notifyThread } from "../notifications/service.ts";
 import { assertNotLinked, findLink, linkSource, type Source } from "../qq/service.ts";
 import { fetchUpload, linkUploads, showImages } from "../uploads/service.ts";
 import {
@@ -501,7 +502,7 @@ export async function createThread(
   const tagIds = await findTags(input.tags);
   if (input.source) await assertNotLinked(input.source);
   const { markdown } = await resolveContent(viewer, input.content, input.source, null);
-  const { html, images } = await renderMarkdown(markdown, showImages);
+  const { html, images, mentions } = await renderMarkdown(markdown, showImages);
 
   const id = await db.transaction().execute(async (trx) => {
     const thread = await trx
@@ -554,6 +555,7 @@ export async function createThread(
         last_read_at: sql<Date>`now()`,
       })
       .execute();
+    await notifyThread(trx, { id: thread.id, postId: opening.id, authorId: viewer.id, mentions });
     await auditBot(trx, actor, "thread.create", "thread", thread.id);
     return thread.id;
   });
@@ -579,9 +581,10 @@ export async function createPost(
     threadId,
   );
   const replyTo = input.reply_to_id ?? replyToId ?? undefined;
-  const { html, images } = await renderMarkdown(markdown, showImages);
+  const { html, images, mentions } = await renderMarkdown(markdown, showImages);
 
   const id = await db.transaction().execute(async (trx) => {
+    let replyToAuthor: number | null = null;
     if (replyTo !== undefined) {
       const target = await trx
         .updateTable("posts")
@@ -589,11 +592,12 @@ export async function createPost(
         .where("id", "=", replyTo)
         .where("thread_id", "=", threadId)
         .where("deleted_at", "is", null)
-        .returning("id")
+        .returning("author_id")
         .executeTakeFirst();
       if (!target) {
         throw new AppError(400, "invalid_request", "回复的那一层不在这个主题里，或者已删除");
       }
+      replyToAuthor = target.author_id;
     }
     // Locks the thread row, so concurrent replies take floor numbers one after another.
     const numbered = await trx
@@ -630,6 +634,7 @@ export async function createPost(
     await countBoard(trx, thread.board_id, { threads: 0, posts: 1 });
     await countUserPosts(trx, viewer.id, { threads: 0, posts: 1 });
     await addReadFloors(trx, viewer.id, threadId, [[numbered.floor_count, numbered.floor_count]]);
+    await notifyPost(trx, { id: post.id, threadId, authorId: viewer.id, mentions }, replyToAuthor);
     await auditBot(trx, actor, "post.create", "post", post.id);
     return post.id;
   });

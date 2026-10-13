@@ -3,6 +3,7 @@ import { createHonoServer } from "react-router-hono-server/node";
 import { apiContext, createApi } from "../app/api.server.ts";
 import { app } from "./app.ts";
 import { clearExpiredLogins } from "./modules/auth/service.ts";
+import { clearOldNotifications } from "./modules/notifications/service.ts";
 import { flushViews } from "./modules/threads/service.ts";
 import { clearUnusedUploads } from "./modules/uploads/service.ts";
 import { refreshAvatars } from "./modules/users/service.ts";
@@ -17,6 +18,7 @@ const DAY_MS = 24 * 3600_000;
 every(DAY_MS, "Clearing unused uploads", clearUnusedUploads);
 every(DAY_MS, "Clearing expired logins", clearExpiredLogins);
 every(DAY_MS, "Clearing old idempotency keys", clearIdempotencyKeys);
+every(DAY_MS, "Clearing old notifications", clearOldNotifications);
 
 export default await createHonoServer({
   defaultLogger: false,
