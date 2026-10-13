@@ -453,3 +453,11 @@ export async function issueLinkFor(actor: Actor) {
     return { token, expires_at: new Date(Date.now() + LINK_TTL_MS) };
   });
 }
+
+// Daily: sessions, login codes and links, and email codes past their time.
+export async function clearExpiredLogins() {
+  const now = new Date();
+  await db.deleteFrom("sessions").where("expires_at", "<", now).execute();
+  await db.deleteFrom("login_tickets").where("expires_at", "<", now).execute();
+  await db.deleteFrom("email_codes").where("expires_at", "<", now).execute();
+}

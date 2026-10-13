@@ -71,3 +71,11 @@ export const idempotency = createMiddleware<AppEnv>(async (c, next) => {
     .where((eb) => eb.and(id))
     .execute();
 });
+
+// Daily: keys older than the 7 days a retry is answered from.
+export async function clearIdempotencyKeys() {
+  await db
+    .deleteFrom("idempotency_keys")
+    .where("created_at", "<", sql<Date>`now() - interval '7 days'`)
+    .execute();
+}
