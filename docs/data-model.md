@@ -52,7 +52,11 @@
 
 ## 互动与通知
 
-表：`reactions`、`thread_users`、`notifications`。
+表：`reactions`、`boosts`、`thread_users`、`notifications`。
+
+- 短评每人每层一条，`UNIQUE (post_id, user_id)`，修改就是覆盖；只挂在楼层上，楼中楼不行。字数（16 个字，emoji 算一个）由应用按字素计数，库里不设长度约束。
+- 短评数冗余在 `posts.boost_count`，楼层列表每层取前 6 条短评，其余点开再取。删除短评是真删除，它的举报跟着删掉。
+- 短评通知的 `type` 是 `boost`，和点赞一样按楼层合并。
 
 - 关注级别：`watching` 每个新楼层都通知，`normal` 只在回复我、@我时通知，`muted` 都不通知。发主题时自动设为 `watching`。
 - 合并通知：未读期间再次触发同一个 `group_key`，只更新触发者、次数和时间，不新增行。
@@ -85,6 +89,8 @@
 ## 管理
 
 表：`reports`、`audit_logs`、`settings`。
+
+- 举报的是短评时填 `boost_id`，`post_id` 填它所在的楼层；同一个人对同一条内容只能举报一次。
 
 - 审计日志记录：经由 bot 的所有写操作、所有管理和审核操作、登录，以及成员角色、冻结和恢复。网页上普通的点赞和回复不记，内容本身就是记录。
 - 设置在进程内缓存，后台修改后立即刷新，不用重启。
