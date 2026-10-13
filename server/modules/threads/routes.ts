@@ -4,6 +4,7 @@ import { env } from "../../platform/env.ts";
 import {
   actorOf,
   authorize,
+  authorizePosting,
   can,
   clientIp,
   createRouter,
@@ -510,7 +511,7 @@ export const threadsRoutes = createRouter()
       },
     }),
     async (c) => {
-      const viewer = authorize(c, "act");
+      const viewer = authorizePosting(c);
       const members = isMember(viewer, c.var.bot);
       const thread = await createThread(actorOf(c, viewer), viewer, members, c.req.valid("json"));
       return c.json(threadDetailJson(thread, true), 201);
@@ -540,7 +541,7 @@ export const threadsRoutes = createRouter()
       },
     }),
     async (c) => {
-      const viewer = authorize(c, "act");
+      const viewer = authorizePosting(c);
       const post = await createPost(
         actorOf(c, viewer),
         viewer,
@@ -576,7 +577,7 @@ export const threadsRoutes = createRouter()
       },
     }),
     async (c) => {
-      const viewer = authorize(c, "act");
+      const viewer = authorizePosting(c);
       const thread = await editThread(
         actorOf(c, viewer),
         viewer,
@@ -621,7 +622,7 @@ export const threadsRoutes = createRouter()
       },
     }),
     async (c) => {
-      const viewer = authorize(c, "act");
+      const viewer = authorizePosting(c);
       const post = await editPost(
         actorOf(c, viewer),
         viewer,
@@ -830,7 +831,7 @@ export const threadsRoutes = createRouter()
       },
     }),
     async (c) => {
-      const viewer = authorize(c, "act");
+      const viewer = authorizePosting(c);
       rateLimit(`preview:${viewer.id}`, 120, 60_000);
       const { html } = await renderMarkdown(c.req.valid("json").markdown, showImages);
       return c.json({ html }, 200);

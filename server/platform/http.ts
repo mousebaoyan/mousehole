@@ -1,7 +1,14 @@
 import { OpenAPIHono, z } from "@hono/zod-openapi";
 import type { Context } from "hono";
 import { HTTPException } from "hono/http-exception";
-import { checkPermission, type Actor, type Bot, type Scope, type Viewer } from "./access.ts";
+import {
+  assertNotMuted,
+  checkPermission,
+  type Actor,
+  type Bot,
+  type Scope,
+  type Viewer,
+} from "./access.ts";
 import { AppError } from "./errors.ts";
 import { log } from "./log.ts";
 
@@ -51,6 +58,14 @@ export function unix(date: Date) {
 // The viewer, once they may do what the route needs; see access.ts for the rules.
 export function authorize(c: Context<AppEnv>, need: Scope) {
   return checkPermission(c.var.viewer, c.var.bot, need);
+}
+
+// For putting words and pictures up, which muted members can't: posts, edits, reactions,
+// boosts, uploads.
+export function authorizePosting(c: Context<AppEnv>) {
+  const viewer = authorize(c, "act");
+  assertNotMuted(viewer);
+  return viewer;
 }
 
 // Whether the viewer may also do what needs `need`, by the same rules as authorize: a moderator

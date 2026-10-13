@@ -138,7 +138,7 @@ export async function applyStanding(trx: Transaction<DB>, actor: Actor | null, r
 export async function findMember(ref: UserRef) {
   return db
     .selectFrom("users")
-    .select(["id", "role", "member_status", "allow_proxy"])
+    .select(["id", "role", "member_status", "allow_proxy", "restriction", "restricted_until"])
     .where((eb) => ("id" in ref ? eb("id", "=", ref.id) : eb("qq", "=", ref.qq)))
     .where("deleted_at", "is", null)
     .executeTakeFirst();
@@ -221,6 +221,8 @@ export async function getUser(ref: UserRef, viewerId: number | null) {
       "users.qq",
       "users.member_status",
       "users.activated_at",
+      "users.restriction",
+      "users.restricted_until",
       "users.thread_count",
       "users.post_count",
       "users.like_received",
@@ -291,6 +293,19 @@ export async function updateSettings(
 // Written by members, which then works out the display name from it.
 export async function saveCustomName(trx: Transaction<DB>, userId: number, name: string | null) {
   await trx.updateTable("users").set({ custom_name: name }).where("id", "=", userId).execute();
+}
+
+// Written by moderation, which checks who may and records why.
+export async function saveRestriction(
+  trx: Transaction<DB>,
+  userId: number,
+  restriction: { type: "mute" | "ban"; until: Date | null } | null,
+) {
+  await trx
+    .updateTable("users")
+    .set({ restriction: restriction?.type ?? null, restricted_until: restriction?.until ?? null })
+    .where("id", "=", userId)
+    .execute();
 }
 
 // ---- Following and 认可; see design §8.7. Doing either again changes nothing.

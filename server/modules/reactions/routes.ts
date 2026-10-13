@@ -1,6 +1,13 @@
 import { createRoute, z } from "@hono/zod-openapi";
 import { isMember } from "../../platform/access.ts";
-import { actorOf, authorize, createRouter, errorResponse, unix } from "../../platform/http.ts";
+import {
+  actorOf,
+  authorize,
+  authorizePosting,
+  createRouter,
+  errorResponse,
+  unix,
+} from "../../platform/http.ts";
 import { UserBriefSchema } from "../users/schemas.ts";
 import { BoostSchema, boostJson } from "./schemas.ts";
 import {
@@ -46,7 +53,7 @@ export const reactionsRoutes = createRouter()
       responses: changed,
     }),
     async (c) => {
-      const viewer = authorize(c, "act");
+      const viewer = authorizePosting(c);
       const { emoji } = c.req.valid("json");
       await react(viewer, isMember(viewer, c.var.bot), c.req.valid("param").id, emoji);
       return c.body(null, 204);
@@ -130,7 +137,7 @@ export const reactionsRoutes = createRouter()
       },
     }),
     async (c) => {
-      const viewer = authorize(c, "act");
+      const viewer = authorizePosting(c);
       const members = isMember(viewer, c.var.bot);
       const boost = await setBoost(
         viewer,
