@@ -214,7 +214,7 @@ token 由管理员在后台创建，只显示一次。每个 token 绑定一个 
 | PUT | `/threads/{id}/bookmark` | 收藏；已经收藏的不变，收藏列表里的位置也不变 | 成员 / `act` |
 | DELETE | `/threads/{id}/bookmark` | 取消收藏 | 成员 / `act` |
 | POST | `/threads/{id}/read` | 记录阅读：`{ floors: [[1, 20], [480, 495]], seconds: 95 }`，读过的楼层区间（含两端）并入已读，超出楼层数的部分不算；`seconds` 计入阅读时间，单次最多算 120 秒。只有网页上报，见[总体设计 §8.9](design.md#89-阅读记录)，bot 调用返回 `403` | 登录用户 |
-| GET | `/threads/{id}/stream` | SSE：这个主题的新回复、编辑和删除 | 访客 |
+| GET | `/threads/{id}/stream` | SSE：这个主题的新回复、编辑和删除，事件名是 `post.created`、`post.updated`、`post.deleted`，`data` 是楼层号；每 20 秒一条心跳注释 | 访客 |
 
 主楼正文用 `PATCH /posts/{主楼 ID}` 修改。
 
@@ -263,7 +263,7 @@ token 由管理员在后台创建，只显示一次。每个 token 绑定一个 
 | GET | `/notifications` | 通知列表，最新的在前，每页 30 条，合并的通知有新动静时排到前面：`unread_only`、`cursor` | 成员 / `act` |
 | GET | `/notifications/unread-count` | 未读数：`{ count }` | 成员 / `act` |
 | POST | `/notifications/read` | 标为已读：`{ ids }`（最多 100 条）或 `{ all: true }` | 成员 / `act` |
-| GET | `/stream` | SSE：当前用户的新通知和未读数 | 成员 |
+| GET | `/stream` | SSE：当前用户的未读通知数，连上时和每次变化时推一条 `unread` 事件，`data` 是未读数；每 20 秒一条心跳注释 | 登录用户，只能在网页上 |
 
 ### 3.9 管理后台
 

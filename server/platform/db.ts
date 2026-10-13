@@ -18,9 +18,12 @@ function listenFailed(error: unknown) {
   log("warn", "LISTEN connection failed", { error });
 }
 
-// A connection of its own, outside the pool, waiting for NOTIFY on `channel`. Lost, it connects
-// again a second later, then calls `onNotify` once for whatever came in between.
-export function listen(channel: string, onNotify: () => void) {
+// What a channel's NOTIFY carries; null right after (re)connecting, when any may have been missed.
+type OnNotify = (payload: string | null) => void;
+
+// A connection of its own, outside the pool, waiting for NOTIFY on these channels. Lost, it
+// connects again a second later.
+export function listen(channels: Record<string, OnNotify>) {
   async function connect() {
     const client = new Client({ connectionString: env.DATABASE_URL });
     client.on("error", listenFailed);
@@ -31,10 +34,16 @@ export function listen(channel: string, onNotify: () => void) {
       setTimeout(() => void connect(), 1000);
       return;
     }
-    client.on("notification", onNotify);
+    client.on("notification", (n) => channels[n.channel](n.payload ?? ""));
     client.on("end", () => setTimeout(() => void connect(), 1000));
     // A failure here ends the connection as well, so it connects again.
-    await client.query(`LISTEN ${channel}`).then(onNotify, listenFailed);
+    await client
+      .query(
+        Object.keys(channels)
+          .map((c) => `LISTEN ${c};`)
+          .join(" "),
+      )
+      .then(() => Object.values(channels).forEach((onNotify) => onNotify(null)), listenFailed);
   }
   void connect();
 }

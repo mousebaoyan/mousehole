@@ -1,4 +1,4 @@
-import { Link2, Reply } from "lucide-react";
+import { ArrowDown, Link2, Reply } from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { data, redirect, useFetcher, useNavigate } from "react-router";
 import { apiContext } from "../api.server.ts";
@@ -208,6 +208,7 @@ function TopicPage({
     if (start > 1) document.getElementById(`floor-${start}`)?.scrollIntoView();
   }, [start]);
   const [current, setCurrent] = useCurrentFloor(start);
+  const newest = useNewestFloor(thread.id, thread.floor_count);
 
   // The address follows the floor being read, so a refresh, a shared link or Back returns to it.
   // Replaced directly: a router navigation would load the page again.
@@ -366,8 +367,31 @@ function TopicPage({
         </nav>
       </aside>
       <FloorProgress floors={floors} />
+      {newest > thread.floor_count && (
+        // Opens the page again from the first new floor, with all that came since.
+        <button
+          type="button"
+          onClick={() => void navigate(`?floor=${thread.floor_count + 1}`)}
+          className="fixed bottom-6 left-1/2 z-20 inline-flex -translate-x-1/2 items-center gap-1.5 rounded-full bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow-lg animate-in fade-in slide-in-from-bottom-2"
+        >
+          <ArrowDown className="size-4" /> {newest - thread.floor_count} 条新回复
+        </button>
+      )}
     </div>
   );
+}
+
+// The highest floor of the thread, as it was loaded and then as the server tells of new ones.
+function useNewestFloor(threadId: number, loaded: number) {
+  const [newest, setNewest] = useState(loaded);
+  useEffect(() => {
+    const stream = new EventSource(`/api/v1/threads/${threadId}/stream`);
+    stream.addEventListener("post.created", (e) => {
+      setNewest((n) => Math.max(n, Number(e.data)));
+    });
+    return () => stream.close();
+  }, [threadId]);
+  return newest;
 }
 
 function documentTop(element: HTMLElement) {

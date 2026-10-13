@@ -1,10 +1,12 @@
 import { createRoute, z } from "@hono/zod-openapi";
 import { streamSSE } from "hono/streaming";
 import { authorize, createRouter, errorResponse, unix } from "../../platform/http.ts";
+import { HEARTBEAT_MS } from "../../platform/sse.ts";
 import {
   checkCursor,
   EVENT_TYPES,
-  heldBack,
+  pending,
+  HELD_MS,
   latestEventId,
   nextEvents,
   readEvents,
@@ -22,10 +24,6 @@ const expired = errorResponse(
 );
 
 const BATCH = 100;
-const HEARTBEAT_MS = 20_000;
-// Events held back by a transaction still running are looked for again this soon: that
-// transaction may write no event, so no NOTIFY would say when it ends.
-const HELD_MS = 200;
 
 export const eventsRoutes = createRouter()
   .openapi(
@@ -66,7 +64,7 @@ export const eventsRoutes = createRouter()
           }
           // A full batch may have more behind it; otherwise wait for news, or say it is alive.
           if (events.length === BATCH) continue;
-          if (await heldBack(cursor)) await nextEvents(HELD_MS, closed.signal);
+          if (await pending(cursor, types)) await nextEvents(HELD_MS, closed.signal);
           else if (!(await nextEvents(HEARTBEAT_MS, closed.signal))) {
             await stream.write(": ping\n\n");
           }

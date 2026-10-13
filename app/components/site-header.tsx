@@ -1,4 +1,5 @@
 import { Bell, LogOut, Menu, PenSquare, Search, Settings, User, Wrench, X } from "lucide-react";
+import { useEffect, useState } from "react";
 import { Form, Link, useLocation, useParams } from "react-router";
 import { Drawer, Dropdown, menuItem } from "~/components/disclosure";
 import { ForumNav } from "~/components/forum-nav";
@@ -9,8 +10,21 @@ import { Button, buttonVariants } from "~/components/ui/button";
 
 type Me = { id: number; display_name: string; avatar_url: string | null; role: string };
 
+// The unread count as the page was loaded, then as the server tells it live.
+function useUnread(initial: number, signedIn: boolean) {
+  const [live, setLive] = useState<number | null>(null);
+  useEffect(() => {
+    if (!signedIn) return undefined;
+    const stream = new EventSource("/api/v1/stream");
+    stream.addEventListener("unread", (e) => setLive(Number(e.data)));
+    return () => stream.close();
+  }, [signedIn]);
+  return live ?? initial;
+}
+
 // `unread` is how many notifications the reader hasn't read.
-export function SiteHeader({ me, unread }: { me: Me | null; unread: number }) {
+export function SiteHeader({ me, unread: loaded }: { me: Me | null; unread: number }) {
+  const unread = useUnread(loaded, me !== null);
   const { pathname } = useLocation();
   // On a board's page, a new thread starts in that board.
   const { slug } = useParams();

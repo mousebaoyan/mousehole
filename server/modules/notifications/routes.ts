@@ -1,7 +1,8 @@
 import { createRoute, z } from "@hono/zod-openapi";
-import { authorize, createRouter, errorResponse, unix } from "../../platform/http.ts";
+import { authorize, createRouter, errorResponse, requireWeb, unix } from "../../platform/http.ts";
+import { liveStream } from "../../platform/sse.ts";
 import { UserBriefSchema } from "../users/schemas.ts";
-import { countUnread, listNotifications, markRead } from "./service.ts";
+import { countUnread, listNotifications, markRead, onUnreadChange } from "./service.ts";
 
 const NotificationSchema = z
   .object({
@@ -108,5 +109,29 @@ export const notificationsRoutes = createRouter()
       const body = c.req.valid("json");
       await markRead(viewer.id, "ids" in body ? body.ids : "all");
       return c.body(null, 204);
+    },
+  )
+  .openapi(
+    createRoute({
+      method: "get",
+      path: "/stream",
+      summary: "SSE：自己的未读通知数，连上时和每次变化时推一条 unread 事件，data 是未读数",
+      responses: {
+        200: {
+          description: "text/event-stream；每 20 秒一条心跳注释",
+          content: { "text/event-stream": { schema: z.string() } },
+        },
+        401: errorResponse("没有登录"),
+      },
+    }),
+    (c) => {
+      const viewer = requireWeb(c);
+      return liveStream(
+        c,
+        (changed) => onUnreadChange(viewer.id, changed),
+        async (stream) => {
+          await stream.writeSSE({ event: "unread", data: String(await countUnread(viewer.id)) });
+        },
+      );
     },
   );

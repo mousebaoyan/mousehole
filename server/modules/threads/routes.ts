@@ -12,7 +12,9 @@ import {
   unix,
 } from "../../platform/http.ts";
 import { renderMarkdown } from "../../platform/markdown.ts";
+import { liveStream } from "../../platform/sse.ts";
 import { rateLimit } from "../../platform/rate-limit.ts";
+import { onEvent } from "../events/service.ts";
 import { BoostSchema, boostJson } from "../reactions/schemas.ts";
 import { floorExtras } from "../reactions/service.ts";
 import { showImages } from "../uploads/service.ts";
@@ -174,6 +176,17 @@ function postJson(p: Post, form: "html" | "markdown", extras: Extras) {
 }
 
 const IdParam = z.object({ id: z.coerce.number().int() });
+
+const FLOOR_EVENTS = new Set(["post.created", "post.updated", "post.deleted"]);
+
+// The floor one of these events is about, from either shape threads/events.ts writes.
+const FloorEvent = z.union([
+  z
+    .object({ post: z.object({ floor: z.number() }), thread: z.object({ id: z.number() }) })
+    .transform((e) => ({ floor: e.post.floor, thread_id: e.thread.id })),
+  z.object({ floor: z.number(), thread_id: z.number() }),
+]);
+
 const BodyQuery = z.object({ body: z.enum(["html", "markdown"]).default("html") });
 
 const Markdown = z
@@ -405,6 +418,43 @@ export const threadsRoutes = createRouter()
       // People reading, not bots fetching.
       if (!bot) recordView(id, viewer ? `u${viewer.id}` : (clientIp(c) ?? ""));
       return c.json(threadDetailJson(thread, viewer !== null), 200);
+    },
+  )
+  .openapi(
+    createRoute({
+      method: "get",
+      path: "/threads/{id}/stream",
+      summary:
+        "SSE：这个主题的新楼层、编辑和删除，事件名同事件流（post.created 等），data 是楼层号",
+      request: { params: IdParam },
+      responses: {
+        200: {
+          description: "text/event-stream；每 20 秒一条心跳注释",
+          content: { "text/event-stream": { schema: z.string() } },
+        },
+        404: errorResponse("主题不存在"),
+      },
+    }),
+    async (c) => {
+      const { id } = c.req.valid("param");
+      await getThread(id, isMember(c.var.viewer, c.var.bot), null);
+      const queue: { type: string; floor: number }[] = [];
+      return liveStream(
+        c,
+        (changed) =>
+          onEvent((event) => {
+            if (!FLOOR_EVENTS.has(event.type)) return;
+            const floor = FloorEvent.safeParse(event.data).data;
+            if (floor?.thread_id !== id) return;
+            queue.push({ type: event.type, floor: floor.floor });
+            changed();
+          }),
+        async (stream) => {
+          for (let e = queue.shift(); e; e = queue.shift()) {
+            await stream.writeSSE({ event: e.type, data: String(e.floor) });
+          }
+        },
+      );
     },
   )
   .openapi(
