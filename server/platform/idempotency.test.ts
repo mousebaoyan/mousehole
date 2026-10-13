@@ -6,7 +6,7 @@ import { createBotToken } from "../modules/auth/service.ts";
 import { db } from "./db.ts";
 import { AppError } from "./errors.ts";
 import { handleError, type AppEnv } from "./http.ts";
-import { idempotency } from "./idempotency.ts";
+import { clearIdempotencyKeys, idempotency } from "./idempotency.ts";
 
 let runs = 0;
 
@@ -106,5 +106,22 @@ describe("幂等", () => {
 
     await post("/created", "k");
     expect(runs).toBe(2);
+  });
+
+  test("每天清理 7 天前的键", async () => {
+    await post("/created", "old");
+    await post("/created", "new");
+    await db
+      .updateTable("idempotency_keys")
+      .set({ created_at: sql`now() - interval '8 days'` })
+      .where("key", "=", "old")
+      .execute();
+    await clearIdempotencyKeys();
+    const keys = await db
+      .selectFrom("idempotency_keys")
+      .select("key")
+      .where("key", "in", ["old", "new"])
+      .execute();
+    expect(keys).toEqual([{ key: "new" }]);
   });
 });
