@@ -49,6 +49,7 @@ export interface AuditLogs {
 
 export interface Boards {
   allow_anonymous: Generated<boolean>;
+  color: Generated<string>;
   created_at: Generated<Timestamp>;
   default_kind: Generated<string>;
   description: Generated<string>;
@@ -61,6 +62,14 @@ export interface Boards {
   slug: string;
   thread_count: Generated<number>;
   visibility: Generated<string>;
+}
+
+export interface Boosts {
+  body: string;
+  created_at: Generated<Timestamp>;
+  id: Generated<number>;
+  post_id: number;
+  user_id: number;
 }
 
 export interface EmailCodes {
@@ -142,6 +151,7 @@ export interface Posts {
   anonymous: Generated<boolean>;
   author_id: number;
   body: string;
+  boost_count: Generated<number>;
   created_at: Generated<Timestamp>;
   deleted_at: Timestamp | null;
   edit_count: Generated<number>;
@@ -201,6 +211,7 @@ export interface Reactions {
 }
 
 export interface Reports {
+  boost_id: number | null;
   created_at: Generated<Timestamp>;
   handled_at: Timestamp | null;
   handler_id: number | null;
@@ -310,6 +321,7 @@ export interface DB {
   api_tokens: ApiTokens;
   audit_logs: AuditLogs;
   boards: Boards;
+  boosts: Boosts;
   email_codes: EmailCodes;
   events: Events;
   group_members: GroupMembers;

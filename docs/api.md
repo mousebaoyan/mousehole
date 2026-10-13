@@ -24,7 +24,7 @@
   "joined_at": 1740000000, "member_status": "member", "activated": true }
 
 // 主题。匿名主题的 author 为 null
-{ "id": 42, "board": { "slug": "qa", "name": "保研问答" }, "kind": "question",
+{ "id": 42, "board": { "slug": "qa", "name": "保研问答", "color": "#e07b53" }, "kind": "question",
   "title": "rank 30% 能冲夏令营吗", "author": { … }, "tags": ["夏令营"],
   "pinned": 0, "featured": false, "locked": false, "status": "visible", "solved_post_id": null,
   "reply_count": 5, "view_count": 120, "like_count": 3,
@@ -35,6 +35,8 @@
   "author": { … }, "html": "<p>…</p>", "via": "qq",
   "source": { "chat_type": "group", "chat_id": 987654321, "message_id": 7731 },
   "status": "visible", "reactions": { "+1": 2 }, "my_reactions": ["+1"], "sub_count": 1,
+  "boosts": [ { "id": 31, "user": { … }, "body": "学到了", "created_at": 1760000100 } ],
+  "boost_count": 9, "my_boost": "已收藏",
   "edited_at": null, "created_at": 1760000000 }
 ```
 
@@ -47,8 +49,8 @@ token 由管理员在后台创建，只显示一次。一个 token 可以有多�
 | 范围 | 允许 |
 | --- | --- |
 | `read` | 读取全部内容，包括仅成员版块和 QQ 号 |
-| `act` | 以群友身份做普通操作：发帖、回复、编辑、删除、点赞、收藏、关注、举报、上传、读通知 |
-| `moderate` | 版主操作：审核（通过、隐藏）、置顶、精华、锁定、移动、处理举报、禁言、管理标签 |
+| `act` | 以群友身份做普通操作：发帖、回复、编辑、删除、点赞、短评、收藏、关注、举报、上传、读通知 |
+| `moderate` | 版主操作：审核（通过、隐藏）、置顶、精华、锁定、移动、删除短评、处理举报、禁言、管理标签 |
 | `admin` | 管理员操作：封禁、设置角色、管理版块、站点设置、关联 QQ 群、查看操作日志 |
 | `sync` | 推送 QQ 群资料和成员数据 |
 | `auth` | 确认登录口令、签发登录链接 |
@@ -151,7 +153,7 @@ token 由管理员在后台创建，只显示一次。一个 token 可以有多�
 | GET | `/boards` | 版块列表；访客看不到仅成员版块 | 访客 |
 | GET | `/boards/{slug}` | 版块信息 | 访客 |
 | POST | `/boards` | 新建版块 | 管理员 / `admin` |
-| PATCH | `/boards/{slug}` | 修改版块，包括可见范围和审核方式 | 管理员 / `admin` |
+| PATCH | `/boards/{slug}` | 修改版块，包括颜色、可见范围和审核方式 | 管理员 / `admin` |
 | DELETE | `/boards/{slug}` | 删除空版块 | 管理员 / `admin` |
 | GET | `/tags` | 标签列表，可按类别（话题、院校、方向）筛选 | 访客 |
 | POST | `/tags` | 新建标签 | 版主 / `moderate` |
@@ -192,6 +194,11 @@ token 由管理员在后台创建，只显示一次。一个 token 可以有多�
 | DELETE | `/posts/{id}/reactions/{emoji}` | 取消 | 成员 / `act` |
 | GET | `/posts/{id}/reactions` | 谁回应了什么 | 访客 |
 | POST | `/posts/{id}/report` | 举报：`{ reason }` | 成员 / `act` |
+| PUT | `/posts/{id}/boost` | 留下或修改自己在这一层的短评：`{ body }`，不超过 16 个字；楼中楼返回 `422 boost_not_allowed` | 成员 / `act` |
+| DELETE | `/posts/{id}/boost` | 删除自己的短评 | 成员 / `act` |
+| GET | `/posts/{id}/boosts` | 这一层的全部短评，按时间排序；楼层列表里每层只带前 6 条 | 访客 |
+| DELETE | `/boosts/{id}` | 删除任意短评，可附 `reason` | 版主 / `moderate` |
+| POST | `/boosts/{id}/report` | 举报短评：`{ reason }` | 成员 / `act` |
 
 ### 3.6 搜索
 
@@ -348,7 +355,7 @@ data: {"post":{…},"thread":{…},"author":{…},"qq_text":"……","url":"http
 | `content.pending` | 先审后发的版块有新内容等待审核 | `thread`、`post`、`author` |
 | `notification.created` | 给某位成员产生通知，且他开启了这类通知的 QQ 提醒 | `user`、`type`、`actor`、`thread`、`post`、`url`、`qq_text` |
 | `member.activated` | 成员第一次登录 | `user` |
-| `report.created` | 有新举报 | `report`、`post`、`reporter` |
+| `report.created` | 有新举报 | `report`、`post`、`boost`（举报的是短评时）、`reporter` |
 
 - `qq_text` 是可以直接发到 QQ 的纯文本，例如"【保研问答】rank 30% 能冲夏令营吗\n鼠鼠：……\nhttps://bbs.mousebaoyan.cn/t/42"。
 - 事件里的用户对象都带 `qq`，插件可以直接 @ 或私聊。匿名内容（二期）的事件不带作者。
