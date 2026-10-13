@@ -42,3 +42,15 @@ export async function login(userId: number) {
   if (!cookie) throw new Error(`login failed: ${res.status}`);
   return cookie;
 }
+
+// An SSE response read a chunk at a time, as text.
+export async function readStream(path: string, headers: Record<string, string>) {
+  const res = await app.request(path, { headers });
+  const reader = res.body?.getReader();
+  if (!reader) throw new Error(`no stream: ${res.status}`);
+  const decoder = new TextDecoder();
+  return {
+    next: async () => decoder.decode((await reader.read()).value),
+    close: () => reader.cancel(),
+  };
+}

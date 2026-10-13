@@ -1,4 +1,5 @@
-import { sql, type Transaction } from "kysely";
+import { EventEmitter } from "node:events";
+import { sql, type Kysely, type Transaction } from "kysely";
 import type { DB } from "../../../db/types.ts";
 import { db } from "../../platform/db.ts";
 import { env } from "../../platform/env.ts";
@@ -105,6 +106,10 @@ async function notify(trx: Transaction<DB>, userIds: number[], notice: Notice) {
           }),
       )
       .execute();
+    await tellUnread(
+      trx,
+      onSite.map((r) => r.id),
+    );
   }
   const toQq = recipients.filter((r) => r.to_qq);
   if (toQq.length > 0) await remindOnQq(trx, toQq, notice);
@@ -210,6 +215,39 @@ export async function notifyOnPost(
   });
 }
 
+// ---- Live unread counts: a NOTIFY names whose changed, so each of their open pages can update.
+
+export const NOTIFICATIONS_CHANNEL = "mousehole_notifications";
+// A NOTIFY payload is at most 8000 bytes.
+const IDS_PER_NOTIFY = 500;
+
+async function tellUnread(executor: Kysely<DB>, userIds: number[]) {
+  for (let i = 0; i < userIds.length; i += IDS_PER_NOTIFY) {
+    const ids = userIds.slice(i, i + IDS_PER_NOTIFY).join(",");
+    await sql`SELECT pg_notify(${NOTIFICATIONS_CHANNEL}, ${ids})`.execute(executor);
+  }
+}
+
+const changes = new EventEmitter();
+changes.setMaxListeners(0);
+const ANYONE = "anyone";
+
+// For the LISTEN connection: whose unread notifications changed, comma-separated; null after
+// connecting again, when it may be anyone's.
+export function unreadChanged(payload: string | null) {
+  if (payload === null) changes.emit(ANYONE);
+  else for (const id of payload.split(",")) changes.emit(id);
+}
+
+export function onUnreadChange(userId: number, listener: () => void) {
+  changes.on(String(userId), listener);
+  changes.on(ANYONE, listener);
+  return () => {
+    changes.off(String(userId), listener);
+    changes.off(ANYONE, listener);
+  };
+}
+
 const PAGE = 30;
 // Characters of the floor a notification is about.
 const EXCERPT = 80;
@@ -297,6 +335,7 @@ export async function markRead(userId: number, ids: number[] | "all") {
     .where("read_at", "is", null);
   if (ids !== "all") query = query.where("id", "in", ids);
   await query.execute();
+  await tellUnread(db, [userId]);
 }
 
 // Read ones are kept half a year.
