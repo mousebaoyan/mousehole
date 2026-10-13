@@ -5,7 +5,8 @@
 ## 1. 约定
 
 - **地址**：`https://bbs.mousebaoyan.cn/api/v1`。下文的路径都省略 `/api/v1` 前缀。
-- **格式**：请求和响应都是 JSON，字段用 snake_case，时间是 Unix 秒。请求体较大时可以用 `Content-Encoding: gzip` 压缩。
+- **格式**：请求和响应都是 JSON，字段用 snake_case，时间是 Unix 秒。请求体较大时可以用 `Content-Encoding: gzip` 压缩；响应按 `Accept-Encoding` 用 Brotli 或 gzip 压缩。
+- **正文**：回复默认只带渲染好的 `html`；带 `?body=markdown` 时改为只带 Markdown 原文 `body`，插件转发到 QQ、网页编辑时用。
 - **认证**：网页用 Cookie 会话；bot 用 `Authorization: Bearer <token>`。
 - **指代用户**：路径、请求头和请求体里的用户，可以写论坛用户 ID（`123`），也可以写 QQ 号（`qq:123456789`）。
 - **QQ 号**：返回给已登录的成员、bot 和管理员；访客和冻结的账号看不到（站点设置可以改成公开）。
@@ -29,9 +30,9 @@
   "reply_count": 5, "view_count": 120, "like_count": 3,
   "last_post_at": 1760000000, "created_at": 1759990000, "url": "https://bbs.mousebaoyan.cn/t/42" }
 
-// 回复。source 只返回给 bot 和管理员
+// 回复。source 只返回给 bot 和管理员；正文只带 html 或 body 中的一个，见上面的「正文」
 { "id": 108, "thread_id": 42, "floor": 3, "parent_id": null, "reply_to_id": null,
-  "author": { … }, "body": "Markdown 原文", "html": "<p>…</p>", "via": "qq",
+  "author": { … }, "html": "<p>…</p>", "via": "qq",
   "source": { "chat_type": "group", "chat_id": 987654321, "message_id": 7731 },
   "status": "visible", "reactions": { "+1": 2 }, "my_reactions": ["+1"], "sub_count": 1,
   "edited_at": null, "created_at": 1760000000 }
