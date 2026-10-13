@@ -36,7 +36,8 @@
 
 // 主题。匿名主题的 author 为 null；floor_count 是最大的楼层号；pinned：0 不置顶，1 版块内置顶，2 全站置顶；
 // posters 是作者以外、最近 20 层里最近回复的最多 4 个人；url 只在主题详情里有；
-// last_read_floor 是自己读过的最高一楼，没打开过为 0，只在登录时返回；主题详情里还有 read_floors，是读过的楼层区间，例如 [[1, 20], [480, 495]]
+// last_read_floor 是自己读过的最高一楼，没打开过为 0，只在登录时返回；主题详情里还有 read_floors，是读过的楼层区间，例如 [[1, 20], [480, 495]]，
+// 以及 bookmarked（是否收藏）和 notify_level（关注级别，见 /threads/{id}/subscription），也只在登录时返回
 { "id": 42, "board": { "slug": "qa", "name": "保研问答", "color": "#e07b53" }, "kind": "question",
   "title": "rank 30% 能冲夏令营吗", "author": { … }, "posters": [ { … } ], "tags": ["夏令营"],
   "pinned": 0, "featured": false, "locked": false, "solved_post_id": null,
@@ -197,8 +198,8 @@ token 由管理员在后台创建，只显示一次。每个 token 绑定一个 
 | DELETE | `/threads/{id}` | 删除主题；有人回复后作者不能删，只有版主能删 | 作者、版主 / `act`、`moderate` |
 | PUT | `/threads/{id}/solution` | 采纳答案：`{ post_id }` | 主题作者、版主 / `act`、`moderate` |
 | DELETE | `/threads/{id}/solution` | 取消采纳 | 同上 |
-| PUT | `/threads/{id}/subscription` | 关注级别：`{ level }`，可选 `watching`、`normal`、`muted` | 成员 / `act` |
-| PUT | `/threads/{id}/bookmark` | 收藏 | 成员 / `act` |
+| PUT | `/threads/{id}/subscription` | 关注级别：`{ level }`，`watching` 每个新楼层都通知，`normal` 回复我、@我时通知，`muted` 都不通知；没设置过是 `normal`，发主题的人是 `watching` | 成员 / `act` |
+| PUT | `/threads/{id}/bookmark` | 收藏；已经收藏的不变，收藏列表里的位置也不变 | 成员 / `act` |
 | DELETE | `/threads/{id}/bookmark` | 取消收藏 | 成员 / `act` |
 | POST | `/threads/{id}/read` | 记录阅读：`{ floors: [[1, 20], [480, 495]], seconds: 95 }`，读过的楼层区间（含两端）并入已读，`seconds` 计入阅读时间，单次最多算 120 秒。网页批量发送，见[总体设计 §8.9](design.md#89-阅读记录) | 成员 |
 | GET | `/threads/{id}/stream` | SSE：这个主题的新回复、编辑和删除 | 访客 |

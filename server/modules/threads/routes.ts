@@ -30,7 +30,10 @@ import {
   listRevisions,
   listThreads,
   MAX_BODY,
+  NOTIFY_LEVELS,
   recordView,
+  setBookmark,
+  setNotifyLevel,
 } from "./service.ts";
 
 const ThreadSchema = z
@@ -55,7 +58,14 @@ const ThreadSchema = z
   })
   .openapi("Thread");
 
-const ThreadDetailSchema = ThreadSchema.extend({ url: z.string() }).openapi("ThreadDetail");
+const ThreadDetailSchema = ThreadSchema.extend({
+  url: z.string(),
+  bookmarked: z.boolean().optional().openapi({ description: "自己是否收藏了；只在登录时有" }),
+  notify_level: z.string().optional().openapi({
+    description:
+      "自己的关注级别：watching 每个新楼层都通知，normal 回复我、@我时通知，muted 都不通知；只在登录时有",
+  }),
+}).openapi("ThreadDetail");
 
 const PostSchema = z
   .object({
@@ -108,8 +118,16 @@ function threadJson(t: Thread) {
   };
 }
 
-function threadDetailJson(t: Thread) {
-  return { ...threadJson(t), url: `${env.PUBLIC_URL}/t/${t.id}` };
+// What is the reader's own comes only to someone signed in.
+function threadDetailJson(t: Thread, signedIn: boolean) {
+  return {
+    ...threadJson(t),
+    url: `${env.PUBLIC_URL}/t/${t.id}`,
+    ...(signedIn && {
+      bookmarked: t.bookmarked_at !== null,
+      notify_level: t.notify_level ?? "normal",
+    }),
+  };
 }
 
 // Only one form of the body travels: the HTML for pages, the Markdown for editing and for bots.
@@ -207,7 +225,10 @@ export const threadsRoutes = createRouter()
         query: z.object({
           board: z.string().optional(),
           tag: z.string().optional(),
-          view: z.enum(["latest", "created", "hot", "unsolved"]).default("latest"),
+          view: z
+            .enum(["latest", "created", "hot", "unsolved", "bookmarked"])
+            .default("latest")
+            .openapi({ description: "bookmarked 是自己收藏的，按收藏时间排，要登录" }),
           cursor: z.string().optional(),
         }),
       },
@@ -223,11 +244,14 @@ export const threadsRoutes = createRouter()
             },
           },
         },
+        401: errorResponse("自己的列表要先登录"),
         404: errorResponse("版块或标签不存在"),
       },
     }),
     async (c) => {
-      const page = await listThreads(isMember(c.var.viewer, c.var.bot), c.req.valid("query"));
+      const query = c.req.valid("query");
+      const viewer = query.view === "bookmarked" ? authorize(c, "read") : c.var.viewer;
+      const page = await listThreads(isMember(viewer, c.var.bot), viewer?.id ?? null, query);
       return c.json({ items: page.items.map(threadJson), next_cursor: page.next_cursor }, 200);
     },
   )
@@ -241,10 +265,11 @@ export const threadsRoutes = createRouter()
     }),
     async (c) => {
       const { id } = c.req.valid("param");
-      const thread = await getThread(id, isMember(c.var.viewer, c.var.bot));
+      const { viewer, bot } = c.var;
+      const thread = await getThread(id, isMember(viewer, bot), viewer?.id ?? null);
       // People reading, not bots fetching.
-      if (!c.var.bot) recordView(id, c.var.viewer ? `u${c.var.viewer.id}` : (clientIp(c) ?? ""));
-      return c.json(threadDetailJson(thread), 200);
+      if (!bot) recordView(id, viewer ? `u${viewer.id}` : (clientIp(c) ?? ""));
+      return c.json(threadDetailJson(thread, viewer !== null), 200);
     },
   )
   .openapi(
@@ -350,7 +375,7 @@ export const threadsRoutes = createRouter()
       const viewer = authorize(c, "act");
       const members = isMember(viewer, c.var.bot);
       const thread = await createThread(actorOf(c, viewer), viewer, members, c.req.valid("json"));
-      return c.json(threadDetailJson(thread), 201);
+      return c.json(threadDetailJson(thread, true), 201);
     },
   )
   .openapi(
@@ -422,7 +447,7 @@ export const threadsRoutes = createRouter()
         c.req.valid("param").id,
         c.req.valid("json"),
       );
-      return c.json(threadDetailJson(thread), 200);
+      return c.json(threadDetailJson(thread, true), 200);
     },
   )
   .openapi(
@@ -518,6 +543,49 @@ export const threadsRoutes = createRouter()
       );
       const items = revisions.map((r) => ({ ...r, created_at: unix(r.created_at) }));
       return c.json({ items }, 200);
+    },
+  )
+  .openapi(
+    createRoute({
+      method: "put",
+      path: "/threads/{id}/bookmark",
+      summary: "收藏主题；已经收藏的不变",
+      request: { params: IdParam },
+      responses: { 204: { description: "已收藏" }, 404: errorResponse("主题不存在") },
+    }),
+    async (c) => {
+      const viewer = authorize(c, "act");
+      await setBookmark(viewer, isMember(viewer, c.var.bot), c.req.valid("param").id, true);
+      return c.body(null, 204);
+    },
+  )
+  .openapi(
+    createRoute({
+      method: "delete",
+      path: "/threads/{id}/bookmark",
+      summary: "取消收藏",
+      request: { params: IdParam },
+      responses: { 204: { description: "已取消" }, 404: errorResponse("主题不存在") },
+    }),
+    async (c) => {
+      const viewer = authorize(c, "act");
+      await setBookmark(viewer, isMember(viewer, c.var.bot), c.req.valid("param").id, false);
+      return c.body(null, 204);
+    },
+  )
+  .openapi(
+    createRoute({
+      method: "put",
+      path: "/threads/{id}/subscription",
+      summary: "关注级别：watching 每个新楼层都通知，normal 回复我、@我时通知，muted 都不通知",
+      request: { params: IdParam, body: json(z.object({ level: z.enum(NOTIFY_LEVELS) })) },
+      responses: { 204: { description: "已设置" }, 404: errorResponse("主题不存在") },
+    }),
+    async (c) => {
+      const viewer = authorize(c, "act");
+      const { id } = c.req.valid("param");
+      await setNotifyLevel(viewer, isMember(viewer, c.var.bot), id, c.req.valid("json").level);
+      return c.body(null, 204);
     },
   )
   .openapi(

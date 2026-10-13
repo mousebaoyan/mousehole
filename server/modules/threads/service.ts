@@ -17,7 +17,7 @@ export const PAGE_SIZE = 30;
 export const MAX_BODY = 30_000;
 export const FLOOR_BATCH = 20;
 
-export type ThreadView = "latest" | "created" | "hot" | "unsolved";
+export type ThreadView = "latest" | "created" | "hot" | "unsolved" | "bookmarked";
 
 function threadNotFound() {
   return new AppError(404, "thread_not_found", "主题不存在");
@@ -34,37 +34,48 @@ function visibleThreads(members: boolean) {
 }
 
 // Microseconds since the epoch, exact for PostgreSQL timestamps, unlike a JavaScript Date.
-const LAST_POST_MICROS = sql<number>`(extract(epoch FROM threads.last_post_at) * 1000000)::bigint`;
+const LAST_POST_MICROS = sql<string>`(extract(epoch FROM threads.last_post_at) * 1000000)::bigint`;
+const BOOKMARK_MICROS = sql<
+  string | null
+>`(extract(epoch FROM mine.bookmarked_at) * 1000000)::bigint`;
 
-function selectThreads(members: boolean) {
-  return visibleThreads(members).select([
-    "threads.id",
-    "threads.kind",
-    "threads.title",
-    "threads.author_id",
-    "threads.board_id",
-    "threads.pinned",
-    "threads.featured",
-    "threads.locked",
-    "threads.solved_post_id",
-    "threads.reply_count",
-    "threads.floor_count",
-    "threads.view_count",
-    "threads.like_count",
-    "threads.last_post_at",
-    "threads.created_at",
-    "boards.slug as board_slug",
-    "boards.name as board_name",
-    "boards.color as board_color",
-    LAST_POST_MICROS.as("last_post_micros"),
-    // Topics first, then schools and majors.
-    sql<string[]>`(
+// With the reader's own row in thread_users, which a guest doesn't have.
+function selectThreads(members: boolean, userId: number | null) {
+  return visibleThreads(members)
+    .leftJoin("thread_users as mine", (join) =>
+      join.onRef("mine.thread_id", "=", "threads.id").on(sql<boolean>`mine.user_id = ${userId}`),
+    )
+    .select([
+      "threads.id",
+      "threads.kind",
+      "threads.title",
+      "threads.author_id",
+      "threads.board_id",
+      "threads.pinned",
+      "threads.featured",
+      "threads.locked",
+      "threads.solved_post_id",
+      "threads.reply_count",
+      "threads.floor_count",
+      "threads.view_count",
+      "threads.like_count",
+      "threads.last_post_at",
+      "threads.created_at",
+      "boards.slug as board_slug",
+      "boards.name as board_name",
+      "boards.color as board_color",
+      "mine.bookmarked_at",
+      "mine.notify_level",
+      LAST_POST_MICROS.as("last_post_micros"),
+      BOOKMARK_MICROS.as("bookmark_micros"),
+      // Topics first, then schools and majors.
+      sql<string[]>`(
       SELECT coalesce(array_agg(tags.name ORDER BY
         array_position(array['topic', 'school', 'major'], tags.kind), tags.name), '{}')
       FROM thread_tags JOIN tags ON tags.id = thread_tags.tag_id
       WHERE thread_tags.thread_id = threads.id)`.as("tags"),
-    // For lists: the latest people to reply besides the author, among the last 20 floors.
-    sql<number[]>`(
+      // For lists: the latest people to reply besides the author, among the last 20 floors.
+      sql<number[]>`(
       SELECT coalesce(array_agg(author_id ORDER BY last_floor DESC), '{}') FROM (
         SELECT author_id, max(floor) AS last_floor FROM (
           SELECT author_id, floor FROM posts
@@ -74,7 +85,7 @@ function selectThreads(members: boolean) {
         WHERE author_id <> threads.author_id
         GROUP BY author_id ORDER BY last_floor DESC LIMIT 4
       ) latest)`.as("poster_ids"),
-  ]);
+    ]);
 }
 
 type ThreadRow = Awaited<ReturnType<ReturnType<typeof selectThreads>["execute"]>>[number];
@@ -119,16 +130,17 @@ function badCursor(): never {
 }
 
 // Cursors: the last thread's ID for `created`, an offset for `hot`, otherwise the last thread's
-// activity time and ID.
+// activity time, or when it was bookmarked, and ID. The reader's own lists are empty for guests.
 export async function listThreads(
   members: boolean,
+  userId: number | null,
   filter: { board?: string; tag?: string; view: ThreadView; cursor?: string },
 ) {
   const { view, cursor } = filter;
   const board = filter.board === undefined ? null : await getBoard(filter.board, members);
   const tagId = filter.tag === undefined ? undefined : await getTagId(filter.tag);
 
-  let query = selectThreads(members).limit(PAGE_SIZE);
+  let query = selectThreads(members, userId).limit(PAGE_SIZE);
   if (board) query = query.where("threads.board_id", "=", board.id);
   if (tagId !== undefined) {
     query = query.where((eb) =>
@@ -175,13 +187,15 @@ export async function listThreads(
         .where("threads.kind", "=", "question")
         .where("threads.solved_post_id", "is", null);
     }
+    if (view === "bookmarked") query = query.where("mine.bookmarked_at", "is not", null);
     if (pinFrom !== null) query = query.where("threads.pinned", "<", pinFrom);
-    query = query.orderBy("threads.last_post_at", "desc").orderBy("threads.id", "desc");
+    const time = view === "bookmarked" ? "mine.bookmarked_at" : "threads.last_post_at";
+    query = query.orderBy(time, "desc").orderBy("threads.id", "desc");
     if (cursor !== undefined) {
       const [, micros, id] = /^(\d+)_(\d+)$/.exec(cursor) ?? badCursor();
       query = query.where((eb) =>
         eb(
-          eb.refTuple("threads.last_post_at", "threads.id"),
+          eb.refTuple(time, "threads.id"),
           "<",
           eb.tuple(
             sql<Date>`timestamptz 'epoch' + ${micros}::bigint * interval '1 microsecond'`,
@@ -190,7 +204,8 @@ export async function listThreads(
         ),
       );
     }
-    next = (last) => `${last.last_post_micros}_${last.id}`;
+    next = (last) =>
+      `${view === "bookmarked" ? last.bookmark_micros : last.last_post_micros}_${last.id}`;
   }
 
   const rows = await query.execute();
@@ -203,8 +218,8 @@ export async function listThreads(
 
 // ---- One thread and its floors
 
-export async function getThread(id: number, members: boolean) {
-  const row = await selectThreads(members).where("threads.id", "=", id).executeTakeFirst();
+export async function getThread(id: number, members: boolean, userId: number | null) {
+  const row = await selectThreads(members, userId).where("threads.id", "=", id).executeTakeFirst();
   if (!row) throw threadNotFound();
   const [thread] = await withUsers([row]);
   return thread;
@@ -422,10 +437,14 @@ export async function createThread(
     await countBoard(trx, board.id, { threads: 1, posts: 0 });
     await countTags(trx, tagIds, 1);
     await countUserPosts(trx, viewer.id, { threads: 1, posts: 0 });
+    await trx
+      .insertInto("thread_users")
+      .values({ user_id: viewer.id, thread_id: thread.id, notify_level: "watching" })
+      .execute();
     await auditBot(trx, actor, "thread.create", "thread", thread.id);
     return thread.id;
   });
-  return getThread(id, members);
+  return getThread(id, members, viewer.id);
 }
 
 export async function createPost(
@@ -611,7 +630,7 @@ export async function editThread(
   change: ThreadChange,
 ) {
   const { title, tags, board: slug, ...moderation } = change;
-  const thread = await getThread(threadId, members);
+  const thread = await getThread(threadId, members, viewer.id);
   assertMayChange(staff, viewer, thread.author_id, thread.locked);
   if (!staff && (slug !== undefined || Object.keys(moderation).length > 0)) {
     throw forbidden("只有版主能移动、置顶、加精和锁定主题");
@@ -696,7 +715,7 @@ export async function editThread(
       data: change,
     });
   });
-  return getThread(threadId, members);
+  return getThread(threadId, members, viewer.id);
 }
 
 // Authors can take back a thread nobody has replied to; moderators can remove any.
@@ -707,7 +726,7 @@ export async function deleteThread(
   members: boolean,
   threadId: number,
 ) {
-  const thread = await getThread(threadId, members);
+  const thread = await getThread(threadId, members, viewer.id);
   assertMayChange(staff, viewer, thread.author_id, thread.locked);
   if (!staff && thread.reply_count > 0) {
     throw forbidden("已经有人回复了，不能删除；需要的话请联系版主");
@@ -828,6 +847,48 @@ export async function countBoosts(trx: Transaction<DB>, postId: number, boosts: 
     .updateTable("posts")
     .set((eb) => ({ boost_count: eb("boost_count", "+", boosts) }))
     .where("id", "=", postId)
+    .execute();
+}
+
+// ---- The reader's own: bookmarks and how closely they follow a thread
+
+export const NOTIFY_LEVELS = ["watching", "normal", "muted"] as const;
+export type NotifyLevel = (typeof NOTIFY_LEVELS)[number];
+
+// Bookmarking again keeps the first time, which the bookmark list is ordered by.
+export async function setBookmark(
+  viewer: Viewer,
+  members: boolean,
+  threadId: number,
+  bookmarked: boolean,
+) {
+  await assertVisible(threadId, members);
+  await db
+    .insertInto("thread_users")
+    .values({
+      user_id: viewer.id,
+      thread_id: threadId,
+      bookmarked_at: bookmarked ? sql<Date>`now()` : null,
+    })
+    .onConflict((oc) =>
+      oc.columns(["user_id", "thread_id"]).doUpdateSet({
+        bookmarked_at: bookmarked ? sql<Date>`coalesce(thread_users.bookmarked_at, now())` : null,
+      }),
+    )
+    .execute();
+}
+
+export async function setNotifyLevel(
+  viewer: Viewer,
+  members: boolean,
+  threadId: number,
+  level: NotifyLevel,
+) {
+  await assertVisible(threadId, members);
+  await db
+    .insertInto("thread_users")
+    .values({ user_id: viewer.id, thread_id: threadId, notify_level: level })
+    .onConflict((oc) => oc.columns(["user_id", "thread_id"]).doUpdateSet({ notify_level: level }))
     .execute();
 }
 

@@ -1,4 +1,4 @@
-import { Bell, Bookmark, Link2, Reply } from "lucide-react";
+import { Link2, Reply } from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { data, redirect, useFetcher, useNavigate } from "react-router";
 import { apiContext } from "../api.server.ts";
@@ -11,6 +11,7 @@ import { useNearView } from "~/near-view";
 import { stamp, unixNow } from "~/time";
 import type { Route } from "./+types/topic.ts";
 import { FloorNav, FloorProgress, useCurrentFloor, type Floors } from "./floor-timeline.tsx";
+import { BookmarkButton, NOTIFY_LEVELS, NotifyButton } from "./follow-buttons.tsx";
 import { PostCard } from "./post-card.tsx";
 import { REACTIONS } from "./reactions.tsx";
 import { TopicHeader } from "./topic-header.tsx";
@@ -100,12 +101,27 @@ export async function action({ params, request, context }: Route.ActionArgs) {
     const res = body
       ? await api.posts[":id"].boost.$put({ param: post, json: { body } })
       : await api.posts[":id"].boost.$delete({ param: post });
-    if (res.ok) return { ok: true as const, boost: body || null };
+    if (res.ok) return { ok: true as const, saved: body || null };
     return { ok: false as const, message: (await res.json()).error.message };
   }
   if (text("intent") === "remove-boost") {
     const res = await api.boosts[":id"].$delete({ param: { id: text("boost_id") }, json: {} });
     if (res.ok) return { ok: true as const };
+    return { ok: false as const, message: (await res.json()).error.message };
+  }
+  if (text("intent") === "bookmark") {
+    const bookmarked = text("bookmarked") === "true";
+    const res = bookmarked
+      ? await api.threads[":id"].bookmark.$put({ param: thread })
+      : await api.threads[":id"].bookmark.$delete({ param: thread });
+    if (res.ok) return { ok: true as const, saved: bookmarked };
+    return { ok: false as const, message: (await res.json()).error.message };
+  }
+  if (text("intent") === "notify") {
+    const level = NOTIFY_LEVELS.find((l) => l.level === text("level"))?.level;
+    if (!level) throw data("关注级别不对", { status: 400 });
+    const res = await api.threads[":id"].subscription.$put({ param: thread, json: { level } });
+    if (res.ok) return { ok: true as const, saved: level };
     return { ok: false as const, message: (await res.json()).error.message };
   }
   if (text("intent") === "delete-thread") {
@@ -320,12 +336,8 @@ function TopicPage({
           <Button size="lg" onClick={() => openComposer({ thread: target, replyTo: null })}>
             <Reply /> 回复
           </Button>
-          <Button size="lg" variant="outline">
-            <Bookmark /> 收藏
-          </Button>
-          <Button size="lg" variant="outline">
-            <Bell /> 关注
-          </Button>
+          <BookmarkButton threadId={thread.id} initial={thread.bookmarked ?? false} />
+          <NotifyButton threadId={thread.id} initial={thread.notify_level} />
           <Button size="icon-lg" variant="ghost" aria-label="复制链接" title="复制链接">
             <Link2 />
           </Button>

@@ -172,7 +172,7 @@ export function ThreadFeed({
 
 // The next page loads when its link comes near the screen; without JavaScript the link opens it.
 // Each page brings the link to the one after it.
-function More({ cursor, showBoard }: { cursor: string; showBoard: boolean }) {
+export function More({ cursor, showBoard }: { cursor: string; showBoard: boolean }) {
   const { load, state, data } = useFetcher<Page>();
   const link = useRef<HTMLAnchorElement>(null);
   const { pathname, search } = useLocation();

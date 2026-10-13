@@ -1,7 +1,6 @@
 import {
   ArrowDown,
   ArrowUp,
-  Bookmark,
   ChevronDown,
   ChevronUp,
   CircleCheck,
@@ -272,9 +271,6 @@ export function PostCard({
                       <Trash2 /> {post.floor === 1 ? "删除主题" : "删除"}
                     </button>
                   )}
-                  <button type="button" className={menuItem} onClick={close}>
-                    <Bookmark /> 收藏
-                  </button>
                   <button
                     type="button"
                     className={menuItem}
