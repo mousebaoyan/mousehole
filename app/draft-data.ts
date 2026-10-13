@@ -85,14 +85,17 @@ export type Thread = {
   views: number;
   lastActive: string;
   participants: User[];
-  // For the signed-in reader: never opened (new), or floors added since they last read it.
+  // For the signed-in reader: never opened (new), floors added since they last read it, or read
+  // to the last floor.
   isNew?: boolean;
   unread?: number;
+  read?: boolean;
 };
 
 export const threads: Thread[] = [
   {
     id: 1,
+    read: true,
     board: "announce",
     title: "鼠洞内测说明：账号、三种登录方式和发帖规则",
     author: users.owner,
@@ -134,6 +137,7 @@ export const threads: Thread[] = [
   },
   {
     id: 4,
+    read: true,
     board: "qa",
     title: "科研经历只有一段大创，简历怎么写才不显得单薄？",
     author: users.ict,
@@ -174,6 +178,7 @@ export const threads: Thread[] = [
   },
   {
     id: 7,
+    read: true,
     board: "qa",
     title: "预推免的英语面试一般问什么？需要提前准备自我介绍吗",
     author: users.sea,

@@ -66,7 +66,11 @@ function ThreadRow({ thread, showBoard }: { thread: Thread; showBoard: boolean }
       <div className="min-w-0">
         <Link
           to={`/t/${thread.id}`}
-          className="text-body leading-snug font-medium text-foreground visited:text-foreground/70 after:absolute after:inset-0 lg:text-base"
+          className={cn(
+            "text-body leading-snug font-medium text-foreground after:absolute after:inset-0 lg:text-base",
+            // Members: read to the last floor. Guests aren't tracked, so the browser's history.
+            me ? thread.read && "text-foreground/65" : "visited:text-foreground/65",
+          )}
         >
           {thread.pinned && (
             <Pin
