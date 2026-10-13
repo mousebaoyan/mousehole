@@ -1,4 +1,3 @@
-import { ForumAside } from "~/components/forum-aside";
 import { ThreadFeed } from "~/components/thread-feed";
 import { threads } from "~/draft-data";
 import type { Route } from "./+types/home.ts";
@@ -19,12 +18,5 @@ export function loader({ request }: Route.LoaderArgs) {
 }
 
 export default function Home({ loaderData }: Route.ComponentProps) {
-  return (
-    <div className="flex gap-8">
-      <div className="min-w-0 flex-1">
-        <ThreadFeed threads={loaderData.threads} sort={loaderData.sort} />
-      </div>
-      <ForumAside />
-    </div>
-  );
+  return <ThreadFeed threads={loaderData.threads} sort={loaderData.sort} />;
 }

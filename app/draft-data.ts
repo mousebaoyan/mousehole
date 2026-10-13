@@ -83,7 +83,6 @@ export type Thread = {
   fromQQ?: boolean;
   replies: number;
   views: number;
-  lastPoster: User;
   lastActive: string;
   participants: User[];
 };
@@ -99,7 +98,6 @@ export const threads: Thread[] = [
     pinned: true,
     replies: 23,
     views: 1820,
-    lastPoster: users.rex,
     lastActive: "3 天前",
     participants: [users.owner, users.rex, users.qi],
   },
@@ -113,7 +111,6 @@ export const threads: Thread[] = [
     solved: false,
     replies: 12,
     views: 436,
-    lastPoster: users.moon,
     lastActive: "12 分钟前",
     participants: [users.qi, users.moon, users.nj, users.cat],
   },
@@ -127,7 +124,6 @@ export const threads: Thread[] = [
     featured: true,
     replies: 48,
     views: 3104,
-    lastPoster: users.sea,
     lastActive: "36 分钟前",
     participants: [users.nj, users.sea, users.ict, users.qi, users.cat],
   },
@@ -142,7 +138,6 @@ export const threads: Thread[] = [
     fromQQ: true,
     replies: 8,
     views: 289,
-    lastPoster: users.rex,
     lastActive: "1 小时前",
     participants: [users.ict, users.rex, users.moon],
   },
@@ -155,7 +150,6 @@ export const threads: Thread[] = [
     kind: "discussion",
     replies: 5,
     views: 912,
-    lastPoster: users.qi,
     lastActive: "2 小时前",
     participants: [users.rex, users.qi],
   },
@@ -168,7 +162,6 @@ export const threads: Thread[] = [
     kind: "discussion",
     replies: 31,
     views: 1210,
-    lastPoster: users.nj,
     lastActive: "3 小时前",
     participants: [users.moon, users.nj, users.rex, users.cat],
   },
@@ -182,7 +175,6 @@ export const threads: Thread[] = [
     solved: true,
     replies: 9,
     views: 377,
-    lastPoster: users.cat,
     lastActive: "5 小时前",
     participants: [users.sea, users.cat, users.rex],
   },
@@ -196,7 +188,6 @@ export const threads: Thread[] = [
     fromQQ: true,
     replies: 214,
     views: 5320,
-    lastPoster: users.qi,
     lastActive: "昨天",
     participants: [users.cat, users.qi, users.moon, users.sea, users.ict],
   },
@@ -209,7 +200,6 @@ export const threads: Thread[] = [
     kind: "discussion",
     replies: 66,
     views: 4410,
-    lastPoster: users.ict,
     lastActive: "2 天前",
     participants: [users.rex, users.ict, users.nj, users.moon],
   },
@@ -380,5 +370,3 @@ export function reactorsOf(reactions: Reactions) {
     })),
   );
 }
-
-export const group = { name: "四非计算机保研鼠群", members: 1824, capacity: 2000 };

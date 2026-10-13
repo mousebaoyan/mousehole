@@ -23,9 +23,10 @@
   "qq": 123456789, "card": "26-某某大学-CV", "level": 5, "level_name": "活跃", "title": "26届",
   "joined_at": 1740000000, "member_status": "member", "activated": true }
 
-// 主题。匿名主题的 author 为 null；floor_count 是最大的楼层号；last_read_floor 是自己读到的楼层，只在登录时返回
+// 主题。匿名主题的 author 为 null；floor_count 是最大的楼层号；last_read_floor 是自己读到的楼层，只在登录时返回；
+// posters 是列表里显示的参与者，作者在前，再按最近回复排最多 4 个人，只在列表里返回
 { "id": 42, "board": { "slug": "qa", "name": "保研问答", "color": "#e07b53" }, "kind": "question",
-  "title": "rank 30% 能冲夏令营吗", "author": { … }, "tags": ["夏令营"],
+  "title": "rank 30% 能冲夏令营吗", "author": { … }, "posters": [ { … } ], "tags": ["夏令营"],
   "pinned": 0, "featured": false, "locked": false, "status": "visible", "solved_post_id": null,
   "reply_count": 5, "floor_count": 6, "view_count": 120, "like_count": 3, "last_read_floor": 4,
   "last_post_at": 1760000000, "created_at": 1759990000, "url": "https://bbs.mousebaoyan.cn/t/42" }
