@@ -92,6 +92,13 @@ describe("发主题和回复", () => {
 
     const wrong = await reply(thread, { content: { markdown: "x" }, reply_to_id: elsewhere.id });
     expect(wrong.status).toBe(400);
+
+    const replies = await api.posts[":id"].replies.$get({
+      param: { id: String(first.id) },
+      query: {},
+    });
+    if (!replies.ok) throw new Error(`status ${replies.status}`);
+    expect((await replies.json()).items.map((p) => p.floor)).toEqual([3]);
   });
 
   test("只有版主能在版主版块发主题；锁定的主题只有版主能回复", async () => {

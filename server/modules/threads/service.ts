@@ -280,6 +280,19 @@ export async function getPost(id: number, members: boolean) {
   return post;
 }
 
+// The floors that answer a post, in floor order, a batch at a time.
+export async function listReplies(postId: number, members: boolean, after: number) {
+  const post = await getPost(postId, members);
+  const rows = await selectPosts()
+    .where("posts.thread_id", "=", post.thread_id)
+    .where("posts.reply_to_id", "=", postId)
+    .where("posts.floor", ">", after)
+    .orderBy("posts.floor")
+    .limit(FLOOR_BATCH)
+    .execute();
+  return withPostUsers(rows);
+}
+
 // ---- Writing
 
 // Bots' writes go to the audit log; people's own posts are their own record.

@@ -208,7 +208,7 @@ token 由管理员在后台创建，只显示一次。每个 token 绑定一个 
 | POST | `/preview` | `{ markdown }`：渲染成发布后的 HTML，返回 `{ html }`，编辑器预览用；每人每分钟最多 120 次 | 成员 / `act` |
 | POST | `/threads/{id}/posts` | 回复：`content`、`reply_to_id`（回复同一主题里的哪一条，可选）、`source`；锁定的主题只有版主能回复，否则返回 `403 thread_locked` | 成员 / `act` |
 | GET | `/posts/{id}` | 单条回复 | 访客 |
-| GET | `/posts/{id}/replies` | 回复这一条的楼层，按楼层号排序：`cursor` | 访客 |
+| GET | `/posts/{id}/replies` | 回复这一条的楼层，按楼层号升序，每次最多 20 层：`after=N` 取第 N 楼之后的，不足 20 层说明取完了 | 访客 |
 | PATCH | `/posts/{id}` | 作者修改 `content`，保留编辑记录；版主还可以改 `status`（审核通过或隐藏），可附 `reason` | 作者、版主 / `act`、`moderate` |
 | DELETE | `/posts/{id}` | 删除；楼层号保留，显示"该楼已删除" | 作者、版主 / `act`、`moderate` |
 | GET | `/posts/{id}/revisions` | 编辑记录 | 作者、版主 / `read` |

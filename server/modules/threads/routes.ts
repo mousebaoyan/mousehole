@@ -17,6 +17,7 @@ import {
   getPost,
   getThread,
   listPosts,
+  listReplies,
   listThreads,
   recordView,
 } from "./service.ts";
@@ -239,6 +240,30 @@ export const threadsRoutes = createRouter()
     async (c) => {
       const post = await getPost(c.req.valid("param").id, isMember(c.var.viewer, c.var.bot));
       return c.json(postJson(post, c.req.valid("query").body), 200);
+    },
+  )
+  .openapi(
+    createRoute({
+      method: "get",
+      path: "/posts/{id}/replies",
+      summary: "回复这一条的楼层，按楼层号升序，每次最多 20 层；after 是上一批最后一层的楼层号",
+      request: {
+        params: IdParam,
+        query: BodyQuery.extend({ after: z.coerce.number().int().min(0).default(0) }),
+      },
+      responses: {
+        200: {
+          description: "不足 20 层说明取完了",
+          content: { "application/json": { schema: z.object({ items: z.array(PostSchema) }) } },
+        },
+        404: errorResponse("回复不存在"),
+      },
+    }),
+    async (c) => {
+      const { after, body } = c.req.valid("query");
+      const members = isMember(c.var.viewer, c.var.bot);
+      const replies = await listReplies(c.req.valid("param").id, members, after);
+      return c.json({ items: replies.map((p) => postJson(p, body)) }, 200);
     },
   )
   .openapi(
