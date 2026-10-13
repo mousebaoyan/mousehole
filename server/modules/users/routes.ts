@@ -5,7 +5,14 @@ import { AppError } from "../../platform/errors.ts";
 import { isMember } from "../../platform/access.ts";
 import { authorize, createRouter, errorResponse, unix } from "../../platform/http.ts";
 import { UserBriefSchema, UserRefSchema } from "./schemas.ts";
-import { AVATARS_DIR, getProfile, getUser, searchUsers } from "./service.ts";
+import {
+  AVATARS_DIR,
+  getProfile,
+  getUser,
+  searchUsers,
+  setEndorsement,
+  setFollow,
+} from "./service.ts";
 
 const MeSchema = z
   .object({
@@ -25,6 +32,8 @@ const UserSchema = UserBriefSchema.extend({
   joined_at: z.number().nullable().openapi({ description: "加入主群的时间" }),
   last_sent_at: z.number().nullable().openapi({ description: "最近一次在主群发言，精确到小时" }),
   qq: z.number().optional().openapi({ description: "qq、member_status、activated 只给成员和 bot" }),
+  followed: z.boolean().optional().openapi({ description: "自己是否关注了 TA；只在登录时有" }),
+  endorsed: z.boolean().optional().openapi({ description: "自己是否认可了 TA；只在登录时有" }),
   member_status: z.string().optional(),
   activated: z.boolean().optional(),
   stats: z.object({
@@ -35,8 +44,20 @@ const UserSchema = UserBriefSchema.extend({
     read_seconds: z.number(),
     threads_read: z.number(),
     posts_read: z.number(),
+    followers: z.number(),
+    following: z.number(),
+    endorsements: z.number(),
   }),
 }).openapi("User");
+
+const UserParam = z.object({ user: UserRefSchema });
+
+const changed = {
+  204: { description: "已更新" },
+  400: errorResponse("是自己"),
+  403: errorResponse("不是成员"),
+  404: errorResponse("用户不存在"),
+};
 
 export const usersRoutes = createRouter()
   .openapi(
@@ -65,15 +86,16 @@ export const usersRoutes = createRouter()
       method: "get",
       path: "/users/{user}",
       summary: "资料卡：群里的资料和论坛里的统计",
-      request: { params: z.object({ user: UserRefSchema }) },
+      request: { params: UserParam },
       responses: {
         200: { description: "用户", content: { "application/json": { schema: UserSchema } } },
         404: errorResponse("用户不存在"),
       },
     }),
     async (c) => {
-      const u = await getUser(c.req.valid("param").user);
-      const members = isMember(c.var.viewer, c.var.bot);
+      const { viewer, bot } = c.var;
+      const u = await getUser(c.req.valid("param").user, viewer?.id ?? null);
+      const members = isMember(viewer, bot);
       return c.json(
         {
           id: u.id,
@@ -92,6 +114,7 @@ export const usersRoutes = createRouter()
             member_status: u.member_status,
             activated: u.activated_at !== null,
           }),
+          ...(viewer && { followed: u.followed, endorsed: u.endorsed }),
           stats: {
             threads: u.thread_count,
             posts: u.post_count,
@@ -100,10 +123,65 @@ export const usersRoutes = createRouter()
             read_seconds: u.read_seconds,
             threads_read: u.threads_read,
             posts_read: u.posts_read,
+            followers: u.followers,
+            following: u.following,
+            endorsements: u.endorsements,
           },
         },
         200,
       );
+    },
+  )
+  .openapi(
+    createRoute({
+      method: "put",
+      path: "/users/{user}/follow",
+      summary: "关注某人：TA 发新主题时通知我",
+      request: { params: UserParam },
+      responses: changed,
+    }),
+    async (c) => {
+      await setFollow(authorize(c, "act"), c.req.valid("param").user, true);
+      return c.body(null, 204);
+    },
+  )
+  .openapi(
+    createRoute({
+      method: "delete",
+      path: "/users/{user}/follow",
+      summary: "取消关注",
+      request: { params: UserParam },
+      responses: changed,
+    }),
+    async (c) => {
+      await setFollow(authorize(c, "act"), c.req.valid("param").user, false);
+      return c.body(null, 204);
+    },
+  )
+  .openapi(
+    createRoute({
+      method: "put",
+      path: "/users/{user}/endorsement",
+      summary: "认可某人的帮助；每人对每人一次",
+      request: { params: UserParam },
+      responses: changed,
+    }),
+    async (c) => {
+      await setEndorsement(authorize(c, "act"), c.req.valid("param").user, true);
+      return c.body(null, 204);
+    },
+  )
+  .openapi(
+    createRoute({
+      method: "delete",
+      path: "/users/{user}/endorsement",
+      summary: "撤回认可",
+      request: { params: UserParam },
+      responses: changed,
+    }),
+    async (c) => {
+      await setEndorsement(authorize(c, "act"), c.req.valid("param").user, false);
+      return c.body(null, 204);
     },
   )
   .openapi(

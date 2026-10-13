@@ -85,3 +85,39 @@ describe("资料卡和个人主页", () => {
     ]);
   });
 });
+
+async function relation(who: Who) {
+  const res = await api.users[":user"].$get({ param: { user: String(author.id) } }, who);
+  if (!res.ok) throw new Error(`status ${res.status}`);
+  const { stats, followed, endorsed } = await res.json();
+  return { followers: stats.followers, endorsements: stats.endorsements, followed, endorsed };
+}
+
+describe("关注和认可", () => {
+  test("关注和认可各算一次，再来一次不变，可以撤回；不能对自己；访客没有自己的状态", async () => {
+    const param = { user: String(author.id) };
+    expect((await api.users[":user"].follow.$put({ param }, reader)).status).toBe(204);
+    await api.users[":user"].follow.$put({ param }, reader);
+    await api.users[":user"].endorsement.$put({ param }, reader);
+    expect(await relation(reader)).toEqual({
+      followers: 1,
+      endorsements: 1,
+      followed: true,
+      endorsed: true,
+    });
+    expect(await relation(guest)).toEqual({
+      followers: 1,
+      endorsements: 1,
+      followed: undefined,
+      endorsed: undefined,
+    });
+
+    await api.users[":user"].endorsement.$delete({ param }, reader);
+    expect(await relation(reader)).toMatchObject({
+      endorsements: 0,
+      endorsed: false,
+      followed: true,
+    });
+    expect((await api.users[":user"].follow.$put({ param }, author.who)).status).toBe(400);
+  });
+});

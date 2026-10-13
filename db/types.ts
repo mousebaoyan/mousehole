@@ -80,6 +80,12 @@ export interface EmailCodes {
   user_id: number;
 }
 
+export interface Endorsements {
+  created_at: Generated<Timestamp>;
+  endorser_id: number;
+  user_id: number;
+}
+
 export interface Events {
   created_at: Generated<Timestamp>;
   data: Json;
@@ -293,6 +299,12 @@ export interface Uploads {
   width: number;
 }
 
+export interface UserFollows {
+  created_at: Generated<Timestamp>;
+  followee_id: number;
+  follower_id: number;
+}
+
 export interface Users {
   activated_at: Timestamp | null;
   allow_proxy: Generated<boolean>;
@@ -327,6 +339,7 @@ export interface DB {
   boards: Boards;
   boosts: Boosts;
   email_codes: EmailCodes;
+  endorsements: Endorsements;
   events: Events;
   group_members: GroupMembers;
   idempotency_keys: IdempotencyKeys;
@@ -347,5 +360,6 @@ export interface DB {
   thread_users: ThreadUsers;
   threads: Threads;
   uploads: Uploads;
+  user_follows: UserFollows;
   users: Users;
 }

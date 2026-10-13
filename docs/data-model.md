@@ -66,7 +66,7 @@
 
 ## 互动与通知
 
-表：`reactions`、`boosts`、`thread_users`、`notifications`。
+表：`reactions`、`boosts`、`thread_users`、`user_follows`、`endorsements`、`notifications`。
 
 - 表情回应每人每条一个，主键 `(post_id, user_id)`，换表情就是覆盖。每个表情都算一次赞：`posts.like_count` 是总数，`posts.reactions` 是各表情的数量，都和写入在同一个事务里更新。
 - 短评每人每层一条，`UNIQUE (post_id, user_id)`，修改就是覆盖，排序位置不变。字数（16 个字，emoji 算一个）由应用按字素计数，库里不设长度约束。
@@ -75,6 +75,7 @@
 
 - 关注级别：`watching` 每个新楼层都通知，`normal` 只在回复我、@我时通知，`muted` 都不通知。发主题时自动设为 `watching`。
 - 收藏是 `thread_users.bookmarked_at`，重复收藏保留第一次的时间。主题的查询都 left join 读者自己的那行（访客没有），详情里的收藏和关注级别、收藏列表都从这里来。
+- 关注用户（`user_follows`）和认可（`endorsements`）每对人一行，不能对自己。关注数、粉丝数、认可数不冗余存，资料卡里直接数，各是一段索引范围。
 - 合并通知：未读期间再次触发同一个 `group_key`，只更新触发者、次数和时间，不新增行。
 - 冻结的账号不再产生新通知。已读超过 180 天的通知每天清理。
 
@@ -155,6 +156,7 @@
 | 重算一个人的成员资格 | `group_members_user` |
 | 未读通知数 | `notifications_unread` |
 | 给关注者发通知 | `thread_users_watchers` |
+| 资料卡的关注数、粉丝数、认可数 | `user_follows` 主键、`user_follows_followee`、`endorsements` 主键 |
 | 收藏列表 | `thread_users_bookmarks` |
 | 已读列表、未读列表、读过的主题数 | `thread_users_read` |
 | 新主题（最近 7 天发布、没打开过） | 主键倒序取最近 7 天的，再排除 `thread_users` 里读过的 |

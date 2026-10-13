@@ -164,9 +164,13 @@ token 由管理员在后台创建，只显示一次。每个 token 绑定一个 
 | 方法 | 路径 | 说明 | 权限 |
 | --- | --- | --- | --- |
 | GET | `/users` | `q`：按名字找成员，最多 8 个，名字以它开头的在前，再按最近活跃；不含 bot 和冻结的账号。编辑器的 @ 补全用 | 已登录 / `read` |
-| GET | `/users/{user}` | 资料卡：显示名、头像、角色、群等级、专属头衔、简介，主群的群名片、入群时间和最近发言时间，以及统计（主题数、回复数、获赞数、认可数、访问天数、阅读时间、读过的主题和回复数）；QQ 号、是否冻结、是否激活只给成员和 bot。注销的账号返回 `404 user_not_found` | 访客 |
+| GET | `/users/{user}` | 资料卡：显示名、头像、角色、群等级、专属头衔、简介，主群的群名片、入群时间和最近发言时间，以及统计（主题数、回复数、获赞数、认可数、访问天数、阅读时间、读过的主题和回复数）；QQ 号、是否冻结、是否激活只给成员和 bot。统计里还有关注数、粉丝数和认可数；登录时带 `followed`、`endorsed`，表示自己是否关注、认可了 TA。注销的账号返回 `404 user_not_found` | 访客 |
 | GET | `/users/{user}/threads` | 发过的主题，最新的在前，每页 30 个，不含匿名内容 | 访客 |
 | GET | `/users/{user}/posts` | 发过的回复（不含主楼），最新的在前，每页 30 个，`cursor` 是上一页最后一条的 ID；每条带所在的主题和正文前 140 个字的纯文本，不含匿名内容 | 访客 |
+| PUT | `/users/{user}/follow` | 关注：TA 发新主题时通知我；不能关注自己（`400`） | 成员 / `act` |
+| DELETE | `/users/{user}/follow` | 取消关注 | 成员 / `act` |
+| PUT | `/users/{user}/endorsement` | 认可 TA 的帮助，每人对每人一次；不能认可自己（`400`） | 成员 / `act` |
+| DELETE | `/users/{user}/endorsement` | 撤回认可 | 成员 / `act` |
 | PATCH | `/users/{user}` | 设置角色、锁定角色 | 管理员 / `admin` |
 | PUT | `/users/{user}/restriction` | 禁言或封禁：`{ type, until, reason }`，`type` 为 `mute` 或 `ban` | 禁言：版主 / `moderate`；封禁：管理员 / `admin` |
 | DELETE | `/users/{user}/restriction` | 解除禁言或封禁 | 同上 |

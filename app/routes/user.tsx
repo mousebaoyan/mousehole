@@ -7,6 +7,7 @@ import { More } from "~/components/thread-feed";
 import { ThreadList } from "~/components/thread-list";
 import { UserAvatar } from "~/components/user-avatar";
 import { UserBadges } from "~/components/user-badges";
+import { RelationButtons, useRelations } from "~/components/user-card";
 import { useNearView } from "~/near-view";
 import { ago, unixNow } from "~/time";
 import type { Route } from "./+types/user.ts";
@@ -48,6 +49,20 @@ export async function loader({ params, request, context }: Route.LoaderArgs) {
 
 type UserPost = NonNullable<Route.ComponentProps["loaderData"]["posts"]>[number];
 
+// Following and 认可, from this page or the profile card anywhere; see useRelations.
+export async function action({ params, request, context }: Route.ActionArgs) {
+  const api = context.get(apiContext).users[":user"];
+  const form = await request.formData();
+  const param = { user: params.id };
+  const follow = form.get("intent") === "follow";
+  const on = form.get(follow ? "followed" : "endorsed") === "true";
+  const res = follow
+    ? await (on ? api.follow.$put({ param }) : api.follow.$delete({ param }))
+    : await (on ? api.endorsement.$put({ param }) : api.endorsement.$delete({ param }));
+  if (res.ok) return { ok: true as const, saved: on };
+  return { ok: false as const, message: (await res.json()).error.message };
+}
+
 // "3.5 小时", "40 分钟".
 function duration(seconds: number) {
   return seconds >= 3600
@@ -68,6 +83,7 @@ const ROLES: Record<string, string> = { admin: "管理员", moderator: "版主" 
 export default function User({ loaderData }: Route.ComponentProps) {
   const { user, tab, threads, posts, next_cursor, now } = loaderData;
   const { stats } = user;
+  const relations = useRelations(user);
   // What the group shows about them; the QQ number only to members.
   const facts: string[] = [];
   if (user.qq !== undefined) facts.push(`QQ ${user.qq}`);
@@ -111,6 +127,19 @@ export default function User({ loaderData }: Route.ComponentProps) {
               ))}
             </p>
           )}
+          <p className="mt-2 flex gap-4 text-meta text-muted-foreground">
+            {[
+              { label: "关注", value: relations.following },
+              { label: "粉丝", value: relations.followers },
+              { label: "认可", value: relations.endorsements },
+            ].map((n) => (
+              <span key={n.label}>
+                <span className="font-semibold text-foreground tabular-nums">{n.value}</span>{" "}
+                {n.label}
+              </span>
+            ))}
+          </p>
+          <RelationButtons relations={relations} className="mt-4 max-w-72" />
         </div>
       </header>
 
