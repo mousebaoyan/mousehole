@@ -8,14 +8,13 @@ import {
   MessagesSquare,
   Reply,
 } from "lucide-react";
-import { useState } from "react";
 import { data } from "react-router";
 import { BoardBadge } from "~/components/board-badge";
+import { useComposer } from "~/components/composer";
 import { ThreadRow } from "~/components/thread-row";
 import { Button } from "~/components/ui/button";
-import { boards, checkInPosts, threads, topicPosts, type Post } from "~/draft-data";
+import { boards, checkInPosts, threads, topicPosts } from "~/draft-data";
 import type { Route } from "./+types/topic.ts";
-import { Composer } from "./composer.tsx";
 import { FloorNav } from "./floor-timeline.tsx";
 import { PostCard } from "./post-card.tsx";
 
@@ -38,8 +37,8 @@ export function loader({ params }: Route.LoaderArgs) {
 export default function Topic({
   loaderData: { thread, board, posts, suggested },
 }: Route.ComponentProps) {
-  // undefined: closed; null: replying to the thread; a post: replying to that floor.
-  const [replyTo, setReplyTo] = useState<Post | null | undefined>(undefined);
+  const openComposer = useComposer();
+  const target = { id: thread.id, title: thread.title };
 
   return (
     <div className="flex gap-8">
@@ -80,13 +79,18 @@ export default function Topic({
               key={post.id}
               post={post}
               op={post.author.id === thread.author.id}
-              onReply={() => setReplyTo(post)}
+              onReply={() =>
+                openComposer({
+                  thread: target,
+                  replyTo: { floor: post.floor, name: post.author.name },
+                })
+              }
             />
           ))}
         </ol>
 
         <div className="mt-4 flex flex-wrap items-center gap-2 border-t pt-5 sm:pl-[4.25rem]">
-          <Button size="lg" onClick={() => setReplyTo(null)}>
+          <Button size="lg" onClick={() => openComposer({ thread: target, replyTo: null })}>
             <Reply /> 回复
           </Button>
           <Button size="lg" variant="outline">
@@ -108,10 +112,6 @@ export default function Topic({
             ))}
           </ul>
         </section>
-
-        {replyTo !== undefined && (
-          <Composer replyTo={replyTo} onClose={() => setReplyTo(undefined)} />
-        )}
       </article>
 
       <aside className="hidden w-56 shrink-0 xl:block">

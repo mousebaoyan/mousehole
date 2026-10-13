@@ -8,7 +8,11 @@ import { createPortal } from "react-dom";
 export const menuItem =
   "flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left hover:bg-accent [&_svg]:size-4 [&_svg]:text-muted-foreground";
 
-function useDismiss(open: boolean, close: () => void, inside?: RefObject<HTMLElement | null>) {
+export function useDismiss(
+  open: boolean,
+  close: () => void,
+  inside?: RefObject<HTMLElement | null>,
+) {
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (open && e.key === "Escape") close();

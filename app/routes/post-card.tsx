@@ -1,5 +1,6 @@
 import {
   Bookmark,
+  Check,
   CircleCheck,
   Ellipsis,
   Flag,
@@ -8,24 +9,31 @@ import {
   Reply,
   Rocket,
   SmilePlus,
+  X,
 } from "lucide-react";
-import { useRef, useState, type Ref } from "react";
+import { useEffect, useRef, useState, type Ref } from "react";
+import { useRouteLoaderData } from "react-router";
 import { cn } from "cn";
-import { Dropdown, menuItem } from "~/components/disclosure";
+import { Dropdown, menuItem, useDismiss } from "~/components/disclosure";
+import { EmojiButton } from "~/components/emoji-button";
 import { UserAvatar } from "~/components/user-avatar";
 import { UserBadges } from "~/components/user-badges";
 import { Button, buttonVariants } from "~/components/ui/button";
-import { Input } from "~/components/ui/input";
 import { Textarea } from "~/components/ui/textarea";
 import type { Post } from "~/draft-data";
+import type { loader as forumLoader } from "./forum-layout.tsx";
 
 // Busy posts can collect dozens of boosts; past this many they fold behind a counter.
 const BOOSTS_SHOWN = 6;
 
+const BOOST_MAX = 16;
+
+// Counts what people see as characters, so an emoji is one.
+const graphemes = new Intl.Segmenter("zh", { granularity: "grapheme" });
+
 const reportReasons = ["垃圾广告", "人身攻击", "违法违规", "其他"];
 
 export function PostCard({ post, op, onReply }: { post: Post; op: boolean; onReply: () => void }) {
-  const [boosting, setBoosting] = useState(false);
   const [allBoosts, setAllBoosts] = useState(false);
   const report = useRef<HTMLDialogElement>(null);
   const boosts = post.boosts ?? [];
@@ -99,7 +107,7 @@ export function PostCard({ post, op, onReply }: { post: Post; op: boolean; onRep
           </ul>
         )}
 
-        <div className="mt-3 flex flex-wrap items-center gap-1.5">
+        <div className="relative mt-3 flex flex-wrap items-center gap-1.5">
           {post.reactions.map((r) => (
             <button
               key={r.emoji}
@@ -116,16 +124,7 @@ export function PostCard({ post, op, onReply }: { post: Post; op: boolean; onRep
           <Button variant="ghost" size="icon-sm" aria-label="表情回应" title="表情回应">
             <SmilePlus />
           </Button>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            aria-label="短评"
-            title="短评"
-            aria-expanded={boosting}
-            onClick={() => setBoosting(!boosting)}
-          >
-            <Rocket />
-          </Button>
+          <BoostButton />
           <div className="ml-auto flex items-center text-muted-foreground">
             <Button variant="ghost" size="sm" onClick={onReply}>
               <Reply /> 回复
@@ -159,23 +158,6 @@ export function PostCard({ post, op, onReply }: { post: Post; op: boolean; onRep
           </div>
         </div>
 
-        {boosting && (
-          <form
-            className="mt-2 flex max-w-sm items-center gap-2"
-            onSubmit={(e) => e.preventDefault()}
-          >
-            <Input
-              ref={(input) => input?.focus()}
-              maxLength={16}
-              placeholder="16 字以内"
-              className="h-8"
-            />
-            <Button type="submit" size="sm" className="h-8 px-3">
-              发送
-            </Button>
-          </form>
-        )}
-
         {post.replies && (
           <div className="mt-3 rounded-xl bg-secondary/60 px-3 py-2">
             {post.replies.map((r) => (
@@ -203,6 +185,86 @@ export function PostCard({ post, op, onReply }: { post: Post; op: boolean; onRep
 
       <ReportDialog ref={report} floor={post.floor} />
     </li>
+  );
+}
+
+// Floats over the content below instead of pushing it down, like linux.do's. It is placed
+// against the action row rather than the button, so it fits on narrow screens.
+function BoostButton() {
+  const [open, setOpen] = useState(false);
+  const [text, setText] = useState("");
+  const root = useRef<HTMLDivElement>(null);
+  const input = useRef<HTMLInputElement>(null);
+  const me = useRouteLoaderData<typeof forumLoader>("routes/forum-layout")?.me;
+  useDismiss(open, () => setOpen(false), root);
+  const length = [...graphemes.segment(text)].length;
+
+  useEffect(() => {
+    if (open) input.current?.focus();
+  }, [open]);
+
+  return (
+    <div ref={root}>
+      <Button
+        variant="ghost"
+        size="icon-sm"
+        aria-label="短评"
+        title="短评"
+        aria-expanded={open}
+        onClick={() => setOpen(!open)}
+      >
+        <Rocket />
+      </Button>
+      {open && (
+        <form
+          className="absolute top-full left-0 z-30 mt-2 flex w-[min(24rem,100%)] items-center gap-1 rounded-full border bg-popover py-1 pr-1 pl-1.5 shadow-lg animate-in fade-in zoom-in-95"
+          onSubmit={(e) => {
+            e.preventDefault();
+            setText("");
+            setOpen(false);
+          }}
+        >
+          {me && <UserAvatar user={{ id: me.id, name: me.display_name }} className="size-7" />}
+          <input
+            ref={input}
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            aria-label="短评"
+            placeholder="短评…"
+            className="min-w-0 flex-1 bg-transparent px-1.5 text-sm outline-none placeholder:text-muted-foreground"
+          />
+          {length > BOOST_MAX - 4 && (
+            <span
+              className={cn(
+                "text-xs tabular-nums",
+                length > BOOST_MAX ? "text-destructive" : "text-muted-foreground",
+              )}
+            >
+              {length}/{BOOST_MAX}
+            </span>
+          )}
+          <EmojiButton target={input} onChange={setText} side="bottom" />
+          <Button
+            type="submit"
+            size="icon-sm"
+            className="rounded-full"
+            aria-label="发送"
+            disabled={length === 0 || length > BOOST_MAX}
+          >
+            <Check />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            className="rounded-full"
+            aria-label="取消"
+            onClick={() => setOpen(false)}
+          >
+            <X />
+          </Button>
+        </form>
+      )}
+    </div>
   );
 }
 
