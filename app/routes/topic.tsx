@@ -12,6 +12,7 @@ import { stamp, unixNow } from "~/time";
 import type { Route } from "./+types/topic.ts";
 import { FloorNav, FloorProgress, useCurrentFloor, type Floors } from "./floor-timeline.tsx";
 import { PostCard } from "./post-card.tsx";
+import { REACTIONS } from "./reactions.tsx";
 import { TopicHeader } from "./topic-header.tsx";
 
 // Floors come 20 at a time; see design §9.
@@ -83,6 +84,14 @@ export async function action({ params, request, context }: Route.ActionArgs) {
         locked: form.has("locked") ? text("locked") === "true" : undefined,
       },
     });
+    if (res.ok) return { ok: true as const, floor };
+    return { ok: false as const, message: (await res.json()).error.message };
+  }
+  if (text("intent") === "react") {
+    const emoji = REACTIONS.find((r) => r.key === text("emoji"))?.key;
+    const res = emoji
+      ? await api.posts[":id"].reaction.$put({ param: post, json: { emoji } })
+      : await api.posts[":id"].reaction.$delete({ param: post });
     if (res.ok) return { ok: true as const, floor };
     return { ok: false as const, message: (await res.json()).error.message };
   }

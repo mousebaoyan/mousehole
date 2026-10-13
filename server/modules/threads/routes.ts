@@ -12,6 +12,7 @@ import {
 } from "../../platform/http.ts";
 import { renderMarkdown } from "../../platform/markdown.ts";
 import { rateLimit } from "../../platform/rate-limit.ts";
+import { myReactions } from "../reactions/service.ts";
 import { showImages } from "../uploads/service.ts";
 import { UserBriefSchema } from "../users/schemas.ts";
 import {
@@ -67,6 +68,10 @@ const PostSchema = z
     reply_to: z.object({ id: z.number(), floor: z.number(), author: UserBriefSchema }).nullable(),
     reply_count: z.number(),
     like_count: z.number(),
+    reactions: z
+      .record(z.string(), z.number())
+      .openapi({ description: '各表情的数量，例如 { heart: 2, "+1": 1 }' }),
+    my_reaction: z.string().nullable().openapi({ description: "自己的表情回应；访客为 null" }),
     deleted: z.boolean().openapi({ description: "已删除的楼层保留楼层号，没有正文" }),
     edited_at: z.number().nullable(),
     created_at: z.number(),
@@ -103,7 +108,7 @@ function threadDetailJson(t: Thread) {
 }
 
 // Only one form of the body travels: the HTML for pages, the Markdown for editing and for bots.
-function postJson(p: Post, form: "html" | "markdown") {
+function postJson(p: Post, form: "html" | "markdown", mine: Map<number, string>) {
   const deleted = p.deleted_at !== null;
   const text = deleted ? "" : form === "html" ? p.html : p.body;
   return {
@@ -116,6 +121,8 @@ function postJson(p: Post, form: "html" | "markdown") {
     reply_to: p.reply_to,
     reply_count: p.reply_count,
     like_count: p.like_count,
+    reactions: p.reactions,
+    my_reaction: mine.get(p.id) ?? null,
     deleted,
     edited_at: p.edited_at && unix(p.edited_at),
     created_at: unix(p.created_at),
@@ -257,7 +264,11 @@ export const threadsRoutes = createRouter()
       const members = isMember(c.var.viewer, c.var.bot);
       const range = before === undefined ? { after: after ?? 0 } : { before };
       const posts = await listPosts(c.req.valid("param").id, members, range);
-      return c.json({ items: posts.map((p) => postJson(p, body)) }, 200);
+      const mine = await myReactions(
+        c.var.viewer?.id ?? null,
+        posts.map((p) => p.id),
+      );
+      return c.json({ items: posts.map((p) => postJson(p, body, mine)) }, 200);
     },
   )
   .openapi(
@@ -270,7 +281,8 @@ export const threadsRoutes = createRouter()
     }),
     async (c) => {
       const post = await getPost(c.req.valid("param").id, isMember(c.var.viewer, c.var.bot));
-      return c.json(postJson(post, c.req.valid("query").body), 200);
+      const mine = await myReactions(c.var.viewer?.id ?? null, [post.id]);
+      return c.json(postJson(post, c.req.valid("query").body, mine), 200);
     },
   )
   .openapi(
@@ -294,7 +306,11 @@ export const threadsRoutes = createRouter()
       const { after, body } = c.req.valid("query");
       const members = isMember(c.var.viewer, c.var.bot);
       const replies = await listReplies(c.req.valid("param").id, members, after);
-      return c.json({ items: replies.map((p) => postJson(p, body)) }, 200);
+      const mine = await myReactions(
+        c.var.viewer?.id ?? null,
+        replies.map((p) => p.id),
+      );
+      return c.json({ items: replies.map((p) => postJson(p, body, mine)) }, 200);
     },
   )
   .openapi(
@@ -361,7 +377,7 @@ export const threadsRoutes = createRouter()
         c.req.valid("param").id,
         c.req.valid("json"),
       );
-      return c.json(postJson(post, "html"), 201);
+      return c.json(postJson(post, "html", new Map()), 201);
     },
   )
   .openapi(
@@ -443,7 +459,7 @@ export const threadsRoutes = createRouter()
         c.req.valid("param").id,
         c.req.valid("json").content.markdown,
       );
-      return c.json(postJson(post, "html"), 200);
+      return c.json(postJson(post, "html", await myReactions(viewer.id, [post.id])), 200);
     },
   )
   .openapi(

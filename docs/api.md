@@ -217,9 +217,9 @@ token 由管理员在后台创建，只显示一次。每个 token 绑定一个 
 | PATCH | `/posts/{id}` | 修改 `content`，旧的正文进编辑记录；版主也能改别人的，还可以改 `status`（审核通过或隐藏），可附 `reason`；锁定的主题只有版主能改 | 作者、版主 / `act`、`moderate` |
 | DELETE | `/posts/{id}` | 删除；楼层号保留，显示"该楼已删除"。主楼不能单独删除（`400`），要删就删整个主题 | 作者、版主 / `act`、`moderate` |
 | GET | `/posts/{id}/revisions` | 编辑记录，最近的在前：每次修改之前的 `body`，改标题时还有旧的 `title`，以及修改人 | 作者、版主 / `read` |
-| PUT | `/posts/{id}/reaction` | 表情回应：`{ emoji }`，取 `heart`（点赞）、`+1`、`laughing`、`open_mouth`、`clap`、`tada`、`hugs`、`thinking`、`sob`、`mouse` 之一；每人一个，已有就替换 | 成员 / `act` |
+| PUT | `/posts/{id}/reaction` | 表情回应：`{ emoji }`，取 `heart`（点赞）、`+1`、`laughing`、`open_mouth`、`clap`、`tada`、`hugs`、`thinking`、`sob`、`mouse` 之一；每人一个，已有就替换；不能回应自己的回复 | 成员 / `act` |
 | DELETE | `/posts/{id}/reaction` | 取消自己的回应 | 成员 / `act` |
-| GET | `/posts/{id}/reactions` | 谁回应了什么：可按 `emoji` 筛选，`cursor` 翻页 | 访客 |
+| GET | `/posts/{id}/reactions` | 谁回应了什么，最近的在前，每次 50 个：可按 `emoji` 筛选，`cursor` 翻页 | 访客 |
 | POST | `/posts/{id}/report` | 举报：`{ reason }` | 成员 / `act` |
 | PUT | `/posts/{id}/boost` | 留下或修改自己在这一层的短评：`{ body }`，不超过 16 个字 | 成员 / `act` |
 | DELETE | `/posts/{id}/boost` | 删除自己的短评 | 成员 / `act` |

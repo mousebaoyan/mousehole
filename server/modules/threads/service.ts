@@ -1,5 +1,5 @@
-import { sql, type Transaction } from "kysely";
-import type { DB } from "../../../db/types.ts";
+import { sql, type RawBuilder, type Transaction } from "kysely";
+import type { DB, Json } from "../../../db/types.ts";
 import { STAFF, type Actor, type Viewer } from "../../platform/access.ts";
 import { db } from "../../platform/db.ts";
 import { AppError } from "../../platform/errors.ts";
@@ -10,7 +10,7 @@ import { countBoard, countTags, findTags, getBoard, getTagId } from "../boards/s
 import { onebotToMarkdown, type Segment } from "../qq/onebot.ts";
 import { assertNotLinked, findLink, linkSource, type Source } from "../qq/service.ts";
 import { fetchUpload, linkUploads, showImages } from "../uploads/service.ts";
-import { countUserPosts, membersByQq, userBriefs } from "../users/service.ts";
+import { countLikes, countUserPosts, membersByQq, userBriefs } from "../users/service.ts";
 
 export const PAGE_SIZE = 30;
 // Longest Markdown a post may have.
@@ -224,7 +224,7 @@ function selectPosts() {
       "posts.via",
       "posts.reply_count",
       "posts.like_count",
-      "posts.reactions",
+      sql<Record<string, number>>`posts.reactions`.as("reactions"),
       "posts.edited_at",
       "posts.created_at",
       "posts.deleted_at",
@@ -782,6 +782,44 @@ export async function deletePost(
       target_id: postId,
     });
   });
+}
+
+// ---- Reactions
+
+// One emoji's count in a post's `reactions`, dropped when it reaches zero.
+function adjust(json: RawBuilder<Json>, emoji: string, delta: number) {
+  const count = sql`coalesce((${json} ->> ${emoji}::text)::integer, 0) + ${delta}::integer`;
+  return sql<Json>`CASE WHEN ${count} > 0
+    THEN jsonb_set(${json}, ARRAY[${emoji}::text], to_jsonb(${count}))
+    ELSE ${json} - ${emoji}::text END`;
+}
+
+// Kept with the reaction, in its transaction: the post's counts by emoji, and since every reaction
+// is a like, the likes of the post, of its thread when it is the opening post, and of its author.
+export async function countReaction(
+  trx: Transaction<DB>,
+  postId: number,
+  { from, to }: { from: string | null; to: string | null },
+) {
+  let reactions = sql<Json>`posts.reactions`;
+  if (from !== null) reactions = adjust(reactions, from, -1);
+  if (to !== null) reactions = adjust(reactions, to, 1);
+  const likes = (to === null ? 0 : 1) - (from === null ? 0 : 1);
+  const post = await trx
+    .updateTable("posts")
+    .set((eb) => ({ reactions, like_count: eb("like_count", "+", likes) }))
+    .where("id", "=", postId)
+    .returning(["thread_id", "floor", "author_id"])
+    .executeTakeFirstOrThrow();
+  if (likes === 0) return;
+  if (post.floor === 1) {
+    await trx
+      .updateTable("threads")
+      .set((eb) => ({ like_count: eb("like_count", "+", likes) }))
+      .where("id", "=", post.thread_id)
+      .execute();
+  }
+  await countLikes(trx, post.author_id, likes);
 }
 
 // ---- Views
