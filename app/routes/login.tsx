@@ -109,7 +109,7 @@ export default function Login({ loaderData, actionData }: Route.ComponentProps) 
       </div>
       <a
         href="https://mousebaoyan.cn/join"
-        className="mt-6 text-meta text-muted-foreground hover:text-foreground"
+        className="mt-4 py-2 text-meta text-muted-foreground hover:text-foreground"
       >
         加入鼠群
       </a>

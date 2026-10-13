@@ -36,7 +36,7 @@ export default function Overview({ loaderData: { members, groups } }: Route.Comp
           <p className="text-sm text-muted-foreground">还没有关联 QQ 群</p>
         ) : (
           <div className="-mx-5 overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full text-sm whitespace-nowrap">
               <thead className="text-left text-meta text-muted-foreground">
                 <tr>
                   <th className="px-5 py-2 font-medium">群</th>

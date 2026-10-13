@@ -4,10 +4,10 @@ import { Link, Outlet } from "react-router";
 export default function LoginLayout() {
   return (
     <div className="flex min-h-svh flex-col bg-secondary/50">
-      <header className="px-4 py-4 sm:px-6">
+      <header className="px-4 py-2 sm:px-6">
         <Link
           to="/"
-          className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
+          className="inline-flex items-center gap-1.5 py-2 text-sm text-muted-foreground hover:text-foreground"
         >
           <ArrowLeft className="size-4" /> 返回论坛
         </Link>
