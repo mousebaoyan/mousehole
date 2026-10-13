@@ -58,6 +58,10 @@
 - 发楼层：在同一个事务里先 `UPDATE threads SET floor_count = floor_count + 1 ... RETURNING floor_count` 分配楼层号，再插入回复，并更新计数和最后回复。这条 UPDATE 会锁住主题行，同一主题的并发回复因此按顺序拿到楼层号。
 - 删除只设 `deleted_at`，楼层号保留，页面显示"该楼已删除"，指向某一楼的链接不会错位。
 - "最新发布"排序直接按 `id DESC` 走主键，不用单独建索引。
+- 计数：`threads.reply_count` 和 `boards.post_count`、`users.post_count` 只算回复（不含主楼），`users.thread_count` 算发过的主题，都和发帖在同一个事务里更新。
+- 列表翻页的游标是最后一个主题的 `last_post_at`（微秒，JavaScript 的 Date 只到毫秒）和 ID，"最新发布"是 ID。
+- 热门：最近 7 天发布的主题按 `(回复数 × 2 + 赞数 + 浏览数 / 20 + 1) / (发布至今的小时数 + 2)^1.5` 排序，取前 500 个，在内存里存 10 分钟；读列表时再按可见范围和筛选条件过滤。
+- 浏览数在内存里累计，每分钟批量写一次；同一个人（登录用户按 ID，访客按 IP）一分钟内只算一次，bot 的请求不算。
 
 ## 互动与通知
 

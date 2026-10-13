@@ -1,6 +1,6 @@
-import { sql, type Updateable } from "kysely";
+import { sql, type Transaction, type Updateable } from "kysely";
 import { DatabaseError } from "pg";
-import type { Boards, Tags } from "../../../db/types.ts";
+import type { Boards, DB, Tags } from "../../../db/types.ts";
 import type { Actor } from "../../platform/access.ts";
 import { db } from "../../platform/db.ts";
 import { AppError } from "../../platform/errors.ts";
@@ -261,4 +261,57 @@ export async function deleteTag(actor: Actor, id: number) {
       data: { name: deleted.name },
     });
   });
+}
+
+export async function getTagId(name: string) {
+  const tag = await db.selectFrom("tags").select("id").where("name", "=", name).executeTakeFirst();
+  if (!tag) throw tagNotFound();
+  return tag.id;
+}
+
+// Tag IDs for names a thread is being given; every name must exist.
+export async function findTags(names: string[]) {
+  if (names.length === 0) return [];
+  const rows = await db
+    .selectFrom("tags")
+    .select(["id", "name"])
+    .where("name", "in", names)
+    .execute();
+  const missing = names.find((n) => !rows.some((r) => r.name === n));
+  if (missing !== undefined) {
+    throw new AppError(400, "invalid_request", `tags：没有「${missing}」这个标签`);
+  }
+  return rows.map((r) => r.id);
+}
+
+// Kept with the threads they count, in the same transaction: public, undeleted threads only.
+export async function countThreads(
+  trx: Transaction<DB>,
+  {
+    boardId,
+    tagIds,
+    threads,
+    posts,
+  }: {
+    boardId: number;
+    tagIds: number[];
+    threads: number;
+    posts: number;
+  },
+) {
+  await trx
+    .updateTable("boards")
+    .set((eb) => ({
+      thread_count: eb("thread_count", "+", threads),
+      post_count: eb("post_count", "+", posts),
+    }))
+    .where("id", "=", boardId)
+    .execute();
+  if (threads !== 0 && tagIds.length > 0) {
+    await trx
+      .updateTable("tags")
+      .set((eb) => ({ thread_count: eb("thread_count", "+", threads) }))
+      .where("id", "in", tagIds)
+      .execute();
+  }
 }

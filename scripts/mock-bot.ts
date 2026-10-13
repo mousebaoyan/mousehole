@@ -350,8 +350,38 @@ async function demo() {
     asGuest.status === 404 && asBot.status === 200,
     `访客 ${asGuest.status}，bot ${asBot.status}`,
   );
+
+  // A member's message turned into a thread; a retry with the same key must not post twice.
+  const post = {
+    method: "POST",
+    headers: { ...asMember, "idempotency-key": `demo-${run}-thread` },
+    body: { board: slug, title: "群里转来的问题", content: { markdown: "夏令营**几号**截止？" } },
+  };
+  const thread = await call("/threads", post);
+  const retried = await call("/threads", post);
+  const threadId = Number(field(thread.data, "id"));
+  check(
+    "代成员发主题，同一个幂等键重试不会重复发",
+    thread.status === 201 && field(retried.data, "id") === threadId,
+    `主题 ${threadId}`,
+  );
+  const floors = await call(`/threads/${threadId}/posts`);
+  const opening = Fields.array().parse(field(floors.data, "items")).at(0);
+  const replied = await call(`/threads/${threadId}/posts`, {
+    method: "POST",
+    headers: asMember,
+    body: { content: { markdown: "6 月 10 日" }, reply_to_id: opening?.id },
+  });
+  check(
+    "回复主楼：排在 2 楼，记下回复的是 1 楼",
+    field(replied.data, "floor") === 2 &&
+      Fields.safeParse(field(replied.data, "reply_to")).data?.floor === 1,
+    replied.data,
+  );
+  const hidden = await call(`/threads/${threadId}`, { token: null });
+  check("访客打不开仅成员版块里的主题", hidden.status === 404, `HTTP ${hidden.status}`);
   const removed = await call(`/boards/${slug}`, { method: "DELETE" });
-  check("删除空版块", removed.status === 204, `HTTP ${removed.status}`);
+  check("有过主题的版块不能删", removed.status === 409, removed.data);
 
   const failed = results.filter(([, ok]) => !ok).length;
   console.log(`\n${results.length - failed}/${results.length} 项通过${failed ? "，有失败项" : ""}`);
