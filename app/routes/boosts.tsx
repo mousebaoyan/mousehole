@@ -8,6 +8,7 @@ import { EmojiButton } from "~/components/emoji-button";
 import { Button } from "~/components/ui/button";
 import { UserAvatar } from "~/components/user-avatar";
 import { useMe } from "~/forum";
+import { useSavedValue } from "~/saved-value";
 
 const BOOST_MAX = 16;
 
@@ -20,25 +21,17 @@ type Boost = PostItem["boosts"][number];
 // rocket, never by id.
 type Shown = { id: number | null; user: { id: number; display_name: string }; body: string };
 
-type Saved = { ok: true; boost: string | null } | { ok: false; message: string };
-
 // The floor's boosts as loaded, or all of them once asked for, with the reader's own as it
-// stands: shown at once while being saved, in its place when changed, last when new. A failed
-// save leaves it as it was.
+// stands: in its place when changed, last when new.
 export function useBoosts(post: PostItem, threadId: number) {
   const me = useMe();
-  const saving = useFetcher<Saved>();
   const all = useFetcher<{ items: Boost[] }>();
-  const [saved, setSaved] = useState({ boost: post.my_boost, data: saving.data });
-  if (saving.data !== saved.data) {
-    setSaved({ boost: saving.data?.ok ? saving.data.boost : saved.boost, data: saving.data });
-  }
-  useEffect(() => {
-    if (saving.state === "idle" && saving.data?.ok === false) alert(saving.data.message);
-  }, [saving.state, saving.data]);
-
-  const pending = saving.formData?.get("body");
-  const mine = typeof pending === "string" ? pending || null : saved.boost;
+  const { value: mine, save } = useSavedValue(
+    post.my_boost,
+    `/t/${threadId}`,
+    "body",
+    (body) => body || null,
+  );
   const loaded: Shown[] = all.data?.items ?? post.boosts;
   let shown = loaded;
   if (me) {
@@ -58,12 +51,7 @@ export function useBoosts(post: PostItem, threadId: number) {
     shown,
     hidden: count - shown.length,
     mine,
-    save: (body: string | null) => {
-      void saving.submit(
-        { intent: "boost", post_id: post.id, body: body ?? "" },
-        { method: "post", action: `/t/${threadId}`, defaultShouldRevalidate: false },
-      );
-    },
+    save: (body: string | null) => save({ intent: "boost", post_id: post.id, body: body ?? "" }),
     loadingAll: all.state !== "idle",
     loadAll: () => {
       void all.load(`/t/${threadId}/p/${post.id}/boosts`);

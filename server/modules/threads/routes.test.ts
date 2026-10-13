@@ -59,6 +59,25 @@ async function floors(thread: number, query: { after?: string; before?: string }
   return (await posts(thread, query)).map((p) => p.floor);
 }
 
+async function detail(thread: number, who: { headers: Record<string, string> } = member) {
+  const res = await api.threads[":id"].$get({ param: { id: String(thread) } }, who);
+  if (!res.ok) throw new Error(`status ${res.status}`);
+  return res.json();
+}
+
+function bookmark(thread: number, on: boolean) {
+  const param = { id: String(thread) };
+  return on
+    ? api.threads[":id"].bookmark.$put({ param }, member)
+    : api.threads[":id"].bookmark.$delete({ param }, member);
+}
+
+async function bookmarked() {
+  const res = await api.threads.$get({ query: { view: "bookmarked" } }, member);
+  if (!res.ok) throw new Error(`status ${res.status}`);
+  return (await res.json()).items.map((t) => t.id);
+}
+
 describe("发主题和回复", () => {
   test("并发回复按顺序拿到楼层号，计数都对", async () => {
     const board = await newBoard();
@@ -69,8 +88,7 @@ describe("发主题和回复", () => {
     expect(results.map((r) => r.status)).toEqual(Array(10).fill(201));
 
     expect(await floors(thread)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]);
-    const detail = await (await api.threads[":id"].$get({ param: { id: String(thread) } })).json();
-    expect(detail).toMatchObject({ reply_count: 10, floor_count: 11 });
+    expect(await detail(thread)).toMatchObject({ reply_count: 10, floor_count: 11 });
     const counts = await db
       .selectFrom("boards")
       .select(["thread_count", "post_count"])
@@ -218,6 +236,33 @@ describe("读主题", () => {
       .where("id", "=", thread)
       .executeTakeFirstOrThrow();
     expect(view_count).toBe(2);
+  });
+});
+
+describe("收藏和关注", () => {
+  test("发主题的人自动关注；访客的主题详情里没有自己的状态", async () => {
+    const thread = await newThread(await newBoard());
+    expect(await detail(thread)).toMatchObject({ bookmarked: false, notify_level: "watching" });
+    expect(await detail(thread, { headers: {} })).not.toHaveProperty("notify_level");
+
+    const param = { id: String(thread) };
+    await api.threads[":id"].subscription.$put({ param, json: { level: "muted" } }, member);
+    expect(await detail(thread)).toMatchObject({ notify_level: "muted" });
+  });
+
+  test("收藏列表按收藏时间排，再收藏一次不挪位置；取消后就不在了；要登录", async () => {
+    const board = await newBoard();
+    const first = await newThread(board);
+    const second = await newThread(board);
+    expect((await bookmark(first, true)).status).toBe(204);
+    await bookmark(second, true);
+    await bookmark(first, true);
+    expect(await bookmarked()).toEqual([second, first]);
+    expect(await detail(first)).toMatchObject({ bookmarked: true });
+
+    await bookmark(second, false);
+    expect(await bookmarked()).toEqual([first]);
+    expect((await api.threads.$get({ query: { view: "bookmarked" } })).status).toBe(401);
   });
 });
 

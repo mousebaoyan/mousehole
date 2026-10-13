@@ -6,6 +6,7 @@ export default [
     route("b/:slug", "routes/board.tsx"),
     route("t/:id", "routes/topic.tsx"),
     route("new", "routes/new-thread.tsx"),
+    route("my/bookmarks", "routes/my-bookmarks.tsx"),
   ]),
   layout("routes/login-layout.tsx", [
     route("login", "routes/login.tsx"),

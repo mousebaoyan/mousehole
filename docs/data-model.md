@@ -60,7 +60,7 @@
 - 编辑：`UPDATE posts ... RETURNING edit_count, old.body` 一步拿到新的版本号和旧正文，再插入 `post_revisions`，并发编辑不会撞号。改标题也算主楼的一次编辑，旧标题存在 `post_revisions.title`。
 - "最新发布"排序直接按 `id DESC` 走主键，不用单独建索引。
 - 计数：`threads.reply_count` 和 `boards.post_count`、`users.post_count` 只算回复（不含主楼），`users.thread_count` 算发过的主题，都和发帖在同一个事务里更新。
-- 列表翻页的游标是最后一个主题的 `last_post_at`（微秒，JavaScript 的 Date 只到毫秒）和 ID，"最新发布"是 ID。
+- 列表翻页的游标是最后一个主题的 `last_post_at`（微秒，JavaScript 的 Date 只到毫秒）和 ID，"最新发布"是 ID，收藏列表是 `thread_users.bookmarked_at`（微秒）和 ID。
 - 热门：最近 7 天发布的主题按 `(回复数 × 2 + 赞数 + 浏览数 / 20 + 1) / (发布至今的小时数 + 2)^1.5` 排序，取前 500 个，在内存里存 10 分钟；读列表时再按可见范围和筛选条件过滤。
 - 浏览数在内存里累计，每分钟批量写一次；同一个人（登录用户按 ID，访客按 IP）一分钟内只算一次，bot 的请求不算。
 
@@ -74,6 +74,7 @@
 - 短评通知的 `type` 是 `boost`，和点赞一样按楼层合并。
 
 - 关注级别：`watching` 每个新楼层都通知，`normal` 只在回复我、@我时通知，`muted` 都不通知。发主题时自动设为 `watching`。
+- 收藏是 `thread_users.bookmarked_at`，重复收藏保留第一次的时间。主题的查询都 left join 读者自己的那行（访客没有），详情里的收藏和关注级别、收藏列表都从这里来。
 - 合并通知：未读期间再次触发同一个 `group_key`，只更新触发者、次数和时间，不新增行。
 - 冻结的账号不再产生新通知。已读超过 180 天的通知每天清理。
 
