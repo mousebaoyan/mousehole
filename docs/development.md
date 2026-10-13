@@ -83,6 +83,8 @@ test/                   Vitest 的全局准备：测试用的数据库
 - 数据走 loader 和 action，提交用 `<Form>` 或 `useFetcher`。不用 `useEffect` 拉数据或同步派生状态，不引入全局状态库和请求库（Redux、Zustand、TanStack Query 等）。
 - React Compiler 已开启，不手写 `useMemo`、`useCallback`、`memo`。
 - 组件先用 shadcn/ui（用它的 CLI 加进仓库再改）；样式写 Tailwind 工具类，除了主题变量不写单独的 CSS。
+- 每个页面都会加载的组件不用 Base UI：按钮、头像是普通元素，顶栏的菜单和抽屉是 `components/disclosure.tsx` 里手写的，Base UI 的菜单和对话框连同定位库要多出约 40KB gzip。Base UI 只用在个别页面才需要的复杂控件上（标签页、对话框、下拉选择等），它们随路由拆分，只在用到的页面加载。
+- 类名冲突要靠 `cn()` 合并才能覆盖（`cva` 只拼接不合并），比如 `buttonVariants({ className: "hidden" })` 已经合并过，可以直接用。
 - 文案直接写在组件里，不引入 i18n 框架。时间统一按北京时间（`Asia/Shanghai`）显示，这样服务端和浏览器渲染出来的结果一致。
 - 先保证手机上好用：大部分人是在 QQ 里点链接打开的，要能在 QQ 内置浏览器里正常使用。
 - 带宽很紧（[总体设计 §11.2](design.md#112-带宽)）：不用网络字体；不往浏览器里打包大依赖，Markdown 渲染和代码高亮只在服务端做；图片用显示档、懒加载并写明宽高；管理后台的代码只在后台的路由里引用。加前端依赖前，先看它让打包结果大了多少。

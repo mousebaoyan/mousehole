@@ -9,12 +9,18 @@ import {
 import type { Route } from "./+types/root.ts";
 import "./app.css";
 
+// Runs before first paint so the page never flashes the wrong theme. Same key as the main site.
+const themeScript = `try{document.documentElement.dataset.theme=localStorage.getItem("theme")||(matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light")}catch{}`;
+
 export function Layout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="zh-CN">
       <head>
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
+        <meta name="theme-color" content="#0e0f12" media="(prefers-color-scheme: dark)" />
+        <script dangerouslySetInnerHTML={{ __html: themeScript }} />
         <Meta />
         <Links />
       </head>

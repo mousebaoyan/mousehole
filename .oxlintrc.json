@@ -15,7 +15,13 @@
       "always",
       {
         "ignorePackages": true,
-        "checkTypeImports": true
+        "checkTypeImports": true,
+        "pathGroupOverrides": [
+          {
+            "pattern": "~/**",
+            "action": "ignore"
+          }
+        ]
       }
     ],
     "import/no-cycle": "error",
@@ -32,7 +38,8 @@
           {
             "name": "react",
             "importNames": ["useMemo", "useCallback", "memo"],
-            "message": "React Compiler memoizes automatically."
+            "message": "React Compiler memoizes automatically.",
+            "allowTypeImports": true
           }
         ]
       }
@@ -60,7 +67,18 @@
     "typescript/no-unsafe-call": "error",
     "typescript/no-unsafe-member-access": "error",
     "typescript/no-unsafe-return": "error",
-    "typescript/only-throw-error": "error",
+    "typescript/only-throw-error": [
+      "error",
+      {
+        "allow": [
+          {
+            "from": "package",
+            "package": "react-router",
+            "name": "DataWithResponseInit"
+          }
+        ]
+      }
+    ],
     "typescript/switch-exhaustiveness-check": "error",
     "react/react-in-jsx-scope": "off"
   }

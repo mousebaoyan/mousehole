@@ -1,6 +1,10 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
+@plugin "@tailwindcss/typography";
+
+/* Like the main site: html[data-theme] is set before first paint from localStorage or the OS. */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
 
 /* Colors follow the main site (mousebaoyan.cn): ink on white, blue for links and focus. */
 
@@ -27,6 +31,9 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
+  --color-link: var(--link);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -35,7 +42,7 @@
 }
 
 :root {
-  color-scheme: light dark;
+  color-scheme: light;
   --radius: 0.625rem;
   --background: #ffffff;
   --foreground: #14161b;
@@ -55,29 +62,34 @@
   --border: #d9dce1;
   --input: #d9dce1;
   --ring: #2563eb;
+  --link: #1d4ed8;
+  --success: #157347;
+  --warning: #8f5b06;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0e0f12;
-    --foreground: #f3f4f6;
-    --card: #15171c;
-    --card-foreground: #f3f4f6;
-    --popover: #15171c;
-    --popover-foreground: #f3f4f6;
-    --primary: #f3f4f6;
-    --primary-foreground: #0e0f12;
-    --secondary: #1a1d23;
-    --secondary-foreground: #f3f4f6;
-    --muted: #1a1d23;
-    --muted-foreground: #a3a9b4;
-    --accent: #20232a;
-    --accent-foreground: #f3f4f6;
-    --destructive: oklch(0.704 0.191 22.216);
-    --border: #343843;
-    --input: #343843;
-    --ring: #5b8cff;
-  }
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --background: #0e0f12;
+  --foreground: #f3f4f6;
+  --card: #15171c;
+  --card-foreground: #f3f4f6;
+  --popover: #15171c;
+  --popover-foreground: #f3f4f6;
+  --primary: #f3f4f6;
+  --primary-foreground: #0e0f12;
+  --secondary: #1a1d23;
+  --secondary-foreground: #f3f4f6;
+  --muted: #1a1d23;
+  --muted-foreground: #a3a9b4;
+  --accent: #20232a;
+  --accent-foreground: #f3f4f6;
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: #343843;
+  --input: #343843;
+  --ring: #5b8cff;
+  --link: #8aadff;
+  --success: #5ad39b;
+  --warning: #f5c56a;
 }
 
 @layer base {

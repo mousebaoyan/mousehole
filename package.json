@@ -20,12 +20,15 @@
     "bootstrap": "node --env-file-if-exists=.env scripts/bootstrap.ts"
   },
   "dependencies": {
+    "@base-ui/react": "^1.9.0",
     "@hono/zod-openapi": "^1.6.3",
     "@react-router/node": "^8.4.0",
+    "class-variance-authority": "^0.7.1",
     "cn": "^0.4.0",
     "hono": "^4.13.13",
     "isbot": "^5.2.2",
     "kysely": "^0.29.6",
+    "lucide-react": "^1.55.0",
     "pg": "^8.23.1",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
@@ -37,6 +40,7 @@
     "@babel/core": "^8.0.7",
     "@react-router/dev": "^8.4.0",
     "@rolldown/plugin-babel": "^0.2.4",
+    "@tailwindcss/typography": "^0.5.20",
     "@tailwindcss/vite": "^4.3.3",
     "@types/node": "^26.6.5",
     "@types/pg": "^8.23.1",

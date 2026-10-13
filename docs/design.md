@@ -82,7 +82,7 @@ mousehole 容器（Hono + React Router 8，Node 26）── 图片目录（数�
 | 数据库 | PostgreSQL 18（复用 1Panel 实例）+ Kysely + `pg` | 迁移直接写 SQL，类型由 kysely-codegen 从数据库生成 |
 | 搜索 | PostgreSQL 全文检索（tsvector + GIN），中文在应用里二元切分 | 实例里没有中文分词扩展，这样做不用装任何扩展 |
 | 缓存 | 进程内缓存 | 单进程足够，暂不用 Redis。以后要跑多个进程时，缓存和限流换成 Redis，实时推送用 PostgreSQL 的 LISTEN/NOTIFY |
-| 样式与组件 | Tailwind CSS v4 + shadcn/ui（底层 Base UI） | 配色变量和深色模式沿用主站；组件代码复制进仓库，由我们自己维护 |
+| 样式与组件 | Tailwind CSS v4 + shadcn/ui（底层 Base UI） | 配色变量和深色模式沿用主站；组件代码复制进仓库，由我们自己维护。每个页面都加载的部分（顶栏、按钮、头像、菜单）用普通元素，不引入 Base UI；Base UI 只用在个别页面才需要的复杂控件上 |
 | 正文 | Markdown（markdown-it），服务端渲染并过滤；Shiki 代码高亮 | 网页和 bot 发的内容走同一套渲染，高亮和主站一致 |
 | 图片 | sharp | 转 WebP、去 EXIF、限尺寸 |
 | 邮件 | nodemailer + SMTP | SMTP 在管理后台配置；建议用一个 QQ 邮箱发信，发往 qq.com 不容易进垃圾箱 |
