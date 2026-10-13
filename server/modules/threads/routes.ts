@@ -12,7 +12,8 @@ import {
 } from "../../platform/http.ts";
 import { renderMarkdown } from "../../platform/markdown.ts";
 import { rateLimit } from "../../platform/rate-limit.ts";
-import { myReactions } from "../reactions/service.ts";
+import { BoostSchema, boostJson } from "../reactions/schemas.ts";
+import { floorExtras } from "../reactions/service.ts";
 import { showImages } from "../uploads/service.ts";
 import { UserBriefSchema } from "../users/schemas.ts";
 import {
@@ -72,6 +73,9 @@ const PostSchema = z
       .record(z.string(), z.number())
       .openapi({ description: '各表情的数量，例如 { heart: 2, "+1": 1 }' }),
     my_reaction: z.string().nullable().openapi({ description: "自己的表情回应；访客为 null" }),
+    boosts: z.array(BoostSchema).openapi({ description: "最先留下的 6 条短评" }),
+    boost_count: z.number(),
+    my_boost: z.string().nullable().openapi({ description: "自己的短评；访客为 null" }),
     deleted: z.boolean().openapi({ description: "已删除的楼层保留楼层号，没有正文" }),
     edited_at: z.number().nullable(),
     created_at: z.number(),
@@ -80,6 +84,7 @@ const PostSchema = z
 
 type Thread = Awaited<ReturnType<typeof getThread>>;
 type Post = Awaited<ReturnType<typeof getPost>>;
+type Extras = Awaited<ReturnType<typeof floorExtras>>;
 
 function threadJson(t: Thread) {
   return {
@@ -108,7 +113,7 @@ function threadDetailJson(t: Thread) {
 }
 
 // Only one form of the body travels: the HTML for pages, the Markdown for editing and for bots.
-function postJson(p: Post, form: "html" | "markdown", mine: Map<number, string>) {
+function postJson(p: Post, form: "html" | "markdown", extras: Extras) {
   const deleted = p.deleted_at !== null;
   const text = deleted ? "" : form === "html" ? p.html : p.body;
   return {
@@ -122,7 +127,10 @@ function postJson(p: Post, form: "html" | "markdown", mine: Map<number, string>)
     reply_count: p.reply_count,
     like_count: p.like_count,
     reactions: p.reactions,
-    my_reaction: mine.get(p.id) ?? null,
+    my_reaction: extras.myReaction.get(p.id) ?? null,
+    boosts: (extras.boosts.get(p.id) ?? []).map(boostJson),
+    boost_count: p.boost_count,
+    my_boost: extras.myBoost.get(p.id) ?? null,
     deleted,
     edited_at: p.edited_at && unix(p.edited_at),
     created_at: unix(p.created_at),
@@ -264,11 +272,11 @@ export const threadsRoutes = createRouter()
       const members = isMember(c.var.viewer, c.var.bot);
       const range = before === undefined ? { after: after ?? 0 } : { before };
       const posts = await listPosts(c.req.valid("param").id, members, range);
-      const mine = await myReactions(
+      const extras = await floorExtras(
         c.var.viewer?.id ?? null,
         posts.map((p) => p.id),
       );
-      return c.json({ items: posts.map((p) => postJson(p, body, mine)) }, 200);
+      return c.json({ items: posts.map((p) => postJson(p, body, extras)) }, 200);
     },
   )
   .openapi(
@@ -281,8 +289,8 @@ export const threadsRoutes = createRouter()
     }),
     async (c) => {
       const post = await getPost(c.req.valid("param").id, isMember(c.var.viewer, c.var.bot));
-      const mine = await myReactions(c.var.viewer?.id ?? null, [post.id]);
-      return c.json(postJson(post, c.req.valid("query").body, mine), 200);
+      const extras = await floorExtras(c.var.viewer?.id ?? null, [post.id]);
+      return c.json(postJson(post, c.req.valid("query").body, extras), 200);
     },
   )
   .openapi(
@@ -306,11 +314,11 @@ export const threadsRoutes = createRouter()
       const { after, body } = c.req.valid("query");
       const members = isMember(c.var.viewer, c.var.bot);
       const replies = await listReplies(c.req.valid("param").id, members, after);
-      const mine = await myReactions(
+      const extras = await floorExtras(
         c.var.viewer?.id ?? null,
         replies.map((p) => p.id),
       );
-      return c.json({ items: replies.map((p) => postJson(p, body, mine)) }, 200);
+      return c.json({ items: replies.map((p) => postJson(p, body, extras)) }, 200);
     },
   )
   .openapi(
@@ -377,7 +385,7 @@ export const threadsRoutes = createRouter()
         c.req.valid("param").id,
         c.req.valid("json"),
       );
-      return c.json(postJson(post, "html", new Map()), 201);
+      return c.json(postJson(post, "html", await floorExtras(null, [])), 201);
     },
   )
   .openapi(
@@ -459,7 +467,7 @@ export const threadsRoutes = createRouter()
         c.req.valid("param").id,
         c.req.valid("json").content.markdown,
       );
-      return c.json(postJson(post, "html", await myReactions(viewer.id, [post.id])), 200);
+      return c.json(postJson(post, "html", await floorExtras(viewer.id, [post.id])), 200);
     },
   )
   .openapi(

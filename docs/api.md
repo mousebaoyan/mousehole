@@ -221,10 +221,10 @@ token 由管理员在后台创建，只显示一次。每个 token 绑定一个 
 | DELETE | `/posts/{id}/reaction` | 取消自己的回应 | 成员 / `act` |
 | GET | `/posts/{id}/reactions` | 谁回应了什么，最近的在前，每次 50 个：可按 `emoji` 筛选，`cursor` 翻页 | 访客 |
 | POST | `/posts/{id}/report` | 举报：`{ reason }` | 成员 / `act` |
-| PUT | `/posts/{id}/boost` | 留下或修改自己在这一层的短评：`{ body }`，不超过 16 个字 | 成员 / `act` |
+| PUT | `/posts/{id}/boost` | 留下或修改自己在这一层的短评：`{ body }`，不超过 16 个字（emoji 算一个），首尾空白去掉；返回这条短评 | 成员 / `act` |
 | DELETE | `/posts/{id}/boost` | 删除自己的短评 | 成员 / `act` |
 | GET | `/posts/{id}/boosts` | 这一层的全部短评，按时间排序；楼层列表里每层只带前 6 条 | 访客 |
-| DELETE | `/boosts/{id}` | 删除任意短评，可附 `reason` | 版主 / `moderate` |
+| DELETE | `/boosts/{id}` | 删除任意短评，可附 `{ reason }`，和短评原文一起记进操作日志 | 版主 / `moderate` |
 | POST | `/boosts/{id}/report` | 举报短评：`{ reason }` | 成员 / `act` |
 
 ### 3.6 搜索

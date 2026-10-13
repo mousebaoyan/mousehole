@@ -95,6 +95,19 @@ export async function action({ params, request, context }: Route.ActionArgs) {
     if (res.ok) return { ok: true as const, floor };
     return { ok: false as const, message: (await res.json()).error.message };
   }
+  if (text("intent") === "boost") {
+    const body = text("body");
+    const res = body
+      ? await api.posts[":id"].boost.$put({ param: post, json: { body } })
+      : await api.posts[":id"].boost.$delete({ param: post });
+    if (res.ok) return { ok: true as const, boost: body || null };
+    return { ok: false as const, message: (await res.json()).error.message };
+  }
+  if (text("intent") === "remove-boost") {
+    const res = await api.boosts[":id"].$delete({ param: { id: text("boost_id") }, json: {} });
+    if (res.ok) return { ok: true as const };
+    return { ok: false as const, message: (await res.json()).error.message };
+  }
   if (text("intent") === "delete-thread") {
     const res = await api.threads[":id"].$delete({ param: thread });
     if (res.ok) return redirect(`/b/${text("board")}`);
@@ -262,6 +275,7 @@ function TopicPage({
                 deleteThread:
                   staff ||
                   (me?.id === post.author.id && !thread.locked && thread.reply_count === 0),
+                moderate: staff,
               }}
               onJump={jump}
               onEdit={(markdown) =>
