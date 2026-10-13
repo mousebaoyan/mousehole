@@ -156,7 +156,7 @@ CREATE TABLE threads (
                   CHECK (status IN ('visible', 'pending', 'hidden')),
   solved_post_id  integer,
   floor_count     integer  NOT NULL DEFAULT 1, -- highest floor number handed out
-  reply_count     integer  NOT NULL DEFAULT 0, -- floors and sub-replies, excluding the opening post
+  reply_count     integer  NOT NULL DEFAULT 0, -- floors, excluding the opening post
   view_count      integer  NOT NULL DEFAULT 0,
   like_count      integer  NOT NULL DEFAULT 0, -- likes on the opening post
   last_poster_id  integer  REFERENCES users (id),
