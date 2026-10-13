@@ -110,6 +110,7 @@
 | `polls`、`poll_votes` | 投票帖 |
 | `points_ledger`、`check_ins` | 鼠币流水、签到 |
 | `badges`、`user_badges` | 徽章，包括由群荣誉同步来的徽章 |
+| `conversations`、`conversation_members`、`messages` | 私信：会话、双方各自的已读位置和屏蔽状态、消息 |
 | `anonymous_aliases` | 匿名编号：同一主题里同一个人的编号固定，例如"匿名鼠鼠 3" |
 | `group_notices`、`group_essences`、`group_files` | 同步来的群公告、精华消息、群文件目录 |
 
