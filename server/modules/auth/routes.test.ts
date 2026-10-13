@@ -201,6 +201,23 @@ describe("bot token", () => {
     expect((await meAs(token, { "X-Act-As": member, "X-Operator": moderator })).status).toBe(200);
   });
 
+  test("后台要求必须带操作人时，代表成员却没带 X-Operator 的请求被拒", async () => {
+    const { admin, token } = await createToken();
+    const member = String((await createUser()).id);
+    const setRequired = (on: boolean) =>
+      api.admin.settings.$patch({ json: { bot: { require_operator: on } } }, as(admin));
+    await setRequired(true);
+
+    expect(await meAs(token, { "X-Act-As": member })).toMatchObject({
+      status: 400,
+      body: { error: { code: "operator_required" } },
+    });
+    expect((await meAs(token, { "X-Act-As": member, "X-Operator": member })).status).toBe(200);
+    // The bot's own work, like member sync, has no one behind it.
+    expect((await meAs(token)).status).toBe(200);
+    await setRequired(false);
+  });
+
   test("token 范围不够时拒绝", async () => {
     const { token } = await createToken(["act"]);
     expect(await meAs(token)).toMatchObject({

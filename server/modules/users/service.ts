@@ -165,3 +165,17 @@ export async function getProfile(userId: number) {
     .where("id", "=", userId)
     .executeTakeFirstOrThrow();
 }
+
+// Member counts for the admin overview; bots and deleted accounts aside.
+export async function memberStats() {
+  return db
+    .selectFrom("users")
+    .select((eb) => [
+      eb.fn.countAll<number>().as("total"),
+      eb.fn.countAll<number>().filterWhere("activated_at", "is not", null).as("activated"),
+      eb.fn.countAll<number>().filterWhere("member_status", "=", "frozen").as("frozen"),
+    ])
+    .where("role", "<>", "bot")
+    .where("deleted_at", "is", null)
+    .executeTakeFirstOrThrow();
+}

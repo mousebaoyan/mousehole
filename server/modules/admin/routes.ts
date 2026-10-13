@@ -2,6 +2,7 @@ import { createRoute, z } from "@hono/zod-openapi";
 import { actorOf, authorize, createRouter, errorResponse } from "../../platform/http.ts";
 import { sendMail } from "../../platform/mail.ts";
 import { getSettings } from "../../platform/settings.ts";
+import { memberStats } from "../users/service.ts";
 import { updateSettings } from "./service.ts";
 
 const LoginSettings = z.object({
@@ -19,14 +20,45 @@ const SmtpSettings = z.object({
   from: z.string().max(200),
 });
 
+const BotSettings = z.object({ require_operator: z.boolean() });
+
 const SettingsSchema = z
   .object({
     login: LoginSettings,
     smtp: SmtpSettings.extend({ password_set: z.boolean() }),
+    bot: BotSettings,
   })
   .openapi("Settings");
 
 export const adminRoutes = createRouter()
+  .openapi(
+    createRoute({
+      method: "get",
+      path: "/admin/overview",
+      summary: "概览：成员数、已激活和已冻结的人数",
+      responses: {
+        200: {
+          description: "群的同步状态见 /admin/groups",
+          content: {
+            "application/json": {
+              schema: z.object({
+                members: z.object({
+                  total: z.number(),
+                  activated: z.number(),
+                  frozen: z.number(),
+                }),
+              }),
+            },
+          },
+        },
+        403: errorResponse("不是管理员"),
+      },
+    }),
+    async (c) => {
+      authorize(c, "admin");
+      return c.json({ members: await memberStats() }, 200);
+    },
+  )
   .openapi(
     createRoute({
       method: "get",
@@ -42,9 +74,9 @@ export const adminRoutes = createRouter()
     }),
     async (c) => {
       authorize(c, "admin");
-      const { login, smtp } = await getSettings();
+      const { login, smtp, bot } = await getSettings();
       const { password, ...rest } = smtp;
-      return c.json({ login, smtp: { ...rest, password_set: password !== "" } }, 200);
+      return c.json({ login, smtp: { ...rest, password_set: password !== "" }, bot }, 200);
     },
   )
   .openapi(
@@ -62,6 +94,7 @@ export const adminRoutes = createRouter()
                 smtp: SmtpSettings.extend({ password: z.string().max(200) })
                   .partial()
                   .optional(),
+                bot: BotSettings.partial().optional(),
               }),
             },
           },
