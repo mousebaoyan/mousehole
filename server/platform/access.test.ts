@@ -2,9 +2,9 @@ import { describe, expect, test } from "vitest";
 import { checkPermission, type Bot, type Scope, type Viewer } from "./access.ts";
 import { AppError } from "./errors.ts";
 
-const member: Viewer = { id: 1, role: "user", member_status: "member" };
-const moderator: Viewer = { id: 2, role: "moderator", member_status: "member" };
-const botAccount: Viewer = { id: 9, role: "bot", member_status: "member" };
+const member: Viewer = { id: 1, role: "user", member_status: "member", restriction: null };
+const moderator: Viewer = { id: 2, role: "moderator", member_status: "member", restriction: null };
+const botAccount: Viewer = { id: 9, role: "bot", member_status: "member", restriction: null };
 
 function bot(change: Partial<Bot> = {}): Bot {
   return {
@@ -47,6 +47,12 @@ describe("权限判定", () => {
     expect(code(frozen, null, "act")).toBe("member_frozen");
     expect(code(frozen, bot(), "act")).toBe("member_frozen");
     expect(code(frozen, bot(), "read")).toBe("ok");
+  });
+
+  test("被封禁的人，bot 也不能代他写，读不受影响", () => {
+    const banned: Viewer = { ...member, restriction: { type: "ban", until: null } };
+    expect(code(banned, bot(), "act")).toBe("banned");
+    expect(code(banned, bot(), "read")).toBe("ok");
   });
 
   test("关闭代发后别人不能让 bot 代他写，读不受影响", () => {

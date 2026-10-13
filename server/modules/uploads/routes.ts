@@ -2,7 +2,7 @@ import { readFile } from "node:fs/promises";
 import { createRoute, z } from "@hono/zod-openapi";
 import type { Context } from "hono";
 import { AppError } from "../../platform/errors.ts";
-import { authorize, createRouter, errorResponse } from "../../platform/http.ts";
+import { authorizePosting, createRouter, errorResponse } from "../../platform/http.ts";
 import { rateLimit } from "../../platform/rate-limit.ts";
 import { fetchUpload, storeUpload, UPLOADS_DIR } from "./service.ts";
 
@@ -39,7 +39,7 @@ export const uploadsRoutes = createRouter()
       },
     }),
     async (c) => {
-      const viewer = authorize(c, "act");
+      const viewer = authorizePosting(c);
       rateLimit(`upload:${viewer.id}`, 30, 10 * 60_000);
       const { file } = c.req.valid("form");
       return c.json(await storeUpload(viewer.id, Buffer.from(await file.arrayBuffer())), 201);
@@ -63,7 +63,7 @@ export const uploadsRoutes = createRouter()
       },
     }),
     async (c) => {
-      const viewer = authorize(c, "act");
+      const viewer = authorizePosting(c);
       rateLimit(`upload:${viewer.id}`, 30, 10 * 60_000);
       return c.json(await fetchUpload(viewer.id, c.req.valid("json").url), 201);
     },

@@ -166,6 +166,8 @@ token 由管理员在后台创建，只显示一次。每个 token 绑定一个 
 | GET | `/me/export` | 导出自己的全部内容 | 已登录，冻结了也可以 |
 | DELETE | `/me` | 注销账号：`{ keep_content }`，`true` 保留内容、署名改为"已注销用户"，`false` 一并删除 | 已登录，冻结了也可以 |
 
+禁言中的成员发帖、回复、编辑、点赞、短评、上传图片和预览返回 `403 muted`，`message` 里有到期时间；收藏、关注、读通知等不受影响。bot 代表被封禁的人做写操作返回 `403 banned`。资料卡里的 `restriction`（`{ type, until }`）只给本人和版主看。
+
 三种登录方式都可以在后台单独关闭，关闭后对应接口返回 `403 login_method_disabled`。封禁中的账号建立会话时返回 `403 banned`，bot 确认口令、签发链接时也会提前拒绝。代表成员登录的两个 bot 接口必须带 `X-Act-As`，否则返回 `400 act_as_required`。冻结的账号可以登录，但只能使用上表中标明"冻结了也可以"的接口，其他和访客一样。
 
 ### 3.2 用户
@@ -181,8 +183,8 @@ token 由管理员在后台创建，只显示一次。每个 token 绑定一个 
 | PUT | `/users/{user}/endorsement` | 认可 TA 的帮助，每人对每人一次；不能认可自己（`400`） | 成员 / `act` |
 | DELETE | `/users/{user}/endorsement` | 撤回认可 | 成员 / `act` |
 | PATCH | `/users/{user}` | 设置角色、锁定角色 | 管理员 / `admin` |
-| PUT | `/users/{user}/restriction` | 禁言或封禁：`{ type, until, reason }`，`type` 为 `mute` 或 `ban` | 禁言：版主 / `moderate`；封禁：管理员 / `admin` |
-| DELETE | `/users/{user}/restriction` | 解除禁言或封禁 | 同上 |
+| PUT | `/users/{user}/restriction` | 禁言或封禁：`{ type, until, reason }`，`type` 为 `mute` 或 `ban`，`until` 是到期的 Unix 秒、`null` 为永久，已有的就换掉；只能对普通成员（版主和管理员返回 `403`）。封禁同时让他所有设备下线。理由记进操作日志 | 禁言：版主 / `moderate`；封禁：管理员 / `admin` |
+| DELETE | `/users/{user}/restriction` | 解除禁言或封禁，可附 `{ reason }`；没有被限制返回 `404 not_restricted` | 版主 / `moderate`，解除封禁要管理员 |
 
 ### 3.3 版块与标签
 

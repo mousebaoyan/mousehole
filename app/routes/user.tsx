@@ -8,9 +8,11 @@ import { ThreadList } from "~/components/thread-list";
 import { UserAvatar } from "~/components/user-avatar";
 import { UserBadges } from "~/components/user-badges";
 import { RelationButtons, useRelations } from "~/components/user-card";
+import { useMe } from "~/forum";
 import { useNearView } from "~/near-view";
 import { ago, unixNow } from "~/time";
 import type { Route } from "./+types/user.ts";
+import { ModerationButtons, restrictionText } from "./user-moderation.tsx";
 
 export function meta({ loaderData }: Route.MetaArgs) {
   return [{ title: `${loaderData.user.display_name} · 鼠洞` }];
@@ -54,7 +56,25 @@ export async function action({ params, request, context }: Route.ActionArgs) {
   const api = context.get(apiContext).users[":user"];
   const form = await request.formData();
   const param = { user: params.id };
-  const follow = form.get("intent") === "follow";
+  const intent = form.get("intent");
+  if (intent === "restrict" || intent === "lift") {
+    const days = Number(form.get("days"));
+    const reason = form.get("reason");
+    const res =
+      intent === "lift"
+        ? await api.restriction.$delete({ param, json: {} })
+        : await api.restriction.$put({
+            param,
+            json: {
+              type: form.get("type") === "ban" ? "ban" : "mute",
+              until: days > 0 ? unixNow() + days * 86_400 : null,
+              reason: typeof reason === "string" ? reason : "",
+            },
+          });
+    if (res.ok) return { ok: true as const, saved: true };
+    return { ok: false as const, message: (await res.json()).error.message };
+  }
+  const follow = intent === "follow";
   const on = form.get(follow ? "followed" : "endorsed") === "true";
   const res = follow
     ? await (on ? api.follow.$put({ param }) : api.follow.$delete({ param }))
@@ -80,8 +100,10 @@ function age(unix: number, now: number) {
 
 const ROLES: Record<string, string> = { admin: "管理员", moderator: "版主" };
 
-export default function User({ loaderData }: Route.ComponentProps) {
+export default function User({ loaderData, actionData }: Route.ComponentProps) {
   const { user, tab, threads, posts, next_cursor, now } = loaderData;
+  const me = useMe();
+  const staff = me?.role === "moderator" || me?.role === "admin";
   const { stats } = user;
   const relations = useRelations(user);
   // What the group shows about them; the QQ number only to members.
@@ -140,6 +162,17 @@ export default function User({ loaderData }: Route.ComponentProps) {
             ))}
           </p>
           <RelationButtons relations={relations} className="mt-4 max-w-72" />
+          {user.restriction && (
+            <p className="mt-3 text-meta text-destructive">{restrictionText(user.restriction)}</p>
+          )}
+          {staff && user.role === "user" && (
+            <ModerationButtons restriction={user.restriction ?? null} admin={me.role === "admin"} />
+          )}
+          {actionData?.ok === false && (
+            <p role="alert" className="mt-2 text-meta text-destructive">
+              {actionData.message}
+            </p>
+          )}
         </div>
       </header>
 

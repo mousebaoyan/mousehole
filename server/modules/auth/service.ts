@@ -2,6 +2,7 @@ import { randomInt } from "node:crypto";
 import type { Kysely, NotNull, Transaction } from "kysely";
 import type { DB } from "../../../db/types.ts";
 import {
+  restrictionOf,
   STAFF,
   type Actor,
   type Bot,
@@ -81,17 +82,17 @@ export async function loginWithLink(token: string, client: Client) {
 }
 
 async function assertNotBanned(executor: Kysely<DB>, userId: number) {
-  const { restriction, restricted_until } = await executor
+  const user = await executor
     .selectFrom("users")
     .select(["restriction", "restricted_until"])
     .where("id", "=", userId)
     .executeTakeFirstOrThrow();
-  if (restriction === "ban" && (!restricted_until || restricted_until > new Date())) {
-    const until = restricted_until
-      ? `，到 ${restricted_until.toLocaleString("zh-CN", { timeZone: "Asia/Shanghai" })} 解封`
-      : "";
-    throw new AppError(403, "banned", `账号已被封禁${until}`);
-  }
+  const restriction = restrictionOf(user.restriction, user.restricted_until);
+  if (restriction?.type !== "ban") return;
+  const until = restriction.until
+    ? `，到 ${restriction.until.toLocaleString("zh-CN", { timeZone: "Asia/Shanghai" })} 解封`
+    : "";
+  throw new AppError(403, "banned", `账号已被封禁${until}`);
 }
 
 // Every way of logging in ends here, so the ban check lives here too.
@@ -122,6 +123,8 @@ export async function resolveSession(token: string) {
       "users.id as user_id",
       "users.role",
       "users.member_status",
+      "users.restriction",
+      "users.restricted_until",
     ])
     .where("sessions.token_hash", "=", hashToken(token))
     .where("sessions.expires_at", ">", new Date())
@@ -137,7 +140,12 @@ export async function resolveSession(token: string) {
       .execute();
     await recordSeen(row.user_id);
   }
-  const viewer: Viewer = { id: row.user_id, role: row.role, member_status: row.member_status };
+  const viewer: Viewer = {
+    id: row.user_id,
+    role: row.role,
+    member_status: row.member_status,
+    restriction: restrictionOf(row.restriction, row.restricted_until),
+  };
   return { id: row.id, viewer, renewed };
 }
 
@@ -158,6 +166,11 @@ export async function endSession(userId: number, sessionId: number) {
     .where("user_id", "=", userId)
     .executeTakeFirst();
   if (ended.numDeletedRows === 0n) throw new AppError(404, "not_found", "这个设备已经下线了");
+}
+
+// A ban logs the person out everywhere.
+export async function endAllSessions(trx: Transaction<DB>, userId: number) {
+  await trx.deleteFrom("sessions").where("user_id", "=", userId).execute();
 }
 
 async function memberOrThrow(ref: UserRef, who: string) {
@@ -183,6 +196,8 @@ export async function resolveBot(
       "users.id as user_id",
       "users.role",
       "users.member_status",
+      "users.restriction",
+      "users.restricted_until",
     ])
     .where("api_tokens.token_hash", "=", hashToken(token))
     .where("api_tokens.revoked_at", "is", null)
@@ -211,8 +226,18 @@ export async function resolveBot(
   }
 
   const viewer: Viewer = member
-    ? { id: member.id, role: member.role, member_status: member.member_status }
-    : { id: row.user_id, role: row.role, member_status: row.member_status };
+    ? {
+        id: member.id,
+        role: member.role,
+        member_status: member.member_status,
+        restriction: restrictionOf(member.restriction, member.restricted_until),
+      }
+    : {
+        id: row.user_id,
+        role: row.role,
+        member_status: row.member_status,
+        restriction: restrictionOf(row.restriction, row.restricted_until),
+      };
   const bot: Bot = {
     tokenId: row.id,
     scopes: row.scopes,

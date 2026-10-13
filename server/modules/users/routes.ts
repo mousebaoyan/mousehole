@@ -2,7 +2,7 @@ import { readFile } from "node:fs/promises";
 import { createRoute, z } from "@hono/zod-openapi";
 import type { Context } from "hono";
 import { AppError } from "../../platform/errors.ts";
-import { isMember } from "../../platform/access.ts";
+import { isMember, restrictionOf, STAFF, type Restriction } from "../../platform/access.ts";
 import { actorOf, authorize, createRouter, errorResponse, unix } from "../../platform/http.ts";
 import { UserBriefSchema, UserRefSchema } from "./schemas.ts";
 import { setCustomName } from "../members/service.ts";
@@ -36,6 +36,11 @@ const UserSchema = UserBriefSchema.extend({
   joined_at: z.number().nullable().openapi({ description: "加入主群的时间" }),
   last_sent_at: z.number().nullable().openapi({ description: "最近一次在主群发言，精确到小时" }),
   qq: z.number().optional().openapi({ description: "qq、member_status、activated 只给成员和 bot" }),
+  restriction: z
+    .object({ type: z.string(), until: z.number().nullable() })
+    .nullable()
+    .optional()
+    .openapi({ description: "禁言（mute）或封禁（ban）和到期时间；只给本人和版主" }),
   followed: z.boolean().optional().openapi({ description: "自己是否关注了 TA；只在登录时有" }),
   endorsed: z.boolean().optional().openapi({ description: "自己是否认可了 TA；只在登录时有" }),
   member_status: z.string().optional(),
@@ -55,6 +60,10 @@ const UserSchema = UserBriefSchema.extend({
 }).openapi("User");
 
 const UserParam = z.object({ user: UserRefSchema });
+
+function restrictionJson(r: Restriction) {
+  return r && { type: r.type, until: r.until && unix(r.until) };
+}
 
 const Switches = z.object({ site: z.boolean(), qq: z.boolean() });
 
@@ -137,6 +146,10 @@ export const usersRoutes = createRouter()
             activated: u.activated_at !== null,
           }),
           ...(viewer && { followed: u.followed, endorsed: u.endorsed }),
+          ...(viewer &&
+            (viewer.id === u.id || STAFF.includes(viewer.role)) && {
+              restriction: restrictionJson(restrictionOf(u.restriction, u.restricted_until)),
+            }),
           stats: {
             threads: u.thread_count,
             posts: u.post_count,
