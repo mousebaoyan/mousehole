@@ -3,6 +3,7 @@ import { testClient } from "hono/testing";
 import { sql } from "kysely";
 import { describe, expect, test } from "vitest";
 import { app } from "../../app.ts";
+import type { Scope } from "../../platform/access.ts";
 import { db } from "../../platform/db.ts";
 import { env } from "../../platform/env.ts";
 import { issueLoginLink } from "./service.ts";
@@ -11,10 +12,10 @@ const api = testClient(app).api.v1;
 
 let lastQq = 10000;
 
-async function createUser() {
+async function createUser(role: "user" | "moderator" | "admin" = "user") {
   const { id } = await db
     .insertInto("users")
-    .values({ qq: ++lastQq, display_name: "鼠鼠" })
+    .values({ qq: ++lastQq, display_name: "鼠鼠", role })
     .returning("id")
     .executeTakeFirstOrThrow();
   return id;
@@ -162,5 +163,106 @@ describe("会话", () => {
     expect((await api.me.$get({}, as(otherDevice))).status).toBe(200);
     expect((await api.me.sessions[":id"].$delete({ param }, as(ownerCookie))).status).toBe(204);
     expect((await api.me.$get({}, as(otherDevice))).status).toBe(401);
+  });
+});
+
+function bearer(token: string, headers: Record<string, string> = {}) {
+  return { headers: { authorization: `Bearer ${token}`, ...headers } };
+}
+
+async function createToken(scopes: Scope[] = ["read", "act"]) {
+  const admin = await login(await createUser("admin"));
+  const res = await api.admin.tokens.$post(
+    { json: { name: "测试 bot", bot_qq: ++lastQq, scopes } },
+    as(admin),
+  );
+  if (!res.ok) throw new Error(`status ${res.status}`);
+  return { admin, ...(await res.json()) };
+}
+
+async function meAs(token: string, headers: Record<string, string> = {}) {
+  const res = await api.me.$get({}, bearer(token, headers));
+  return { status: res.status, body: await res.json() };
+}
+
+describe("bot token", () => {
+  test("token 只在创建时返回一次，bot 账号固定为 bot 角色", async () => {
+    const { admin, id, token } = await createToken();
+
+    const list = await api.admin.tokens.$get({}, as(admin));
+    if (!list.ok) throw new Error(`status ${list.status}`);
+    const listed = (await list.json()).items.find((t) => t.id === id);
+    expect(listed).toMatchObject({ scopes: ["read", "act"], revoked_at: null });
+    expect(JSON.stringify(listed)).not.toContain(token);
+
+    expect((await meAs(token)).body).toMatchObject({ id: listed?.bot.id, role: "bot" });
+  });
+
+  test("X-Act-As 代表成员，可以写用户 ID 或 QQ 号", async () => {
+    const { token } = await createToken();
+    const member = await createUser();
+
+    expect((await meAs(token, { "X-Act-As": `qq:${lastQq}` })).body).toMatchObject({ id: member });
+    expect((await meAs(token, { "X-Act-As": String(member) })).body).toMatchObject({ id: member });
+    expect(await meAs(token, { "X-Act-As": "qq:1" })).toMatchObject({
+      status: 404,
+      body: { error: { code: "unknown_member" } },
+    });
+    expect(await meAs(token, { "X-Act-As": "abc" })).toMatchObject({
+      status: 400,
+      body: { error: { code: "invalid_request" } },
+    });
+  });
+
+  test("普通成员只能让 bot 代表自己，版主可以代表别人", async () => {
+    const { token } = await createToken();
+    const member = String(await createUser());
+    const other = String(await createUser());
+    const moderator = String(await createUser("moderator"));
+
+    expect(await meAs(token, { "X-Act-As": member, "X-Operator": other })).toMatchObject({
+      status: 403,
+      body: { error: { code: "operator_not_allowed" } },
+    });
+    expect((await meAs(token, { "X-Act-As": member, "X-Operator": member })).status).toBe(200);
+    expect((await meAs(token, { "X-Act-As": member, "X-Operator": moderator })).status).toBe(200);
+  });
+
+  test("token 范围不够时拒绝", async () => {
+    const { token } = await createToken(["act"]);
+    expect(await meAs(token)).toMatchObject({
+      status: 403,
+      body: { error: { code: "scope_missing" } },
+    });
+  });
+
+  test("吊销后不能再用", async () => {
+    const { admin, id, token } = await createToken();
+    const res = await api.admin.tokens[":id"].$delete({ param: { id: String(id) } }, as(admin));
+    expect(res.status).toBe(204);
+    expect(await meAs(token)).toMatchObject({
+      status: 401,
+      body: { error: { code: "invalid_token" } },
+    });
+  });
+
+  test("带 token 的请求不检查 Origin，但不能管理 token", async () => {
+    const { token } = await createToken(["read", "act", "moderate", "admin"]);
+
+    // A bodyless POST without Origin is what the CSRF check stops for cookie requests.
+    expect((await api.auth.logout.$post({}, bearer(token))).status).toBe(204);
+    expect((await api.admin.tokens.$get({}, bearer(token))).status).toBe(403);
+  });
+
+  test("登录过的群友不能用作 bot", async () => {
+    const admin = await login(await createUser("admin"));
+    await login(await createUser());
+
+    const res = await api.admin.tokens.$post(
+      { json: { name: "误填", bot_qq: lastQq, scopes: ["read"] } },
+      as(admin),
+    );
+    expect(res.status).toBe(409);
+    expect(await res.json()).toMatchObject({ error: { code: "bot_qq_taken" } });
   });
 });

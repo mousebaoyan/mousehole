@@ -11,7 +11,7 @@
 - **指代用户**：路径、请求头和请求体里的用户，可以写论坛用户 ID（`123`），也可以写 QQ 号（`qq:123456789`）。
 - **QQ 号**：返回给已登录的成员、bot 和管理员；访客和冻结的账号看不到（站点设置可以改成公开）。
 - **分页**：列表返回 `{ "items": [...], "next_cursor": "..." }`，取下一页时带 `?cursor=`。主题里的楼层用 `?page=`，每页 30 层。
-- **错误**：HTTP 状态码加 `{ "error": { "code": "thread_locked", "message": "主题已锁定" } }`。`code` 固定不变，插件据此判断；`message` 给人看，以后可能调整。各接口都可能返回的错误码：`invalid_request`（400，参数不对，`message` 指出哪个字段）、`unauthorized`（401，没有登录）、`not_found`（404）、`internal_error`（500）。
+- **错误**：HTTP 状态码加 `{ "error": { "code": "thread_locked", "message": "主题已锁定" } }`。`code` 固定不变，插件据此判断；`message` 给人看，以后可能调整。各接口都可能返回的错误码：`invalid_request`（400，参数不对，`message` 指出哪个字段）、`unauthorized`（401，没有登录）、`forbidden`（403，没有权限）、`not_found`（404）、`internal_error`（500）。
 - **限流**：按 IP、用户和 token 分别限流，超出时返回 `429` 和 `Retry-After`。
 - **CSRF**：网页的写请求校验 Origin；带 Bearer token 的请求不受影响。
 
@@ -44,7 +44,9 @@
 
 ### 2.1 token 与权限范围
 
-token 由管理员在后台创建，只显示一次。一个 token 可以有多个范围：
+token 由管理员在后台创建，只显示一次。每个 token 绑定一个 bot 账号：创建时填 bot 的 QQ 号，没同步过就先建号，角色固定为 `bot`；登录过的群友不能用作 bot，返回 `409 bot_qq_taken`。不带 `X-Act-As` 时以这个账号操作。token 无效或已吊销返回 `401 invalid_token`。
+
+一个 token 可以有多个范围，接口要的范围不在其中时返回 `403 scope_missing`：
 
 | 范围 | 允许 |
 | --- | --- |
@@ -69,7 +71,7 @@ token 由管理员在后台创建，只显示一次。一个 token 可以有多�
 - **权限取交集**：以 bot 自己的账号操作时，能做什么由 token 的范围决定；代表某位成员时，还要这位成员自己有这个权限。例如代表普通成员时，即使 token 有 `moderate`，也不能锁帖。
 - **只能代表成员**：被代表的人必须是同步过、没注销的账号，否则返回 `404 unknown_member`。冻结的账号只能读，写操作返回 `403 member_frozen`。有人刚进群、论坛还没同步到时，插件先推送一条增量。
 - **代发开关**：成员关闭"允许代发"后，只有他本人让 bot 操作（`X-Operator` 就是本人）时才放行，否则写操作返回 `403 proxy_disabled`。读操作不受影响。
-- **操作人校验**：带 `X-Operator` 时，论坛会检查操作人有没有资格：代表别人操作时，操作人必须是版主或管理员；以 bot 账号执行管理操作时，操作人自己必须有这个权限。不通过返回 `403 operator_not_allowed`。没有操作人的场景（例如定时任务）可以不带这个头；后台可以设为必须带。
+- **操作人校验**：带 `X-Operator` 时，论坛会检查操作人有没有资格：代表别人操作时，操作人必须是版主或管理员；执行版主或管理员操作时，操作人自己也必须有这个权限。不通过返回 `403 operator_not_allowed`。没有操作人的场景（例如定时任务）可以不带这个头；后台可以设为必须带。
 - **来源标注**：代表成员发的内容，带来源消息时 `via` 为 `qq`，页面标"来自群聊"；否则为 `bot`，标"由机器人代发"。本人可以编辑和删除。
 - **审计**：经由 bot 的写操作都写入审计日志，记录以谁的身份、操作人、token、来源消息和 IP。
 
@@ -77,7 +79,7 @@ token 由管理员在后台创建，只显示一次。一个 token 可以有多�
 
 - 所有 `POST` 请求都可以带 `Idempotency-Key`，最长 128 个字符，建议用 `qq-{群号}-{消息ID}-{动作}`。
 - 同一个 token 用同一个键在 7 天内再次请求时，直接返回第一次的结果，不会重复执行。
-- 第一次请求还在处理时（例如正在下载图片），重复请求返回 `409 idempotency_in_progress`，稍后重试即可。处理中超过 5 分钟视为中断，可以重新执行。
+- 第一次请求还在处理时（例如正在下载图片），重复请求返回 `409 idempotency_in_progress`，稍后重试即可。处理中超过 5 分钟视为中断，可以重新执行。第一次出了服务器错误（5xx）不算结果，重试会重新执行。
 - 同一个键用在别的接口上，返回 `422 idempotency_key_reused`。
 - 另外，如果创建请求带的 `source` 已经对应了论坛内容，返回 `409 source_exists` 并附上已有的对象，避免同一条群消息被转两次。
 
@@ -241,7 +243,9 @@ token 由管理员在后台创建，只显示一次。一个 token 可以有多�
 | GET | `/admin/reports` | 举报列表：`status` | 版主 / `moderate` |
 | PATCH | `/admin/reports/{id}` | 处理举报：`{ status }`，可选 `resolved`、`dismissed` | 版主 / `moderate` |
 | GET | `/admin/audit-logs` | 操作日志，可以按操作人、对象、动作筛选 | 管理员 / `admin` |
-| GET、POST、DELETE | `/admin/tokens` | 管理 bot token | 管理员，只能在网页上操作 |
+| GET | `/admin/tokens` | bot token 列表，包括已吊销的；不含 token 本身 | 管理员，只能在网页上操作 |
+| POST | `/admin/tokens` | 创建：`{ name, bot_qq, scopes }`，返回 `{ id, token }`，token 只出现这一次 | 管理员，只能在网页上操作 |
+| DELETE | `/admin/tokens/{id}` | 吊销 | 管理员，只能在网页上操作 |
 
 审核通过或隐藏内容，用 `PATCH /threads/{id}` 或 `PATCH /posts/{id}` 修改 `status`。
 

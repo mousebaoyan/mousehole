@@ -1,0 +1,65 @@
+import { AppError } from "./errors.ts";
+
+// Who a request acts as: a session's user, or for a bot the member in X-Act-As, else the
+// bot's own account.
+export type Viewer = { id: number; role: string; member_status: string };
+
+// What a bot request adds on top of the viewer. See docs/api.md §2.
+export type Bot = {
+  tokenId: number;
+  scopes: string[];
+  actingAs: boolean;
+  operator: { id: number; role: string } | null;
+  // False when the member turned off proxying and someone else asked the bot.
+  proxyAllowed: boolean;
+};
+
+// How the API refers to a user: a forum user ID, or `qq:` and a QQ number.
+export type UserRef = { id: number } | { qq: number };
+
+// Who did a write, for the audit log.
+export type Actor = {
+  userId: number;
+  operatorId: number | null;
+  tokenId: number | null;
+  ip: string | null;
+};
+
+// Bot token scopes, which double as the capability a route needs.
+export const SCOPES = ["read", "act", "moderate", "admin", "sync", "auth", "events"] as const;
+export type Scope = (typeof SCOPES)[number];
+
+export const STAFF = ["moderator", "admin"];
+
+const WRITES = new Set<Scope>(["act", "moderate", "admin"]);
+const BOT_ONLY = new Set<Scope>(["sync", "auth", "events"]);
+const ROLES: Partial<Record<Scope, string[]>> = { moderate: STAFF, admin: ["admin"] };
+
+export function checkPermission(viewer: Viewer | null, bot: Bot | null, need: Scope) {
+  if (!viewer) throw new AppError(401, "unauthorized", "请先登录");
+  if (bot && !bot.scopes.includes(need)) {
+    throw new AppError(403, "scope_missing", `这个 token 没有 ${need} 权限`);
+  }
+  if (!bot && BOT_ONLY.has(need)) throw new AppError(403, "forbidden", "只有 bot 能调用这个接口");
+
+  if (WRITES.has(need)) {
+    if (viewer.member_status === "frozen") {
+      throw new AppError(403, "member_frozen", "账号已冻结，只能浏览");
+    }
+    if (bot && !bot.proxyAllowed) {
+      throw new AppError(403, "proxy_disabled", "这位成员关闭了代发，只有本人能让 bot 操作");
+    }
+  }
+
+  const roles = ROLES[need];
+  if (roles) {
+    // The bot's own account is limited by its token's scopes alone.
+    if ((!bot || bot.actingAs) && !roles.includes(viewer.role)) {
+      throw new AppError(403, "forbidden", "没有权限");
+    }
+    if (bot?.operator && !roles.includes(bot.operator.role)) {
+      throw new AppError(403, "operator_not_allowed", "操作人没有这个权限");
+    }
+  }
+  return viewer;
+}
