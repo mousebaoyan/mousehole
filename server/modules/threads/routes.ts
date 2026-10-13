@@ -8,6 +8,7 @@ import {
   clientIp,
   createRouter,
   errorResponse,
+  requireWeb,
   unix,
 } from "../../platform/http.ts";
 import { renderMarkdown } from "../../platform/markdown.ts";
@@ -31,6 +32,7 @@ import {
   listThreads,
   MAX_BODY,
   NOTIFY_LEVELS,
+  recordReading,
   recordView,
   setBookmark,
   setNotifyLevel,
@@ -55,11 +57,19 @@ const ThreadSchema = z
     like_count: z.number(),
     last_post_at: z.number(),
     created_at: z.number(),
+    last_read_floor: z
+      .number()
+      .optional()
+      .openapi({ description: "自己读过的最高一楼，没打开过为 0；只在登录时有" }),
   })
   .openapi("Thread");
 
 const ThreadDetailSchema = ThreadSchema.extend({
   url: z.string(),
+  read_floors: z
+    .array(z.tuple([z.number(), z.number()]))
+    .optional()
+    .openapi({ description: "读过的楼层区间，含两端，例如 [[1, 20], [480, 495]]；只在登录时有" }),
   bookmarked: z.boolean().optional().openapi({ description: "自己是否收藏了；只在登录时有" }),
   notify_level: z.string().optional().openapi({
     description:
@@ -92,11 +102,13 @@ const PostSchema = z
   })
   .openapi("Post");
 
+type ThreadItem = Awaited<ReturnType<typeof listThreads>>["items"][number];
 type Thread = Awaited<ReturnType<typeof getThread>>;
 type Post = Awaited<ReturnType<typeof getPost>>;
 type Extras = Awaited<ReturnType<typeof floorExtras>>;
 
-function threadJson(t: Thread) {
+// What is the reader's own comes only to someone signed in.
+function threadJson(t: ThreadItem, signedIn: boolean) {
   return {
     id: t.id,
     board: { slug: t.board_slug, name: t.board_name, color: t.board_color },
@@ -115,15 +127,16 @@ function threadJson(t: Thread) {
     like_count: t.like_count,
     last_post_at: unix(t.last_post_at),
     created_at: unix(t.created_at),
+    ...(signedIn && { last_read_floor: t.last_read_floor ?? 0 }),
   };
 }
 
-// What is the reader's own comes only to someone signed in.
 function threadDetailJson(t: Thread, signedIn: boolean) {
   return {
-    ...threadJson(t),
+    ...threadJson(t, signedIn),
     url: `${env.PUBLIC_URL}/t/${t.id}`,
     ...(signedIn && {
+      read_floors: t.read_floors,
       bookmarked: t.bookmarked_at !== null,
       notify_level: t.notify_level ?? "normal",
     }),
@@ -256,7 +269,8 @@ export const threadsRoutes = createRouter()
       const own = query.view === "bookmarked" || query.view === "posted";
       const viewer = own ? authorize(c, "read") : c.var.viewer;
       const page = await listThreads(isMember(viewer, c.var.bot), viewer?.id ?? null, query);
-      return c.json({ items: page.items.map(threadJson), next_cursor: page.next_cursor }, 200);
+      const items = page.items.map((t) => threadJson(t, viewer !== null));
+      return c.json({ items, next_cursor: page.next_cursor }, 200);
     },
   )
   .openapi(
@@ -547,6 +561,42 @@ export const threadsRoutes = createRouter()
       );
       const items = revisions.map((r) => ({ ...r, created_at: unix(r.created_at) }));
       return c.json({ items }, 200);
+    },
+  )
+  .openapi(
+    createRoute({
+      method: "post",
+      path: "/threads/{id}/read",
+      summary: "记录阅读：读过的楼层区间并入已读，seconds 计入阅读时间，单次最多算 120 秒",
+      description: "网页批量上报，见 docs/design.md §8.9。超出主题楼层数的部分不算",
+      request: {
+        params: IdParam,
+        body: json(
+          z.object({
+            floors: z
+              .array(
+                z
+                  .tuple([z.number().int().min(1), z.number().int().min(1)])
+                  .refine(([from, to]) => from <= to, "区间的起点不能大于终点"),
+              )
+              .max(100)
+              .openapi({ description: "楼层区间，含两端，例如 [[1, 20], [480, 495]]" }),
+            seconds: z.number().int().min(0).max(3600),
+          }),
+        ),
+      },
+      responses: {
+        204: { description: "已记录" },
+        401: errorResponse("没有登录"),
+        404: errorResponse("主题不存在"),
+      },
+    }),
+    async (c) => {
+      const viewer = requireWeb(c);
+      const { floors, seconds } = c.req.valid("json");
+      const members = isMember(viewer, c.var.bot);
+      await recordReading(viewer, members, c.req.valid("param").id, floors, seconds);
+      return c.body(null, 204);
     },
   )
   .openapi(

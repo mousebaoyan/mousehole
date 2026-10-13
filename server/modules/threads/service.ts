@@ -10,7 +10,13 @@ import { countBoard, countTags, findTags, getBoard, getTagId } from "../boards/s
 import { onebotToMarkdown, type Segment } from "../qq/onebot.ts";
 import { assertNotLinked, findLink, linkSource, type Source } from "../qq/service.ts";
 import { fetchUpload, linkUploads, showImages } from "../uploads/service.ts";
-import { countLikes, countUserPosts, membersByQq, userBriefs } from "../users/service.ts";
+import {
+  countLikes,
+  countReading,
+  countUserPosts,
+  membersByQq,
+  userBriefs,
+} from "../users/service.ts";
 
 export const PAGE_SIZE = 30;
 // Longest Markdown a post may have.
@@ -66,6 +72,7 @@ function selectThreads(members: boolean, userId: number | null) {
       "boards.color as board_color",
       "mine.bookmarked_at",
       "mine.notify_level",
+      sql<number | null>`upper(mine.read_floors) - 1`.as("last_read_floor"),
       LAST_POST_MICROS.as("last_post_micros"),
       BOOKMARK_MICROS.as("bookmark_micros"),
       // Topics first, then schools and majors.
@@ -90,7 +97,7 @@ function selectThreads(members: boolean, userId: number | null) {
 
 type ThreadRow = Awaited<ReturnType<ReturnType<typeof selectThreads>["execute"]>>[number];
 
-async function withUsers(rows: ThreadRow[]) {
+async function withUsers<Row extends ThreadRow>(rows: Row[]) {
   const user = await userBriefs(rows.flatMap((r) => [r.author_id, ...r.poster_ids]));
   return rows.map((row) => ({
     ...row,
@@ -228,7 +235,14 @@ export async function listThreads(
 // ---- One thread and its floors
 
 export async function getThread(id: number, members: boolean, userId: number | null) {
-  const row = await selectThreads(members, userId).where("threads.id", "=", id).executeTakeFirst();
+  const row = await selectThreads(members, userId)
+    .select(
+      sql<[number, number][]>`(
+        SELECT coalesce(json_agg(json_build_array(lower(r), upper(r) - 1) ORDER BY lower(r)), '[]')
+        FROM unnest(mine.read_floors) r)`.as("read_floors"),
+    )
+    .where("threads.id", "=", id)
+    .executeTakeFirst();
   if (!row) throw threadNotFound();
   const [thread] = await withUsers([row]);
   return thread;
@@ -280,7 +294,7 @@ async function withPostUsers(rows: PostRow[]) {
 
 async function assertVisible(threadId: number, members: boolean) {
   const thread = await visibleThreads(members)
-    .select(["threads.id", "threads.locked", "threads.board_id"])
+    .select(["threads.id", "threads.locked", "threads.board_id", "threads.floor_count"])
     .where("threads.id", "=", threadId)
     .executeTakeFirst();
   if (!thread) throw threadNotFound();
@@ -448,7 +462,13 @@ export async function createThread(
     await countUserPosts(trx, viewer.id, { threads: 1, posts: 0 });
     await trx
       .insertInto("thread_users")
-      .values({ user_id: viewer.id, thread_id: thread.id, notify_level: "watching" })
+      .values({
+        user_id: viewer.id,
+        thread_id: thread.id,
+        notify_level: "watching",
+        read_floors: readFloors([[1, 1]]),
+        last_read_at: sql<Date>`now()`,
+      })
       .execute();
     await auditBot(trx, actor, "thread.create", "thread", thread.id);
     return thread.id;
@@ -525,6 +545,7 @@ export async function createPost(
       .execute();
     await countBoard(trx, thread.board_id, { threads: 0, posts: 1 });
     await countUserPosts(trx, viewer.id, { threads: 0, posts: 1 });
+    await addReadFloors(trx, viewer.id, threadId, [[numbered.floor_count, numbered.floor_count]]);
     await auditBot(trx, actor, "post.create", "post", post.id);
     return post.id;
   });
@@ -899,6 +920,71 @@ export async function setNotifyLevel(
     .values({ user_id: viewer.id, thread_id: threadId, notify_level: level })
     .onConflict((oc) => oc.columns(["user_id", "thread_id"]).doUpdateSet({ notify_level: level }))
     .execute();
+}
+
+// ---- Reading. See design §8.9.
+
+// A report counts this much reading time at most; it is sent every minute or so.
+const MAX_READ_SECONDS = 120;
+
+// Floor ranges, both ends included, as an int4multirange: adjacent ones merge on the way in.
+function readFloors(ranges: [number, number][]) {
+  return sql<string>`int4multirange(${sql.join(
+    ranges.map(([from, to]) => sql`int4range(${from}, ${to}, '[]')`),
+  )})`;
+}
+
+function floorsIn(set: "old" | "new") {
+  return sql<number>`(SELECT coalesce(sum(upper(r) - lower(r)), 0)::integer
+    FROM unnest(${sql.raw(set)}.read_floors) r)`;
+}
+
+// Joins floors to what the reader has read, and returns how many of them they hadn't.
+async function addReadFloors(
+  trx: Transaction<DB>,
+  userId: number,
+  threadId: number,
+  ranges: [number, number][],
+) {
+  const { added } = await trx
+    .insertInto("thread_users")
+    .values({
+      user_id: userId,
+      thread_id: threadId,
+      read_floors: readFloors(ranges),
+      last_read_at: sql<Date>`now()`,
+    })
+    .onConflict((oc) =>
+      oc.columns(["user_id", "thread_id"]).doUpdateSet({
+        read_floors: sql<string>`thread_users.read_floors + excluded.read_floors`,
+        last_read_at: sql<Date>`now()`,
+      }),
+    )
+    .returning(sql<number>`${floorsIn("new")} - ${floorsIn("old")}`.as("added"))
+    .executeTakeFirstOrThrow();
+  return added;
+}
+
+// What the browser reports: the floors read since the last report and for how long. Floors past
+// the end of the thread are dropped.
+export async function recordReading(
+  viewer: Viewer,
+  members: boolean,
+  threadId: number,
+  ranges: [number, number][],
+  seconds: number,
+) {
+  const thread = await assertVisible(threadId, members);
+  const floors = ranges
+    .map(([from, to]): [number, number] => [from, Math.min(to, thread.floor_count)])
+    .filter(([from, to]) => from <= to);
+  await db.transaction().execute(async (trx) => {
+    const added = await addReadFloors(trx, viewer.id, threadId, floors);
+    await countReading(trx, viewer.id, {
+      posts: added,
+      seconds: Math.min(seconds, MAX_READ_SECONDS),
+    });
+  });
 }
 
 // ---- Views
