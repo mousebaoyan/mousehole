@@ -4,6 +4,7 @@ import { cn } from "cn";
 import { BoardBadge } from "~/components/board-badge";
 import { UserAvatar } from "~/components/user-avatar";
 import { boards, type Thread } from "~/draft-data";
+import { useMe } from "~/me";
 
 // Phones stack the reply count over the time beside the title; wider screens line the numbers up
 // under a header.
@@ -53,6 +54,7 @@ export function ThreadList({
 }
 
 function ThreadRow({ thread, showBoard }: { thread: Thread; showBoard: boolean }) {
+  const me = useMe();
   const board = boards.find((b) => b.slug === thread.board);
   return (
     <li
@@ -81,6 +83,17 @@ function ThreadRow({ thread, showBoard }: { thread: Thread; showBoard: boolean }
           )}
           {thread.featured && (
             <Sparkles aria-label="精华" className="ml-1.5 -mt-0.5 inline size-4 text-warning" />
+          )}
+          {me && thread.isNew && (
+            <span className="ml-2 inline-block size-2 rounded-full bg-primary align-middle">
+              <span className="sr-only">新主题</span>
+            </span>
+          )}
+          {me && thread.unread !== undefined && (
+            <span className="ml-2 inline-block rounded-full bg-primary px-1.5 align-middle text-2xs font-semibold text-primary-foreground tabular-nums">
+              {thread.unread}
+              <span className="sr-only">条新回复</span>
+            </span>
           )}
         </Link>
         <div className="relative mt-1.5 flex flex-wrap items-center gap-x-2.5 gap-y-1">

@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState, type ReactNode, type RefObject } from "react";
 import { createPortal } from "react-dom";
+import { cn } from "cn";
 
 // Hand-rolled instead of Base UI's Menu and Dialog: the header is on every page, and those
 // would add ~40KB gzip of JavaScript, positioning library included, for every visitor.
@@ -34,11 +35,14 @@ export function Dropdown({
   label,
   trigger,
   triggerClassName,
+  align = "end",
   children,
 }: {
   label: string;
   trigger: ReactNode;
   triggerClassName: string;
+  // Which edge of the trigger the menu lines up with.
+  align?: "start" | "end";
   // Gets `close` for items that act in place; links close the menu by navigating.
   children: (close: () => void) => ReactNode;
 }) {
@@ -61,7 +65,10 @@ export function Dropdown({
       {open && (
         <div
           id={id}
-          className="absolute top-full right-0 z-50 mt-2 flex w-48 flex-col rounded-xl border bg-popover p-1 text-sm text-popover-foreground shadow-lg"
+          className={cn(
+            "absolute top-full z-50 mt-2 flex w-48 flex-col rounded-xl border bg-popover p-1 text-sm text-popover-foreground shadow-lg",
+            align === "start" ? "left-0" : "right-0",
+          )}
         >
           {children(() => setOpen(false))}
         </div>

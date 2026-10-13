@@ -68,6 +68,10 @@
 - 合并通知：未读期间再次触发同一个 `group_key`，只更新触发者、次数和时间，不新增行。
 - 冻结的账号不再产生新通知。已读超过 180 天的通知每天清理。
 
+- 阅读记录（[总体设计 §8.9](design.md#89-阅读记录)）存在 `thread_users`：`read_floors` 是读过的楼层（`int4multirange`），上报时 `read_floors + 新区间` 并进去，相邻的区间自动合并；`last_read_at` 是最后一次上报的时间。列表里的 `last_read_floor` 取 `upper(read_floors) - 1`。
+- 同一个事务里更新 `users` 的阅读统计：`posts_read` 加上这次新读的楼层数（并入前后区间集合的大小之差），`read_seconds` 加上阅读秒数。读过的主题数直接数 `thread_users` 里 `last_read_at` 不为空的行，走 `thread_users_read`。
+- `days_visited`：每次更新 `last_seen_at` 时，如果按北京时间已经是新的一天就加一。会话续期和阅读上报都会更新 `last_seen_at`。
+
 ## 图片
 
 表：`uploads`、`post_uploads`。
@@ -137,6 +141,8 @@
 | 未读通知数 | `notifications_unread` |
 | 给关注者发通知 | `thread_users_watchers` |
 | 收藏列表 | `thread_users_bookmarks` |
+| 已读列表、未读列表、读过的主题数 | `thread_users_read` |
+| 新主题（最近 7 天发布、没打开过） | 主键倒序取最近 7 天的，再排除 `thread_users` 里读过的 |
 | 由 QQ 消息找论坛内容 | `qq_message_links` 主键 |
 | 由回复找来源消息 | `qq_message_links_post` |
 | 事件流续传 | `events` 主键 |

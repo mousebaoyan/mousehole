@@ -23,7 +23,8 @@
   "qq": 123456789, "card": "26-某某大学-CV", "level": 5, "level_name": "活跃", "title": "26届",
   "joined_at": 1740000000, "member_status": "member", "activated": true }
 
-// 主题。匿名主题的 author 为 null；floor_count 是最大的楼层号；last_read_floor 是自己读到的楼层，只在登录时返回；
+// 主题。匿名主题的 author 为 null；floor_count 是最大的楼层号；
+// last_read_floor 是自己读过的最高一楼，没打开过为 0，只在登录时返回；主题详情里还有 read_floors，是读过的楼层区间，例如 [[1, 20], [480, 495]]；
 // posters 是列表里显示的参与者，作者在前，再按最近回复排最多 4 个人，只在列表里返回
 { "id": 42, "board": { "slug": "qa", "name": "保研问答", "color": "#e07b53" }, "kind": "question",
   "title": "rank 30% 能冲夏令营吗", "author": { … }, "posters": [ { … } ], "tags": ["夏令营"],
@@ -143,7 +144,7 @@ token 由管理员在后台创建，只显示一次。每个 token 绑定一个 
 
 | 方法 | 路径 | 说明 | 权限 |
 | --- | --- | --- | --- |
-| GET | `/users/{user}` | 资料卡：显示名、头像、角色、QQ 号、群名片、群等级、专属头衔、入群时间、是否已冻结、统计 | 访客 |
+| GET | `/users/{user}` | 资料卡：显示名、头像、角色、QQ 号、群名片、群等级、专属头衔、入群时间、是否已冻结、统计（主题数、回复数、获赞数、认可数、访问天数、阅读时间、读过的主题和回复数） | 访客 |
 | GET | `/users/{user}/threads` | 发过的主题，不含匿名内容 | 访客 |
 | GET | `/users/{user}/posts` | 发过的回复，不含匿名内容 | 访客 |
 | PATCH | `/users/{user}` | 设置角色、锁定角色 | 管理员 / `admin` |
@@ -168,7 +169,8 @@ token 由管理员在后台创建，只显示一次。每个 token 绑定一个 
 
 | 方法 | 路径 | 说明 | 权限 |
 | --- | --- | --- | --- |
-| GET | `/threads` | 主题列表：`board`、`tag`、`author`、`kind`、`sort`、`cursor`。`sort` 可选 `latest`（最新回复）、`new`（最新发布）、`hot`（热门）、`unsolved`（待解答） | 访客 |
+| GET | `/threads` | 主题列表：`board`、`tag`、`author`、`kind`、`view`、`cursor`。`view` 默认 `latest`（按最后回复），还可以是 `created`（按发布时间）、`hot`（热门）、`unsolved`（待解答）；以下几种要登录：`new`（最近 7 天发布、自己还没打开过）、`unread`（读过、之后有新楼层）、`read`（读过的，按最后阅读时间）、`posted`（自己发过或回复过的）、`bookmarked`（收藏的，按收藏时间） | 访客 |
+| GET | `/threads/counts` | 当前范围里新和未读的主题各有几个：`board`、`tag`，返回 `{ new, unread }` | 成员 |
 | POST | `/threads` | 发主题：`board`、`title`、`content`、`kind`、`tags`、`source` | 成员 / `act` |
 | GET | `/threads/{id}` | 主题详情，含主楼 | 访客 |
 | PATCH | `/threads/{id}` | 作者可以改标题和标签；版主还可以改版块、置顶、精华、锁定、`status`（审核通过或隐藏） | 作者、版主 / `act`、`moderate` |
@@ -178,7 +180,7 @@ token 由管理员在后台创建，只显示一次。每个 token 绑定一个 
 | PUT | `/threads/{id}/subscription` | 关注级别：`{ level }`，可选 `watching`、`normal`、`muted` | 成员 / `act` |
 | PUT | `/threads/{id}/bookmark` | 收藏 | 成员 / `act` |
 | DELETE | `/threads/{id}/bookmark` | 取消收藏 | 成员 / `act` |
-| PUT | `/threads/{id}/read` | 记录已读到第几楼：`{ floor }` | 成员 |
+| POST | `/threads/{id}/read` | 记录阅读：`{ floors: [[1, 20], [480, 495]], seconds: 95 }`，读过的楼层区间（含两端）并入已读，`seconds` 计入阅读时间，单次最多算 120 秒。网页批量发送，见[总体设计 §8.9](design.md#89-阅读记录) | 成员 |
 | GET | `/threads/{id}/stream` | SSE：这个主题的新回复、编辑和删除 | 访客 |
 
 主楼正文用 `PATCH /posts/{主楼 ID}` 修改。

@@ -85,6 +85,9 @@ export type Thread = {
   views: number;
   lastActive: string;
   participants: User[];
+  // For the signed-in reader: never opened (new), or floors added since they last read it.
+  isNew?: boolean;
+  unread?: number;
 };
 
 export const threads: Thread[] = [
@@ -103,6 +106,7 @@ export const threads: Thread[] = [
   },
   {
     id: 2,
+    unread: 3,
     board: "qa",
     title: "rank 30% 能冲华五的夏令营吗？有没有类似背景的学长学姐",
     author: users.qi,
@@ -116,6 +120,7 @@ export const threads: Thread[] = [
   },
   {
     id: 3,
+    isNew: true,
     board: "experience",
     title: "26 届南大 CS 夏令营复盘：机试、面试和联系导师的时间线",
     author: users.nj,
@@ -143,6 +148,7 @@ export const threads: Thread[] = [
   },
   {
     id: 5,
+    isNew: true,
     board: "deadlines",
     title: "复旦大学计算机科学技术学院 2026 年夏令营报名开启（6 月 10 日截止）",
     author: users.rex,
@@ -155,6 +161,7 @@ export const threads: Thread[] = [
   },
   {
     id: 6,
+    unread: 12,
     board: "schools",
     title: "上交 CS 学硕和浙大软院专硕怎么选？想做系统方向",
     author: users.moon,
@@ -180,6 +187,7 @@ export const threads: Thread[] = [
   },
   {
     id: 8,
+    unread: 27,
     board: "chat",
     title: "今天的鼠鼠也在努力（每日打卡楼）",
     author: users.cat,
@@ -204,6 +212,42 @@ export const threads: Thread[] = [
     participants: [users.rex, users.ict, users.nj, users.moon],
   },
 ];
+
+export const tags = ["夏令营", "预推免", "九推", "简历", "机试", "面试", "导师", "定位", "科研"];
+
+const VIEWS = ["latest", "new", "unread", "hot", "unsolved"] as const;
+export type ThreadView = (typeof VIEWS)[number];
+
+// The list filters in a page URL: ?view=hot&tag=夏令营.
+export function readFilter(url: string) {
+  const params = new URL(url).searchParams;
+  return {
+    view: VIEWS.find((v) => v === params.get("view")) ?? "latest",
+    tag: tags.find((t) => t === params.get("tag")) ?? null,
+  };
+}
+
+// What /api/v1/threads will do with board, tag and view.
+export function listThreads(board: string | null, tag: string | null, view: ThreadView) {
+  const scope = threads.filter(
+    (t) => (board === null || t.board === board) && (tag === null || t.tags.includes(tag)),
+  );
+  const counts = {
+    new: scope.filter((t) => t.isNew).length,
+    unread: scope.filter((t) => t.unread).length,
+  };
+  const list =
+    view === "new"
+      ? scope.filter((t) => t.isNew)
+      : view === "unread"
+        ? scope.filter((t) => t.unread)
+        : view === "hot"
+          ? scope.toSorted((a, b) => b.views - a.views)
+          : view === "unsolved"
+            ? scope.filter((t) => t.kind === "question" && !t.solved)
+            : scope;
+  return { threads: list, counts };
+}
 
 export type ReactionKey =
   | "heart"
