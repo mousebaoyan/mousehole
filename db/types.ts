@@ -282,6 +282,7 @@ export interface ThreadUsers {
 }
 
 export interface Uploads {
+  animated: Generated<boolean>;
   bytes: number;
   created_at: Generated<Timestamp>;
   height: number;

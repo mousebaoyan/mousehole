@@ -63,7 +63,7 @@ const sanitizer = new FilterXSS({
     h5: [],
     h6: [],
     hr: [],
-    img: ["src", "alt", "title", "loading"],
+    img: ["src", "alt", "title", "width", "height", "loading"],
     input: ["type", "checked", "disabled"],
     li: ["class"],
     ol: ["start"],
@@ -102,8 +102,15 @@ function link(href: string, text: string) {
   return [open, body, new Token("link_close", "a", -1)];
 }
 
-// Marks up a paragraph's inline tokens: mentions, external links, images, task boxes.
-function inline(children: InstanceType<typeof Token>[], mentions: Set<number>) {
+// An image a post may show: the file to load, the larger one it opens, and its size on the page.
+export type ShownImage = { src: string; href: string; width: number; height: number };
+
+// Marks up a paragraph's inline tokens: mentions, external links, images.
+function inline(
+  children: InstanceType<typeof Token>[],
+  mentions: Set<number>,
+  images: Map<string, ShownImage>,
+) {
   const out: InstanceType<typeof Token>[] = [];
   for (const [i, token] of children.entries()) {
     if (token.type === "link_open") {
@@ -115,28 +122,46 @@ function inline(children: InstanceType<typeof Token>[], mentions: Set<number>) {
       }
       if (isExternal(href)) token.attrSet("rel", "ugc nofollow noopener");
     }
-    // Only uploaded images are shown; others become links, so pages don't load strangers' files.
+    if (token.type !== "image") {
+      out.push(token);
+      continue;
+    }
+    // Only images uploaded here are shown, with their size written down so the page doesn't
+    // jump as they load; others become links, so pages don't load strangers' files.
     const src = attr(token, "src");
-    if (token.type === "image" && !src.startsWith("/uploads/")) {
+    const image = images.get(src);
+    if (image) {
+      const shown = new Token("html_inline", "", 0);
+      const escape = md.utils.escapeHtml;
+      shown.content = `<a href="${escape(image.href)}"><img src="${escape(image.src)}" alt="${escape(token.content)}" width="${image.width}" height="${image.height}" loading="lazy"></a>`;
+      out.push(shown);
+    } else {
       const [open, ...rest] = link(src, token.content || src);
       if (isExternal(src)) open.attrSet("rel", "ugc nofollow noopener");
       out.push(open, ...rest);
-      continue;
     }
-    if (token.type === "image") token.attrSet("loading", "lazy");
-    out.push(token);
   }
   return out;
 }
 
-export async function renderMarkdown(source: string) {
+// `images` says which of the image addresses in the text may be shown, and how. The result lists
+// those that are, so the caller can keep track of what the post uses.
+export async function renderMarkdown(
+  source: string,
+  images: (srcs: string[]) => Promise<Map<string, ShownImage>>,
+) {
   const tokens = md.parse(source, {});
   if (tokens.some((t) => t.type === "fence")) await loadLanguages();
   const mentions = new Set<number>();
+  const srcs = tokens
+    .flatMap((t) => t.children ?? [])
+    .filter((t) => t.type === "image")
+    .map((t) => attr(t, "src"));
+  const shown = srcs.length > 0 ? await images([...new Set(srcs)]) : new Map<string, ShownImage>();
 
   for (const [i, token] of tokens.entries()) {
     if (token.type === "inline" && token.children) {
-      token.children = inline(token.children, mentions);
+      token.children = inline(token.children, mentions, shown);
       // `- [x] done` in a list.
       const first = token.children.at(0);
       const task = first?.type === "text" ? TASK.exec(first.content) : null;
@@ -159,5 +184,5 @@ export async function renderMarkdown(source: string) {
   }
 
   const html = sanitizer.process(md.renderer.render(tokens, md.options, {}));
-  return { html, mentions: [...mentions] };
+  return { html, mentions: [...mentions], images: [...shown.keys()] };
 }

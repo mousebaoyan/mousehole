@@ -234,7 +234,7 @@ token 由管理员在后台创建，只显示一次。每个 token 绑定一个 
 
 | 方法 | 路径 | 说明 | 权限 |
 | --- | --- | --- | --- |
-| POST | `/uploads` | 用 multipart 上传图片，返回 `id`、`url`、`width`、`height` | 成员 / `act` |
+| POST | `/uploads` | 用 multipart 的 `file` 字段上传图片（JPEG、PNG、WebP、GIF、AVIF，最大 20MB），返回 `id`、`url`、`width`、`height`；`url` 是大图的地址，写进正文用它，同一张图再传返回同一个。不是能识别的图片返回 `400 invalid_image`；每人 10 分钟最多 30 张 | 成员 / `act` |
 | POST | `/uploads/fetch` | `{ url }`：论坛下载并转存，只接受 QQ 的图片域名 | `act` |
 
 一般不需要单独调用 `/uploads/fetch`：`content.onebot` 里的图片会自动转存。

@@ -84,7 +84,7 @@ test/                   Vitest 的全局准备：测试用的数据库
 
 ## 4. 前端
 
-- 数据走 loader 和 action，提交用 `<Form>` 或 `useFetcher`。不用 `useEffect` 拉数据或同步派生状态，不引入全局状态库和请求库（Redux、Zustand、TanStack Query 等）。
+- 数据走 loader 和 action，提交用 `<Form>` 或 `useFetcher`。上传图片是例外：编辑器用 `app/browser-api.ts` 直接 `POST /api/v1/uploads`，文件大，经过 action 要多读一遍、多传一次。不用 `useEffect` 拉数据或同步派生状态，不引入全局状态库和请求库（Redux、Zustand、TanStack Query 等）。
 - React Compiler 已开启，不手写 `useMemo`、`useCallback`、`memo`。
 - 组件先用 shadcn/ui（用它的 CLI 加进仓库再改）；样式写 Tailwind 工具类，除了主题变量不写单独的 CSS。
 - 每个页面都会加载的组件不用 Base UI：按钮、头像、输入框是普通元素，菜单和抽屉是 `components/disclosure.tsx` 里手写的，Base UI 的菜单和对话框连同定位库要多出约 40KB gzip。对话框用原生 `<dialog>`（`showModal()` 自带遮罩、Esc 关闭和焦点管理），滑块之类的控件也先找原生元素。Base UI 只用在原生元素做不了的复杂控件上（标签页、下拉选择等），它们随路由拆分，只在用到的页面加载。

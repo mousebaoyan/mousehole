@@ -6,6 +6,7 @@ import { AppError } from "../../platform/errors.ts";
 import { renderMarkdown } from "../../platform/markdown.ts";
 import { recordAudit } from "../audit/service.ts";
 import { countBoard, countTags, findTags, getBoard, getTagId } from "../boards/service.ts";
+import { linkUploads, showImages } from "../uploads/service.ts";
 import { countUserPosts, userBriefs } from "../users/service.ts";
 
 export const PAGE_SIZE = 30;
@@ -320,7 +321,7 @@ export async function createThread(
     throw new AppError(403, "forbidden", "这个版块只有版主能发主题");
   }
   const tagIds = await findTags(input.tags);
-  const { html } = await renderMarkdown(input.markdown);
+  const { html, images } = await renderMarkdown(input.markdown, showImages);
 
   const id = await db.transaction().execute(async (trx) => {
     const thread = await trx
@@ -334,7 +335,7 @@ export async function createThread(
       })
       .returning(["id", "last_post_at"])
       .executeTakeFirstOrThrow();
-    await trx
+    const opening = await trx
       .insertInto("posts")
       .values({
         thread_id: thread.id,
@@ -344,7 +345,9 @@ export async function createThread(
         html,
         via: actor.tokenId === null ? "web" : "bot",
       })
-      .execute();
+      .returning("id")
+      .executeTakeFirstOrThrow();
+    await linkUploads(trx, opening.id, images);
     if (tagIds.length > 0) {
       await trx
         .insertInto("thread_tags")
@@ -377,7 +380,7 @@ export async function createPost(
   if (thread.locked && !STAFF.includes(viewer.role)) {
     throw new AppError(403, "thread_locked", "主题已锁定");
   }
-  const { html } = await renderMarkdown(input.markdown);
+  const { html, images } = await renderMarkdown(input.markdown, showImages);
 
   const id = await db.transaction().execute(async (trx) => {
     if (input.reply_to_id !== undefined) {
@@ -418,6 +421,7 @@ export async function createPost(
       })
       .returning("id")
       .executeTakeFirstOrThrow();
+    await linkUploads(trx, post.id, images);
     await trx
       .updateTable("thread_tags")
       .set({ last_post_at: numbered.last_post_at })
@@ -469,7 +473,7 @@ export async function editPost(
   const thread = await assertVisible(post.thread_id, members);
   assertMayChange(staff, viewer, post.author_id, thread.locked);
   if (markdown === post.body) return post;
-  const { html } = await renderMarkdown(markdown);
+  const { html, images } = await renderMarkdown(markdown, showImages);
 
   await db.transaction().execute(async (trx) => {
     const edited = await trx
@@ -492,6 +496,7 @@ export async function editPost(
         editor_id: viewer.id,
       })
       .execute();
+    await linkUploads(trx, postId, images);
     await auditChange(trx, actor, post.author_id, {
       action: "post.edit",
       target_type: "post",
