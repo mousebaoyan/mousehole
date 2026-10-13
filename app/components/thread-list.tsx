@@ -10,7 +10,19 @@ import { boards, type Thread } from "~/draft-data";
 const COLUMNS =
   "grid grid-cols-[minmax(0,1fr)_auto] gap-x-4 px-3 sm:px-4 md:grid-cols-[minmax(0,1fr)_9.25rem_3rem_3rem_5rem]";
 
-const COUNT = new Intl.NumberFormat("zh-CN", { notation: "compact" });
+const COUNT = new Intl.NumberFormat("en", { notation: "compact", maximumFractionDigits: 1 });
+
+// 1.5k rather than 1,520.
+function count(n: number) {
+  return COUNT.format(n).toLowerCase();
+}
+
+// Hotter colors for bigger numbers: one, two, three, then four or more digits.
+const HEAT = ["", "text-link", "text-warning", "font-semibold text-destructive"];
+
+function heat(n: number) {
+  return HEAT[Math.min(String(n).length, HEAT.length) - 1];
+}
 
 export function ThreadList({
   threads,
@@ -86,15 +98,17 @@ function ThreadRow({ thread, showBoard }: { thread: Thread; showBoard: boolean }
         ))}
       </div>
       <div className="flex flex-col items-end gap-1 md:items-center">
-        <span className="flex items-center gap-1 font-medium tabular-nums">
+        <span
+          className={cn("flex items-center gap-1 font-medium tabular-nums", heat(thread.replies))}
+        >
           <MessageSquare className="size-3.5 md:hidden" />
-          {thread.replies}
+          {count(thread.replies)}
           <span className="sr-only">条回复</span>
         </span>
         <span className="md:hidden">{thread.lastActive}</span>
       </div>
-      <span className="text-center tabular-nums max-md:hidden">
-        {COUNT.format(thread.views)}
+      <span className={cn("text-center tabular-nums max-md:hidden", heat(thread.views))}>
+        {count(thread.views)}
         <span className="sr-only">次浏览</span>
       </span>
       <span className="text-center max-md:hidden">{thread.lastActive}</span>
