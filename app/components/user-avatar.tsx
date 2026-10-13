@@ -9,12 +9,13 @@ const tints = [
   "bg-stone-200 text-stone-700 dark:bg-stone-400/25 dark:text-stone-200",
 ];
 
-// Until avatars are cached from QQ, show the first character on a tint picked by user id.
+// Until avatars are cached from QQ, show the first letter on a tint picked by user id. Letters
+// rather than characters: group cards often start with a year, as in "26-南京大学-CV".
 export function UserAvatar({
   user,
   className,
 }: {
-  user: { id: number; name: string };
+  user: { id: number; display_name: string };
   className?: string;
 }) {
   return (
@@ -26,7 +27,7 @@ export function UserAvatar({
         className,
       )}
     >
-      {user.name.slice(0, 1)}
+      {/\p{L}/u.exec(user.display_name)?.[0] ?? user.display_name.slice(0, 1)}
     </span>
   );
 }

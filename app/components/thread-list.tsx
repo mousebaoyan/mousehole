@@ -1,10 +1,11 @@
 import { CircleCheck, MessageSquare, Pin, Sparkles } from "lucide-react";
+import type { ReactNode } from "react";
 import { Link } from "react-router";
 import { cn } from "cn";
+import type { ThreadItem } from "~/api-types";
 import { BoardBadge } from "~/components/board-badge";
 import { UserAvatar } from "~/components/user-avatar";
-import type { Thread } from "~/draft-data";
-import { useBoards, useMe } from "~/forum";
+import { ago } from "~/time";
 
 // Phones stack the reply count over the time beside the title; wider screens line the numbers up
 // under a header.
@@ -25,12 +26,17 @@ function heat(n: number) {
   return HEAT[Math.min(String(n).length, HEAT.length) - 1];
 }
 
+// `children` are more rows, for lists that grow as they are scrolled.
 export function ThreadList({
   threads,
+  now,
   showBoard = true,
+  children,
 }: {
-  threads: Thread[];
+  threads: ThreadItem[];
+  now: number;
   showBoard?: boolean;
+  children?: ReactNode;
 }) {
   return (
     <>
@@ -45,17 +51,35 @@ export function ThreadList({
         <span className="text-center">活动</span>
       </div>
       <ul>
-        {threads.map((t) => (
-          <ThreadRow key={t.id} thread={t} showBoard={showBoard} />
-        ))}
+        <ThreadRows threads={threads} now={now} showBoard={showBoard} />
+        {children}
       </ul>
     </>
   );
 }
 
-function ThreadRow({ thread, showBoard }: { thread: Thread; showBoard: boolean }) {
-  const me = useMe();
-  const board = useBoards().find((b) => b.slug === thread.board);
+export function ThreadRows({
+  threads,
+  now,
+  showBoard,
+}: {
+  threads: ThreadItem[];
+  now: number;
+  showBoard: boolean;
+}) {
+  return threads.map((t) => <ThreadRow key={t.id} thread={t} now={now} showBoard={showBoard} />);
+}
+
+function ThreadRow({
+  thread,
+  now,
+  showBoard,
+}: {
+  thread: ThreadItem;
+  now: number;
+  showBoard: boolean;
+}) {
+  const active = ago(thread.last_post_at, now);
   return (
     <li
       className={cn(
@@ -66,20 +90,16 @@ function ThreadRow({ thread, showBoard }: { thread: Thread; showBoard: boolean }
       <div className="min-w-0">
         <Link
           to={`/t/${thread.id}`}
-          className={cn(
-            "text-body leading-snug font-medium text-foreground after:absolute after:inset-0 lg:text-base",
-            // Members: read to the last floor. Guests aren't tracked, so the browser's history.
-            me ? thread.read && "text-foreground/65" : "visited:text-foreground/65",
-          )}
+          className="text-body leading-snug font-medium text-foreground after:absolute after:inset-0 visited:text-foreground/65 lg:text-base"
         >
-          {thread.pinned && (
+          {thread.pinned > 0 && (
             <Pin
               aria-label="置顶"
               className="mr-1 -mt-0.5 inline size-4 rotate-45 text-brand-strong"
             />
           )}
           {thread.title}
-          {thread.solved && (
+          {thread.solved_post_id !== null && (
             <CircleCheck
               aria-label="已解决"
               className="ml-1.5 -mt-0.5 inline size-4 text-success"
@@ -88,47 +108,39 @@ function ThreadRow({ thread, showBoard }: { thread: Thread; showBoard: boolean }
           {thread.featured && (
             <Sparkles aria-label="精华" className="ml-1.5 -mt-0.5 inline size-4 text-warning" />
           )}
-          {me && thread.isNew && (
-            <span className="ml-2 inline-block size-2 rounded-full bg-primary align-middle">
-              <span className="sr-only">新主题</span>
-            </span>
-          )}
-          {me && thread.unread !== undefined && (
-            <span className="ml-2 inline-block rounded-full bg-primary px-1.5 align-middle text-2xs font-semibold text-primary-foreground tabular-nums">
-              {thread.unread}
-              <span className="sr-only">条新回复</span>
-            </span>
-          )}
         </Link>
         <div className="relative mt-1.5 flex flex-wrap items-center gap-x-2.5 gap-y-1">
-          {showBoard && board && <BoardBadge board={board} />}
+          {showBoard && <BoardBadge board={thread.board} />}
           {thread.tags.map((t) => (
             <span key={t}>#{t}</span>
           ))}
         </div>
       </div>
       <div className="relative flex gap-0.5 max-md:hidden">
-        {thread.participants.map((p) => (
-          <span key={p.id} title={p.name}>
+        {[thread.author, ...thread.posters].map((p) => (
+          <span key={p.id} title={p.display_name}>
             <UserAvatar user={p} className="size-7" />
           </span>
         ))}
       </div>
       <div className="flex flex-col items-end gap-1 md:items-center">
         <span
-          className={cn("flex items-center gap-1 font-medium tabular-nums", heat(thread.replies))}
+          className={cn(
+            "flex items-center gap-1 font-medium tabular-nums",
+            heat(thread.reply_count),
+          )}
         >
           <MessageSquare className="size-3.5 md:hidden" />
-          {count(thread.replies)}
+          {count(thread.reply_count)}
           <span className="sr-only">条回复</span>
         </span>
-        <span className="md:hidden">{thread.lastActive}</span>
+        <span className="md:hidden">{active}</span>
       </div>
-      <span className={cn("text-center tabular-nums max-md:hidden", heat(thread.views))}>
-        {count(thread.views)}
+      <span className={cn("text-center tabular-nums max-md:hidden", heat(thread.view_count))}>
+        {count(thread.view_count)}
         <span className="sr-only">次浏览</span>
       </span>
-      <span className="text-center max-md:hidden">{thread.lastActive}</span>
+      <span className="text-center max-md:hidden">{active}</span>
     </li>
   );
 }

@@ -81,9 +81,7 @@ export function SiteHeader({ me }: { me: Me | null }) {
                 key={pathname}
                 label="我的账号"
                 triggerClassName="flex rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                trigger={
-                  <UserAvatar user={{ id: me.id, name: me.display_name }} className="size-8" />
-                }
+                trigger={<UserAvatar user={me} className="size-8" />}
               >
                 {() => (
                   <>

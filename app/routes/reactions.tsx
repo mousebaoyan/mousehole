@@ -96,10 +96,8 @@ export function ReactionSummary({ sorted }: { sorted: [string, number][] }) {
               >
                 <UserAvatar user={r.user} className="size-8" />
                 <div className="min-w-0 flex-1">
-                  <div className="truncate font-medium">{r.user.name}</div>
-                  <div className="truncate text-xs text-muted-foreground">
-                    LV{r.user.level} {r.user.levelName}
-                  </div>
+                  <div className="truncate font-medium">{r.user.display_name}</div>
+                  <div className="truncate text-xs text-muted-foreground">LV{r.user.level}</div>
                 </div>
                 <span className="text-lg">{emojiOf(r.reaction)}</span>
               </li>

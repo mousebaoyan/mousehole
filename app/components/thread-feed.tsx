@@ -1,21 +1,32 @@
 import { Check, ChevronDown, PenSquare } from "lucide-react";
-import { Fragment, type ReactNode } from "react";
-import { Link, useLocation } from "react-router";
+import { Fragment, useRef, type ReactNode } from "react";
+import { Link, useFetcher, useLocation } from "react-router";
 import { cn } from "cn";
+import type { ThreadItem } from "~/api-types";
 import { Dropdown, menuItem } from "~/components/disclosure";
-import { ThreadList } from "~/components/thread-list";
+import { ThreadList, ThreadRows } from "~/components/thread-list";
 import { buttonVariants } from "~/components/ui/button";
-import type { Thread, ThreadView } from "~/draft-data";
-import { useBoards, useMe, useTags, type Board } from "~/forum";
+import { useBoards, useTags, type Board } from "~/forum";
+import { useNearView } from "~/near-view";
 
-// New and unread depend on what the reader has read, so only members see them.
-const VIEWS: { view: ThreadView; label: string; mine?: boolean }[] = [
+// New and unread join these once reading is recorded; see design §8.9.
+const VIEWS = [
   { view: "latest", label: "最新" },
-  { view: "new", label: "新", mine: true },
-  { view: "unread", label: "未读", mine: true },
   { view: "hot", label: "热门" },
   { view: "unsolved", label: "待解答" },
-];
+] as const;
+
+export type ThreadView = (typeof VIEWS)[number]["view"];
+
+// The list filters in a page URL: ?view=hot&tag=夏令营&cursor=…
+export function readFilter(url: string) {
+  const params = new URL(url).searchParams;
+  return {
+    view: VIEWS.find((v) => v.view === params.get("view"))?.view ?? "latest",
+    tag: params.get("tag"),
+    cursor: params.get("cursor"),
+  };
+}
 
 const KINDS = [
   { kind: "topic", label: "话题" },
@@ -34,21 +45,17 @@ function listUrl(board: string | null, tag: string | null, view: ThreadView) {
   return `${board === null ? "/" : `/b/${board}`}${params.size > 0 ? `?${params}` : ""}`;
 }
 
+type Page = { threads: ThreadItem[]; next_cursor: string | null; now: number };
+
 // The board and tag filters stack, and both keep the current view.
 export function ThreadFeed({
   threads,
-  counts,
+  next_cursor,
+  now,
   view,
   tag,
   board,
-}: {
-  threads: Thread[];
-  counts: { new: number; unread: number };
-  view: ThreadView;
-  tag: string | null;
-  board: Board | null;
-}) {
-  const me = useMe();
+}: Page & { view: ThreadView; tag: string | null; board: Board | null }) {
   const boards = useBoards();
   const tags = useTags();
   const { key } = useLocation();
@@ -137,27 +144,59 @@ export function ThreadFeed({
           aria-label="主题列表"
           className="-mx-1 flex overflow-x-auto px-1 [scrollbar-width:none] max-sm:w-full"
         >
-          {VIEWS.filter((v) => !v.mine || me).map((v) => {
-            const count = v.view === "new" ? counts.new : v.view === "unread" ? counts.unread : 0;
-            return (
-              <Link
-                key={v.view}
-                to={listUrl(slug, tag, v.view)}
-                aria-current={v.view === view ? "page" : undefined}
-                className={cn(
-                  "shrink-0 rounded-full px-3.5 py-1.5 text-sm whitespace-nowrap text-muted-foreground hover:text-foreground",
-                  v.view === view && "bg-secondary font-medium text-foreground",
-                )}
-              >
-                {v.label}
-                {count > 0 && <span className="ml-1 text-primary tabular-nums">{count}</span>}
-              </Link>
-            );
-          })}
+          {VIEWS.map((v) => (
+            <Link
+              key={v.view}
+              to={listUrl(slug, tag, v.view)}
+              aria-current={v.view === view ? "page" : undefined}
+              className={cn(
+                "shrink-0 rounded-full px-3.5 py-1.5 text-sm whitespace-nowrap text-muted-foreground hover:text-foreground",
+                v.view === view && "bg-secondary font-medium text-foreground",
+              )}
+            >
+              {v.label}
+            </Link>
+          ))}
         </nav>
       </div>
-      <ThreadList threads={threads} showBoard={board === null} />
+      {threads.length === 0 ? (
+        <p className="py-16 text-center text-sm text-muted-foreground">还没有主题</p>
+      ) : (
+        <ThreadList threads={threads} now={now} showBoard={board === null}>
+          {next_cursor !== null && <More cursor={next_cursor} showBoard={board === null} />}
+        </ThreadList>
+      )}
     </section>
+  );
+}
+
+// The next page loads when its link comes near the screen; without JavaScript the link opens it.
+// Each page brings the link to the one after it.
+function More({ cursor, showBoard }: { cursor: string; showBoard: boolean }) {
+  const { load, state, data } = useFetcher<Page>();
+  const link = useRef<HTMLAnchorElement>(null);
+  const { pathname, search } = useLocation();
+  const params = new URLSearchParams(search);
+  params.set("cursor", cursor);
+  const href = `${pathname}?${params}`;
+  // The home page is an index route, which fetchers reach only with ?index.
+  const url = pathname === "/" ? `/?index&${params}` : href;
+  useNearView(link, state === "idle" && !data, () => void load(url));
+
+  if (!data) {
+    return (
+      <li className="py-4 text-center text-meta">
+        <a ref={link} href={href} className="text-muted-foreground hover:text-foreground">
+          {state === "loading" ? "加载中…" : "加载更多"}
+        </a>
+      </li>
+    );
+  }
+  return (
+    <>
+      <ThreadRows threads={data.threads} now={data.now} showBoard={showBoard} />
+      {data.next_cursor !== null && <More cursor={data.next_cursor} showBoard={showBoard} />}
+    </>
   );
 }
 
