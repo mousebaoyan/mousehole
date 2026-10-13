@@ -124,3 +124,110 @@
     cursor: pointer;
   }
 }
+
+/* Post bodies, rendered when they were written. */
+
+.prose a.mention {
+  @apply rounded-md bg-secondary px-1 py-px font-medium text-foreground no-underline hover:bg-accent;
+}
+
+.prose li.task {
+  list-style: none;
+}
+.prose li.task > input {
+  margin: 0 0.4em 0 -1.3em;
+  vertical-align: -0.1em;
+  accent-color: var(--primary);
+}
+
+/* Code colored by highlight.js, in GitHub's light and dark colors like the main site. */
+.hljs {
+  --hl-keyword: #d73a49;
+  --hl-title: #6f42c1;
+  --hl-constant: #005cc5;
+  --hl-string: #032f62;
+  --hl-built-in: #e36209;
+  --hl-comment: #6a737d;
+  --hl-tag: #22863a;
+  --hl-bullet: #735c0f;
+  --hl-deleted: #b31d28;
+  --hl-deleted-bg: #ffeef0;
+  --hl-added-bg: #f0fff4;
+}
+[data-theme="dark"] .hljs {
+  --hl-keyword: #ff7b72;
+  --hl-title: #d2a8ff;
+  --hl-constant: #79c0ff;
+  --hl-string: #a5d6ff;
+  --hl-built-in: #ffa657;
+  --hl-comment: #8b949e;
+  --hl-tag: #7ee787;
+  --hl-bullet: #f2cc60;
+  --hl-deleted: #ffdcd7;
+  --hl-deleted-bg: #67060c;
+  --hl-added-bg: #033a16;
+}
+.hljs-doctag,
+.hljs-keyword,
+.hljs-template-tag,
+.hljs-template-variable,
+.hljs-type,
+.hljs-variable.language_ {
+  color: var(--hl-keyword);
+}
+.hljs-title,
+.hljs-title.class_,
+.hljs-title.function_ {
+  color: var(--hl-title);
+}
+.hljs-attr,
+.hljs-attribute,
+.hljs-literal,
+.hljs-meta,
+.hljs-number,
+.hljs-operator,
+.hljs-variable,
+.hljs-selector-attr,
+.hljs-selector-class,
+.hljs-selector-id,
+.hljs-section {
+  color: var(--hl-constant);
+}
+.hljs-regexp,
+.hljs-string,
+.hljs-meta .hljs-string {
+  color: var(--hl-string);
+}
+.hljs-built_in,
+.hljs-symbol {
+  color: var(--hl-built-in);
+}
+.hljs-comment,
+.hljs-code,
+.hljs-formula {
+  color: var(--hl-comment);
+}
+.hljs-name,
+.hljs-quote,
+.hljs-selector-tag,
+.hljs-selector-pseudo,
+.hljs-addition {
+  color: var(--hl-tag);
+}
+.hljs-bullet {
+  color: var(--hl-bullet);
+}
+.hljs-section,
+.hljs-strong {
+  font-weight: 600;
+}
+.hljs-emphasis {
+  font-style: italic;
+}
+.hljs-addition {
+  background-color: var(--hl-added-bg);
+}
+.hljs-deletion {
+  color: var(--hl-deleted);
+  background-color: var(--hl-deleted-bg);
+}
