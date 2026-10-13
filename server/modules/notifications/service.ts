@@ -1,8 +1,10 @@
 import { sql, type Transaction } from "kysely";
 import type { DB } from "../../../db/types.ts";
 import { db } from "../../platform/db.ts";
+import { env } from "../../platform/env.ts";
 import { AppError } from "../../platform/errors.ts";
 import { excerpt } from "../../platform/markdown.ts";
+import { recordEvent } from "../events/service.ts";
 import { userBriefs } from "../users/service.ts";
 
 // What people are told of; see design §8.6. reply: someone replied to my floor; mention: @ me;
@@ -30,11 +32,29 @@ type Notice = {
   data?: Record<string, string>;
 };
 
+// Unless turned off, every type shows on the site; QQ reminders only come for these.
+const QQ_BY_DEFAULT = new Set<NotificationType>(["reply", "mention"]);
+
+// What happened, as the QQ reminder says it after the person's name.
+const SAID: Record<NotificationType, string> = {
+  reply: "回复了你",
+  mention: "提到了你",
+  like: "赞了你",
+  boost: "给你留了短评",
+  watching: "回复了你关注的主题",
+  following: "发了新主题",
+};
+
+// Characters of the floor in a QQ reminder.
+const QQ_EXCERPT = 60;
+
 // Written in the transaction that caused it. Nobody hears of their own doing, nor anyone who left
-// the groups, muted the thread or turned the type off.
+// the groups or muted the thread. Each type shows on the site, and goes to QQ as an event for the
+// bot plugin, as each person set it.
 async function notify(trx: Transaction<DB>, userIds: number[], notice: Notice) {
   const ids = [...new Set(userIds)].filter((id) => id !== notice.actorId);
   if (ids.length === 0) return;
+  const prefs = sql`users.notify_prefs -> ${notice.type}`;
   const recipients = await trx
     .selectFrom("users")
     .leftJoin("thread_users", (join) =>
@@ -42,41 +62,86 @@ async function notify(trx: Transaction<DB>, userIds: number[], notice: Notice) {
         .onRef("thread_users.user_id", "=", "users.id")
         .on("thread_users.thread_id", "=", notice.threadId),
     )
-    .select("users.id")
+    .select([
+      "users.id",
+      "users.display_name",
+      "users.qq",
+      sql<boolean>`coalesce((${prefs} ->> 'site')::boolean, true)`.as("site"),
+      sql<boolean>`coalesce((${prefs} ->> 'qq')::boolean, ${QQ_BY_DEFAULT.has(notice.type)})`.as(
+        "to_qq",
+      ),
+    ])
     .where("users.id", "in", ids)
     .where("users.member_status", "=", "member")
     .where("users.deleted_at", "is", null)
     .where(sql<boolean>`thread_users.notify_level IS DISTINCT FROM 'muted'`)
-    .where(sql<boolean>`coalesce((users.notify_prefs -> ${notice.type} ->> 'site')::boolean, true)`)
     .execute();
-  if (recipients.length === 0) return;
-  const key = notice.type === "watching" ? notice.threadId : notice.postId;
-  await trx
-    .insertInto("notifications")
-    .values(
-      recipients.map((r) => ({
-        user_id: r.id,
-        type: notice.type,
-        actor_id: notice.actorId,
-        thread_id: notice.threadId,
-        post_id: notice.postId,
-        group_key: MERGED.has(notice.type) ? `${notice.type}:${key}` : null,
-        data: notice.data ?? {},
-      })),
-    )
-    .onConflict((oc) =>
-      oc
-        .columns(["user_id", "group_key"])
-        .where("group_key", "is not", null)
-        .where("read_at", "is", null)
-        .doUpdateSet({
-          count: sql<number>`notifications.count + 1`,
-          actor_id: sql<number>`excluded.actor_id`,
-          data: sql`excluded.data`,
-          created_at: sql<Date>`now()`,
-        }),
-    )
-    .execute();
+  const onSite = recipients.filter((r) => r.site);
+  if (onSite.length > 0) {
+    const key = notice.type === "watching" ? notice.threadId : notice.postId;
+    await trx
+      .insertInto("notifications")
+      .values(
+        onSite.map((r) => ({
+          user_id: r.id,
+          type: notice.type,
+          actor_id: notice.actorId,
+          thread_id: notice.threadId,
+          post_id: notice.postId,
+          group_key: MERGED.has(notice.type) ? `${notice.type}:${key}` : null,
+          data: notice.data ?? {},
+        })),
+      )
+      .onConflict((oc) =>
+        oc
+          .columns(["user_id", "group_key"])
+          .where("group_key", "is not", null)
+          .where("read_at", "is", null)
+          .doUpdateSet({
+            count: sql<number>`notifications.count + 1`,
+            actor_id: sql<number>`excluded.actor_id`,
+            data: sql`excluded.data`,
+            created_at: sql<Date>`now()`,
+          }),
+      )
+      .execute();
+  }
+  const toQq = recipients.filter((r) => r.to_qq);
+  if (toQq.length > 0) await remindOnQq(trx, toQq, notice);
+}
+
+async function remindOnQq(
+  trx: Transaction<DB>,
+  people: { id: number; display_name: string; qq: number | null }[],
+  notice: Notice,
+) {
+  const about = await trx
+    .selectFrom("posts")
+    .innerJoin("threads", "threads.id", "posts.thread_id")
+    .innerJoin("users", (join) => join.on("users.id", "=", notice.actorId))
+    .select([
+      "posts.floor",
+      "posts.html",
+      "threads.title",
+      "users.id as actor_id",
+      "users.display_name as actor_name",
+      "users.qq as actor_qq",
+    ])
+    .where("posts.id", "=", notice.postId)
+    .executeTakeFirstOrThrow();
+  const url = `${env.PUBLIC_URL}/t/${notice.threadId}${about.floor > 1 ? `?floor=${about.floor}` : ""}`;
+  const text = `${about.actor_name} ${SAID[notice.type]}：${excerpt(about.html, QQ_EXCERPT)}\n${about.title}\n${url}`;
+  for (const person of people) {
+    await recordEvent(trx, "notification.created", {
+      user: { id: person.id, display_name: person.display_name, qq: person.qq },
+      type: notice.type,
+      actor: { id: about.actor_id, display_name: about.actor_name, qq: about.actor_qq },
+      thread: { id: notice.threadId, title: about.title },
+      post: { id: notice.postId, floor: about.floor },
+      url,
+      qq_text: text,
+    });
+  }
 }
 
 // A new floor: its author's floor if it answers one, then those @-ed in it, then those watching the

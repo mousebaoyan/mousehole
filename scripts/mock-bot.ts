@@ -149,6 +149,18 @@ async function call(path: string, { method = "GET", body, gzip, headers = {}, to
   return { status: res.status, data, cookies };
 }
 
+// Prints the event stream as the plugin would receive it, until stopped.
+async function listen() {
+  const res = await fetch(`${env.PUBLIC_URL}/api/v1/bot/events`, {
+    headers: { authorization: `Bearer ${state().token}` },
+  });
+  if (!res.body) throw new Error(`事件流连不上：HTTP ${res.status}`);
+  console.log("在听事件流，Ctrl-C 停止");
+  for await (const chunk of res.body.pipeThrough(new TextDecoderStream())) {
+    process.stdout.write(chunk);
+  }
+}
+
 function show(result: { status: number; data: unknown }) {
   console.log(result.status, JSON.stringify(result.data, null, 2));
 }
@@ -278,6 +290,7 @@ async function demo() {
   const member = first + 5;
   let t = now() - 600;
 
+  const since = Number(field((await call("/bot/events/batch")).data, "next_after"));
   const linked = await call("/admin/groups", { method: "POST", body: { group_id: group } });
   check("关联演示群", linked.status === 204, `群号 ${group}`);
   await pushInfo(group);
@@ -486,6 +499,23 @@ async function demo() {
     answer.data,
   );
 
+  // What the plugin hears: the question with the message it came from, and the answer with the
+  // message it answers, which the plugin can quote back in the group.
+  const heard = await call(
+    `/bot/events/batch?after=${since}&types=thread.created,post.created&limit=500`,
+  );
+  const events = Fields.array().parse(field(heard.data, "items"));
+  const about = (type: string) =>
+    events.findLast((e) => e.type === type && field(field(e.data, "thread"), "id") === fromGroupId);
+  const same = (source: unknown) =>
+    Object.entries(question).every(([k, v]) => field(source, k) === v);
+  check(
+    "事件流：群里的提问带来源消息，回答带被回复那条的来源",
+    same(field(about("thread.created")?.data, "source")) &&
+      same(field(field(about("post.created")?.data, "reply_to"), "source")),
+    `${events.length} 个事件`,
+  );
+
   const hidden = await call(`/threads/${threadId}`, { token: null });
   check("访客打不开仅成员版块里的主题", hidden.status === 404, `HTTP ${hidden.status}`);
   const removed = await call(`/boards/${slug}`, { method: "DELETE" });
@@ -511,7 +541,8 @@ const USAGE = `用法：pnpm mock-bot <命令>
   join QQ号 / leave QQ号  增量：进群、退群
   link QQ号              给这位成员签发登录链接
   code 口令 QQ号          以这位成员的身份确认登录口令
-  demo                   在新的群里跑一遍 bot 的完整流程，逐项检查`;
+  demo                   在新的群里跑一遍 bot 的完整流程，逐项检查
+  events                 接上事件流，把收到的事件原样打出来`;
 
 const { positionals, values } = parseArgs({
   allowPositionals: true,
@@ -562,6 +593,9 @@ switch (command) {
     break;
   case "demo":
     process.exitCode = (await demo()) ? 0 : 1;
+    break;
+  case "events":
+    await listen();
     break;
   default:
     console.log(USAGE);
