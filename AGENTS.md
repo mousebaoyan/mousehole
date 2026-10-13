@@ -2,7 +2,7 @@
 
 鼠洞（mousehole）是四非计算机保研鼠群的论坛：一个 QQ 号就是一个账号，群里的 AstrBot 插件通过接口使用论坛的几乎全部功能。这份文件是参与开发的规矩和文档索引，人和编码 agent 都适用。
 
-> 正在搭 M1 骨架。`pnpm test` 和 `pnpm db:*` 随数据库和测试一起加上，在那之前还不能用。
+> 正在搭 M1 骨架。`pnpm test` 随第一批测试一起加上，在那之前还不能用。
 
 ## 文档索引
 
@@ -30,7 +30,8 @@
 
 | 命令 | 用途 |
 | --- | --- |
-| `pnpm dev` | 本地开发 |
+| `docker compose up -d` | 启动本地 PostgreSQL；第一次先 `cp .env.example .env` |
+| `pnpm dev` | 本地开发，启动时自动执行迁移 |
 | `pnpm check` | 类型检查、lint、格式检查和测试，提交前要全部通过 |
 | `pnpm test <路径>` | 只跑相关的测试 |
 | `pnpm format` | 格式化 |
