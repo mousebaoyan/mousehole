@@ -1,7 +1,6 @@
 import { data } from "react-router";
 import { PenSquare } from "lucide-react";
 import { Link } from "react-router";
-import { ForumAside } from "~/components/forum-aside";
 import { ThreadFeed } from "~/components/thread-feed";
 import { buttonVariants } from "~/components/ui/button";
 import { boards, threads } from "~/draft-data";
@@ -21,26 +20,23 @@ export function loader({ request, params }: Route.LoaderArgs) {
 export default function Board({ loaderData }: Route.ComponentProps) {
   const { board, sort } = loaderData;
   return (
-    <div className="flex gap-8">
-      <div className="min-w-0 flex-1">
-        <header className="mb-5 flex items-start gap-4 px-1">
-          <span
-            className="mt-1.5 size-3 shrink-0 rounded-full"
-            style={{ backgroundColor: board.color }}
-          />
-          <div className="flex-1">
-            <h1 className="text-xl font-semibold">{board.name}</h1>
-            <p className="mt-1 text-sm text-muted-foreground">
-              {board.description} · {board.threads.toLocaleString()} 个主题
-            </p>
-          </div>
-          <Link to="/new" className={buttonVariants({ variant: "outline", size: "sm" })}>
-            <PenSquare /> 发帖
-          </Link>
-        </header>
-        <ThreadFeed threads={loaderData.threads} sort={sort} showBoard={false} />
-      </div>
-      <ForumAside />
-    </div>
+    <>
+      <header className="mb-5 flex items-start gap-4 px-1">
+        <span
+          className="mt-1.5 size-3 shrink-0 rounded-full"
+          style={{ backgroundColor: board.color }}
+        />
+        <div className="flex-1">
+          <h1 className="text-xl font-semibold">{board.name}</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {board.description} · {board.threads.toLocaleString()} 个主题
+          </p>
+        </div>
+        <Link to="/new" className={buttonVariants({ variant: "outline", size: "sm" })}>
+          <PenSquare /> 发帖
+        </Link>
+      </header>
+      <ThreadFeed threads={loaderData.threads} sort={sort} showBoard={false} />
+    </>
   );
 }

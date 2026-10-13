@@ -11,7 +11,7 @@ import {
 import { data } from "react-router";
 import { BoardBadge } from "~/components/board-badge";
 import { useComposer } from "~/components/composer";
-import { ThreadRow } from "~/components/thread-row";
+import { ThreadList } from "~/components/thread-list";
 import { Button } from "~/components/ui/button";
 import { boards, checkInPosts, threads, topicPosts } from "~/draft-data";
 import type { Route } from "./+types/topic.ts";
@@ -108,11 +108,9 @@ export default function Topic({
 
         <section className="mt-12">
           <h2 className="px-1 font-semibold">推荐主题</h2>
-          <ul className="mt-2">
-            {suggested.map((t) => (
-              <ThreadRow key={t.id} thread={t} />
-            ))}
-          </ul>
+          <div className="mt-3">
+            <ThreadList threads={suggested} />
+          </div>
         </section>
       </article>
 

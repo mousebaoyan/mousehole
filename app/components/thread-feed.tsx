@@ -1,7 +1,7 @@
 import { PenSquare } from "lucide-react";
 import { Link } from "react-router";
 import { cn } from "cn";
-import { ThreadRow } from "~/components/thread-row";
+import { ThreadList } from "~/components/thread-list";
 import type { Thread } from "~/draft-data";
 
 const sorts = [
@@ -35,11 +35,7 @@ export function ThreadFeed({
           </Link>
         ))}
       </div>
-      <ul>
-        {threads.map((t) => (
-          <ThreadRow key={t.id} thread={t} showBoard={showBoard} />
-        ))}
-      </ul>
+      <ThreadList threads={threads} showBoard={showBoard} />
       <Link
         to="/new"
         aria-label="发帖"
