@@ -179,3 +179,47 @@ export async function memberStats() {
     .where("deleted_at", "is", null)
     .executeTakeFirstOrThrow();
 }
+
+export async function countUserPosts(
+  trx: Transaction<DB>,
+  userId: number,
+  { threads, posts }: { threads: number; posts: number },
+) {
+  await trx
+    .updateTable("users")
+    .set((eb) => ({
+      thread_count: eb("thread_count", "+", threads),
+      post_count: eb("post_count", "+", posts),
+    }))
+    .where("id", "=", userId)
+    .execute();
+}
+
+// How people appear next to their posts: the title is their custom one in the primary group.
+// Returns a lookup for the IDs asked for.
+export async function userBriefs(ids: number[]) {
+  const rows = await db
+    .selectFrom("users")
+    .leftJoin("qq_groups", (join) => join.on("qq_groups.is_primary", "=", true))
+    .leftJoin("group_members", (join) =>
+      join
+        .onRef("group_members.group_id", "=", "qq_groups.id")
+        .onRef("group_members.user_id", "=", "users.id")
+        .on("group_members.left_at", "is", null),
+    )
+    .select((eb) => [
+      "users.id",
+      "users.display_name",
+      "users.role",
+      "users.level",
+      eb.fn.coalesce("group_members.title", eb.val("")).as("title"),
+    ])
+    .where("users.id", "=", sql<number>`any(${[...new Set(ids)]}::integer[])`)
+    .execute();
+  const users = new Map(rows.map((r) => [r.id, r]));
+  return (id: number) => {
+    const user = users.get(id);
+    if (!user) throw new Error(`User ${id} was not looked up`);
+    return user;
+  };
+}

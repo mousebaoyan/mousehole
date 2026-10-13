@@ -31,18 +31,22 @@
 // 标签。kind：topic 话题、school 院校、major 方向
 { "id": 1, "name": "夏令营", "kind": "topic", "thread_count": 42 }
 
-// 主题。匿名主题的 author 为 null；floor_count 是最大的楼层号；
-// last_read_floor 是自己读过的最高一楼，没打开过为 0，只在登录时返回；主题详情里还有 read_floors，是读过的楼层区间，例如 [[1, 20], [480, 495]]；
-// posters 是列表里显示的参与者，作者在前，再按最近回复排最多 4 个人，只在列表里返回
+// 主题和回复里的用户只带这几项；title 是主群里的专属头衔，没有为空字符串
+{ "id": 7, "display_name": "鼠鼠", "role": "user", "level": 5, "title": "26届" }
+
+// 主题。匿名主题的 author 为 null；floor_count 是最大的楼层号；pinned：0 不置顶，1 版块内置顶，2 全站置顶；
+// posters 是作者以外、最近 20 层里最近回复的最多 4 个人；url 只在主题详情里有；
+// last_read_floor 是自己读过的最高一楼，没打开过为 0，只在登录时返回；主题详情里还有 read_floors，是读过的楼层区间，例如 [[1, 20], [480, 495]]
 { "id": 42, "board": { "slug": "qa", "name": "保研问答", "color": "#e07b53" }, "kind": "question",
   "title": "rank 30% 能冲夏令营吗", "author": { … }, "posters": [ { … } ], "tags": ["夏令营"],
-  "pinned": 0, "featured": false, "locked": false, "status": "visible", "solved_post_id": null,
+  "pinned": 0, "featured": false, "locked": false, "solved_post_id": null,
   "reply_count": 5, "floor_count": 6, "view_count": 120, "like_count": 3, "last_read_floor": 4,
   "last_post_at": 1760000000, "created_at": 1759990000, "url": "https://bbs.mousebaoyan.cn/t/42" }
 
-// 回复。source 只返回给 bot 和管理员；正文只带 html 或 body 中的一个，见上面的「正文」
+// 回复。source 只返回给 bot 和管理员；正文只带 html 或 body 中的一个，见上面的「正文」；
+// 删除的楼层 deleted 为 true，正文为空字符串
 { "id": 108, "thread_id": 42, "floor": 3, "reply_to": { "id": 105, "floor": 2, "author": { … } },
-  "author": { … }, "html": "<p>…</p>", "via": "qq",
+  "author": { … }, "html": "<p>…</p>", "via": "qq", "deleted": false,
   "source": { "chat_type": "group", "chat_id": 987654321, "message_id": 7731 },
   "status": "visible", "reactions": { "heart": 2, "+1": 1 }, "my_reaction": "heart", "reply_count": 1,
   "boosts": [ { "id": 31, "user": { … }, "body": "学到了", "created_at": 1760000100 } ],
@@ -180,10 +184,10 @@ token 由管理员在后台创建，只显示一次。每个 token 绑定一个 
 
 | 方法 | 路径 | 说明 | 权限 |
 | --- | --- | --- | --- |
-| GET | `/threads` | 主题列表：`board`、`tag`、`author`、`kind`、`view`、`cursor`。`view` 默认 `latest`（按最后回复），还可以是 `created`（按发布时间）、`hot`（热门）、`unsolved`（待解答）；以下几种要登录：`new`（最近 7 天发布、自己还没打开过）、`unread`（读过、之后有新楼层）、`read`（读过的，按最后阅读时间）、`posted`（自己发过或回复过的）、`bookmarked`（收藏的，按收藏时间） | 访客 |
+| GET | `/threads` | 主题列表，每页 30 个：`board`、`tag`、`author`、`kind`、`view`、`cursor`；版块或标签不存在返回 404。`view` 默认 `latest`（按最后回复），还可以是 `created`（按发布时间）、`hot`（热门）、`unsolved`（待解答）；以下几种要登录：`new`（最近 7 天发布、自己还没打开过）、`unread`（读过、之后有新楼层）、`read`（读过的，按最后阅读时间）、`posted`（自己发过或回复过的）、`bookmarked`（收藏的，按收藏时间）。`latest` 的第一页先列置顶的主题：首页是全站置顶，版块页还有版块内置顶；按标签筛选时不置顶 | 访客 |
 | GET | `/threads/counts` | 当前范围里新和未读的主题各有几个：`board`、`tag`，返回 `{ new, unread }` | 成员 |
-| POST | `/threads` | 发主题：`board`、`title`、`content`、`kind`、`tags`、`source` | 成员 / `act` |
-| GET | `/threads/{id}` | 主题详情，含主楼 | 访客 |
+| POST | `/threads` | 发主题：`board`、`title`（4–80 个字）、`content`、`kind`（不带时用版块的默认类型）、`tags`（最多 5 个，只能用已有的）、`source`；只有版主能发的版块返回 `403 forbidden` | 成员 / `act` |
+| GET | `/threads/{id}` | 主题详情；楼层（包括主楼）用 `/threads/{id}/posts` 取 | 访客 |
 | PATCH | `/threads/{id}` | 作者可以改标题和标签；版主还可以改版块、置顶、精华、锁定、`status`（审核通过或隐藏） | 作者、版主 / `act`、`moderate` |
 | DELETE | `/threads/{id}` | 删除主题；有人回复后作者不能删，只有版主能删 | 作者、版主 / `act`、`moderate` |
 | PUT | `/threads/{id}/solution` | 采纳答案：`{ post_id }` | 主题作者、版主 / `act`、`moderate` |
@@ -200,11 +204,11 @@ token 由管理员在后台创建，只显示一次。每个 token 绑定一个 
 
 | 方法 | 路径 | 说明 | 权限 |
 | --- | --- | --- | --- |
-| GET | `/threads/{id}/posts` | 楼层列表，按楼层号升序，每次最多 20 层：`after=N` 取第 N 楼之后的（默认 0，从主楼开始），`before=N` 取第 N 楼之前的，二选一；不足 20 层说明这个方向到头了。每层带 `reply_to`（回复的是哪一条，没有为 `null`）和 `reply_count`（有几条回复它） | 访客 |
+| GET | `/threads/{id}/posts` | 楼层列表，按楼层号升序，每次最多 20 层：`after=N` 取第 N 楼之后的（默认 0，从主楼开始），`before=N` 取第 N 楼之前的，二选一；不足 20 层说明这个方向到头了。每层带 `reply_to`（回复的是哪一条，没有为 `null`）和 `reply_count`（有几条回复它）；删除的楼层也在，带 `deleted: true` | 访客 |
 | POST | `/preview` | `{ markdown }`：渲染成发布后的 HTML，返回 `{ html }`，编辑器预览用；每人每分钟最多 120 次 | 成员 / `act` |
-| POST | `/threads/{id}/posts` | 回复：`content`、`reply_to_id`（回复同一主题里的哪一条，可选）、`source` | 成员 / `act` |
+| POST | `/threads/{id}/posts` | 回复：`content`、`reply_to_id`（回复同一主题里的哪一条，可选）、`source`；锁定的主题只有版主能回复，否则返回 `403 thread_locked` | 成员 / `act` |
 | GET | `/posts/{id}` | 单条回复 | 访客 |
-| GET | `/posts/{id}/replies` | 回复这一条的楼层，按楼层号排序：`cursor` | 访客 |
+| GET | `/posts/{id}/replies` | 回复这一条的楼层，按楼层号升序，每次最多 20 层：`after=N` 取第 N 楼之后的，不足 20 层说明取完了 | 访客 |
 | PATCH | `/posts/{id}` | 作者修改 `content`，保留编辑记录；版主还可以改 `status`（审核通过或隐藏），可附 `reason` | 作者、版主 / `act`、`moderate` |
 | DELETE | `/posts/{id}` | 删除；楼层号保留，显示"该楼已删除" | 作者、版主 / `act`、`moderate` |
 | GET | `/posts/{id}/revisions` | 编辑记录 | 作者、版主 / `read` |
