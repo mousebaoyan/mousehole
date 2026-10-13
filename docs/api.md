@@ -34,7 +34,7 @@
 { "id": 108, "thread_id": 42, "floor": 3, "parent_id": null, "reply_to_id": null,
   "author": { … }, "html": "<p>…</p>", "via": "qq",
   "source": { "chat_type": "group", "chat_id": 987654321, "message_id": 7731 },
-  "status": "visible", "reactions": { "+1": 2 }, "my_reactions": ["+1"], "sub_count": 1,
+  "status": "visible", "reactions": { "heart": 2, "+1": 1 }, "my_reaction": "heart", "sub_count": 1,
   "boosts": [ { "id": 31, "user": { … }, "body": "学到了", "created_at": 1760000100 } ],
   "boost_count": 9, "my_boost": "已收藏",
   "edited_at": null, "created_at": 1760000000 }
@@ -183,16 +183,16 @@ token 由管理员在后台创建，只显示一次。一个 token 可以有多�
 
 | 方法 | 路径 | 说明 | 权限 |
 | --- | --- | --- | --- |
-| GET | `/threads/{id}/posts` | 楼层列表：`page`（每页 30 层），每层附前 3 条楼中楼 | 访客 |
+| GET | `/threads/{id}/posts` | 楼层列表：`page`（每页 30 层）。楼中楼默认收起，只带 `sub_count` | 访客 |
 | POST | `/threads/{id}/posts` | 回复：`content`、`parent_id`（发楼中楼时填楼层 ID）、`reply_to_id`（回复或引用某一条）、`source` | 成员 / `act` |
 | GET | `/posts/{id}` | 单条回复，附所在楼层号和页码，方便跳转 | 访客 |
 | GET | `/posts/{id}/replies` | 某一层的全部楼中楼：`cursor` | 访客 |
 | PATCH | `/posts/{id}` | 作者修改 `content`，保留编辑记录；版主还可以改 `status`（审核通过或隐藏），可附 `reason` | 作者、版主 / `act`、`moderate` |
 | DELETE | `/posts/{id}` | 删除；楼层号保留，显示"该楼已删除" | 作者、版主 / `act`、`moderate` |
 | GET | `/posts/{id}/revisions` | 编辑记录 | 作者、版主 / `read` |
-| PUT | `/posts/{id}/reactions/{emoji}` | 点赞（`+1`）或表情回应 | 成员 / `act` |
-| DELETE | `/posts/{id}/reactions/{emoji}` | 取消 | 成员 / `act` |
-| GET | `/posts/{id}/reactions` | 谁回应了什么 | 访客 |
+| PUT | `/posts/{id}/reaction` | 表情回应：`{ emoji }`，取 `heart`（点赞）、`+1`、`laughing`、`open_mouth`、`clap`、`tada`、`hugs`、`thinking`、`sob`、`mouse` 之一；每人一个，已有就替换 | 成员 / `act` |
+| DELETE | `/posts/{id}/reaction` | 取消自己的回应 | 成员 / `act` |
+| GET | `/posts/{id}/reactions` | 谁回应了什么：可按 `emoji` 筛选，`cursor` 翻页 | 访客 |
 | POST | `/posts/{id}/report` | 举报：`{ reason }` | 成员 / `act` |
 | PUT | `/posts/{id}/boost` | 留下或修改自己在这一层的短评：`{ body }`，不超过 16 个字；楼中楼返回 `422 boost_not_allowed` | 成员 / `act` |
 | DELETE | `/posts/{id}/boost` | 删除自己的短评 | 成员 / `act` |
