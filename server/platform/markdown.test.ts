@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 import { env } from "./env.ts";
-import { renderMarkdown, type ShownImage } from "./markdown.ts";
+import { excerpt, renderMarkdown, type ShownImage } from "./markdown.ts";
 
 // Stands in for the uploads: only /uploads/ addresses are known images.
 async function images(srcs: string[]) {
@@ -80,5 +80,13 @@ describe("Markdown 渲染", () => {
 
   test("单个换行就是换行", async () => {
     expect(await html("第一行\n第二行")).toBe("<p>第一行<br>\n第二行</p>\n");
+  });
+});
+
+describe("摘要", () => {
+  test("去掉标签、还原转义、合并空白，按看到的字截断", async () => {
+    const out = await html("**rank** 30% <能冲吗>\n\n- 夏令营\n- 预推免 👨‍👩‍👧 还有");
+    expect(excerpt(out, 100)).toBe("rank 30% <能冲吗> 夏令营 预推免 👨‍👩‍👧 还有");
+    expect(excerpt(out, 24)).toBe("rank 30% <能冲吗> 夏令营 预推免 👨‍👩‍👧…");
   });
 });

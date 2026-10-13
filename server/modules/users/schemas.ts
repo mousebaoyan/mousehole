@@ -1,4 +1,13 @@
 import { z } from "@hono/zod-openapi";
+import type { UserRef } from "../../platform/access.ts";
+
+// A user in a path or header: a forum user ID, or qq: and a QQ number.
+export const UserRefSchema = z
+  .string()
+  .regex(/^(qq:)?\d{1,12}$/, "格式应为 qq:QQ号 或论坛用户 ID")
+  .transform((v): UserRef =>
+    v.startsWith("qq:") ? { qq: Number(v.slice(3)) } : { id: Number(v) },
+  );
 
 // How a person appears next to what they wrote, wherever that is.
 export const UserBriefSchema = z

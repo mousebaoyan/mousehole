@@ -16,7 +16,8 @@ import { rateLimit } from "../../platform/rate-limit.ts";
 import { BoostSchema, boostJson } from "../reactions/schemas.ts";
 import { floorExtras } from "../reactions/service.ts";
 import { showImages } from "../uploads/service.ts";
-import { UserBriefSchema } from "../users/schemas.ts";
+import { UserBriefSchema, UserRefSchema } from "../users/schemas.ts";
+import { findUserId } from "../users/service.ts";
 import {
   countUnread,
   createPost,
@@ -31,6 +32,7 @@ import {
   listReplies,
   listRevisions,
   listThreads,
+  listUserPosts,
   MAX_BODY,
   NOTIFY_LEVELS,
   recordReading,
@@ -273,6 +275,95 @@ export const threadsRoutes = createRouter()
       const page = await listThreads(isMember(viewer, c.var.bot), viewer?.id ?? null, query);
       const items = page.items.map((t) => threadJson(t, viewer !== null));
       return c.json({ items, next_cursor: page.next_cursor }, 200);
+    },
+  )
+  .openapi(
+    createRoute({
+      method: "get",
+      path: "/users/{user}/threads",
+      summary: "某人发过的主题，最新的在前，每页 30 个",
+      request: {
+        params: z.object({ user: UserRefSchema }),
+        query: z.object({ cursor: z.string().optional() }),
+      },
+      responses: {
+        200: {
+          description: "主题",
+          content: {
+            "application/json": {
+              schema: z.object({
+                items: z.array(ThreadSchema),
+                next_cursor: z.string().nullable(),
+              }),
+            },
+          },
+        },
+        404: errorResponse("用户不存在"),
+      },
+    }),
+    async (c) => {
+      const author = await findUserId(c.req.valid("param").user);
+      const { viewer, bot } = c.var;
+      const page = await listThreads(isMember(viewer, bot), viewer?.id ?? null, {
+        author,
+        view: "created",
+        cursor: c.req.valid("query").cursor,
+      });
+      const items = page.items.map((t) => threadJson(t, viewer !== null));
+      return c.json({ items, next_cursor: page.next_cursor }, 200);
+    },
+  )
+  .openapi(
+    createRoute({
+      method: "get",
+      path: "/users/{user}/posts",
+      summary: "某人的回复（不含主楼），最新的在前，每页 30 个，正文只带前 140 个字",
+      request: {
+        params: z.object({ user: UserRefSchema }),
+        query: z.object({ cursor: z.coerce.number().int().optional() }),
+      },
+      responses: {
+        200: {
+          description: "回复",
+          content: {
+            "application/json": {
+              schema: z.object({
+                items: z.array(
+                  z.object({
+                    id: z.number(),
+                    thread: z.object({ id: z.number(), title: z.string() }),
+                    floor: z.number(),
+                    excerpt: z.string().openapi({ description: "正文的纯文本，最多 140 个字" }),
+                    like_count: z.number(),
+                    created_at: z.number(),
+                  }),
+                ),
+                next_cursor: z.string().nullable(),
+              }),
+            },
+          },
+        },
+        404: errorResponse("用户不存在"),
+      },
+    }),
+    async (c) => {
+      const author = await findUserId(c.req.valid("param").user);
+      const members = isMember(c.var.viewer, c.var.bot);
+      const page = await listUserPosts(members, author, c.req.valid("query").cursor);
+      return c.json(
+        {
+          items: page.items.map((p) => ({
+            id: p.id,
+            thread: { id: p.thread_id, title: p.title },
+            floor: p.floor,
+            excerpt: p.excerpt,
+            like_count: p.like_count,
+            created_at: unix(p.created_at),
+          })),
+          next_cursor: page.next_cursor,
+        },
+        200,
+      );
     },
   )
   // Before /threads/{id}, which would take "counts" for an ID.

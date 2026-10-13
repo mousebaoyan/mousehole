@@ -2,7 +2,6 @@ import { createRoute, z } from "@hono/zod-openapi";
 import type { Context } from "hono";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import { createMiddleware } from "hono/factory";
-import type { UserRef } from "../../platform/access.ts";
 import { env } from "../../platform/env.ts";
 import { AppError } from "../../platform/errors.ts";
 import {
@@ -30,6 +29,7 @@ import {
   resolveSession,
   SESSION_TTL_MS,
 } from "./service.ts";
+import { UserRefSchema } from "../users/schemas.ts";
 
 const COOKIE = "session";
 // Held by the browser that asked for a login code, until the code is used or expires.
@@ -45,13 +45,6 @@ function setSessionCookie(c: Context, token: string) {
     maxAge: SESSION_TTL_MS / 1000,
   });
 }
-
-const UserRefSchema = z
-  .string()
-  .regex(/^(qq:)?\d{1,12}$/, "格式应为 qq:QQ号 或论坛用户 ID")
-  .transform((v): UserRef =>
-    v.startsWith("qq:") ? { qq: Number(v.slice(3)) } : { id: Number(v) },
-  );
 
 function userRefHeader(c: Context, name: string) {
   const value = c.req.header(name);
