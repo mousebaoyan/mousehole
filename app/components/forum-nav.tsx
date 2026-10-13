@@ -1,8 +1,7 @@
 import { Bookmark, ExternalLink, History, Home, MessagesSquare } from "lucide-react";
 import { Link, NavLink } from "react-router";
 import { cn } from "cn";
-import { boards, tags } from "~/draft-data";
-import { useMe } from "~/me";
+import { useBoards, useMe, useTags } from "~/forum";
 
 const item = ({ isActive }: { isActive: boolean }) =>
   cn(
@@ -19,6 +18,9 @@ const mine = [
 
 export function ForumNav() {
   const me = useMe();
+  const boards = useBoards();
+  // Schools and majors are many; they stay in the list's tag filter.
+  const topics = useTags().filter((t) => t.kind === "topic");
   return (
     <nav className="flex flex-col gap-6 text-sm">
       <div className="flex flex-col gap-0.5">
@@ -41,20 +43,22 @@ export function ForumNav() {
           </NavLink>
         ))}
       </div>
-      <div className="flex flex-col gap-1.5 px-2.5">
-        <h2 className="pb-0.5 text-xs font-medium text-muted-foreground">标签</h2>
-        <div className="flex flex-wrap gap-1.5">
-          {tags.map((t) => (
-            <Link
-              key={t}
-              to={`/?tag=${t}`}
-              className="rounded-md bg-secondary px-2 py-0.5 text-xs text-secondary-foreground hover:bg-accent"
-            >
-              {t}
-            </Link>
-          ))}
+      {topics.length > 0 && (
+        <div className="flex flex-col gap-1.5 px-2.5">
+          <h2 className="pb-0.5 text-xs font-medium text-muted-foreground">标签</h2>
+          <div className="flex flex-wrap gap-1.5">
+            {topics.map((t) => (
+              <Link
+                key={t.id}
+                to={`/?tag=${encodeURIComponent(t.name)}`}
+                className="rounded-md bg-secondary px-2 py-0.5 text-xs text-secondary-foreground hover:bg-accent"
+              >
+                {t.name}
+              </Link>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
       <a
         href="https://mousebaoyan.cn/"
         className="flex items-center gap-1.5 px-2.5 text-xs text-muted-foreground hover:text-foreground"

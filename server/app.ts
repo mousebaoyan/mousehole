@@ -4,6 +4,7 @@ import { sql } from "kysely";
 import { adminRoutes } from "./modules/admin/routes.ts";
 import { authenticate, authRoutes, bearerToken } from "./modules/auth/routes.ts";
 import { tokenRoutes } from "./modules/auth/token-routes.ts";
+import { boardsRoutes } from "./modules/boards/routes.ts";
 import { membersRoutes } from "./modules/members/routes.ts";
 import { usersRoutes } from "./modules/users/routes.ts";
 import { db } from "./platform/db.ts";
@@ -17,6 +18,7 @@ const api = createRouter()
   .route("/", tokenRoutes)
   .route("/", usersRoutes)
   .route("/", membersRoutes)
+  .route("/", boardsRoutes)
   .route("/", adminRoutes);
 
 api.doc31("/openapi.json", { openapi: "3.1.0", info: { title: "鼠洞", version: "1" } });

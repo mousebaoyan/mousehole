@@ -3,8 +3,8 @@ import { Link } from "react-router";
 import { cn } from "cn";
 import { BoardBadge } from "~/components/board-badge";
 import { UserAvatar } from "~/components/user-avatar";
-import { boards, type Thread } from "~/draft-data";
-import { useMe } from "~/me";
+import type { Thread } from "~/draft-data";
+import { useBoards, useMe } from "~/forum";
 
 // Phones stack the reply count over the time beside the title; wider screens line the numbers up
 // under a header.
@@ -55,7 +55,7 @@ export function ThreadList({
 
 function ThreadRow({ thread, showBoard }: { thread: Thread; showBoard: boolean }) {
   const me = useMe();
-  const board = boards.find((b) => b.slug === thread.board);
+  const board = useBoards().find((b) => b.slug === thread.board);
   return (
     <li
       className={cn(

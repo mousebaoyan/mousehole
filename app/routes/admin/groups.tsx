@@ -3,7 +3,7 @@ import { apiContext } from "../../api.server.ts";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import type { Route } from "./+types/groups.ts";
-import { Field, readForm, Result, Section, Time } from "./parts.tsx";
+import { Badge, Field, readForm, Result, Section, Time } from "./parts.tsx";
 
 export function meta() {
   return [{ title: "QQ 群 · 管理后台" }];
@@ -53,16 +53,8 @@ export default function Groups({ loaderData: { groups }, actionData }: Route.Com
               <div className="min-w-48 flex-1">
                 <div className="flex items-center gap-2 font-medium">
                   {g.name || "（未同步群资料）"}
-                  {g.is_primary && (
-                    <span className="rounded bg-secondary px-1.5 py-px text-2xs text-muted-foreground">
-                      主群
-                    </span>
-                  )}
-                  {!g.enabled && (
-                    <span className="rounded bg-secondary px-1.5 py-px text-2xs text-muted-foreground">
-                      已停用
-                    </span>
-                  )}
+                  {g.is_primary && <Badge>主群</Badge>}
+                  {!g.enabled && <Badge>已停用</Badge>}
                 </div>
                 <div className="text-xs text-muted-foreground tabular-nums">
                   {g.group_id} · {g.member_count ?? "—"} / {g.max_member_count ?? "—"} 人 · 全量{" "}

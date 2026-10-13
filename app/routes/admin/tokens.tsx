@@ -5,7 +5,7 @@ import { apiContext } from "../../api.server.ts";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import type { Route } from "./+types/tokens.ts";
-import { Field, readForm, Result, Section, Time } from "./parts.tsx";
+import { Badge, Field, readForm, Result, Section, Time } from "./parts.tsx";
 
 export function meta() {
   return [{ title: "bot · 管理后台" }];
@@ -66,13 +66,9 @@ export default function Tokens({ loaderData: { tokens }, actionData }: Route.Com
           {tokens.map((t) => (
             <li key={t.id} className="flex flex-wrap items-center gap-x-6 gap-y-2 py-3">
               <div className="min-w-56 flex-1">
-                <div className="font-medium">
+                <div className="flex items-center gap-2 font-medium">
                   {t.name}
-                  {t.revoked_at !== null && (
-                    <span className="ml-2 rounded bg-secondary px-1.5 py-px text-2xs text-muted-foreground">
-                      已吊销
-                    </span>
-                  )}
+                  {t.revoked_at !== null && <Badge>已吊销</Badge>}
                 </div>
                 <div className="mt-0.5 text-xs text-muted-foreground">
                   {t.bot.display_name}（{t.bot.qq}）· {t.scopes.join("、")}

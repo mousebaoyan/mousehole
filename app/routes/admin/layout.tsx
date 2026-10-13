@@ -1,4 +1,13 @@
-import { ArrowLeft, Bot, LayoutDashboard, Mail, Settings, UsersRound } from "lucide-react";
+import {
+  ArrowLeft,
+  Bot,
+  LayoutDashboard,
+  LayoutList,
+  Mail,
+  Settings,
+  Tags,
+  UsersRound,
+} from "lucide-react";
 import { useEffect, useRef } from "react";
 import { data, Link, NavLink, Outlet, redirect, useLocation } from "react-router";
 import { apiContext } from "../../api.server.ts";
@@ -23,6 +32,8 @@ export async function loader({ context }: Route.LoaderArgs) {
 const pages = [
   { to: "/admin", label: "概览", icon: LayoutDashboard, end: true },
   { to: "/admin/groups", label: "QQ 群", icon: UsersRound },
+  { to: "/admin/boards", label: "版块", icon: LayoutList },
+  { to: "/admin/tags", label: "标签", icon: Tags },
   { to: "/admin/site", label: "站点", icon: Settings },
   { to: "/admin/email", label: "邮件", icon: Mail },
   { to: "/admin/tokens", label: "bot", icon: Bot },

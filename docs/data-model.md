@@ -44,6 +44,10 @@
 
 主题有新回复时，同时更新 `thread_tags.last_post_at`（每个主题最多 5 个标签）。
 
+- `boards.position` 是侧栏里的顺序；移动一个版块时，在同一个事务里给全部版块重新编号。
+- `boards.thread_count` 和 `tags.thread_count` 只算公开、没删除的主题。合并标签时把主题挪过去（两个标签都有的只留一行），再重新数一遍目标标签的主题数。
+- 删除的主题仍然指向原来的版块，所以有过主题的版块删不掉（外键拦下）。
+
 ## 主题与回复
 
 表：`threads`、`posts`、`post_revisions`。

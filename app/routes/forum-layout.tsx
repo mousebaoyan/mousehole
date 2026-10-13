@@ -1,4 +1,4 @@
-import { Outlet } from "react-router";
+import { Outlet, type ShouldRevalidateFunctionArgs } from "react-router";
 import { apiContext } from "../api.server.ts";
 import { ComposerProvider } from "~/components/composer";
 import { ForumNav } from "~/components/forum-nav";
@@ -6,8 +6,21 @@ import { SiteHeader } from "~/components/site-header";
 import type { Route } from "./+types/forum-layout.ts";
 
 export async function loader({ context }: Route.LoaderArgs) {
-  const res = await context.get(apiContext).me.$get();
-  return { me: res.ok ? await res.json() : null };
+  const api = context.get(apiContext);
+  const [me, boards, tags] = await Promise.all([api.me.$get(), api.boards.$get(), api.tags.$get()]);
+  return {
+    me: me.ok ? await me.json() : null,
+    boards: (await boards.json()).items,
+    tags: (await tags.json()).items,
+  };
+}
+
+// The reader, boards and tags don't change with the page or its filters, only after a submission.
+export function shouldRevalidate({
+  formMethod,
+  defaultShouldRevalidate,
+}: ShouldRevalidateFunctionArgs) {
+  return formMethod !== undefined && defaultShouldRevalidate;
 }
 
 export default function ForumLayout({ loaderData: { me } }: Route.ComponentProps) {
