@@ -26,7 +26,16 @@ const SmtpSchema = z.object({
   from: z.string().default(""),
 });
 
-export type Settings = { login: z.infer<typeof LoginSchema>; smtp: z.infer<typeof SmtpSchema> };
+const BotSchema = z.object({
+  // Bot requests acting as a member must say who asked for them.
+  require_operator: z.boolean().default(false),
+});
+
+export type Settings = {
+  login: z.infer<typeof LoginSchema>;
+  smtp: z.infer<typeof SmtpSchema>;
+  bot: z.infer<typeof BotSchema>;
+};
 
 let cache: Promise<Settings> | null = null;
 
@@ -52,6 +61,7 @@ async function load(): Promise<Settings> {
   return {
     login: LoginSchema.parse(stored.get("login") ?? {}),
     smtp: { ...smtp, password: smtp.password && decrypt(smtp.password) },
+    bot: BotSchema.parse(stored.get("bot") ?? {}),
   };
 }
 
@@ -67,6 +77,7 @@ export function getSettings() {
 export async function saveSettings(trx: Transaction<DB>, change: Partial<Settings>) {
   const rows = [];
   if (change.login) rows.push({ key: "login", value: JSON.stringify(change.login) });
+  if (change.bot) rows.push({ key: "bot", value: JSON.stringify(change.bot) });
   if (change.smtp) {
     const smtp = {
       ...change.smtp,

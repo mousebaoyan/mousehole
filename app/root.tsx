@@ -39,14 +39,21 @@ export default function App() {
   return <Outlet />;
 }
 
+const TITLES: Partial<Record<number, string>> = { 403: "没有权限", 404: "页面不存在" };
+
 export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
-  const notFound = isRouteErrorResponse(error) && error.status === 404;
+  const response = isRouteErrorResponse(error) ? error : null;
+  const title = (response && TITLES[response.status]) ?? "出错了";
+  const detail =
+    typeof response?.data === "string"
+      ? response.data
+      : response?.status === 404
+        ? "链接有误，或内容已被删除。"
+        : "请稍后重试。";
   return (
     <main className="mx-auto max-w-3xl p-6">
-      <h1 className="text-2xl font-semibold">{notFound ? "页面不存在" : "出错了"}</h1>
-      <p className="mt-2 text-muted-foreground">
-        {notFound ? "链接有误，或内容已被删除。" : "请稍后重试。"}
-      </p>
+      <h1 className="text-2xl font-semibold">{title}</h1>
+      <p className="mt-2 text-muted-foreground">{detail}</p>
     </main>
   );
 }

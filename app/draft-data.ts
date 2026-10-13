@@ -384,32 +384,3 @@ export function reactorsOf(reactions: Reactions) {
 }
 
 export const group = { name: "四非计算机保研鼠群", members: 1824, capacity: 2000 };
-
-export const adminOverview = {
-  stats: [
-    { label: "成员", value: "1,824", note: "已激活 312" },
-    { label: "今日新帖", value: "37", note: "回复 214" },
-    { label: "待审核", value: "2", note: "最早 25 分钟前" },
-    { label: "未处理举报", value: "1", note: "最早 3 小时前" },
-  ],
-  groups: [
-    {
-      name: "四非计算机保研鼠群",
-      id: 987654321,
-      members: 1824,
-      full: "6 分钟前",
-      delta: "1 分钟前",
-      ok: true,
-      primary: true,
-    },
-    {
-      name: "鼠群 2 群",
-      id: 912345678,
-      members: 213,
-      full: "48 分钟前",
-      delta: "12 分钟前",
-      ok: false,
-      primary: false,
-    },
-  ],
-};

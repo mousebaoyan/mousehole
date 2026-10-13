@@ -197,6 +197,13 @@ export async function resolveBot(
       .execute();
   }
 
+  if (actAs && !operatorRef && (await getSettings()).bot.require_operator) {
+    throw new AppError(
+      400,
+      "operator_required",
+      "代表成员操作时要用 X-Operator 指明是谁让 bot 做的",
+    );
+  }
   const member = actAs && (await memberOrThrow(actAs, "X-Act-As 指定的人"));
   const operator = operatorRef && (await memberOrThrow(operatorRef, "X-Operator 指定的人"));
   if (member && operator && operator.id !== member.id && !STAFF.includes(operator.role)) {

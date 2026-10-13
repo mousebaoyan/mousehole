@@ -12,5 +12,11 @@ export default [
   ]),
   route("login/code", "routes/login-code.ts"),
   route("logout", "routes/logout.ts"),
-  route("admin", "routes/admin.tsx"),
+  route("admin", "routes/admin/layout.tsx", [
+    index("routes/admin/overview.tsx"),
+    route("groups", "routes/admin/groups.tsx"),
+    route("site", "routes/admin/site.tsx"),
+    route("email", "routes/admin/email.tsx"),
+    route("tokens", "routes/admin/tokens.tsx"),
+  ]),
 ] satisfies RouteConfig;
