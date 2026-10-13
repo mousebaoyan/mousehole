@@ -1,6 +1,7 @@
 import { CircleCheck } from "lucide-react";
 import { useLayoutEffect, useRef, useState } from "react";
 import { useDismiss } from "~/components/disclosure";
+import { UserAvatar } from "~/components/user-avatar";
 import type { Post } from "~/draft-data";
 
 // Up to this many floors a plain list fits beside the posts; beyond it, a timeline scrubber.
@@ -21,8 +22,11 @@ export function FloorNav({ posts, onJump }: { posts: Post[]; onJump?: () => void
             onClick={onJump}
             className="flex items-center gap-2 rounded-md px-2 py-1 hover:bg-accent"
           >
-            <span className="w-7 text-muted-foreground tabular-nums">#{p.floor}</span>
-            <span className="truncate">{p.author.name}</span>
+            <span className="w-7 shrink-0 text-muted-foreground tabular-nums">#{p.floor}</span>
+            <UserAvatar user={p.author} className="size-5 text-2xs" />
+            <span className="truncate" title={p.author.name}>
+              {p.author.name}
+            </span>
             {p.accepted && <CircleCheck className="ml-auto size-3.5 text-success" />}
           </a>
         ))}
@@ -114,6 +118,7 @@ function FloorTimeline({ posts, onJump }: { posts: Post[]; onJump?: () => void }
   }
 
   const offset = (shown - 1) / (total - 1);
+  const at = posts.find((p) => p.floor === shown);
   return (
     <div className="flex flex-col gap-2 text-meta select-none">
       <button
@@ -139,17 +144,24 @@ function FloorTimeline({ posts, onJump }: { posts: Post[]; onJump?: () => void }
         />
         <div className="pointer-events-none absolute inset-y-0 left-1 w-0.5 rounded-full bg-border" />
         <div
-          className="pointer-events-none absolute left-0 flex h-12 items-center gap-3 rounded-md peer-focus-visible:outline-2 peer-focus-visible:outline-offset-4 peer-focus-visible:outline-ring"
-          style={{ top: `calc(${offset} * (100% - 3rem))` }}
+          className="pointer-events-none absolute inset-x-0 flex h-16 items-center gap-3 rounded-md peer-focus-visible:outline-2 peer-focus-visible:outline-offset-4 peer-focus-visible:outline-ring"
+          style={{ top: `calc(${offset} * (100% - 4rem))` }}
         >
-          <div className="h-full w-1.5 rounded-full bg-brand" />
-          <div>
+          <div className="h-full w-1.5 shrink-0 rounded-full bg-brand" />
+          <div className="min-w-0 flex-1">
             <div className="font-semibold text-foreground tabular-nums">
               {shown} / {total}
             </div>
-            <div className="text-xs text-muted-foreground">
-              {posts.find((p) => p.floor === shown)?.time}
-            </div>
+            {/* Who wrote it and when, once that floor is loaded. */}
+            {at && (
+              <>
+                <div className="mt-1 flex items-center gap-1.5">
+                  <UserAvatar user={at.author} className="size-5 text-2xs" />
+                  <span className="truncate text-foreground/80">{at.author.name}</span>
+                </div>
+                <div className="mt-0.5 text-xs text-muted-foreground">{at.time}</div>
+              </>
+            )}
           </div>
         </div>
       </div>
