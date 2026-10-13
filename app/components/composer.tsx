@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronUp, Maximize2, Minimize2, Reply, X } from "lucide-react";
+import { ChevronDown, ChevronUp, Maximize2, Minimize2, Pencil, Reply, X } from "lucide-react";
 import {
   createContext,
   use,
@@ -17,6 +17,8 @@ import { useMe } from "~/forum";
 type ComposerTarget = {
   thread: { id: number; title: string };
   replyTo: { id: number; floor: number; name: string } | null;
+  // Changing a floor instead of replying: its number and its Markdown as it is.
+  edit?: { postId: number; floor: number; markdown: string };
 };
 
 type Draft = ComposerTarget & { text: string; collapsed: boolean };
@@ -50,29 +52,34 @@ export function ComposerProvider({ children }: { children: ReactNode }) {
       void navigate("/login");
       return;
     }
-    const sameThread = draft?.thread.id === target.thread.id;
-    const text = sameThread ? draft.text : (localStorage.getItem(draftKey(target.thread.id)) ?? "");
+    const sameThread = draft?.thread.id === target.thread.id && !draft.edit;
+    const text =
+      target.edit?.markdown ??
+      (sameThread ? draft.text : (localStorage.getItem(draftKey(target.thread.id)) ?? ""));
     setDraft({ ...target, text, collapsed: false });
     focus();
   }
 
+  // Edits aren't kept as drafts: the post itself still has the text.
   function setText(text: string) {
     if (!draft) return;
     setDraft({ ...draft, text });
+    if (draft.edit) return;
     if (text.trim()) localStorage.setItem(draftKey(draft.thread.id), text);
     else localStorage.removeItem(draftKey(draft.thread.id));
   }
 
   function discard() {
     if (!draft) return;
-    if (draft.text.trim() && !confirm("放弃这条回复？")) return;
-    localStorage.removeItem(draftKey(draft.thread.id));
+    const changed = draft.edit ? draft.text !== draft.edit.markdown : draft.text.trim() !== "";
+    if (changed && !confirm(draft.edit ? "放弃这次修改？" : "放弃这条回复？")) return;
+    if (!draft.edit) localStorage.removeItem(draftKey(draft.thread.id));
     setDraft(null);
   }
 
   function posted(floor: number) {
     if (!draft) return;
-    localStorage.removeItem(draftKey(draft.thread.id));
+    if (!draft.edit) localStorage.removeItem(draftKey(draft.thread.id));
     setDraft(null);
     void navigate(`/t/${draft.thread.id}?floor=${floor}`);
   }
@@ -129,7 +136,7 @@ function Composer({
   const [full, setFull] = useState(false);
   const drag = useRef<{ y: number; height: number } | null>(null);
   const reply = useFetcher<{ ok: true; floor: number } | { ok: false; message: string }>();
-  const { thread, replyTo, text, collapsed } = draft;
+  const { thread, replyTo, edit, text, collapsed } = draft;
   const busy = reply.state !== "idle";
 
   useEffect(() => {
@@ -139,8 +146,14 @@ function Composer({
   function send() {
     if (!text.trim() || busy) return;
     void reply.submit(
-      { markdown: text, ...(replyTo && { reply_to_id: replyTo.id }) },
-      { method: "post", action: `/t/${thread.id}/reply`, defaultShouldRevalidate: false },
+      edit
+        ? { intent: "edit-post", post_id: edit.postId, floor: edit.floor, markdown: text }
+        : { markdown: text, ...(replyTo && { reply_to_id: replyTo.id }) },
+      {
+        method: "post",
+        action: edit ? `/t/${thread.id}` : `/t/${thread.id}/reply`,
+        defaultShouldRevalidate: false,
+      },
     );
   }
 
@@ -191,9 +204,17 @@ function Composer({
             collapsed ? "h-12" : "pb-2",
           )}
         >
-          <Reply className="size-4 shrink-0 text-muted-foreground" />
+          {edit ? (
+            <Pencil className="size-4 shrink-0 text-muted-foreground" />
+          ) : (
+            <Reply className="size-4 shrink-0 text-muted-foreground" />
+          )}
           <span className="shrink-0">
-            {replyTo ? (
+            {edit ? (
+              <>
+                编辑 <span className="text-muted-foreground tabular-nums">#{edit.floor}</span>
+              </>
+            ) : replyTo ? (
               <>
                 回复 <span className="font-medium">{replyTo.name}</span>
                 <span className="ml-1 text-muted-foreground tabular-nums">#{replyTo.floor}</span>
@@ -247,13 +268,14 @@ function Composer({
               value={text}
               onChange={onText}
               onSubmit={send}
-              label="回复内容"
+              label={edit ? "修改内容" : "回复内容"}
               textarea={textarea}
               className="flex-1 border-t"
             />
             <footer className="flex items-center gap-3 border-t px-4 py-2.5">
               <Button onClick={send} disabled={busy || !text.trim()}>
-                <Reply /> {busy ? "发送中…" : "回复"}
+                {edit ? <Pencil /> : <Reply />}
+                {busy ? "发送中…" : edit ? "保存" : "回复"}
               </Button>
               {reply.data && !reply.data.ok && (
                 <p role="alert" className="min-w-0 truncate text-meta text-destructive">
