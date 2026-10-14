@@ -85,9 +85,9 @@ describe("头像", () => {
     const settings = await api.me.settings.$get({}, me);
     if (!settings.ok) throw new Error(`status ${settings.status}`);
     expect(await settings.json()).toMatchObject({ avatar_custom: true });
-    const me1 = await api.me.$get({}, me);
-    if (!me1.ok) throw new Error(`status ${me1.status}`);
-    expect((await me1.json()).avatar_url).toBe(`/avatars/${user.id}.webp?v=1`);
+    const profile = await api.me.$get({}, me);
+    if (!profile.ok) throw new Error(`status ${profile.status}`);
+    expect((await profile.json()).avatar_url).toBe(`/avatars/${user.id}.webp?v=1`);
 
     const restored = await api.me.avatar.$delete({}, me);
     if (!restored.ok) throw new Error(`status ${restored.status}`);
