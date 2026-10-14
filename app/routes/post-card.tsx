@@ -7,7 +7,6 @@ import {
   Ellipsis,
   Flag,
   Forward,
-  Link2,
   MessagesSquare,
   Pencil,
   Reply,
@@ -17,6 +16,7 @@ import {
 import { useEffect, useRef, useState, type ReactNode, type Ref } from "react";
 import { useFetcher, useNavigate } from "react-router";
 import { cn } from "cn";
+import { CopyLinkButton } from "~/components/copy-link-button";
 import { Dropdown, menuItem } from "~/components/disclosure";
 import { PROSE } from "~/components/prose";
 import { UserAvatar } from "~/components/user-avatar";
@@ -276,9 +276,10 @@ export function PostCard({
                 }}
               />
             )}
-            <Button variant="ghost" size="icon-sm" aria-label="复制链接" title="复制链接">
-              <Link2 />
-            </Button>
+            <CopyLinkButton
+              path={post.floor === 1 ? `/t/${threadId}` : `/t/${threadId}?floor=${post.floor}`}
+              size="icon-sm"
+            />
             <Dropdown
               label="更多"
               triggerClassName={buttonVariants({ variant: "ghost", size: "icon-sm" })}
