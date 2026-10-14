@@ -437,6 +437,32 @@ const SEND = {
   edit: { label: "保存", Icon: Pencil, field: "修改内容" },
 };
 
+// The part of the window the on-screen keyboard leaves free: how far up from the bottom it ends,
+// and how tall it is. iOS lays the keyboard over the page without resizing it, so the docked
+// composer is lifted by hand; Android browsers resize the page instead (interactive-widget in
+// root.tsx), which leaves nothing to lift.
+function useFreeViewport() {
+  const [free, setFree] = useState(() => ({ bottom: 0, height: innerHeight }));
+  useEffect(() => {
+    const viewport = visualViewport;
+    // Missing in some older in-app browsers, which then behave like a desktop.
+    if (!viewport) return undefined;
+    const update = () =>
+      setFree({
+        bottom: Math.max(0, innerHeight - viewport.height - viewport.offsetTop),
+        height: viewport.height,
+      });
+    update();
+    viewport.addEventListener("resize", update);
+    viewport.addEventListener("scroll", update);
+    return () => {
+      viewport.removeEventListener("resize", update);
+      viewport.removeEventListener("scroll", update);
+    };
+  }, []);
+  return free;
+}
+
 // What the page actions answer: the new thread's ID, or the floor posted or changed.
 type Sent = { ok: true; id?: number; floor?: number } | { ok: false; message: string };
 
@@ -464,6 +490,7 @@ function Composer({
     clampHeight(Number(localStorage.getItem(HEIGHT_KEY)) || 360),
   );
   const [full, setFull] = useState(false);
+  const free = useFreeViewport();
   const drag = useRef<{ y: number; height: number } | null>(null);
   const sending = useFetcher<Sent>();
   const { target, content, collapsed } = writing;
@@ -547,7 +574,10 @@ function Composer({
       <section
         aria-label={target.mode === "thread" ? "发帖" : target.mode === "edit" ? "编辑" : "回复"}
         className="fixed inset-x-0 bottom-0 z-40 mx-auto flex max-w-5xl flex-col rounded-t-2xl border border-b-0 bg-card shadow-[0_-12px_40px_-16px_rgb(0_0_0/0.25)] animate-in slide-in-from-bottom-8"
-        style={{ height: full && !collapsed ? "100svh" : shown }}
+        style={{
+          bottom: free.bottom,
+          height: full && !collapsed ? free.height : Math.min(shown, free.height),
+        }}
       >
         {!collapsed && (
           <button
