@@ -1,5 +1,6 @@
 import { RouterContextProvider } from "react-router";
 import type { Context } from "hono";
+import { createMiddleware } from "hono/factory";
 import type { SecureHeadersVariables } from "hono/secure-headers";
 import { createHonoServer } from "react-router-hono-server/node";
 import { apiContext, createApi } from "../app/api.server.ts";
@@ -45,6 +46,13 @@ function countCachedView(c: Context) {
   if (thread !== undefined && ip !== null) recordView(Number(thread), ip);
 }
 
+// The emoji data's path carries its version, so browsers may keep it; public files otherwise
+// get an hour.
+const cacheForAYear = createMiddleware(async (c, next) => {
+  await next();
+  c.res.headers.set("cache-control", "public, max-age=31536000, immutable");
+});
+
 // Docker stops the container with SIGTERM; the view counts not yet written go out first.
 process.once("SIGTERM", () => {
   void flushViews().finally(() => process.exit(0));
@@ -58,6 +66,7 @@ export default await createHonoServer<{ Variables: SecureHeadersVariables }>({
   beforeAll(server) {
     server.use(guestPages(server, countCachedView));
     server.use(securityHeaders);
+    server.use("/emojibase/*", cacheForAYear);
   },
   // Built files have Brotli and gzip copies beside them; see scripts/compress-assets.ts.
   serveStaticOptions: {
