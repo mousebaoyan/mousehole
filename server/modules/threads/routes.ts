@@ -24,7 +24,7 @@ import { BoostSchema, boostJson } from "../reactions/schemas.ts";
 import { floorExtras } from "../reactions/service.ts";
 import { showImages } from "../uploads/service.ts";
 import { UserBriefSchema, UserRefSchema, WriterSchema } from "../users/schemas.ts";
-import { threadJson, ThreadSchema } from "./schemas.ts";
+import { pollJson, PollSchema, threadJson, ThreadSchema } from "./schemas.ts";
 import { findUserId } from "../users/service.ts";
 import {
   countUnread,
@@ -66,6 +66,7 @@ const ThreadDetailSchema = ThreadSchema.extend({
   }),
   author_anonymous: z.boolean().openapi({ description: "楼主匿名" }),
   anonymous_replies: z.boolean().openapi({ description: "楼主以外的人回复时匿名" }),
+  poll: PollSchema.nullable().openapi({ description: "投票帖的投票；其他类型为 null" }),
   my_alias: z
     .number()
     .nullable()
@@ -166,6 +167,7 @@ function threadDetailJson(t: Thread, signedIn: boolean) {
     status: t.status,
     author_anonymous: t.author_anonymous,
     anonymous_replies: t.anonymous_replies,
+    poll: t.poll && pollJson(t.poll),
     ...(signedIn && {
       my_alias: t.my_alias,
       read_floors: t.read_floors,
@@ -253,6 +255,40 @@ const Source = z
   .openapi("Source", { description: "内容来自哪条 QQ 消息" });
 
 const Title = z.string().trim().min(4).max(80);
+
+const PollInput = z
+  .object({
+    options: z
+      .array(z.string().trim().min(1).max(50))
+      .min(2)
+      .max(20)
+      .refine((o) => new Set(o).size === o.length, "选项不能重复"),
+    multiple: z.boolean().default(false),
+    max_choices: z
+      .number()
+      .int()
+      .min(2)
+      .nullable()
+      .default(null)
+      .openapi({ description: "多选时最多选几项；null 不限" }),
+    anonymous: z.boolean().default(false).openapi({ description: "匿名投票" }),
+    results: z.enum(["voted", "always"]).default("voted").openapi({
+      description: "voted 投过票或结束后才看得到结果，always 随时公开",
+    }),
+    days: z
+      .number()
+      .int()
+      .min(1)
+      .max(30)
+      .nullable()
+      .default(null)
+      .openapi({ description: "几天后截止；null 不限" }),
+  })
+  .refine((p) => p.max_choices === null || p.max_choices < p.options.length, {
+    message: "最多选几项要少于选项数",
+    path: ["max_choices"],
+  })
+  .openapi("PollInput", { description: "选项、单选还是多选、是否匿名发出后都不能改" });
 
 const Tags = z
   .array(z.string())
@@ -580,19 +616,25 @@ export const threadsRoutes = createRouter()
       summary: "发帖；kind 不带时用版块的默认类型",
       request: {
         body: json(
-          z.object({
-            board: z.string(),
-            title: Title,
-            content: Content,
-            kind: z.enum(["discussion", "question"]).optional(),
-            tags: Tags.default([]),
-            source: Source.optional(),
-            anonymous: z.boolean().optional().openapi({ description: "楼主匿名，发出后不能改" }),
-            anonymous_replies: z
-              .boolean()
-              .optional()
-              .openapi({ description: "楼主以外的人回复时匿名，发出后不能改" }),
-          }),
+          z
+            .object({
+              board: z.string(),
+              title: Title,
+              content: Content,
+              kind: z.enum(["discussion", "question", "poll"]).optional(),
+              poll: PollInput.optional().openapi({ description: "投票帖必带，其他类型不能带" }),
+              tags: Tags.default([]),
+              source: Source.optional(),
+              anonymous: z.boolean().optional().openapi({ description: "楼主匿名，发出后不能改" }),
+              anonymous_replies: z
+                .boolean()
+                .optional()
+                .openapi({ description: "楼主以外的人回复时匿名，发出后不能改" }),
+            })
+            .refine((b) => (b.kind === "poll") === (b.poll !== undefined), {
+              message: "投票帖要带 poll，其他类型不能带",
+              path: ["poll"],
+            }),
         ),
       },
       responses: {

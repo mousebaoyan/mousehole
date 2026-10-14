@@ -13,6 +13,7 @@ import { stamp, unixNow } from "~/time";
 import type { Route } from "./+types/thread.ts";
 import { FloorNav, FloorProgress, useCurrentFloor, type Floors } from "./floor-timeline.tsx";
 import { BookmarkButton, NOTIFY_LEVELS, NotifyButton } from "./follow-buttons.tsx";
+import { PollCard } from "./poll-card.tsx";
 import { PostCard } from "./post-card.tsx";
 import { REACTIONS } from "./reactions.tsx";
 import { useReading } from "./reading.ts";
@@ -166,6 +167,17 @@ export async function action({ params, request, context }: Route.ActionArgs) {
           })
         : await api.threads[":id"].solution.$delete({ param: thread });
     if (res.ok) return { ok: true as const, floor };
+    return { ok: false as const, message: (await res.json()).error.message };
+  }
+  if (text("intent") === "vote" || text("intent") === "close-poll") {
+    const res =
+      text("intent") === "vote"
+        ? await api.threads[":id"].poll.vote.$put({
+            param: thread,
+            json: { options: form.getAll("options").map(Number) },
+          })
+        : await api.threads[":id"].poll.close.$post({ param: thread });
+    if (res.ok) return { ok: true as const, poll: await res.json() };
     return { ok: false as const, message: (await res.json()).error.message };
   }
   if (text("intent") === "delete-thread") {
@@ -415,6 +427,17 @@ function ThreadPage({
                     { intent: "review-post", post_id: post.id, floor: post.floor, ...review },
                     { method: "post", defaultShouldRevalidate: false },
                   )
+                }
+                poll={
+                  post.floor === 1 && thread.poll ? (
+                    <PollCard
+                      poll={thread.poll}
+                      threadId={thread.id}
+                      canVote={me !== null && published && !thread.locked}
+                      canClose={staff || authored}
+                      now={now}
+                    />
+                  ) : null
                 }
                 onReply={
                   published

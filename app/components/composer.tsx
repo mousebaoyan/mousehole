@@ -5,6 +5,7 @@ import {
   Minimize2,
   PenSquare,
   Pencil,
+  Plus,
   Reply,
   Send,
   X,
@@ -35,7 +36,17 @@ import { useHydrated } from "~/hydrated";
 
 type ThreadRef = { id: number; title: string };
 type ReplyRef = { id: number; floor: number; name: string };
-type Kind = "discussion" | "question";
+type Kind = "discussion" | "question" | "poll";
+
+// A poll being set up, as the API takes it (design §8.11); blank options are left out on posting.
+type PollDraft = {
+  options: string[];
+  multiple: boolean;
+  max_choices: number | null;
+  anonymous: boolean;
+  results: "voted" | "always";
+  days: number | null;
+};
 
 // A new thread, a reply to one, or a change to a floor already posted.
 export type ComposerTarget =
@@ -49,6 +60,7 @@ type Content = {
   title: string;
   board: string;
   kind: Kind;
+  poll: PollDraft;
   tags: string[];
   // Design §8.12: the author, and everyone else replying.
   anonymous: boolean;
@@ -67,10 +79,22 @@ const EMPTY: Content = {
   title: "",
   board: "",
   kind: "discussion",
+  poll: {
+    options: ["", ""],
+    multiple: false,
+    max_choices: null,
+    anonymous: false,
+    results: "voted",
+    days: null,
+  },
   tags: [],
   anonymous: false,
   anonymousReplies: false,
 };
+
+function filledOptions(poll: PollDraft) {
+  return poll.options.map((o) => o.trim()).filter(Boolean);
+}
 
 // `new`, or the thread a reply is for. Edits keep no draft: the floor itself still has the text.
 function draftKey(target: ComposerTarget) {
@@ -84,12 +108,13 @@ function isEmpty(content: Content) {
 
 function draftBody({ target, content }: Writing) {
   if (target.mode === "thread") {
-    const { text, title, board, kind, tags, anonymous, anonymousReplies } = content;
+    const { text, title, board, kind, poll, tags, anonymous, anonymousReplies } = content;
     return {
       body: text,
       title,
       board: board || null,
       kind,
+      poll: kind === "poll" ? poll : null,
       tags,
       author_anonymous: anonymous,
       anonymous_replies: anonymousReplies,
@@ -259,7 +284,8 @@ export function ComposerProvider({
         text: draft.body,
         title: draft.title,
         board: draft.board ?? "",
-        kind: draft.kind === "question" ? "question" : "discussion",
+        kind: draft.kind === "question" || draft.kind === "poll" ? draft.kind : "discussion",
+        poll: draft.poll ?? EMPTY.poll,
         tags: draft.tags,
         anonymous: draft.author_anonymous,
         anonymousReplies: draft.anonymous_replies,
@@ -354,6 +380,8 @@ export function ComposerProvider({
 const HEIGHT_KEY = "composer-height";
 const MIN_HEIGHT = 240;
 const COLLAPSED_HEIGHT = 48;
+// Room for a poll's settings and a few options besides the text.
+const POLL_HEIGHT = 560;
 
 function clampHeight(height: number) {
   return Math.round(Math.min(Math.max(height, MIN_HEIGHT), innerHeight * 0.85));
@@ -398,8 +426,14 @@ function Composer({
   const sending = useFetcher<Sent>();
   const { target, content, collapsed } = writing;
   const busy = sending.state !== "idle";
-  const ready = content.text.trim() !== "" && (target.mode !== "thread" || content.board !== "");
+  const ready =
+    content.text.trim() !== "" &&
+    (target.mode !== "thread" ||
+      (content.board !== "" &&
+        (content.kind !== "poll" || filledOptions(content.poll).length >= 2)));
   const { label, Icon, field } = SEND[target.mode];
+  const withPoll = target.mode === "thread" && content.kind === "poll";
+  const setPoll = (next: PollDraft) => onChange({ ...content, poll: next });
 
   useEffect(() => {
     if (sending.state !== "idle" || !sending.data?.ok) return;
@@ -419,6 +453,15 @@ function Composer({
       for (const tag of content.tags) form.append("tags", tag);
       form.set("anonymous", String(content.anonymous));
       form.set("anonymous_replies", String(content.anonymousReplies));
+      if (content.kind === "poll") {
+        const { poll } = content;
+        for (const option of filledOptions(poll)) form.append("options", option);
+        form.set("multiple", String(poll.multiple));
+        form.set("max_choices", poll.multiple ? String(poll.max_choices ?? "") : "");
+        form.set("poll_anonymous", String(poll.anonymous));
+        form.set("results", poll.results);
+        form.set("days", String(poll.days ?? ""));
+      }
       void sending.submit(form, { ...options, action: "/new" });
     } else if (target.mode === "edit") {
       const { id, floor } = target.post;
@@ -441,7 +484,8 @@ function Composer({
     return clamped;
   }
 
-  const shown = collapsed ? COLLAPSED_HEIGHT : height;
+  const open = withPoll ? Math.max(height, clampHeight(POLL_HEIGHT)) : height;
+  const shown = collapsed ? COLLAPSED_HEIGHT : open;
   return (
     <>
       <div aria-hidden="true" style={{ height: shown }} />
@@ -457,7 +501,7 @@ function Composer({
             className="flex h-3 shrink-0 cursor-row-resize touch-none items-center justify-center rounded-t-2xl outline-none focus-visible:bg-accent"
             onPointerDown={(e) => {
               e.currentTarget.setPointerCapture(e.pointerId);
-              drag.current = { y: e.clientY, height };
+              drag.current = { y: e.clientY, height: open };
             }}
             onPointerMove={(e) => {
               if (drag.current) resize(drag.current.height + drag.current.y - e.clientY);
@@ -468,7 +512,7 @@ function Composer({
             }}
             onKeyDown={(e) => {
               const step = { ArrowUp: 40, ArrowDown: -40 }[e.key];
-              if (step) localStorage.setItem(HEIGHT_KEY, String(resize(height + step)));
+              if (step) localStorage.setItem(HEIGHT_KEY, String(resize(open + step)));
             }}
           >
             <span className="h-1 w-10 rounded-full bg-border" />
@@ -512,14 +556,19 @@ function Composer({
         {!collapsed && (
           <>
             {target.mode === "thread" && <ThreadFields content={content} onChange={onChange} />}
-            <MarkdownEditor
-              value={content.text}
-              onChange={(text) => onChange({ ...content, text })}
-              onSubmit={send}
-              label={field}
-              textarea={textarea}
-              className="flex-1 border-t"
-            />
+            {withPoll && <PollSettings poll={content.poll} onChange={setPoll} />}
+            {/* Scrolls when a poll's options leave the editor too little room. */}
+            <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+              {withPoll && <PollOptions poll={content.poll} onChange={setPoll} />}
+              <MarkdownEditor
+                value={content.text}
+                onChange={(text) => onChange({ ...content, text })}
+                onSubmit={send}
+                label={field}
+                textarea={textarea}
+                className="min-h-40 flex-1 border-t"
+              />
+            </div>
             <footer className="flex items-center gap-3 border-t px-4 py-2.5">
               <Button onClick={send} disabled={busy || !ready}>
                 <Icon /> {busy ? "发送中…" : label}
@@ -585,9 +634,11 @@ function Heading({ target, title }: { target: ComposerTarget; title: string }) {
 const KINDS = [
   { kind: "discussion", label: "讨论" },
   { kind: "question", label: "问答" },
+  { kind: "poll", label: "投票" },
 ] as const;
 
-// A new thread's title, board, kind and tags above its body. Picking a board takes its kind.
+// A new thread's title, board, kind and tags above its body. Picking a board takes its kind,
+// unless a poll is being set up.
 function ThreadFields({
   content,
   onChange,
@@ -614,11 +665,8 @@ function ThreadFields({
           value={content.board}
           onValueChange={(slug) => {
             const board = boards.find((b) => b.slug === slug);
-            onChange({
-              ...content,
-              board: slug,
-              kind: board?.default_kind === "question" ? "question" : "discussion",
-            });
+            const kind = board?.default_kind === "question" ? "question" : "discussion";
+            onChange({ ...content, board: slug, kind: content.kind === "poll" ? "poll" : kind });
           }}
           options={boards.map((b) => ({ value: b.slug, label: b.name }))}
           placeholder="选择版块"
@@ -672,6 +720,118 @@ function ThreadFields({
           </span>
         )}
       </div>
+    </div>
+  );
+}
+
+const MAX_OPTIONS = 20;
+
+const DAYS = [
+  { value: "", label: "不限时间" },
+  ...[1, 3, 7, 30].map((d) => ({ value: String(d), label: `${d} 天后截止` })),
+];
+
+// How the poll works, fixed once posted. Kept out of the scrolling part, which would clip the
+// dropdowns.
+function PollSettings({
+  poll,
+  onChange,
+}: {
+  poll: PollDraft;
+  onChange: (poll: PollDraft) => void;
+}) {
+  const id = useId();
+  const most = [
+    { value: "", label: "不限项数" },
+    ...Array.from({ length: Math.max(poll.options.length - 2, 0) }, (_, i) => ({
+      value: String(i + 2),
+      label: `最多选 ${i + 2} 项`,
+    })),
+  ];
+  return (
+    <div className="flex flex-wrap items-center gap-x-5 gap-y-2 border-t px-4 py-2.5 text-sm">
+      <span className="flex items-center gap-2">
+        <Checkbox
+          id={`${id}-multiple`}
+          checked={poll.multiple}
+          onChange={(e) => onChange({ ...poll, multiple: e.target.checked })}
+        />
+        <label htmlFor={`${id}-multiple`}>多选</label>
+      </span>
+      {poll.multiple && (
+        <Select
+          value={String(poll.max_choices ?? "")}
+          onValueChange={(v) => onChange({ ...poll, max_choices: v ? Number(v) : null })}
+          options={most}
+          aria-label="最多选几项"
+          className="w-32"
+        />
+      )}
+      <Select
+        value={String(poll.days ?? "")}
+        onValueChange={(v) => onChange({ ...poll, days: v ? Number(v) : null })}
+        options={DAYS}
+        aria-label="截止时间"
+        className="w-32"
+      />
+      <span className="flex items-center gap-2">
+        <Checkbox
+          id={`${id}-anonymous`}
+          checked={poll.anonymous}
+          onChange={(e) => onChange({ ...poll, anonymous: e.target.checked })}
+        />
+        <label htmlFor={`${id}-anonymous`}>匿名投票</label>
+      </span>
+      <span className="flex items-center gap-2">
+        <Checkbox
+          id={`${id}-results`}
+          checked={poll.results === "always"}
+          onChange={(e) => onChange({ ...poll, results: e.target.checked ? "always" : "voted" })}
+        />
+        <label htmlFor={`${id}-results`}>没投票也能看结果</label>
+      </span>
+    </div>
+  );
+}
+
+function PollOptions({ poll, onChange }: { poll: PollDraft; onChange: (poll: PollDraft) => void }) {
+  return (
+    <div className="flex shrink-0 flex-col items-start gap-2 border-t px-4 py-2.5">
+      <ol className="flex w-full flex-col gap-1.5">
+        {poll.options.map((option, i) => (
+          // Options have nothing but their place to tell them apart.
+          <li key={i} className="flex items-center gap-2">
+            <Input
+              value={option}
+              onChange={(e) => onChange({ ...poll, options: poll.options.with(i, e.target.value) })}
+              aria-label={`选项 ${i + 1}`}
+              placeholder={`选项 ${i + 1}`}
+              maxLength={50}
+              className="h-8"
+            />
+            {poll.options.length > 2 && (
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                aria-label={`删掉选项 ${i + 1}`}
+                title="删掉"
+                onClick={() => onChange({ ...poll, options: poll.options.toSpliced(i, 1) })}
+              >
+                <X />
+              </Button>
+            )}
+          </li>
+        ))}
+      </ol>
+      {poll.options.length < MAX_OPTIONS && (
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => onChange({ ...poll, options: [...poll.options, ""] })}
+        >
+          <Plus /> 加一个选项
+        </Button>
+      )}
     </div>
   );
 }

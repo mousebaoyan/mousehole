@@ -14,6 +14,7 @@ import { notificationsRoutes } from "./modules/notifications/routes.ts";
 import { qqRoutes } from "./modules/qq/routes.ts";
 import { reactionsRoutes } from "./modules/reactions/routes.ts";
 import { searchRoutes } from "./modules/search/routes.ts";
+import { pollRoutes } from "./modules/threads/poll-routes.ts";
 import { serveSitemap, threadsRoutes } from "./modules/threads/routes.ts";
 import { serveUpload, uploadsRoutes } from "./modules/uploads/routes.ts";
 import { serveAvatar, usersRoutes } from "./modules/users/routes.ts";
@@ -31,6 +32,7 @@ const api = createRouter()
   .route("/", membersRoutes)
   .route("/", boardsRoutes)
   .route("/", threadsRoutes)
+  .route("/", pollRoutes)
   .route("/", draftsRoutes)
   .route("/", uploadsRoutes)
   .route("/", qqRoutes)

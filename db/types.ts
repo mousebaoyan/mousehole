@@ -79,6 +79,7 @@ export interface Drafts {
   board_id: number | null;
   body: Generated<string>;
   kind: string | null;
+  poll: Json | null;
   reply_to_id: number | null;
   tags: Generated<string[]>;
   thread_id: number | null;
@@ -156,6 +157,32 @@ export interface Notifications {
   read_at: Timestamp | null;
   thread_id: number | null;
   type: string;
+  user_id: number;
+}
+
+export interface PollOptions {
+  id: Generated<number>;
+  label: string;
+  position: number;
+  thread_id: number;
+  vote_count: Generated<number>;
+}
+
+export interface Polls {
+  anonymous: Generated<boolean>;
+  closed_at: Timestamp | null;
+  closes_at: Timestamp | null;
+  max_choices: number | null;
+  multiple: Generated<boolean>;
+  results: Generated<string>;
+  thread_id: number;
+  voter_count: Generated<number>;
+}
+
+export interface PollVotes {
+  created_at: Generated<Timestamp>;
+  option_id: number;
+  thread_id: number;
   user_id: number;
 }
 
@@ -370,6 +397,9 @@ export interface DB {
   idempotency_keys: IdempotencyKeys;
   login_tickets: LoginTickets;
   notifications: Notifications;
+  poll_options: PollOptions;
+  poll_votes: PollVotes;
+  polls: Polls;
   post_revisions: PostRevisions;
   post_search: PostSearch;
   post_uploads: PostUploads;

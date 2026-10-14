@@ -2,6 +2,7 @@ import { sql, type Transaction } from "kysely";
 import type { DB } from "../../../db/types.ts";
 import { db } from "../../platform/db.ts";
 import { AppError } from "../../platform/errors.ts";
+import type { PollSpec } from "../threads/polls.ts";
 
 // What people are still writing, saved by the composer as they type; see design §8.2. A null
 // thread is the one new thread each person may have in progress.
@@ -10,7 +11,9 @@ export type DraftContent = {
   body: string;
   title?: string;
   board?: string | null;
-  kind?: "discussion" | "question" | null;
+  kind?: "discussion" | "question" | "poll" | null;
+  // As far as it has been written: options may still be blank.
+  poll?: PollSpec | null;
   tags?: string[];
   author_anonymous?: boolean;
   anonymous_replies?: boolean;
@@ -61,6 +64,7 @@ export async function getDraft(userId: number, threadId: number | null) {
       "drafts.title",
       "boards.slug as board",
       "drafts.kind",
+      sql<PollSpec | null>`drafts.poll`.as("poll"),
       "drafts.tags",
       "drafts.author_anonymous",
       "drafts.anonymous_replies",
@@ -104,6 +108,7 @@ export async function saveDraft(userId: number, threadId: number | null, content
       ? sql<number | null>`(SELECT id FROM boards WHERE slug = ${content.board})`
       : null,
     kind: content.kind ?? null,
+    poll: content.poll ?? null,
     tags: content.tags ?? [],
     author_anonymous: content.author_anonymous ?? false,
     anonymous_replies: content.anonymous_replies ?? false,
@@ -123,6 +128,7 @@ export async function saveDraft(userId: number, threadId: number | null, content
         title: eb.ref("excluded.title"),
         board_id: eb.ref("excluded.board_id"),
         kind: eb.ref("excluded.kind"),
+        poll: eb.ref("excluded.poll"),
         tags: eb.ref("excluded.tags"),
         author_anonymous: eb.ref("excluded.author_anonymous"),
         anonymous_replies: eb.ref("excluded.anonymous_replies"),

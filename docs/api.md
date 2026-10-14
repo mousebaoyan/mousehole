@@ -39,17 +39,26 @@
 // number 是这个人在这个帖子里的编号，楼主匿名时是 1 号；没有 id、头像和 QQ 号
 { "anonymous": true, "number": 3, "display_name": "匿名鼠 3" }
 
-// 帖子。楼主匿名时 author 是匿名的样子；帖子详情里有 author_anonymous、anonymous_replies（楼主以外的人回复时匿名），
+// 帖子。kind：discussion 讨论、question 问答、poll 投票；楼主匿名时 author 是匿名的样子；帖子详情里有 author_anonymous、anonymous_replies（楼主以外的人回复时匿名），
 // 登录时还有 my_alias（自己在这个帖子里匿名时的编号，没有为 null）；floor_count 是最大的楼层号；帖子详情里的 solved_floor 是采纳的回答在第几楼，excerpt 是主楼正文的前 100 个字；pinned：0 不置顶，1 版块内置顶，2 全站置顶；
 // posters 是楼主以外、最近 20 层里最近回复的最多 4 个人，不含匿名回复的；url 只在帖子详情里有；
 // last_read_floor 是自己读过的最高一楼，没打开过为 0，只在登录时返回；帖子详情里还有 read_floors，是读过的楼层区间，例如 [[1, 20], [480, 495]]，
 // 以及 bookmarked（是否收藏）和 notify_level（关注级别，见 /threads/{id}/subscription），也只在登录时返回；
+// 帖子详情里的 poll 是投票帖的投票（见下面的「投票」），其他类型为 null；
 // status：visible 公开，pending 待审核，hidden 已隐藏，后两种只有作者和版主能看到
 { "id": 42, "board": { "slug": "qa", "name": "保研问答", "color": "#e07b53" }, "kind": "question",
   "title": "rank 30% 能冲夏令营吗", "author": { … }, "posters": [ { … } ], "tags": ["夏令营"],
   "status": "visible", "pinned": 0, "featured": false, "locked": false, "solved_post_id": null,
   "reply_count": 5, "floor_count": 6, "view_count": 120, "like_count": 3, "last_read_floor": 4,
   "last_post_at": 1760000000, "created_at": 1759990000, "url": "https://bbs.mousebaoyan.cn/t/42" }
+
+// 投票（总体设计 §8.11）。results：voted 投过票或结束后才看得到结果，always 随时公开；
+// 还看不到结果时每项的 votes 为 null，voter_count（一共多少人投了票）总是有；closes_at 为 null 是不限时间；
+// my_votes 是自己投的选项，没投为 []，访客为 null
+{ "multiple": true, "max_choices": 2, "anonymous": false, "results": "voted",
+  "closes_at": 1760600000, "closed": false, "voter_count": 12,
+  "options": [ { "id": 5, "label": "1–3 个", "votes": 4 }, { "id": 6, "label": "4–6 个", "votes": 9 } ],
+  "my_votes": [6] }
 
 // 楼层。source 只返回给 bot 和管理员；正文只带 html 或 body 中的一个，见上面的「正文」；
 // 删除的楼层 deleted 为 true，正文为空字符串；status 同帖子，主楼的跟着帖子；
@@ -175,8 +184,8 @@ token 由管理员在后台创建，只显示一次。每个 token 绑定一个 
 | DELETE | `/me/avatar` | 头像改回跟着 QQ，立刻拉一次 QQ 头像，返回 `{ avatar_url }`；拉取失败返回 `502 fetch_failed`，头像不变 | 成员 / `act` |
 | GET | `/me/export` | 导出自己的全部内容，作为附件 `mousehole-{id}.json` 下载：`user`（`id`、`qq`、`display_name`、`bio`）、`posts`（发过的主楼和回复，Markdown 原文，含待审核和已隐藏的，不含删掉的；`floor` 为 1 的就是自己发的帖子）、`boosts`、`bookmarks`；每小时最多 3 次 | 已登录，只能在网页上 |
 | GET | `/me/drafts` | 自己的草稿，最近改过的在前：`thread`（回复的帖子 `{ id, title }`，发帖的为 `null`）、`title`、`excerpt`（正文前 100 个字）、`updated_at` | 已登录，只能在网页上 |
-| GET | `/me/drafts/{key}` | 一份草稿，`key` 为 `new` 是发帖的，为帖子 ID 是回复这个帖子的：`title`、`board`、`kind`、`tags`、`body`、`reply_to`（`{ id, floor, name }` 或 `null`）、`updated_at`；没有返回 `404 draft_not_found` | 已登录，只能在网页上 |
-| PUT | `/me/drafts/{key}` | 保存草稿，整份替换：`{ body, title?, board?, kind?, tags?, reply_to_id? }`；回复的帖子不存在返回 `404`，不在这个帖子里的 `reply_to_id`、不存在的版块不保存。发帖、回复成功后论坛删掉对应的草稿，180 天没动过的每天清理 | 已登录，只能在网页上 |
+| GET | `/me/drafts/{key}` | 一份草稿，`key` 为 `new` 是发帖的，为帖子 ID 是回复这个帖子的：`title`、`board`、`kind`、`poll`（写了一半的投票，字段同发帖，选项可以是空的；没有为 `null`）、`tags`、`author_anonymous`、`anonymous_replies`、`body`、`reply_to`（`{ id, floor, name }` 或 `null`）、`updated_at`；没有返回 `404 draft_not_found` | 已登录，只能在网页上 |
+| PUT | `/me/drafts/{key}` | 保存草稿，整份替换：`{ body, title?, board?, kind?, poll?, tags?, author_anonymous?, anonymous_replies?, reply_to_id? }`；回复的帖子不存在返回 `404`，不在这个帖子里的 `reply_to_id`、不存在的版块不保存。发帖、回复成功后论坛删掉对应的草稿，180 天没动过的每天清理 | 已登录，只能在网页上 |
 | DELETE | `/me/drafts/{key}` | 放弃草稿 | 已登录，只能在网页上 |
 | GET | `/me/sessions` | 已登录的设备：`user_agent`、`device`（例如"Chrome · macOS"）、`ip`、时间、是否当前设备 | 已登录 |
 | DELETE | `/me/sessions/{id}` | 让某个设备下线 | 已登录 |
@@ -223,12 +232,15 @@ token 由管理员在后台创建，只显示一次。每个 token 绑定一个 
 | --- | --- | --- | --- |
 | GET | `/threads` | 帖子列表，每页 30 个：`board`、`tag`、`author`、`kind`、`view`、`cursor`；版块或标签不存在返回 404。`view` 默认 `latest`（按最后回复），还可以是 `created`（按发布时间）、`hot`（热门）、`unsolved`（待解答）；以下几种要登录：`new`（最近 7 天发布、自己还没打开过）、`unread`（读过、之后有新楼层）、`read`（读过的，按最后阅读时间）、`posted`（自己发过或回复过的，删掉的回复不算，按最后回复）、`bookmarked`（收藏的，按收藏时间）。`latest` 的第一页先列置顶的帖子：首页是全站置顶，版块页还有版块内置顶；按标签筛选时不置顶 | 访客 |
 | GET | `/threads/counts` | 当前范围里新和未读的帖子各有几个：`board`、`tag`，返回 `{ new, unread }` | 成员 |
-| POST | `/threads` | 发帖：`board`、`title`（4–80 个字）、`content`、`kind`（不带时用版块的默认类型）、`tags`（最多 5 个，只能用已有的）、`source`、`anonymous`（楼主匿名）、`anonymous_replies`（楼主以外的人回复时匿名），后两个发出后不能改；只有版主能发的版块返回 `403 forbidden`。先审后发的版块里，版主以外的人发的帖子 `status` 为 `pending`，通过后才公开 | 成员 / `act` |
+| POST | `/threads` | 发帖：`board`、`title`（4–80 个字）、`content`、`kind`（不带时用版块的默认类型）、`tags`（最多 5 个，只能用已有的）、`source`、`anonymous`（楼主匿名）、`anonymous_replies`（楼主以外的人回复时匿名），后两个发出后不能改。`kind` 为 `poll` 时要带 `poll`，别的类型不能带：`options`（2–20 个，每个最多 50 个字，不能重复）、`multiple`、`max_choices`（多选时最多选几项，要少于选项数，`null` 不限）、`anonymous`（匿名投票）、`results`（`voted` 或 `always`）、`days`（1–30 天后截止，`null` 不限），发出后都不能改；只有版主能发的版块返回 `403 forbidden`。先审后发的版块里，版主以外的人发的帖子 `status` 为 `pending`，通过后才公开 | 成员 / `act` |
 | GET | `/threads/{id}` | 帖子详情；楼层（包括主楼）用 `/threads/{id}/posts` 取。楼主设置了不给访客看时，访客得到 `401 login_required` | 访客 |
 | PATCH | `/threads/{id}` | 只改带了的字段：楼主可以改 `title`、`tags`；版主还可以改 `board`（移动版块）、`pinned`（0–2）、`featured`、`locked`、`status`（`visible` 或 `hidden`，见下面的「审核」）和 `reason`（隐藏的理由，最多 200 个字，会告诉作者）。改标题记在主楼的编辑记录里；锁定后只有版主能改 | 楼主、版主 / `act`、`moderate` |
 | DELETE | `/threads/{id}` | 删除帖子；有人回复后楼主不能删，只有版主能删 | 楼主、版主 / `act`、`moderate` |
 | PUT | `/threads/{id}/solution` | 采纳答案：`{ post_id }`，只能是问答帖子里公开、没删的回复（不含主楼），否则 `400`；帖子待审核或已隐藏时返回 `403`；再采纳别的就换掉。回答的人收到通知，产生 `thread.solved` 事件；锁定后只有版主能改。返回帖子详情 | 楼主、版主 / `act`、`moderate` |
 | DELETE | `/threads/{id}/solution` | 取消采纳；采纳的回答被删除时也自动取消 | 同上 |
+| PUT | `/threads/{id}/poll/vote` | 投票：`{ options }`，选项 ID；再投就换掉原来的，空数组是撤票。单选选了几项、超过 `max_choices`、选项不在这个投票里返回 `400`；投票已结束返回 `403 poll_closed`，帖子锁定返回 `403 thread_locked`，待审核或已隐藏返回 `403`；不是投票帖返回 `404 poll_not_found`。返回投票 | 没被禁言的成员 / `act` |
+| POST | `/threads/{id}/poll/close` | 提前结束投票，已经结束的不变；返回投票 | 楼主、版主 / `act`、`moderate` |
+| GET | `/threads/{id}/poll/options/{option}/voters` | 投了这一项的人，先投的在前：`{ items }`；匿名投票，或者自己还看不到结果时返回 `403` | 成员 / `read` |
 | PUT | `/threads/{id}/subscription` | 关注级别：`{ level }`，`watching` 每个新楼层都通知，`normal` 回复我、@我时通知，`muted` 都不通知；没设置过是 `normal`，发帖的人是 `watching` | 成员 / `act` |
 | PUT | `/threads/{id}/bookmark` | 收藏；已经收藏的不变，收藏列表里的位置也不变 | 成员 / `act` |
 | DELETE | `/threads/{id}/bookmark` | 取消收藏 | 成员 / `act` |
