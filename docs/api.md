@@ -276,7 +276,7 @@ token 由管理员在后台创建，只显示一次。每个 token 绑定一个 
 
 | 方法 | 路径 | 说明 | 权限 |
 | --- | --- | --- | --- |
-| GET | `/admin/overview` | 概览：`{ members: { total, activated, frozen } }`，不算 bot 和已注销的账号；群的同步状态见 `/admin/groups`。今日新帖、待审核和举报数、事件流是否在线、存储占用随对应功能加入 | 管理员 / `admin` |
+| GET | `/admin/overview` | 概览：`members`（`total`、`activated`、`frozen`，不算 bot 和已注销的账号）、`content`（`threads_today`、`posts_today`：今天公开的主题和回复，按北京时间；`pending`：待审核；`reports`：待处理的举报）、`events`（`streams`：现在连着的事件流；`polled_at`：最近一次按游标拉取的时间，进程重启后为 `null`）、`storage`（`database`、`uploads`：数据库和上传图片占用的字节数）；群的同步状态见 `/admin/groups` | 管理员 / `admin` |
 | GET | `/admin/settings` | 站点设置，按分组返回：`login`（三种登录方式的开关和口令提示）、`smtp`（密码只返回 `password_set`）、`bot`（`require_operator`）；站点信息、QQ 号可见范围、默认审核方式、等级名称等随对应功能加入 | 管理员 / `admin` |
 | PATCH | `/admin/settings` | 修改站点设置，立即生效：只改带了的分组和字段；SMTP 密码不带就不变，传空字符串清空 | 管理员 / `admin` |
 | POST | `/admin/settings/test-email` | `{ qq }`：用当前 SMTP 设置发一封测试邮件 | 管理员 / `admin` |

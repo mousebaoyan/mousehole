@@ -1267,6 +1267,31 @@ export async function listModerated(status: "pending" | "hidden", cursor: number
   };
 }
 
+// For the admin overview: what was published today, Beijing time, and what waits for review.
+export async function contentStats() {
+  const today = sql<Date>`date_trunc('day', now() AT TIME ZONE 'Asia/Shanghai')
+    AT TIME ZONE 'Asia/Shanghai'`;
+  const published = await db
+    .selectFrom("posts")
+    .select([
+      sql<number>`count(*) FILTER (WHERE floor = 1)::integer`.as("threads"),
+      sql<number>`count(*) FILTER (WHERE floor > 1)::integer`.as("posts"),
+    ])
+    .where("created_at", ">=", today)
+    .where("status", "=", "visible")
+    .where("deleted_at", "is", null)
+    .executeTakeFirstOrThrow();
+  const { pending } = await db
+    .selectFrom("posts")
+    .innerJoin("threads", "threads.id", "posts.thread_id")
+    .select(sql<number>`count(*)::integer`.as("pending"))
+    .where("posts.status", "=", "pending")
+    .where("posts.deleted_at", "is", null)
+    .where("threads.deleted_at", "is", null)
+    .executeTakeFirstOrThrow();
+  return { threads_today: published.threads, posts_today: published.posts, pending };
+}
+
 // ---- Accepted answers
 
 // The asker, or a moderator, picks the floor that answered a question; another pick replaces it,

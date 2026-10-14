@@ -106,6 +106,27 @@ export async function clearOldEvents() {
     .execute();
 }
 
+// How the bot plugin is listening, for the admin overview: event streams open now, and when it
+// last fetched a batch. Kept in memory, as one process serves the forum.
+let openStreams = 0;
+let polledAt: Date | null = null;
+
+export function streamOpened() {
+  openStreams += 1;
+}
+
+export function streamClosed() {
+  openStreams -= 1;
+}
+
+export function batchPolled() {
+  polledAt = new Date();
+}
+
+export function botListening() {
+  return { streams: openStreams, polled_at: polledAt };
+}
+
 // ---- Listening in this process: pages following a thread live. The events are read once for
 // all of them, in order, as they arrive.
 

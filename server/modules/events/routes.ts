@@ -3,6 +3,7 @@ import { streamSSE } from "hono/streaming";
 import { authorize, createRouter, errorResponse, unix } from "../../platform/http.ts";
 import { HEARTBEAT_MS } from "../../platform/sse.ts";
 import {
+  batchPolled,
   checkCursor,
   EVENT_TYPES,
   pending,
@@ -10,6 +11,8 @@ import {
   latestEventId,
   nextEvents,
   readEvents,
+  streamClosed,
+  streamOpened,
 } from "./service.ts";
 
 const Types = z
@@ -52,22 +55,27 @@ export const eventsRoutes = createRouter()
       return streamSSE(c, async (stream) => {
         const closed = new AbortController();
         stream.onAbort(() => closed.abort());
-        while (!closed.signal.aborted) {
-          const events = await readEvents(cursor, types, BATCH);
-          for (const e of events) {
-            await stream.writeSSE({
-              id: String(e.id),
-              event: e.type,
-              data: JSON.stringify(e.data),
-            });
-            cursor = e.id;
+        streamOpened();
+        try {
+          while (!closed.signal.aborted) {
+            const events = await readEvents(cursor, types, BATCH);
+            for (const e of events) {
+              await stream.writeSSE({
+                id: String(e.id),
+                event: e.type,
+                data: JSON.stringify(e.data),
+              });
+              cursor = e.id;
+            }
+            // A full batch may have more behind it; otherwise wait for news, or say it is alive.
+            if (events.length === BATCH) continue;
+            if (await pending(cursor, types)) await nextEvents(HELD_MS, closed.signal);
+            else if (!(await nextEvents(HEARTBEAT_MS, closed.signal))) {
+              await stream.write(": ping\n\n");
+            }
           }
-          // A full batch may have more behind it; otherwise wait for news, or say it is alive.
-          if (events.length === BATCH) continue;
-          if (await pending(cursor, types)) await nextEvents(HELD_MS, closed.signal);
-          else if (!(await nextEvents(HEARTBEAT_MS, closed.signal))) {
-            await stream.write(": ping\n\n");
-          }
+        } finally {
+          streamClosed();
         }
       });
     },
@@ -110,6 +118,7 @@ export const eventsRoutes = createRouter()
     }),
     async (c) => {
       authorize(c, "events");
+      batchPolled();
       const { after, limit, types } = c.req.valid("query");
       if (after === undefined) return c.json({ items: [], next_after: await latestEventId() }, 200);
       await checkCursor(after);

@@ -1,9 +1,13 @@
 import { createRoute, z } from "@hono/zod-openapi";
-import { actorOf, authorize, createRouter, errorResponse } from "../../platform/http.ts";
+import { actorOf, authorize, createRouter, errorResponse, unix } from "../../platform/http.ts";
 import { sendMail } from "../../platform/mail.ts";
 import { getSettings } from "../../platform/settings.ts";
+import { botListening } from "../events/service.ts";
+import { countOpenReports } from "../moderation/service.ts";
+import { contentStats } from "../threads/service.ts";
+import { uploadBytes } from "../uploads/service.ts";
 import { memberStats } from "../users/service.ts";
-import { updateSettings } from "./service.ts";
+import { databaseBytes, updateSettings } from "./service.ts";
 
 const LoginSettings = z.object({
   code: z.boolean(),
@@ -35,7 +39,7 @@ export const adminRoutes = createRouter()
     createRoute({
       method: "get",
       path: "/admin/overview",
-      summary: "概览：成员数、已激活和已冻结的人数",
+      summary: "概览：成员、今天的内容、待处理的事、bot 的事件流和存储",
       responses: {
         200: {
           description: "群的同步状态见 /admin/groups",
@@ -47,6 +51,25 @@ export const adminRoutes = createRouter()
                   activated: z.number(),
                   frozen: z.number(),
                 }),
+                content: z.object({
+                  threads_today: z.number().openapi({ description: "今天（北京时间）公开的主题" }),
+                  posts_today: z.number().openapi({ description: "今天公开的回复" }),
+                  pending: z.number().openapi({ description: "待审核的主题和回复" }),
+                  reports: z.number().openapi({ description: "待处理的举报" }),
+                }),
+                events: z.object({
+                  streams: z.number().openapi({ description: "现在连着的事件流" }),
+                  polled_at: z
+                    .number()
+                    .nullable()
+                    .openapi({ description: "最近一次按游标拉取事件的时间，进程重启后为 null" }),
+                }),
+                storage: z.object({
+                  database: z.number().openapi({ description: "数据库占用的字节数" }),
+                  uploads: z
+                    .number()
+                    .openapi({ description: "上传的图片占用的字节数，两种尺寸合计" }),
+                }),
               }),
             },
           },
@@ -56,7 +79,26 @@ export const adminRoutes = createRouter()
     }),
     async (c) => {
       authorize(c, "admin");
-      return c.json({ members: await memberStats() }, 200);
+      const [members, content, reports, database, uploads] = await Promise.all([
+        memberStats(),
+        contentStats(),
+        countOpenReports(),
+        databaseBytes(),
+        uploadBytes(),
+      ]);
+      const events = botListening();
+      return c.json(
+        {
+          members,
+          content: { ...content, reports },
+          events: {
+            streams: events.streams,
+            polled_at: events.polled_at && unix(events.polled_at),
+          },
+          storage: { database, uploads },
+        },
+        200,
+      );
     },
   )
   .openapi(
