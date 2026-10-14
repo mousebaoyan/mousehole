@@ -81,6 +81,10 @@ export function checkPermission(viewer: Viewer | null, bot: Bot | null, need: Sc
   return viewer;
 }
 
+// Who is reading, for what they may open: members see members-only boards; content waiting for
+// review or hidden shows to moderators, and to its author.
+export type Reader = { members: boolean; id: number | null; staff: boolean };
+
 // Who may see members-only boards and what is in them; everyone else gets the public site.
 export function isMember(viewer: Viewer | null, bot: Bot | null) {
   return viewer?.member_status === "member" && (bot === null || bot.scopes.includes("read"));

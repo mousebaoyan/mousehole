@@ -9,6 +9,7 @@ import {
   clientIp,
   createRouter,
   errorResponse,
+  readerOf,
   requireWeb,
   unix,
 } from "../../platform/http.ts";
@@ -368,7 +369,7 @@ export const threadsRoutes = createRouter()
     async (c) => {
       const { id } = c.req.valid("param");
       const { viewer, bot } = c.var;
-      const thread = await getThread(id, isMember(viewer, bot), viewer?.id ?? null);
+      const thread = await getThread(id, readerOf(c));
       // People reading, not bots fetching.
       if (!bot) recordView(id, viewer ? `u${viewer.id}` : (clientIp(c) ?? ""));
       return c.json(threadDetailJson(thread, viewer !== null), 200);
@@ -391,7 +392,7 @@ export const threadsRoutes = createRouter()
     }),
     async (c) => {
       const { id } = c.req.valid("param");
-      await getThread(id, isMember(c.var.viewer, c.var.bot), null);
+      await getThread(id, readerOf(c));
       const queue: { type: string; floor: number }[] = [];
       return liveStream(
         c,
@@ -433,9 +434,8 @@ export const threadsRoutes = createRouter()
     }),
     async (c) => {
       const { after, before, body } = c.req.valid("query");
-      const members = isMember(c.var.viewer, c.var.bot);
       const range = before === undefined ? { after: after ?? 0 } : { before };
-      const posts = await listPosts(c.req.valid("param").id, members, range);
+      const posts = await listPosts(c.req.valid("param").id, readerOf(c), range);
       const extras = await floorExtras(
         c.var.viewer?.id ?? null,
         posts.map((p) => p.id),
@@ -452,7 +452,7 @@ export const threadsRoutes = createRouter()
       responses: { 200: postResponse, 404: errorResponse("回复不存在") },
     }),
     async (c) => {
-      const post = await getPost(c.req.valid("param").id, isMember(c.var.viewer, c.var.bot));
+      const post = await getPost(c.req.valid("param").id, readerOf(c));
       const extras = await floorExtras(c.var.viewer?.id ?? null, [post.id]);
       return c.json(postJson(post, c.req.valid("query").body, extras), 200);
     },
@@ -476,8 +476,7 @@ export const threadsRoutes = createRouter()
     }),
     async (c) => {
       const { after, body } = c.req.valid("query");
-      const members = isMember(c.var.viewer, c.var.bot);
-      const replies = await listReplies(c.req.valid("param").id, members, after);
+      const replies = await listReplies(c.req.valid("param").id, readerOf(c), after);
       const extras = await floorExtras(
         c.var.viewer?.id ?? null,
         replies.map((p) => p.id),

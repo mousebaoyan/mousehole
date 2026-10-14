@@ -30,7 +30,7 @@ export async function react(
   postId: number,
   emoji: Reaction | null,
 ) {
-  const post = await getPost(postId, members);
+  const post = await getPost(postId, { members, id: viewer.id, staff: false });
   if (post.deleted_at !== null) throw new AppError(404, "post_not_found", "回复不存在");
   if (post.author_id === viewer.id) throw new AppError(403, "forbidden", "不能给自己点赞");
 
@@ -75,7 +75,7 @@ export async function listReactions(
   emoji: Reaction | undefined,
   offset: number,
 ) {
-  await getPost(postId, members);
+  await getPost(postId, { members, id: null, staff: false });
   let query = db
     .selectFrom("reactions")
     .select(["user_id", "emoji", "created_at"])
@@ -108,7 +108,7 @@ export function boostLength(body: string) {
 
 // One per person per floor; leaving another replaces it where it stood.
 export async function setBoost(viewer: Viewer, members: boolean, postId: number, body: string) {
-  const post = await getPost(postId, members);
+  const post = await getPost(postId, { members, id: viewer.id, staff: false });
   if (post.deleted_at !== null) throw new AppError(404, "post_not_found", "回复不存在");
   const row = await db.transaction().execute(async (trx) => {
     const { replaced, ...saved } = await trx
@@ -176,7 +176,7 @@ async function withBoostUsers(
 }
 
 export async function listBoosts(members: boolean, postId: number) {
-  await getPost(postId, members);
+  await getPost(postId, { members, id: null, staff: false });
   const rows = await selectBoosts()
     .where("post_id", "=", postId)
     .orderBy("created_at")

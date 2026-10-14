@@ -1,6 +1,6 @@
 import { sql, type ExpressionBuilder, type RawBuilder, type Transaction } from "kysely";
 import type { DB, Json } from "../../../db/types.ts";
-import { STAFF, type Actor, type Viewer } from "../../platform/access.ts";
+import { STAFF, type Actor, type Reader, type Viewer } from "../../platform/access.ts";
 import { db } from "../../platform/db.ts";
 import { AppError } from "../../platform/errors.ts";
 import { log } from "../../platform/log.ts";
@@ -54,17 +54,28 @@ function threadNotFound() {
 
 // What a viewer may open: published, not deleted, and in a board they can see.
 function visibleThreads(members: boolean) {
+  return openableThreads({ members, id: null, staff: false });
+}
+
+// Also threads waiting for review or hidden, for moderators and their authors. See design §8.4.
+function openableThreads(reader: Reader) {
   return db
     .selectFrom("threads")
     .innerJoin("boards", "boards.id", "threads.board_id")
     .where("threads.deleted_at", "is", null)
-    .where("threads.status", "=", "visible")
-    .$if(!members, (qb) => qb.where("boards.visibility", "=", "public"));
+    .$if(!reader.staff, (qb) =>
+      qb.where((eb) =>
+        reader.id === null
+          ? eb("threads.status", "=", "visible")
+          : eb.or([eb("threads.status", "=", "visible"), eb("threads.author_id", "=", reader.id)]),
+      ),
+    )
+    .$if(!reader.members, (qb) => qb.where("boards.visibility", "=", "public"));
 }
 
 // With the reader's own row in thread_users, which a guest doesn't have.
-function selectThreads(members: boolean, userId: number | null) {
-  return visibleThreads(members)
+function selectThreads(from: ReturnType<typeof openableThreads>, userId: number | null) {
+  return from
     .leftJoin("thread_users as mine", (join) =>
       join.onRef("mine.thread_id", "=", "threads.id").on(sql<boolean>`mine.user_id = ${userId}`),
     )
@@ -201,7 +212,7 @@ export async function listThreads(
         ? "mine.last_read_at"
         : "threads.last_post_at";
 
-  let query = selectThreads(members, userId)
+  let query = selectThreads(visibleThreads(members), userId)
     // Microseconds, exact for PostgreSQL timestamps, unlike a JavaScript Date.
     .select(sql<number>`(extract(epoch FROM ${sql.ref(time)}) * 1000000)::bigint`.as("micros"))
     .where(inScope(scope))
@@ -329,14 +340,16 @@ export async function listUserPosts(members: boolean, authorId: number, cursor?:
 // These threads as lists show them, for search results; ones the viewer can't see are left out.
 export async function threadsByIds(members: boolean, userId: number | null, ids: number[]) {
   if (ids.length === 0) return new Map<number, Awaited<ReturnType<typeof withUsers>>[number]>();
-  const rows = await selectThreads(members, userId).where("threads.id", "in", ids).execute();
+  const rows = await selectThreads(visibleThreads(members), userId)
+    .where("threads.id", "in", ids)
+    .execute();
   return new Map((await withUsers(rows)).map((t) => [t.id, t]));
 }
 
 // ---- One thread and its floors
 
-export async function getThread(id: number, members: boolean, userId: number | null) {
-  const row = await selectThreads(members, userId)
+export async function getThread(id: number, reader: Reader) {
+  const row = await selectThreads(openableThreads(reader), reader.id)
     .select([
       sql<[number, number][]>`(
         SELECT coalesce(json_agg(json_build_array(lower(r), upper(r) - 1) ORDER BY lower(r)), '[]')
@@ -352,7 +365,8 @@ export async function getThread(id: number, members: boolean, userId: number | n
   return thread;
 }
 
-function selectPosts() {
+// Floors waiting for review or hidden show to moderators and their authors only.
+function selectPosts(reader: Reader) {
   return db
     .selectFrom("posts")
     .leftJoin("posts as target", "target.id", "posts.reply_to_id")
@@ -374,8 +388,15 @@ function selectPosts() {
       "target.id as target_id",
       "target.floor as target_floor",
       "target.author_id as target_author_id",
+      "posts.status",
     ])
-    .where("posts.status", "=", "visible");
+    .$if(!reader.staff, (qb) =>
+      qb.where((eb) =>
+        reader.id === null
+          ? eb("posts.status", "=", "visible")
+          : eb.or([eb("posts.status", "=", "visible"), eb("posts.author_id", "=", reader.id)]),
+      ),
+    );
 }
 
 type PostRow = Awaited<ReturnType<ReturnType<typeof selectPosts>["execute"]>>[number];
@@ -396,8 +417,8 @@ async function withPostUsers(rows: PostRow[]) {
   }));
 }
 
-async function assertVisible(threadId: number, members: boolean) {
-  const thread = await visibleThreads(members)
+async function assertVisible(threadId: number, reader: Reader) {
+  const thread = await openableThreads(reader)
     .select(["threads.id", "threads.locked", "threads.board_id", "threads.floor_count"])
     .where("threads.id", "=", threadId)
     .executeTakeFirst();
@@ -408,11 +429,11 @@ async function assertVisible(threadId: number, members: boolean) {
 // Up to a batch of floors after or before one; fewer means that end of the thread was reached.
 export async function listPosts(
   threadId: number,
-  members: boolean,
+  reader: Reader,
   range: { after: number } | { before: number },
 ) {
-  await assertVisible(threadId, members);
-  let query = selectPosts().where("posts.thread_id", "=", threadId).limit(FLOOR_BATCH);
+  await assertVisible(threadId, reader);
+  let query = selectPosts(reader).where("posts.thread_id", "=", threadId).limit(FLOOR_BATCH);
   query =
     "after" in range
       ? query.where("posts.floor", ">", range.after).orderBy("posts.floor")
@@ -422,18 +443,18 @@ export async function listPosts(
   return withPostUsers(rows);
 }
 
-export async function getPost(id: number, members: boolean) {
-  const row = await selectPosts().where("posts.id", "=", id).executeTakeFirst();
+export async function getPost(id: number, reader: Reader) {
+  const row = await selectPosts(reader).where("posts.id", "=", id).executeTakeFirst();
   if (!row) throw new AppError(404, "post_not_found", "回复不存在");
-  await assertVisible(row.thread_id, members);
+  await assertVisible(row.thread_id, reader);
   const [post] = await withPostUsers([row]);
   return post;
 }
 
 // The floors that answer a post, in floor order, a batch at a time.
-export async function listReplies(postId: number, members: boolean, after: number) {
-  const post = await getPost(postId, members);
-  const rows = await selectPosts()
+export async function listReplies(postId: number, reader: Reader, after: number) {
+  const post = await getPost(postId, reader);
+  const rows = await selectPosts(reader)
     .where("posts.thread_id", "=", post.thread_id)
     .where("posts.reply_to_id", "=", postId)
     .where("posts.deleted_at", "is", null)
@@ -514,6 +535,7 @@ export async function createThread(
     source?: Source;
   },
 ) {
+  const reader: Reader = { members, id: viewer.id, staff: false };
   const board = await getBoard(input.board, members);
   if (board.post_role === "moderator" && !STAFF.includes(viewer.role)) {
     throw new AppError(403, "forbidden", "这个版块只有版主能发主题");
@@ -580,7 +602,7 @@ export async function createThread(
     await auditBot(trx, actor, "thread.create", "thread", thread.id);
     return thread.id;
   });
-  return getThread(id, members, viewer.id);
+  return getThread(id, reader);
 }
 
 export async function createPost(
@@ -590,7 +612,8 @@ export async function createPost(
   threadId: number,
   input: { content: Content; reply_to_id?: number; source?: Source },
 ) {
-  const thread = await assertVisible(threadId, members);
+  const reader: Reader = { members, id: viewer.id, staff: false };
+  const thread = await assertVisible(threadId, reader);
   if (thread.locked && !STAFF.includes(viewer.role)) {
     throw new AppError(403, "thread_locked", "主题已锁定");
   }
@@ -661,7 +684,7 @@ export async function createPost(
     await auditBot(trx, actor, "post.create", "post", post.id);
     return post.id;
   });
-  return getPost(id, members);
+  return getPost(id, reader);
 }
 
 // ---- Changing and removing
@@ -697,9 +720,10 @@ export async function editPost(
   postId: number,
   markdown: string,
 ) {
-  const post = await getPost(postId, members);
+  const reader: Reader = { members, id: viewer.id, staff };
+  const post = await getPost(postId, reader);
   if (post.deleted_at !== null) throw new AppError(404, "post_not_found", "回复不存在");
-  const thread = await assertVisible(post.thread_id, members);
+  const thread = await assertVisible(post.thread_id, reader);
   assertMayChange(staff, viewer, post.author_id, thread.locked);
   if (markdown === post.body) return post;
   const { html, images } = await renderMarkdown(markdown, showImages);
@@ -734,7 +758,7 @@ export async function editPost(
       target_id: postId,
     });
   });
-  return getPost(postId, members);
+  return getPost(postId, reader);
 }
 
 export async function listRevisions(
@@ -743,7 +767,8 @@ export async function listRevisions(
   members: boolean,
   postId: number,
 ) {
-  const post = await getPost(postId, members);
+  const reader: Reader = { members, id: viewer.id, staff };
+  const post = await getPost(postId, reader);
   if (!staff && post.author_id !== viewer.id) throw forbidden("只有作者和版主能看编辑记录");
   const rows = await db
     .selectFrom("post_revisions")
@@ -773,8 +798,9 @@ export async function editThread(
   threadId: number,
   change: ThreadChange,
 ) {
+  const reader: Reader = { members, id: viewer.id, staff };
   const { title, tags, board: slug, ...moderation } = change;
-  const thread = await getThread(threadId, members, viewer.id);
+  const thread = await getThread(threadId, reader);
   assertMayChange(staff, viewer, thread.author_id, thread.locked);
   if (!staff && (slug !== undefined || Object.keys(moderation).length > 0)) {
     throw forbidden("只有版主能移动、置顶、加精和锁定主题");
@@ -862,7 +888,7 @@ export async function editThread(
       data: change,
     });
   });
-  return getThread(threadId, members, viewer.id);
+  return getThread(threadId, reader);
 }
 
 // Authors can take back a thread nobody has replied to; moderators can remove any.
@@ -873,7 +899,8 @@ export async function deleteThread(
   members: boolean,
   threadId: number,
 ) {
-  const thread = await getThread(threadId, members, viewer.id);
+  const reader: Reader = { members, id: viewer.id, staff };
+  const thread = await getThread(threadId, reader);
   assertMayChange(staff, viewer, thread.author_id, thread.locked);
   if (!staff && thread.reply_count > 0) {
     throw forbidden("已经有人回复了，不能删除；需要的话请联系版主");
@@ -913,12 +940,13 @@ export async function deletePost(
   members: boolean,
   postId: number,
 ) {
-  const post = await getPost(postId, members);
+  const reader: Reader = { members, id: viewer.id, staff };
+  const post = await getPost(postId, reader);
   if (post.deleted_at !== null) throw new AppError(404, "post_not_found", "回复不存在");
   if (post.floor === 1) {
     throw new AppError(400, "invalid_request", "主楼不能单独删除，可以删除整个主题");
   }
-  const thread = await assertVisible(post.thread_id, members);
+  const thread = await assertVisible(post.thread_id, reader);
   assertMayChange(staff, viewer, post.author_id, thread.locked);
 
   await db.transaction().execute(async (trx) => {
@@ -970,7 +998,8 @@ export async function setSolution(
   threadId: number,
   postId: number | null,
 ) {
-  const thread = await getThread(threadId, members, viewer.id);
+  const reader: Reader = { members, id: viewer.id, staff };
+  const thread = await getThread(threadId, reader);
   assertMayChange(staff, viewer, thread.author_id, thread.locked);
   if (thread.kind !== "question") {
     throw new AppError(400, "invalid_request", "只有问答主题能采纳答案");
@@ -1012,7 +1041,7 @@ export async function setSolution(
       data: { post_id: answer?.id ?? null },
     });
   });
-  return getThread(threadId, members, viewer.id);
+  return getThread(threadId, reader);
 }
 
 // ---- Reactions
@@ -1073,7 +1102,8 @@ export async function setBookmark(
   threadId: number,
   bookmarked: boolean,
 ) {
-  await assertVisible(threadId, members);
+  const reader: Reader = { members, id: viewer.id, staff: false };
+  await assertVisible(threadId, reader);
   await db
     .insertInto("thread_users")
     .values({
@@ -1095,7 +1125,8 @@ export async function setNotifyLevel(
   threadId: number,
   level: NotifyLevel,
 ) {
-  await assertVisible(threadId, members);
+  const reader: Reader = { members, id: viewer.id, staff: false };
+  await assertVisible(threadId, reader);
   await db
     .insertInto("thread_users")
     .values({ user_id: viewer.id, thread_id: threadId, notify_level: level })
@@ -1155,7 +1186,8 @@ export async function recordReading(
   ranges: [number, number][],
   seconds: number,
 ) {
-  const thread = await assertVisible(threadId, members);
+  const reader: Reader = { members, id: viewer.id, staff: false };
+  const thread = await assertVisible(threadId, reader);
   const floors = ranges
     .map(([from, to]): [number, number] => [from, Math.min(to, thread.floor_count)])
     .filter(([from, to]) => from <= to);
