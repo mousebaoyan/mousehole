@@ -1,9 +1,15 @@
-import { restrictionOf, type Actor, type UserRef } from "../../platform/access.ts";
+import { sql, type Transaction } from "kysely";
+import type { DB } from "../../../db/types.ts";
+import { restrictionOf, type Actor, type UserRef, type Viewer } from "../../platform/access.ts";
 import { db } from "../../platform/db.ts";
+import { env } from "../../platform/env.ts";
 import { AppError } from "../../platform/errors.ts";
+import { excerpt } from "../../platform/markdown.ts";
 import { recordAudit } from "../audit/service.ts";
 import { endAllSessions } from "../auth/service.ts";
-import { findMember, saveRestriction } from "../users/service.ts";
+import { recordEvent } from "../events/service.ts";
+import { getPost } from "../threads/service.ts";
+import { findMember, saveRestriction, userBriefs } from "../users/service.ts";
 
 // ---- Mutes and bans; see design §6.4. Moderators mute, admins also ban; only ordinary members
 // can be either, so staff are demoted first.
@@ -53,6 +59,156 @@ export async function lift(actor: Actor, admin: boolean, ref: UserRef, reason: s
       target_type: "user",
       target_id: user.id,
       data: { type: current.type, reason: reason ?? null },
+    });
+  });
+}
+
+// ---- Reports: members flag floors and boosts for moderators; see design §8.4.
+
+const PAGE = 30;
+const REPORT_EXCERPT = 120;
+
+function alreadyReported() {
+  return new AppError(409, "already_reported", "你已经举报过了，版主会尽快处理");
+}
+
+async function person(trx: Transaction<DB>, id: number) {
+  return trx
+    .selectFrom("users")
+    .select(["id", "display_name", "qq"])
+    .where("id", "=", id)
+    .executeTakeFirstOrThrow();
+}
+
+async function boostOf(id: number) {
+  const boost = await db
+    .selectFrom("boosts")
+    .select(["id", "post_id", "user_id", "body"])
+    .where("id", "=", id)
+    .executeTakeFirst();
+  if (!boost) throw new AppError(404, "boost_not_found", "短评不存在");
+  return boost;
+}
+
+export async function reportPost(viewer: Viewer, members: boolean, postId: number, reason: string) {
+  await fileReport(viewer, await getPost(postId, members), null, reason);
+}
+
+export async function reportBoost(
+  viewer: Viewer,
+  members: boolean,
+  boostId: number,
+  reason: string,
+) {
+  const boost = await boostOf(boostId);
+  await fileReport(viewer, await getPost(boost.post_id, members), boost, reason);
+}
+
+// Each person once for each floor or boost. The bot plugin hears of it.
+async function fileReport(
+  viewer: Viewer,
+  post: Awaited<ReturnType<typeof getPost>>,
+  boost: Awaited<ReturnType<typeof boostOf>> | null,
+  reason: string,
+) {
+  if (post.deleted_at !== null) throw new AppError(404, "post_not_found", "回复不存在");
+  await db.transaction().execute(async (trx) => {
+    const created = await trx
+      .insertInto("reports")
+      .values({ post_id: post.id, boost_id: boost?.id ?? null, reporter_id: viewer.id, reason })
+      .onConflict((oc) => oc.doNothing())
+      .returning("id")
+      .executeTakeFirst();
+    if (!created) throw alreadyReported();
+    await recordEvent(trx, "report.created", {
+      report: { id: created.id, reason },
+      post: { id: post.id, floor: post.floor, thread_id: post.thread_id },
+      boost: boost && { id: boost.id, body: boost.body, author: await person(trx, boost.user_id) },
+      reporter: await person(trx, viewer.id),
+      url: `${env.PUBLIC_URL}/t/${post.thread_id}?floor=${post.floor}`,
+    });
+  });
+}
+
+export type ReportStatus = "open" | "resolved" | "dismissed";
+
+// For moderators: newest first, a page at a time; the cursor is the last one's ID.
+export async function listReports(status: ReportStatus, cursor: number | undefined) {
+  let query = db
+    .selectFrom("reports")
+    .innerJoin("posts", "posts.id", "reports.post_id")
+    .innerJoin("threads", "threads.id", "posts.thread_id")
+    .leftJoin("boosts", "boosts.id", "reports.boost_id")
+    .select([
+      "reports.id",
+      "reports.reason",
+      "reports.status",
+      "reports.reporter_id",
+      "reports.handler_id",
+      "reports.handled_at",
+      "reports.created_at",
+      "posts.id as post_id",
+      "posts.floor",
+      "posts.html",
+      "posts.author_id",
+      "posts.deleted_at",
+      "threads.id as thread_id",
+      "threads.title",
+      "boosts.id as boost_id",
+      "boosts.body as boost_body",
+      "boosts.user_id as boost_user_id",
+    ])
+    .where("reports.status", "=", status)
+    .orderBy("reports.id", "desc")
+    .limit(PAGE);
+  if (cursor !== undefined) query = query.where("reports.id", "<", cursor);
+  const rows = await query.execute();
+  const user = await userBriefs(
+    rows
+      .flatMap((r) => [r.reporter_id, r.author_id, r.handler_id, r.boost_user_id])
+      .filter((id) => id !== null),
+  );
+  const last = rows.at(-1);
+  return {
+    items: rows.map((r) => ({
+      id: r.id,
+      reason: r.reason,
+      status: r.status,
+      reporter: user(r.reporter_id),
+      post: {
+        id: r.post_id,
+        floor: r.floor,
+        thread: { id: r.thread_id, title: r.title },
+        author: user(r.author_id),
+        excerpt: excerpt(r.html, REPORT_EXCERPT),
+        deleted: r.deleted_at !== null,
+      },
+      boost:
+        r.boost_id === null || r.boost_body === null || r.boost_user_id === null
+          ? null
+          : { id: r.boost_id, body: r.boost_body, user: user(r.boost_user_id) },
+      handler: r.handler_id === null ? null : user(r.handler_id),
+      handled_at: r.handled_at,
+      created_at: r.created_at,
+    })),
+    next_cursor: rows.length === PAGE && last ? String(last.id) : null,
+  };
+}
+
+// Dealt with (whatever was done about the content), or not a problem after all.
+export async function handleReport(actor: Actor, id: number, status: "resolved" | "dismissed") {
+  await db.transaction().execute(async (trx) => {
+    const handled = await trx
+      .updateTable("reports")
+      .set({ status, handler_id: actor.userId, handled_at: sql<Date>`now()` })
+      .where("id", "=", id)
+      .returning("id")
+      .executeTakeFirst();
+    if (!handled) throw new AppError(404, "report_not_found", "举报不存在");
+    await recordAudit(trx, actor, {
+      action: status === "resolved" ? "report.resolve" : "report.dismiss",
+      target_type: "report",
+      target_id: id,
     });
   });
 }

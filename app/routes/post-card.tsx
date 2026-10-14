@@ -23,14 +23,12 @@ import { UserAvatar } from "~/components/user-avatar";
 import { UserCard } from "~/components/user-card";
 import { UserBadges } from "~/components/user-badges";
 import { Button, buttonVariants } from "~/components/ui/button";
-import { Textarea } from "~/components/ui/textarea";
 import type { PostItem, UserBrief } from "~/api-types";
 import { useMe } from "~/forum";
 import { stamp } from "~/time";
 import { BoostButton, BoostChip, useBoosts } from "./boosts.tsx";
 import { LikeButton, ReactionSummary, useReaction } from "./reactions.tsx";
-
-const reportReasons = ["垃圾广告", "人身攻击", "违法违规", "其他"];
+import { ReportDialog, type ReportTarget } from "./report-dialog.tsx";
 
 // `parent` is the floor this one replies to when it is on the page; otherwise it is fetched when
 // the reader opens it. The floors that reply to this one are fetched the same way.
@@ -77,7 +75,9 @@ export function PostCard({
   const [repliesOpen, setRepliesOpen] = useState(false);
   const parentFetcher = useFetcher<PostItem>();
   const repliesFetcher = useFetcher<PostItem[]>();
-  const report = useRef<HTMLDialogElement>(null);
+  const [reporting, setReporting] = useState<ReportTarget | null>(null);
+  const reportBoost = (id: number, body: string) => () =>
+    setReporting({ boostId: id, label: `短评「${body}」` });
   const history = useRef<HTMLDialogElement>(null);
   const historyFetcher = useFetcher<Revision[]>();
   // The Markdown to edit, fetched when 编辑 is chosen; `editing` marks a choice still waiting.
@@ -305,7 +305,7 @@ export function PostCard({
                     className={menuItem}
                     onClick={() => {
                       close();
-                      report.current?.showModal();
+                      setReporting({ postId: post.id, label: ` #${post.floor}` });
                     }}
                   >
                     <Flag /> 举报
@@ -328,6 +328,9 @@ export function PostCard({
                 boost={b}
                 threadId={threadId}
                 removable={manage.moderate && b.user.id !== me?.id}
+                onReport={
+                  me && b.user.id !== me.id && b.id !== null ? reportBoost(b.id, b.body) : undefined
+                }
               />
             ))}
             {boosts.hidden > 0 && (
@@ -363,7 +366,9 @@ export function PostCard({
         )}
       </div>
 
-      <ReportDialog ref={report} floor={post.floor} />
+      {reporting && (
+        <ReportDialog threadId={threadId} target={reporting} onClose={() => setReporting(null)} />
+      )}
       {post.edited_at !== null && manage.history && (
         <HistoryDialog ref={history} floor={post.floor} revisions={historyFetcher.data} now={now} />
       )}
@@ -462,37 +467,5 @@ function PostPreview({
         )}
       </div>
     </div>
-  );
-}
-
-// A native <dialog>: modal, Esc to close and focus handling come with the browser.
-function ReportDialog({ ref, floor }: { ref: Ref<HTMLDialogElement>; floor: number }) {
-  return (
-    <dialog
-      ref={ref}
-      className="m-auto w-[min(24rem,calc(100%-2rem))] rounded-2xl border bg-popover p-5 text-popover-foreground shadow-xl backdrop:bg-black/30"
-    >
-      <form method="dialog">
-        <h2 className="font-semibold">举报 #{floor}</h2>
-        <fieldset className="mt-4 grid grid-cols-2 gap-2">
-          {reportReasons.map((reason) => (
-            <label
-              key={reason}
-              className="flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-sm has-checked:border-brand has-checked:bg-brand/10"
-            >
-              <input type="radio" name="reason" value={reason} className="accent-brand" />
-              {reason}
-            </label>
-          ))}
-        </fieldset>
-        <Textarea placeholder="补充说明（选填）" className="mt-3 min-h-20" />
-        <div className="mt-4 flex justify-end gap-2">
-          <Button type="submit" variant="ghost" value="cancel">
-            取消
-          </Button>
-          <Button type="submit">提交</Button>
-        </div>
-      </form>
-    </dialog>
   );
 }

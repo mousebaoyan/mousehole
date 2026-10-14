@@ -125,6 +125,15 @@ export async function action({ params, request, context }: Route.ActionArgs) {
     if (res.ok) return { ok: true as const, saved: level };
     return { ok: false as const, message: (await res.json()).error.message };
   }
+  if (text("intent") === "report") {
+    const note = text("note").trim();
+    const json = { reason: (note ? `${text("reason")}：${note}` : text("reason")).slice(0, 200) };
+    const res = form.has("boost_id")
+      ? await api.boosts[":id"].report.$post({ param: { id: text("boost_id") }, json })
+      : await api.posts[":id"].report.$post({ param: post, json });
+    if (res.ok) return { ok: true as const, message: "已举报，版主会尽快处理" };
+    return { ok: false as const, message: (await res.json()).error.message };
+  }
   if (text("intent") === "accept" || text("intent") === "unaccept") {
     const res =
       text("intent") === "accept"

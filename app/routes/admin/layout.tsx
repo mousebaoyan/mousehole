@@ -1,6 +1,7 @@
 import {
   ArrowLeft,
   Bot,
+  Flag,
   LayoutDashboard,
   LayoutList,
   Mail,
@@ -20,23 +21,27 @@ export function meta() {
   return [{ title: "管理后台 · 鼠洞" }];
 }
 
-export async function loader({ context }: Route.LoaderArgs) {
+// Admins see it all; moderators the pages for their work (design §10), starting at reports.
+export async function loader({ context, request }: Route.LoaderArgs) {
   const res = await context.get(apiContext).me.$get();
   if (!res.ok) return redirect("/login");
-  const me = await res.json();
-  if (me.role !== "admin") throw data("管理后台只有管理员能进", { status: 403 });
-  return null;
+  const { role } = await res.json();
+  if (role === "admin") return { admin: true };
+  if (role !== "moderator") throw data("管理后台只有管理员和版主能进", { status: 403 });
+  if (new URL(request.url).pathname === "/admin") return redirect("/admin/reports");
+  return { admin: false };
 }
 
-// Pages appear here as they are built; members, moderation and the audit log come later.
+// Pages appear here as they are built; members, the audit log and more moderation come later.
 const pages = [
-  { to: "/admin", label: "概览", icon: LayoutDashboard, end: true },
-  { to: "/admin/groups", label: "QQ 群", icon: UsersRound },
-  { to: "/admin/boards", label: "版块", icon: LayoutList },
-  { to: "/admin/tags", label: "标签", icon: Tags },
-  { to: "/admin/site", label: "站点", icon: Settings },
-  { to: "/admin/email", label: "邮件", icon: Mail },
-  { to: "/admin/tokens", label: "bot", icon: Bot },
+  { to: "/admin", label: "概览", icon: LayoutDashboard, end: true, admin: true },
+  { to: "/admin/reports", label: "举报", icon: Flag, admin: false },
+  { to: "/admin/groups", label: "QQ 群", icon: UsersRound, admin: true },
+  { to: "/admin/boards", label: "版块", icon: LayoutList, admin: true },
+  { to: "/admin/tags", label: "标签", icon: Tags, admin: true },
+  { to: "/admin/site", label: "站点", icon: Settings, admin: true },
+  { to: "/admin/email", label: "邮件", icon: Mail, admin: true },
+  { to: "/admin/tokens", label: "bot", icon: Bot, admin: true },
 ];
 
 const link = ({ isActive }: { isActive: boolean }) =>
@@ -45,7 +50,7 @@ const link = ({ isActive }: { isActive: boolean }) =>
     isActive && "bg-background font-medium text-foreground shadow-sm",
   );
 
-export default function AdminLayout() {
+export default function AdminLayout({ loaderData: { admin } }: Route.ComponentProps) {
   const { pathname } = useLocation();
   const nav = useRef<HTMLElement>(null);
   // On phones the row may have scrolled the current page out of sight.
@@ -68,11 +73,13 @@ export default function AdminLayout() {
         </div>
         {/* A sidebar on wide screens, a row that scrolls sideways on phones. */}
         <nav ref={nav} className="-mx-1 flex gap-1 overflow-x-auto px-1 text-sm md:flex-col">
-          {pages.map((p) => (
-            <NavLink key={p.to} to={p.to} end={p.end} className={link}>
-              <p.icon className="size-4" /> {p.label}
-            </NavLink>
-          ))}
+          {pages
+            .filter((p) => admin || !p.admin)
+            .map((p) => (
+              <NavLink key={p.to} to={p.to} end={p.end} className={link}>
+                <p.icon className="size-4" /> {p.label}
+              </NavLink>
+            ))}
         </nav>
         <Link
           to="/"

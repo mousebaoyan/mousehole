@@ -14,6 +14,7 @@ export const EVENT_TYPES = [
   "thread.solved",
   "notification.created",
   "member.activated",
+  "report.created",
 ] as const;
 export type EventType = (typeof EVENT_TYPES)[number];
 
