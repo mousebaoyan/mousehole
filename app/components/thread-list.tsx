@@ -1,4 +1,4 @@
-import { ChartBar, CircleCheck, MessageSquare, Pin, Sparkles } from "lucide-react";
+import { ChartBar, CircleCheck, Gift, MessageSquare, Pin, Sparkles } from "lucide-react";
 import type { ReactNode } from "react";
 import { Link } from "react-router";
 import { cn } from "cn";
@@ -117,6 +117,12 @@ function ThreadRow({
           {thread.kind === "poll" && (
             <ChartBar
               aria-label="投票"
+              className="ml-1.5 -mt-0.5 inline size-4 text-muted-foreground"
+            />
+          )}
+          {thread.kind === "lottery" && (
+            <Gift
+              aria-label="抽奖"
               className="ml-1.5 -mt-0.5 inline size-4 text-muted-foreground"
             />
           )}

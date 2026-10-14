@@ -34,10 +34,11 @@ import { Select } from "~/components/ui/select";
 import { useMe, usePostableBoards } from "~/forum";
 import { useHydrated } from "~/hydrated";
 import { fromWallClock, unixNow, wallClock } from "~/time";
+import { levelName } from "../../server/platform/site.ts";
 
 type ThreadRef = { id: number; title: string };
 type ReplyRef = { id: number; floor: number; name: string };
-type Kind = "discussion" | "question" | "poll";
+type Kind = "discussion" | "question" | "poll" | "lottery";
 
 // A poll being set up, as the API takes it (design §8.11); blank options are left out on posting.
 // It closes some days after posting or at a time of the author's; neither is never.
@@ -49,6 +50,16 @@ type PollDraft = {
   results: "voted" | "always";
   days: number | null;
   closes_at: number | null;
+};
+
+// A lottery being set up (design §8.13); prizes without a name are left out on posting. Like a
+// poll's end, it is drawn some days after posting or at a time of the author's.
+type LotteryDraft = {
+  prizes: { name: string; winners: number }[];
+  entry: "button" | "reply";
+  min_level: number;
+  days: number | null;
+  draws_at: number | null;
 };
 
 // A new thread, a reply to one, or a change to a floor already posted.
@@ -64,6 +75,7 @@ type Content = {
   board: string;
   kind: Kind;
   poll: PollDraft;
+  lottery: LotteryDraft;
   tags: string[];
   // Design §8.12: the author, and everyone else replying.
   anonymous: boolean;
@@ -91,6 +103,13 @@ const EMPTY: Content = {
     days: null,
     closes_at: null,
   },
+  lottery: {
+    prizes: [{ name: "", winners: 1 }],
+    entry: "button",
+    min_level: 0,
+    days: 3,
+    draws_at: null,
+  },
   tags: [],
   anonymous: false,
   anonymousReplies: false,
@@ -98,6 +117,20 @@ const EMPTY: Content = {
 
 function filledOptions(poll: PollDraft) {
   return poll.options.map((o) => o.trim()).filter(Boolean);
+}
+
+function filledPrizes(lottery: LotteryDraft) {
+  return lottery.prizes.filter((p) => p.name.trim());
+}
+
+function lotteryReady(lottery: LotteryDraft) {
+  const prizes = filledPrizes(lottery);
+  return prizes.length > 0 && prizes.every((p) => p.winners >= 1 && p.winners <= 100);
+}
+
+// Unix seconds: some days from now, or the time picked.
+function deadlineOf(days: number | null, at: number | null) {
+  return days === null ? at : unixNow() + days * 86_400;
 }
 
 // `new`, or the thread a reply is for. Edits keep no draft: the floor itself still has the text.
@@ -112,13 +145,14 @@ function isEmpty(content: Content) {
 
 function draftBody({ target, content }: Writing) {
   if (target.mode === "thread") {
-    const { text, title, board, kind, poll, tags, anonymous, anonymousReplies } = content;
+    const { text, title, board, kind, poll, lottery, tags, anonymous, anonymousReplies } = content;
     return {
       body: text,
       title,
       board: board || null,
       kind,
       poll: kind === "poll" ? poll : null,
+      lottery: kind === "lottery" ? lottery : null,
       tags,
       author_anonymous: anonymous,
       anonymous_replies: anonymousReplies,
@@ -288,8 +322,12 @@ export function ComposerProvider({
         text: draft.body,
         title: draft.title,
         board: draft.board ?? "",
-        kind: draft.kind === "question" || draft.kind === "poll" ? draft.kind : "discussion",
+        kind:
+          draft.kind === "question" || draft.kind === "poll" || draft.kind === "lottery"
+            ? draft.kind
+            : "discussion",
         poll: draft.poll ?? EMPTY.poll,
+        lottery: draft.lottery ?? EMPTY.lottery,
         tags: draft.tags,
         anonymous: draft.author_anonymous,
         anonymousReplies: draft.anonymous_replies,
@@ -384,8 +422,8 @@ export function ComposerProvider({
 const HEIGHT_KEY = "composer-height";
 const MIN_HEIGHT = 240;
 const COLLAPSED_HEIGHT = 48;
-// Room for a poll's settings and a few options besides the text.
-const POLL_HEIGHT = 560;
+// Room for a poll's or lottery's settings and a few options or prizes besides the text.
+const SETUP_HEIGHT = 560;
 
 function clampHeight(height: number) {
   return Math.round(Math.min(Math.max(height, MIN_HEIGHT), innerHeight * 0.85));
@@ -434,10 +472,13 @@ function Composer({
     content.text.trim() !== "" &&
     (target.mode !== "thread" ||
       (content.board !== "" &&
-        (content.kind !== "poll" || filledOptions(content.poll).length >= 2)));
+        (content.kind !== "poll" || filledOptions(content.poll).length >= 2) &&
+        (content.kind !== "lottery" || lotteryReady(content.lottery))));
   const { label, Icon, field } = SEND[target.mode];
   const withPoll = target.mode === "thread" && content.kind === "poll";
+  const withLottery = target.mode === "thread" && content.kind === "lottery";
   const setPoll = (next: PollDraft) => onChange({ ...content, poll: next });
+  const setLottery = (next: LotteryDraft) => onChange({ ...content, lottery: next });
 
   useEffect(() => {
     if (sending.state !== "idle" || !sending.data?.ok) return;
@@ -464,8 +505,17 @@ function Composer({
         form.set("max_choices", poll.multiple ? String(poll.max_choices ?? "") : "");
         form.set("poll_anonymous", String(poll.anonymous));
         form.set("results", poll.results);
-        const closesAt = poll.days === null ? poll.closes_at : unixNow() + poll.days * 86_400;
-        form.set("closes_at", String(closesAt ?? ""));
+        form.set("closes_at", String(deadlineOf(poll.days, poll.closes_at) ?? ""));
+      }
+      if (content.kind === "lottery") {
+        const { lottery } = content;
+        for (const prize of filledPrizes(lottery)) {
+          form.append("prize_names", prize.name);
+          form.append("prize_winners", String(prize.winners));
+        }
+        form.set("entry", lottery.entry);
+        form.set("min_level", String(lottery.min_level));
+        form.set("draws_at", String(deadlineOf(lottery.days, lottery.draws_at) ?? ""));
       }
       void sending.submit(form, { ...options, action: "/new" });
     } else if (target.mode === "edit") {
@@ -489,7 +539,7 @@ function Composer({
     return clamped;
   }
 
-  const open = withPoll ? Math.max(height, clampHeight(POLL_HEIGHT)) : height;
+  const open = withPoll || withLottery ? Math.max(height, clampHeight(SETUP_HEIGHT)) : height;
   const shown = collapsed ? COLLAPSED_HEIGHT : open;
   return (
     <>
@@ -562,9 +612,11 @@ function Composer({
           <>
             {target.mode === "thread" && <ThreadFields content={content} onChange={onChange} />}
             {withPoll && <PollSettings poll={content.poll} onChange={setPoll} />}
-            {/* Scrolls when a poll's options leave the editor too little room. */}
+            {withLottery && <LotterySettings lottery={content.lottery} onChange={setLottery} />}
+            {/* Scrolls when a poll's options or lottery's prizes leave the editor too little room. */}
             <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
               {withPoll && <PollOptions poll={content.poll} onChange={setPoll} />}
+              {withLottery && <LotteryPrizes lottery={content.lottery} onChange={setLottery} />}
               <MarkdownEditor
                 value={content.text}
                 onChange={(text) => onChange({ ...content, text })}
@@ -640,10 +692,11 @@ const KINDS = [
   { kind: "discussion", label: "讨论" },
   { kind: "question", label: "问答" },
   { kind: "poll", label: "投票" },
+  { kind: "lottery", label: "抽奖" },
 ] as const;
 
 // A new thread's title, board, kind and tags above its body. Picking a board takes its kind,
-// unless a poll is being set up.
+// unless a poll or lottery is being set up.
 function ThreadFields({
   content,
   onChange,
@@ -671,7 +724,8 @@ function ThreadFields({
           onValueChange={(slug) => {
             const board = boards.find((b) => b.slug === slug);
             const kind = board?.default_kind === "question" ? "question" : "discussion";
-            onChange({ ...content, board: slug, kind: content.kind === "poll" ? "poll" : kind });
+            const kept = content.kind === "poll" || content.kind === "lottery";
+            onChange({ ...content, board: slug, kind: kept ? content.kind : kind });
           }}
           options={boards.map((b) => ({ value: b.slug, label: b.name }))}
           placeholder="选择版块"
@@ -681,12 +735,13 @@ function ThreadFields({
         <fieldset className="flex rounded-full bg-secondary p-0.5 text-sm">
           <legend className="sr-only">类型</legend>
           {KINDS.map((k) => {
-            // Polls come with L2 (design §6.6).
-            const held = k.kind === "poll" && !staff && (me?.level ?? 0) < 2;
+            // Polls and lotteries come with L2 (design §6.6).
+            const held =
+              (k.kind === "poll" || k.kind === "lottery") && !staff && (me?.level ?? 0) < 2;
             return (
               <label
                 key={k.kind}
-                title={held ? "L2 起才能发投票帖" : undefined}
+                title={held ? `L2 起才能发${k.label}帖` : undefined}
                 className="cursor-pointer rounded-full px-3.5 py-1 text-muted-foreground has-checked:bg-card has-checked:font-medium has-checked:text-foreground has-checked:shadow-sm has-disabled:cursor-not-allowed has-disabled:opacity-50"
               >
                 <input
@@ -695,7 +750,14 @@ function ThreadFields({
                   value={k.kind}
                   checked={content.kind === k.kind}
                   disabled={held}
-                  onChange={() => onChange({ ...content, kind: k.kind })}
+                  onChange={() =>
+                    onChange({
+                      ...content,
+                      kind: k.kind,
+                      // Lotteries can't be anonymous (design §8.13).
+                      ...(k.kind === "lottery" && { anonymous: false, anonymousReplies: false }),
+                    })
+                  }
                   className="sr-only"
                 />
                 {k.label}
@@ -705,8 +767,11 @@ function ThreadFields({
         </fieldset>
         <TagPicker chosen={content.tags} onChange={(tags) => onChange({ ...content, tags })} />
       </div>
-      {/* Fixed once posted, so said up front (design §8.12). */}
-      <div className="flex flex-wrap items-center gap-x-5 gap-y-1 text-sm">
+      {/* Fixed once posted, so said up front (design §8.12); lotteries have none. */}
+      <div
+        hidden={content.kind === "lottery"}
+        className="flex flex-wrap items-center gap-x-5 gap-y-1 text-sm"
+      >
         <span className="flex items-center gap-2">
           <Checkbox
             id={`${id}-author`}
@@ -737,15 +802,58 @@ function ThreadFields({
 
 const MAX_OPTIONS = 20;
 
-const DEADLINES = [
-  { value: "", label: "不限时间" },
-  ...[1, 3, 7].map((d) => ({ value: String(d), label: `${d} 天后截止` })),
-  { value: "at", label: "自定义截止时间" },
-];
-
 // Where a custom time starts: three days on, on the hour.
 function defaultDeadline() {
   return Math.ceil((unixNow() + 3 * 86_400) / 3600) * 3600;
+}
+
+type Deadline = { days: number | null; at: number | null };
+
+// When a poll closes or a lottery is drawn: some days after posting, or a time of the author's in
+// Beijing time, as every time on the forum is shown. Neither is never, where that is allowed.
+function DeadlinePicker({
+  deadline,
+  verb,
+  optional,
+  onChange,
+}: {
+  deadline: Deadline;
+  verb: "截止" | "开奖";
+  optional: boolean;
+  onChange: (deadline: Deadline) => void;
+}) {
+  const options = [
+    ...(optional ? [{ value: "", label: "不限时间" }] : []),
+    ...[1, 3, 7].map((d) => ({ value: String(d), label: `${d} 天后${verb}` })),
+    { value: "at", label: `自定义${verb}时间` },
+  ];
+  return (
+    <>
+      <Select
+        value={deadline.at === null ? String(deadline.days ?? "") : "at"}
+        onValueChange={(v) =>
+          onChange({
+            days: v && v !== "at" ? Number(v) : null,
+            at: v === "at" ? defaultDeadline() : null,
+          })
+        }
+        options={options}
+        aria-label={`${verb}时间`}
+        className="w-40"
+      />
+      {deadline.at !== null && (
+        <Input
+          type="datetime-local"
+          value={wallClock(deadline.at)}
+          onChange={(e) => {
+            if (e.target.value) onChange({ days: null, at: fromWallClock(e.target.value) });
+          }}
+          aria-label={`${verb}时间`}
+          className="h-8 w-48"
+        />
+      )}
+    </>
+  );
 }
 
 // How the poll works, fixed once posted. Kept out of the scrolling part, which would clip the
@@ -784,31 +892,12 @@ function PollSettings({
           className="w-32"
         />
       )}
-      <Select
-        value={poll.closes_at === null ? String(poll.days ?? "") : "at"}
-        onValueChange={(v) =>
-          onChange({
-            ...poll,
-            days: v && v !== "at" ? Number(v) : null,
-            closes_at: v === "at" ? defaultDeadline() : null,
-          })
-        }
-        options={DEADLINES}
-        aria-label="截止时间"
-        className="w-40"
+      <DeadlinePicker
+        deadline={{ days: poll.days, at: poll.closes_at }}
+        verb="截止"
+        optional
+        onChange={({ days, at }) => onChange({ ...poll, days, closes_at: at })}
       />
-      {poll.closes_at !== null && (
-        // Beijing time, as every time on the forum is shown.
-        <Input
-          type="datetime-local"
-          value={wallClock(poll.closes_at)}
-          onChange={(e) => {
-            if (e.target.value) onChange({ ...poll, closes_at: fromWallClock(e.target.value) });
-          }}
-          aria-label="截止时间"
-          className="h-8 w-48"
-        />
-      )}
       <span className="flex items-center gap-2">
         <Checkbox
           id={`${id}-anonymous`}
@@ -865,6 +954,126 @@ function PollOptions({ poll, onChange }: { poll: PollDraft; onChange: (poll: Pol
           onClick={() => onChange({ ...poll, options: [...poll.options, ""] })}
         >
           <Plus /> 加一个选项
+        </Button>
+      )}
+    </div>
+  );
+}
+
+const MAX_PRIZES = 10;
+
+const ENTRIES = [
+  { value: "button", label: "点按钮参与" },
+  { value: "reply", label: "回复参与" },
+];
+
+const MIN_LEVELS = [0, 1, 2, 3, 4, 5].map((l) => ({
+  value: String(l),
+  label: l === 0 ? "不限等级" : `${levelName(l)} 起`,
+}));
+
+// How the lottery works, fixed once posted; out of the scrolling part like a poll's.
+function LotterySettings({
+  lottery,
+  onChange,
+}: {
+  lottery: LotteryDraft;
+  onChange: (lottery: LotteryDraft) => void;
+}) {
+  return (
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-t px-4 py-2.5 text-sm">
+      <Select
+        value={lottery.entry}
+        onValueChange={(v) => onChange({ ...lottery, entry: v === "reply" ? "reply" : "button" })}
+        options={ENTRIES}
+        aria-label="参与方式"
+        className="w-32"
+      />
+      <Select
+        value={String(lottery.min_level)}
+        onValueChange={(v) => onChange({ ...lottery, min_level: Number(v) })}
+        options={MIN_LEVELS}
+        aria-label="参与要几级"
+        className="w-32"
+      />
+      <DeadlinePicker
+        deadline={{ days: lottery.days, at: lottery.draws_at }}
+        verb="开奖"
+        optional={false}
+        onChange={({ days, at }) => onChange({ ...lottery, days, draws_at: at })}
+      />
+    </div>
+  );
+}
+
+// Drawn in this order: the first prize is filled first.
+function LotteryPrizes({
+  lottery,
+  onChange,
+}: {
+  lottery: LotteryDraft;
+  onChange: (lottery: LotteryDraft) => void;
+}) {
+  const { prizes } = lottery;
+  return (
+    <div className="flex shrink-0 flex-col items-start gap-2 border-t px-4 py-2.5">
+      <ol className="flex w-full flex-col gap-1.5">
+        {prizes.map((prize, i) => (
+          // Prizes have nothing but their place to tell them apart.
+          <li key={i} className="flex items-center gap-2">
+            <Input
+              value={prize.name}
+              onChange={(e) =>
+                onChange({ ...lottery, prizes: prizes.with(i, { ...prize, name: e.target.value }) })
+              }
+              aria-label={`奖项 ${i + 1}`}
+              placeholder={i === 0 ? "奖品，例如「一等奖：机械键盘」" : `奖项 ${i + 1}`}
+              maxLength={50}
+              className="h-8"
+            />
+            <span className="flex shrink-0 items-center gap-1.5 text-sm text-muted-foreground">
+              抽
+              <Input
+                type="number"
+                min={1}
+                max={100}
+                // Empty while being typed over, which the send button waits out.
+                value={prize.winners || ""}
+                onChange={(e) =>
+                  onChange({
+                    ...lottery,
+                    prizes: prizes.with(i, {
+                      ...prize,
+                      winners: Math.trunc(Number(e.target.value)),
+                    }),
+                  })
+                }
+                aria-label={`奖项 ${i + 1} 抽几人`}
+                className="h-8 w-16"
+              />
+              人
+            </span>
+            {prizes.length > 1 && (
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                aria-label={`删掉奖项 ${i + 1}`}
+                title="删掉"
+                onClick={() => onChange({ ...lottery, prizes: prizes.toSpliced(i, 1) })}
+              >
+                <X />
+              </Button>
+            )}
+          </li>
+        ))}
+      </ol>
+      {prizes.length < MAX_PRIZES && (
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => onChange({ ...lottery, prizes: [...prizes, { name: "", winners: 1 }] })}
+        >
+          <Plus /> 加一个奖项
         </Button>
       )}
     </div>

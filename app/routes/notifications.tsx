@@ -3,6 +3,7 @@ import {
   BellRing,
   CheckCheck,
   CircleCheck,
+  Gift,
   Heart,
   Reply,
   Rocket,
@@ -58,7 +59,7 @@ export async function action({ request, context }: Route.ActionArgs) {
   await read.$post({ json: { ids: [Number(form.get("id"))] } });
   const to = form.get("to");
   return redirect(
-    typeof to === "string" && /^\/(t\/\d+\?floor=\d+|u\/\d+)$/.test(to) ? to : "/notifications",
+    typeof to === "string" && /^\/(t\/\d+(\?floor=\d+)?|u\/\d+)$/.test(to) ? to : "/notifications",
   );
 }
 
@@ -74,6 +75,15 @@ const ICONS: Record<string, typeof Reply> = {
   solved: CircleCheck,
   moderation: ShieldCheck,
   level: TrendingUp,
+  lottery: Gift,
+};
+
+// How a lottery went, for whom; see design §8.13.
+const LOTTERY: Record<string, string> = {
+  won: "你中奖了",
+  lost: "抽奖开奖了，这次没中",
+  drawn: "你发起的抽奖开奖了",
+  cancelled: "你参与的抽奖取消了",
 };
 
 // What a moderator did; see design §8.4.
@@ -105,6 +115,8 @@ function headline(n: Item) {
       return `${who} ${MODERATED[n.data.action] ?? "处理了你的"}${n.post?.floor === 1 ? "帖子" : "回复"}${n.data.reason ? `：${n.data.reason}` : ""}`;
     case "level":
       return `你升到了 ${levelName(Number(n.data.level))}`;
+    case "lottery":
+      return `${LOTTERY[n.data.result]}${n.data.prize ? `：${n.data.prize}` : ""}`;
     default:
       return `${who} 发了新帖`;
   }
@@ -164,8 +176,10 @@ function Row({ item: n, now }: { item: Item; now: number }) {
   const submit = useSubmit();
   const me = useMe();
   const Icon = ICONS[n.type] ?? Reply;
-  // A level goes to one's profile, where the next one's progress is.
-  const to = n.thread && n.post ? `/t/${n.thread.id}?floor=${n.post.floor}` : `/u/${me?.id}`;
+  // A lottery goes to its thread; a level to one's profile, where the next one's progress is.
+  const to = n.thread
+    ? `/t/${n.thread.id}${n.post ? `?floor=${n.post.floor}` : ""}`
+    : `/u/${me?.id}`;
   return (
     <li
       className={cn(

@@ -8,5 +8,5 @@ export async function loader({ params, context }: Route.LoaderArgs) {
     param: { id: params.id, option: params.option },
   });
   if (!res.ok) throw data((await res.json()).error.message, { status: res.status });
-  return res.json();
+  return { items: (await res.json()).items.map((user) => ({ user, note: null })) };
 }
