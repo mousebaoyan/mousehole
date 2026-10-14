@@ -590,5 +590,7 @@ Content-Type: application/json
 HTTP/1.1 201 Created
 Content-Type: application/json
 
-{ "thread": { "id": 42, "url": "https://bbs.mousebaoyan.cn/t/42", … }, "post": { "id": 108, "floor": 1, "via": "qq", … } }
+{ "id": 42, "kind": "question", "title": "rank 30% 能冲夏令营吗", "url": "https://bbs.mousebaoyan.cn/t/42", "excerpt": "……", … }
 ```
+
+返回的是帖子详情；主楼用 `GET /threads/42/posts` 取，第一项就是。
