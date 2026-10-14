@@ -6,3 +6,5 @@
 /public/emojibase/
 /.mock-bot.json
 /data/
+/test-results/
+/playwright-report/
