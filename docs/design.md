@@ -88,7 +88,7 @@ mousehole 容器（Hono + React Router 8，Node 26）── 图片目录（数�
 | 邮件 | nodemailer + SMTP | SMTP 在管理后台配置；建议用一个 QQ 邮箱发信，发往 qq.com 不容易进垃圾箱 |
 | 实时 | SSE（Hono 的 `streamSSE`） | 只需要服务端单向推送，经过反向代理也简单 |
 | 代码检查 | oxlint + tsgolint（含需要类型信息的规则）、Prettier | 基于 TypeScript 7，比 ESLint 快一个数量级 |
-| 测试 | Vitest（单元、接口）、Playwright（关键页面）、k6（压测） | 接口测试连真实的 PostgreSQL |
+| 测试 | Vitest（单元、接口）、Playwright（关键页面）、`scripts/load-test.ts`（压测） | 接口测试连真实的 PostgreSQL；压测脚本用 Node 自带的 fetch，和 mock-bot 共用演示群，不另装工具 |
 | 部署 | GitHub Actions 构建镜像推到 GHCR，服务器用 docker compose 拉取运行 | 服务器不编译 |
 
 ### 5.2 选型依据
@@ -381,7 +381,7 @@ bot 把 QQ 群的信息推送给论坛。两种方式都支持，推荐一起用
 
 ### 11.4 验收
 
-- 上线前用 k6 压测：100 个并发用户混合浏览、回复、点赞，p95 低于 100ms，内存不超出预算。
+- 上线前用 `pnpm load-test` 压测：100 个并发读者，一半是访客打开分享的链接，成员混合浏览、点赞、回复，p95 低于 100ms，内存不超出预算。只对本地或预发的服务器跑，不对正式站点。
 - 两千人的完整名单做一次全量同步，在 1 秒内完成；没有变化时不产生任何写入。
 - 热点查询在 CI 里用 `EXPLAIN` 检查，必须走索引。
 - 访客第一次打开主题页，除图片和头像外传输不超过 200KB；再次打开不超过 30KB。
