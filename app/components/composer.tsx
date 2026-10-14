@@ -73,12 +73,8 @@ export function ComposerProvider({ children }: { children: ReactNode }) {
   async function discard() {
     if (!draft) return;
     const changed = draft.edit ? draft.text !== draft.edit.markdown : draft.text.trim() !== "";
-    if (
-      changed &&
-      !(await confirmDialog(draft.edit ? "放弃这次修改？" : "放弃这条回复？", "放弃"))
-    ) {
-      return;
-    }
+    const question = draft.edit ? "放弃这次修改？" : "放弃这条回复？";
+    if (changed && !(await confirmDialog(question, "放弃"))) return;
     if (!draft.edit) localStorage.removeItem(draftKey(draft.thread.id));
     setDraft(null);
   }
