@@ -2,7 +2,7 @@ import { Check, ChevronDown } from "lucide-react";
 import { Fragment, useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { flushSync } from "react-dom";
 import { cn } from "cn";
-import { menuItem, useDismiss } from "~/components/disclosure";
+import { matching, menuItem, SEARCH_FROM, SearchBox, useDismiss } from "~/components/disclosure";
 
 export type SelectOption = { value: string; label: string; group?: string };
 
@@ -38,25 +38,29 @@ export function Select({
   const current = value ?? own;
   const [open, setOpen] = useState(false);
   const [up, setUp] = useState(false);
+  const [query, setQuery] = useState("");
   const root = useRef<HTMLDivElement>(null);
   const button = useRef<HTMLButtonElement>(null);
   const list = useRef<HTMLDivElement>(null);
   const input = useRef<HTMLInputElement>(null);
   useDismiss(open, () => setOpen(false), root);
   const chosen = options.find((o) => o.value === current);
+  const searchable = options.length >= SEARCH_FROM;
+  const shown = matching(options, query);
 
-  // Like a menu: opening puts the focus on the chosen item.
+  // Like a menu: opening puts the focus on the chosen item, or in the search box.
   useEffect(() => {
-    if (!open) return;
+    if (!open || searchable) return;
     const items = list.current?.querySelectorAll("button");
     (list.current?.querySelector<HTMLButtonElement>("[aria-current]") ?? items?.[0])?.focus();
-  }, [open]);
+  }, [open, searchable]);
 
   function show() {
     const box = button.current?.getBoundingClientRect();
     // Upwards when the list would run off the bottom and there is more room above.
     const below = box ? innerHeight - box.bottom : innerHeight;
     setUp(below < 300 && box !== undefined && box.top > below);
+    setQuery("");
     setOpen(true);
   }
 
@@ -85,7 +89,8 @@ export function Select({
     ]).get(e.key);
     if (to !== undefined) {
       e.preventDefault();
-      items.at(Math.min(Math.max(to, 0), items.length - 1))?.focus();
+      if (to < 0 && searchable) list.current?.querySelector("input")?.focus();
+      else items.at(Math.min(Math.max(to, 0), items.length - 1))?.focus();
     } else if (e.key === "Escape") {
       // Only the list closes, not a dialog it is in.
       e.preventDefault();
@@ -139,9 +144,28 @@ export function Select({
             up ? "bottom-full mb-1" : "top-full mt-1",
           )}
         >
-          {options.map((o, i) => (
+          {searchable && (
+            <SearchBox
+              value={query}
+              onChange={setQuery}
+              onKeyDown={(e) => {
+                if (e.key === "ArrowDown") {
+                  e.preventDefault();
+                  list.current?.querySelector("button")?.focus();
+                } else if (e.key === "Enter") {
+                  // Not the form's submit: the first match is what was meant.
+                  e.preventDefault();
+                  if (shown.length > 0) pick(shown[0].value);
+                } else if (e.key === "Escape") {
+                  e.preventDefault();
+                  close();
+                }
+              }}
+            />
+          )}
+          {shown.map((o, i) => (
             <Fragment key={o.value}>
-              {o.group !== undefined && (i === 0 || o.group !== options[i - 1].group) && (
+              {o.group !== undefined && (i === 0 || o.group !== shown[i - 1].group) && (
                 <div className="px-2.5 pt-2 pb-1 text-xs text-muted-foreground">{o.group}</div>
               )}
               <button
@@ -156,6 +180,7 @@ export function Select({
               </button>
             </Fragment>
           ))}
+          {shown.length === 0 && <p className="px-2.5 py-1.5 text-muted-foreground">没有匹配的</p>}
         </div>
       )}
     </div>

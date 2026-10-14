@@ -1,6 +1,15 @@
-import { useEffect, useId, useRef, useState, type ReactNode, type RefObject } from "react";
+import {
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type KeyboardEventHandler,
+  type ReactNode,
+  type RefObject,
+} from "react";
 import { createPortal } from "react-dom";
 import { cn } from "cn";
+import { Input } from "~/components/ui/input";
 
 // Hand-rolled instead of Base UI's Menu and Dialog: the header is on every page, and those
 // would add ~40KB gzip of JavaScript, positioning library included, for every visitor.
@@ -8,6 +17,44 @@ import { cn } from "cn";
 
 export const menuItem =
   "flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left hover:bg-accent [&_svg]:size-4 [&_svg]:text-muted-foreground";
+
+// Lists longer than this get a box to narrow them down: tags, schools among them, run to dozens.
+export const SEARCH_FROM = 12;
+
+export function matching<T extends { label: string }>(items: readonly T[], query: string) {
+  const q = query.trim().toLowerCase();
+  return q === "" ? items : items.filter((item) => item.label.toLowerCase().includes(q));
+}
+
+// Stays at the top of a scrolling list. Takes the focus only with a mouse: on a phone the
+// keyboard would cover the list before anyone asked to type.
+export function SearchBox({
+  value,
+  onChange,
+  onKeyDown,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  onKeyDown?: KeyboardEventHandler<HTMLInputElement>;
+}) {
+  const input = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (matchMedia("(pointer: fine)").matches) input.current?.focus();
+  }, []);
+  return (
+    <div className="sticky -top-1 -mx-1 -mt-1 mb-1 border-b bg-popover p-1.5">
+      <Input
+        ref={input}
+        enterKeyHint="search"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        onKeyDown={onKeyDown}
+        aria-label="搜索"
+        placeholder="搜索"
+      />
+    </div>
+  );
+}
 
 export function useDismiss(
   open: boolean,
