@@ -2,9 +2,9 @@ import { execFileSync } from "node:child_process";
 import { expect, test, type Page } from "@playwright/test";
 import { SERVER_ENV } from "./env.ts";
 
-// The first admin comes in through the bootstrap command's one-time link, as on a new server.
-async function signInAsAdmin(page: Page) {
-  const output = execFileSync("node", ["scripts/bootstrap.ts", "--qq", "10001"], {
+// Through the bootstrap command's one-time link: --owner as on a new server, --qq for an admin.
+async function signIn(page: Page, args: string[]) {
+  const output = execFileSync("node", ["scripts/bootstrap.ts", ...args], {
     env: { ...process.env, ...SERVER_ENV },
     encoding: "utf8",
   });
@@ -15,8 +15,8 @@ async function signInAsAdmin(page: Page) {
   await page.waitForURL((url) => !url.pathname.startsWith("/login"));
 }
 
-test("管理员登录，建版块、设公告，发帖再回复", async ({ page }) => {
-  await signInAsAdmin(page);
+test("站长建版块、设公告，管理员发帖再回复", async ({ page }) => {
+  await signIn(page, ["--owner"]);
 
   await page.goto("/admin/boards");
   const create = page.locator("form", { has: page.getByRole("button", { name: "创建" }) });
@@ -30,6 +30,7 @@ test("管理员登录，建版块、设公告，发帖再回复", async ({ page 
   await page.getByRole("button", { name: "保存" }).click();
   await expect(page.getByText("已保存，立即生效")).toBeVisible();
 
+  await signIn(page, ["--qq", "10001"]);
   await page.goto("/");
   await page.getByRole("button", { name: "发帖" }).click();
   const composer = page.getByRole("region", { name: "发帖" });

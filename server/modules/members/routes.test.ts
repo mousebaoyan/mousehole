@@ -1,6 +1,7 @@
 import type { InferRequestType } from "hono/client";
 import { testClient } from "hono/testing";
 import { beforeAll, describe, expect, test } from "vitest";
+import { ownerSession } from "../../../test/fixtures.ts";
 import { app } from "../../app.ts";
 import { db } from "../../platform/db.ts";
 import { createBotToken } from "../auth/service.ts";
@@ -15,6 +16,8 @@ type Members = InferRequestType<
 const T = Math.floor(Date.now() / 1000) - 3600;
 
 let auth = { headers: {} };
+// Groups are linked and switched in the back office, by the site owner.
+let siteOwner = { headers: {} };
 let lastQq = 40000;
 let lastGroup = 900000;
 
@@ -31,11 +34,14 @@ beforeAll(async () => {
     scopes: ["sync", "admin"],
   });
   auth = { headers: { authorization: `Bearer ${token}` } };
+  siteOwner = await ownerSession();
 });
 
 async function newGroup() {
   const groupId = ++lastGroup;
-  expect((await api.admin.groups.$post({ json: { group_id: groupId } }, auth)).status).toBe(204);
+  expect((await api.admin.groups.$post({ json: { group_id: groupId } }, siteOwner)).status).toBe(
+    204,
+  );
   return groupId;
 }
 
@@ -56,7 +62,10 @@ function account(qq: number) {
 }
 
 function patchGroup(groupId: number, json: { enabled?: boolean; is_primary?: true }) {
-  return api.admin.groups[":group_id"].$patch({ param: { group_id: String(groupId) }, json }, auth);
+  return api.admin.groups[":group_id"].$patch(
+    { param: { group_id: String(groupId) }, json },
+    siteOwner,
+  );
 }
 
 function people(count: number) {

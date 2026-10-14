@@ -1,7 +1,7 @@
 import { testClient } from "hono/testing";
 import { sql } from "kysely";
 import { beforeAll, describe, expect, test, vi } from "vitest";
-import { as, createUser, login, nextQq, sessionCookie } from "../../../test/fixtures.ts";
+import { createUser, nextQq, ownerSession, sessionCookie } from "../../../test/fixtures.ts";
 import { app } from "../../app.ts";
 import { db } from "../../platform/db.ts";
 import { sendMail } from "../../platform/mail.ts";
@@ -14,14 +14,14 @@ const api = testClient(app).api.v1;
 let lastIp = 0;
 
 beforeAll(async () => {
-  const admin = as(await login((await createUser("admin")).id));
+  const owner = await ownerSession();
   await api.admin.settings.$patch(
     {
       json: {
         smtp: { accounts: [{ host: "smtp.qq.com", port: 465, secure: true, user: "bot@qq.com" }] },
       },
     },
-    admin,
+    owner,
   );
 });
 
@@ -106,10 +106,10 @@ describe("QQ 邮箱验证码", () => {
 
 describe("站点设置", () => {
   test("关掉邮箱登录后，申请验证码返回 403", async () => {
-    const admin = as(await login((await createUser("admin")).id));
+    const owner = await ownerSession();
     const { qq } = await createUser();
 
-    const off = await api.admin.settings.$patch({ json: { login: { email: false } } }, admin);
+    const off = await api.admin.settings.$patch({ json: { login: { email: false } } }, owner);
     expect(off.status).toBe(204);
     expect(await (await api.auth.methods.$get()).json()).toMatchObject({
       email: false,
@@ -119,22 +119,22 @@ describe("站点设置", () => {
     expect(res.status).toBe(403);
     expect(await res.json()).toMatchObject({ error: { code: "login_method_disabled" } });
 
-    await api.admin.settings.$patch({ json: { login: { email: true } } }, admin);
+    await api.admin.settings.$patch({ json: { login: { email: true } } }, owner);
   });
 
   test("发信邮箱的密码加密存储，接口只说是否已设置；保存时不带密码，沿用这个账号原来的", async () => {
-    const admin = as(await login((await createUser("admin")).id));
+    const owner = await ownerSession();
     const password = "smtp-auth-code-123";
     const mailbox = { host: "smtp.qq.com", port: 465, secure: true };
     const save = (accounts: { user: string; password?: string }[]) =>
       api.admin.settings.$patch(
         { json: { smtp: { accounts: accounts.map((a) => ({ ...mailbox, ...a })) } } },
-        admin,
+        owner,
       );
     await save([{ user: "bot@qq.com", password }]);
     await save([{ user: "spare@qq.com", password: "spare" }, { user: "bot@qq.com" }]);
 
-    const res = await api.admin.settings.$get({}, admin);
+    const res = await api.admin.settings.$get({}, owner);
     if (!res.ok) throw new Error(`status ${res.status}`);
     const { smtp } = await res.json();
     expect(smtp.accounts).toMatchObject([

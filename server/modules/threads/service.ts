@@ -1,13 +1,7 @@
 import { sql, type ExpressionBuilder, type RawBuilder, type Transaction } from "kysely";
 import type { DB, Json } from "../../../db/types.ts";
-import {
-  EVERY_BOARD,
-  GUEST,
-  STAFF,
-  type Actor,
-  type Reader,
-  type Viewer,
-} from "../../platform/access.ts";
+import { EVERY_BOARD, GUEST, type Actor, type Reader, type Viewer } from "../../platform/access.ts";
+import { STAFF } from "../../platform/site.ts";
 import { db } from "../../platform/db.ts";
 import { AppError } from "../../platform/errors.ts";
 import { log } from "../../platform/log.ts";

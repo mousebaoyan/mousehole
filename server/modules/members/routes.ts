@@ -1,5 +1,12 @@
 import { createRoute, z } from "@hono/zod-openapi";
-import { actorOf, authorize, createRouter, errorResponse, unix } from "../../platform/http.ts";
+import {
+  actorOf,
+  authorize,
+  authorizeOwner,
+  createRouter,
+  errorResponse,
+  unix,
+} from "../../platform/http.ts";
 import { UserRefSchema } from "../users/schemas.ts";
 import {
   linkGroup,
@@ -227,12 +234,12 @@ export const membersRoutes = createRouter()
       },
       responses: {
         204: { description: "已关联" },
-        403: errorResponse("不是管理员"),
+        403: errorResponse("不是站长，或者用 bot token 调用"),
         409: errorResponse("已经关联过了"),
       },
     }),
     async (c) => {
-      const viewer = authorize(c, "admin");
+      const viewer = authorizeOwner(c);
       await linkGroup(actorOf(c, viewer), c.req.valid("json").group_id);
       return c.body(null, 204);
     },
@@ -257,12 +264,12 @@ export const membersRoutes = createRouter()
       },
       responses: {
         204: { description: "已修改，相关成员的成员资格和显示名已重算" },
-        403: errorResponse("不是管理员"),
+        403: errorResponse("不是站长，或者用 bot token 调用"),
         404: errorResponse("这个群还没有关联"),
       },
     }),
     async (c) => {
-      const viewer = authorize(c, "admin");
+      const viewer = authorizeOwner(c);
       const { enabled, is_primary } = c.req.valid("json");
       await updateGroup(actorOf(c, viewer), c.req.valid("param").group_id, {
         enabled,

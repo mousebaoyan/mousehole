@@ -3,6 +3,7 @@ import { Link, NavLink } from "react-router";
 import { cn } from "cn";
 import { useDrafts } from "~/components/composer";
 import { useBoards, useMe, useTags } from "~/forum";
+import { STAFF } from "../../server/platform/site.ts";
 
 const item = ({ isActive }: { isActive: boolean }) =>
   cn(
@@ -21,7 +22,7 @@ export function ForumNav() {
   const me = useMe();
   const drafts = useDrafts();
   const boards = useBoards();
-  const staff = me?.role === "moderator" || me?.role === "admin";
+  const staff = me !== null && STAFF.includes(me.role);
   // Schools and majors are many; they stay in the list's tag filter.
   const topics = useTags().filter((t) => t.kind === "topic");
   return (

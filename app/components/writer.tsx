@@ -1,5 +1,6 @@
 import { createContext, use } from "react";
 import type { UserBrief, Writer } from "~/api-types";
+import { STAFF } from "../../server/platform/site.ts";
 
 // Who each number in a thread is, for an admin who chose to see it there (design §8.12).
 export const RevealContext = createContext<Map<number, UserBrief> | null>(null);
@@ -18,7 +19,7 @@ export function isMine(
 // else 0. Nothing anonymous.
 export function levelPower(writer: Writer, me: { id: number; level: number } | null) {
   if (!me || me.level < 3 || "anonymous" in writer || writer.id === me.id) return 0;
-  const staff = writer.role === "moderator" || writer.role === "admin";
+  const staff = STAFF.includes(writer.role);
   return writer.level < me.level && !staff ? me.level : 0;
 }
 

@@ -11,6 +11,7 @@ import {
   Tags,
   Users,
   UsersRound,
+  type LucideIcon,
 } from "lucide-react";
 import { useEffect, useRef } from "react";
 import { data, Link, NavLink, Outlet, redirect, useLocation } from "react-router";
@@ -25,30 +26,39 @@ export function meta() {
   return [{ title: `管理后台 · ${SITE_NAME}` }];
 }
 
-// Admins see it all; moderators the pages for their work (design §10), starting at reports.
+// Who sees which pages (design §10): moderators those for their work, starting at reports;
+// admins the forum's as well; the owner also the system's.
+const RANKS = ["moderator", "admin", "owner"] as const;
+type Rank = (typeof RANKS)[number];
+
+const pages: { to: string; label: string; icon: LucideIcon; end?: boolean; from: Rank }[] = [
+  { to: "/admin", label: "概览", icon: LayoutDashboard, end: true, from: "admin" },
+  { to: "/admin/content", label: "内容", icon: ClipboardCheck, from: "moderator" },
+  { to: "/admin/reports", label: "举报", icon: Flag, from: "moderator" },
+  { to: "/admin/members", label: "成员", icon: Users, from: "moderator" },
+  { to: "/admin/boards", label: "版块", icon: LayoutList, from: "admin" },
+  { to: "/admin/tags", label: "标签", icon: Tags, from: "admin" },
+  { to: "/admin/site", label: "站点", icon: Settings, from: "owner" },
+  { to: "/admin/groups", label: "QQ 群", icon: UsersRound, from: "owner" },
+  { to: "/admin/email", label: "邮件", icon: Mail, from: "owner" },
+  { to: "/admin/tokens", label: "bot", icon: Bot, from: "owner" },
+  { to: "/admin/logs", label: "操作日志", icon: ScrollText, from: "owner" },
+];
+
 export async function loader({ context, request }: Route.LoaderArgs) {
   const res = await context.get(apiContext).me.$get();
   if (!res.ok) return redirect("/login");
   const { role } = await res.json();
-  if (role === "admin") return { admin: true };
-  if (role !== "moderator") throw data("管理后台只有管理员和版主能进", { status: 403 });
-  if (new URL(request.url).pathname === "/admin") return redirect("/admin/reports");
-  return { admin: false };
+  const rank = RANKS.find((r) => r === role);
+  if (!rank) throw data("管理后台只有版主、管理员和站长能进", { status: 403 });
+  const { pathname } = new URL(request.url);
+  if (rank === "moderator" && pathname === "/admin") return redirect("/admin/reports");
+  const page = pages.find((p) => p.to === pathname);
+  if (page && RANKS.indexOf(page.from) > RANKS.indexOf(rank)) {
+    throw data("没有权限打开这个页面", { status: 403 });
+  }
+  return { rank };
 }
-
-const pages = [
-  { to: "/admin", label: "概览", icon: LayoutDashboard, end: true, admin: true },
-  { to: "/admin/content", label: "内容", icon: ClipboardCheck, admin: false },
-  { to: "/admin/reports", label: "举报", icon: Flag, admin: false },
-  { to: "/admin/members", label: "成员", icon: Users, admin: false },
-  { to: "/admin/groups", label: "QQ 群", icon: UsersRound, admin: true },
-  { to: "/admin/boards", label: "版块", icon: LayoutList, admin: true },
-  { to: "/admin/tags", label: "标签", icon: Tags, admin: true },
-  { to: "/admin/site", label: "站点", icon: Settings, admin: true },
-  { to: "/admin/email", label: "邮件", icon: Mail, admin: true },
-  { to: "/admin/tokens", label: "bot", icon: Bot, admin: true },
-  { to: "/admin/logs", label: "操作日志", icon: ScrollText, admin: true },
-];
 
 const link = ({ isActive }: { isActive: boolean }) =>
   cn(
@@ -56,7 +66,7 @@ const link = ({ isActive }: { isActive: boolean }) =>
     isActive && "bg-background font-medium text-foreground shadow-sm",
   );
 
-export default function AdminLayout({ loaderData: { admin } }: Route.ComponentProps) {
+export default function AdminLayout({ loaderData: { rank } }: Route.ComponentProps) {
   const { pathname } = useLocation();
   const nav = useRef<HTMLElement>(null);
   // On phones the row may have scrolled the current page out of sight.
@@ -80,7 +90,7 @@ export default function AdminLayout({ loaderData: { admin } }: Route.ComponentPr
         {/* A sidebar on wide screens, a row that scrolls sideways on phones. */}
         <nav ref={nav} className="-mx-1 flex gap-1 overflow-x-auto px-1 text-sm md:flex-col">
           {pages
-            .filter((p) => admin || !p.admin)
+            .filter((p) => RANKS.indexOf(p.from) <= RANKS.indexOf(rank))
             .map((p) => (
               <NavLink key={p.to} to={p.to} end={p.end} className={link}>
                 <p.icon className="size-4" /> {p.label}

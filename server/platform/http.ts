@@ -3,6 +3,7 @@ import type { Context } from "hono";
 import { HTTPException } from "hono/http-exception";
 import {
   assertNotMuted,
+  checkOwner,
   checkPermission,
   reachOf,
   type Reader,
@@ -59,6 +60,10 @@ export function unix(date: Date) {
 // The viewer, once they may do what the route needs; see access.ts for the rules.
 export function authorize(c: Context<AppEnv>, need: Scope) {
   return checkPermission(c.var.viewer, c.var.bot, need);
+}
+
+export function authorizeOwner(c: Context<AppEnv>) {
+  return checkOwner(c.var.viewer, c.var.bot);
 }
 
 // For putting words and pictures up, which muted members can't: posts, edits, reactions,

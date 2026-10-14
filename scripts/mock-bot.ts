@@ -5,6 +5,7 @@ import { parseArgs } from "node:util";
 import { gzipSync } from "node:zlib";
 import { z } from "zod";
 import { createBotToken } from "../server/modules/auth/service.ts";
+import { linkGroup } from "../server/modules/members/service.ts";
 import { SCOPES } from "../server/platform/access.ts";
 import { db } from "../server/platform/db.ts";
 import { env } from "../server/platform/env.ts";
@@ -163,14 +164,19 @@ function show(result: { status: number; data: unknown }) {
   console.log(result.status, JSON.stringify(result.data, null, 2));
 }
 
-async function setup(owner?: number) {
-  const admin = await db
+// The owner links groups and creates tokens in the back office; this does the same directly.
+async function ownerActor() {
+  const owner = await db
     .selectFrom("users")
     .select("id")
-    .where("role", "=", "admin")
+    .where("role", "=", "owner")
     .executeTakeFirst();
-  if (!admin) throw new Error("还没有管理员，先运行 pnpm bootstrap --qq <你的QQ号>");
-  const actor = { userId: admin.id, operatorId: null, tokenId: null, ip: null, userAgent: null };
+  if (!owner) throw new Error("还没有站长，先运行 pnpm bootstrap --owner");
+  return { userId: owner.id, operatorId: null, tokenId: null, ip: null, userAgent: null };
+}
+
+async function setup(owner?: number) {
+  const actor = await ownerActor();
   const { token } = await createBotToken(actor, {
     name: "mock-bot",
     botQq: BOT_QQ,
@@ -179,7 +185,12 @@ async function setup(owner?: number) {
   writeFileSync(STATE_FILE, JSON.stringify({ token }));
   console.log(`已创建 token，存在 ${STATE_FILE}`);
 
-  await call("/admin/groups", { method: "POST", body: { group_id: GROUP } });
+  const linked = await db
+    .selectFrom("qq_groups")
+    .select("id")
+    .where("id", "=", GROUP)
+    .executeTakeFirst();
+  if (!linked) await linkGroup(actor, GROUP);
   await pushInfo(GROUP);
   show(await pushFull(GROUP, fakeGroup(FIRST_QQ, owner), true));
 }
@@ -297,8 +308,8 @@ async function demo() {
   let t = now() - 600;
 
   const since = Number(field((await call("/bot/events/batch")).data, "next_after"));
-  const linked = await call("/admin/groups", { method: "POST", body: { group_id: group } });
-  check("关联演示群", linked.status === 204, `群号 ${group}`);
+  await linkGroup(await ownerActor(), group);
+  console.log(`站长关联了演示群 ${group}`);
   await pushInfo(group);
 
   const full = await pushFull(group, members, true, ++t);

@@ -1,5 +1,5 @@
 import { mkdir, readFile, rename, stat, utimes, writeFile } from "node:fs/promises";
-import { sql, type ExpressionBuilder, type Transaction } from "kysely";
+import { sql, type ExpressionBuilder, type NotNull, type Transaction } from "kysely";
 import type { DB } from "../../../db/types.ts";
 import type { Actor, UserRef, Viewer } from "../../platform/access.ts";
 import { readCapped } from "../../platform/body.ts";
@@ -10,7 +10,27 @@ import { log } from "../../platform/log.ts";
 import { recordAudit } from "../audit/service.ts";
 import { recordEvent } from "../events/service.ts";
 
-// For the bootstrap command: the first admin logs in before any group is synced.
+// For the bootstrap command: the owner sets the site up before any group is synced (design
+// §10). There is one, with no QQ number.
+export async function ensureOwner() {
+  return db.transaction().execute(async (trx) => {
+    const owner = await trx
+      .selectFrom("users")
+      .select("id")
+      .where("role", "=", "owner")
+      .executeTakeFirst();
+    if (owner) return owner.id;
+    const { id } = await trx
+      .insertInto("users")
+      .values({ qq: null, display_name: "站长", role: "owner", role_locked: true })
+      .returning("id")
+      .executeTakeFirstOrThrow();
+    await recordAudit(trx, null, { action: "user.bootstrap", target_type: "user", target_id: id });
+    return id;
+  });
+}
+
+// For the bootstrap command on a local copy: an admin with a QQ number, who can post too.
 export async function ensureAdmin(qq: number) {
   return db.transaction().execute(async (trx) => {
     const { id } = await trx
@@ -130,6 +150,7 @@ export async function applyStanding(trx: Transaction<DB>, actor: Actor | null, r
   }
 }
 
+// Someone a bot acts for or an admin manages: anyone but the owner, who is in no group.
 export async function findMember(ref: UserRef) {
   return db
     .selectFrom("users")
@@ -143,6 +164,7 @@ export async function findMember(ref: UserRef) {
       "restricted_until",
     ])
     .where((eb) => ("id" in ref ? eb("id", "=", ref.id) : eb("qq", "=", ref.qq)))
+    .where("role", "<>", "owner")
     .executeTakeFirst();
 }
 
@@ -559,7 +581,7 @@ export async function getProfile(userId: number) {
   return { ...profile, avatar_url: avatarUrl(userId, avatar_version) };
 }
 
-// Member counts for the admin overview; bots aside.
+// Member counts for the admin overview; bots and the owner aside.
 export async function memberStats() {
   return db
     .selectFrom("users")
@@ -568,7 +590,7 @@ export async function memberStats() {
       eb.fn.countAll<number>().filterWhere("activated_at", "is not", null).as("activated"),
       eb.fn.countAll<number>().filterWhere("member_status", "=", "frozen").as("frozen"),
     ])
-    .where("role", "<>", "bot")
+    .where("role", "not in", ["bot", "owner"])
     .executeTakeFirstOrThrow();
 }
 
@@ -666,6 +688,7 @@ export async function membersByQq(qqs: number[]) {
           .selectFrom("users")
           .select(["id", "qq", "display_name"])
           .where("qq", "in", qqs)
+          .$narrowType<{ qq: NotNull }>()
           .execute();
   return new Map(rows.map((r) => [r.qq, r]));
 }
@@ -759,6 +782,9 @@ export async function refreshAvatars() {
     .selectFrom("users")
     .select(["id", "qq"])
     .where("avatar_custom", "=", false)
+    // The owner has no QQ, so no QQ avatar.
+    .where("qq", "is not", null)
+    .$narrowType<{ qq: NotNull }>()
     .execute();
   const failed: { id: number; error: unknown }[] = [];
   for (const { id, qq } of users) {

@@ -1,5 +1,12 @@
 import { createRoute, z } from "@hono/zod-openapi";
-import { actorOf, authorize, createRouter, errorResponse, unix } from "../../platform/http.ts";
+import {
+  actorOf,
+  authorize,
+  authorizeOwner,
+  createRouter,
+  errorResponse,
+  unix,
+} from "../../platform/http.ts";
 import { testMailboxes } from "../../platform/mail.ts";
 import { getSettings } from "../../platform/settings.ts";
 import { botListening } from "../events/service.ts";
@@ -140,11 +147,11 @@ export const adminRoutes = createRouter()
           description: "当前设置",
           content: { "application/json": { schema: SettingsSchema } },
         },
-        403: errorResponse("不是管理员"),
+        403: errorResponse("不是站长，或者用 bot token 调用"),
       },
     }),
     async (c) => {
-      authorize(c, "admin");
+      authorizeOwner(c);
       const { site, login, smtp, bot } = await getSettings();
       const accounts = smtp.accounts.map(({ password, ...rest }) => ({
         ...rest,
@@ -180,10 +187,13 @@ export const adminRoutes = createRouter()
           },
         },
       },
-      responses: { 204: { description: "已保存" }, 403: errorResponse("不是管理员") },
+      responses: {
+        204: { description: "已保存" },
+        403: errorResponse("不是站长，或者用 bot token 调用"),
+      },
     }),
     async (c) => {
-      const viewer = authorize(c, "admin");
+      const viewer = authorizeOwner(c);
       await updateSettings(actorOf(c, viewer), c.req.valid("json"));
       return c.body(null, 204);
     },
@@ -217,12 +227,12 @@ export const adminRoutes = createRouter()
             },
           },
         },
-        403: errorResponse("不是管理员"),
+        403: errorResponse("不是站长，或者用 bot token 调用"),
         503: errorResponse("邮件服务还没有配置"),
       },
     }),
     async (c) => {
-      authorize(c, "admin");
+      authorizeOwner(c);
       const results = await testMailboxes(`${c.req.valid("json").qq}@qq.com`);
       return c.json({ results }, 200);
     },

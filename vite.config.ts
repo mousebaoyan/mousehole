@@ -12,8 +12,8 @@ export default defineConfig(({ mode }) => {
     plugins: [
       reactRouterHonoServer({
         serverEntryPoint: "server/main.ts",
-        // Pages import the site's name from here; in development the browser loads it as a
-        // module, which otherwise only files under app/ may be.
+        // Pages import the site's name, level names and staff roles from here; in development the
+        // browser loads it as a module, which otherwise only files under app/ may be.
         dev: { exclude: [/^\/server\/platform\/site\.ts(\?.*)?$/] },
       }),
       tailwindcss(),

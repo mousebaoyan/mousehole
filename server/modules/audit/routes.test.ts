@@ -1,21 +1,23 @@
 import { testClient } from "hono/testing";
 import { beforeAll, describe, expect, test } from "vitest";
-import { as, createUser, login } from "../../../test/fixtures.ts";
+import { as, createUser, login, ownerSession } from "../../../test/fixtures.ts";
 import { app } from "../../app.ts";
 
 const api = testClient(app).api.v1;
 
 let admin = as("");
+let owner = as("");
 let member = as("");
 
 beforeAll(async () => {
   admin = as(await login((await createUser("admin")).id));
+  owner = await ownerSession();
   member = as(await login((await createUser()).id));
   await api.boards.$post({ json: { slug: "a", name: "日志" } }, admin);
 });
 
 describe("操作日志", () => {
-  test("成员自己发的帖子也记下，带 IP、User-Agent 和标题；管理员能按 IP 查，别人看不了", async () => {
+  test("成员自己发的帖子也记下，带 IP、User-Agent 和标题；站长能按 IP 查，管理员和别人看不了", async () => {
     const from = {
       headers: {
         ...member.headers,
@@ -29,7 +31,7 @@ describe("操作日志", () => {
     );
     expect(posted.status).toBe(201);
 
-    const res = await api.admin["audit-logs"].$get({ query: { ip: "203.0.113.7" } }, admin);
+    const res = await api.admin["audit-logs"].$get({ query: { ip: "203.0.113.7" } }, owner);
     if (!res.ok) throw new Error(`status ${res.status}`);
     expect((await res.json()).items).toMatchObject([
       {
@@ -40,7 +42,8 @@ describe("操作日志", () => {
       },
     ]);
 
-    const refused = await api.admin["audit-logs"].$get({ query: {} }, member);
-    expect(refused.status).toBe(403);
+    for (const who of [member, admin]) {
+      expect((await api.admin["audit-logs"].$get({ query: {} }, who)).status).toBe(403);
+    }
   });
 });

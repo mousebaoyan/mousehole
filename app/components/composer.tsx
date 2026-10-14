@@ -34,7 +34,7 @@ import { Select } from "~/components/ui/select";
 import { useMe, usePostableBoards } from "~/forum";
 import { useHydrated } from "~/hydrated";
 import { fromWallClock, unixNow, wallClock } from "~/time";
-import { levelName } from "../../server/platform/site.ts";
+import { levelName, STAFF } from "../../server/platform/site.ts";
 
 type ThreadRef = { id: number; title: string };
 type ReplyRef = { id: number; floor: number; name: string };
@@ -705,7 +705,7 @@ function ThreadFields({
   onChange: (content: Content) => void;
 }) {
   const me = useMe();
-  const staff = me?.role === "moderator" || me?.role === "admin";
+  const staff = me !== null && STAFF.includes(me.role);
   const boards = usePostableBoards();
   const id = useId();
   return (

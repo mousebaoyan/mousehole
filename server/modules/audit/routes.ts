@@ -1,5 +1,5 @@
 import { createRoute, z } from "@hono/zod-openapi";
-import { authorize, createRouter, errorResponse, unix } from "../../platform/http.ts";
+import { authorizeOwner, createRouter, errorResponse, unix } from "../../platform/http.ts";
 import { deviceSummary } from "../auth/device.ts";
 import { UserBriefSchema, UserRefSchema } from "../users/schemas.ts";
 import { findUserId, userBriefs } from "../users/service.ts";
@@ -51,12 +51,12 @@ export const auditRoutes = createRouter().openapi(
         },
       },
       400: errorResponse("IP 格式不对"),
-      403: errorResponse("不是管理员"),
+      403: errorResponse("不是站长，或者用 bot token 调用"),
       404: errorResponse("操作人不存在"),
     },
   }),
   async (c) => {
-    authorize(c, "admin");
+    authorizeOwner(c);
     const { actor, ip, action, target_type, target_id, cursor } = c.req.valid("query");
     const page = await listAuditLogs({
       actorId: actor === undefined ? undefined : await findUserId(actor),

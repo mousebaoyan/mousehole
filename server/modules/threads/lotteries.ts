@@ -1,7 +1,8 @@
 import { createHash, randomBytes } from "node:crypto";
 import { sql, type Kysely, type Transaction } from "kysely";
 import type { DB } from "../../../db/types.ts";
-import { STAFF, type Actor, type Viewer } from "../../platform/access.ts";
+import { type Actor, type Viewer } from "../../platform/access.ts";
+import { STAFF } from "../../platform/site.ts";
 import { db } from "../../platform/db.ts";
 import { AppError } from "../../platform/errors.ts";
 import { recordAudit } from "../audit/service.ts";

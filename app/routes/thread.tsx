@@ -24,6 +24,7 @@ import { confirmDialog } from "~/components/ui/dialog";
 import { toast } from "~/components/ui/toast";
 import { browserApi } from "~/browser-api";
 import { isMine, levelPower, RevealContext, sameWriter } from "~/components/writer";
+import { STAFF } from "../../server/platform/site.ts";
 
 // Floors come 20 at a time; see design §9.
 const BATCH = 20;
@@ -240,7 +241,7 @@ function ThreadPage({
   const openComposer = useComposer();
   const navigate = useNavigate();
   const me = useMe();
-  const staff = me?.role === "moderator" || me?.role === "admin";
+  const staff = me !== null && STAFF.includes(me.role);
   // How the reader writes here (design §8.12).
   const myAlias = thread.my_alias ?? null;
   const authored = isMine(thread.author, me, myAlias);

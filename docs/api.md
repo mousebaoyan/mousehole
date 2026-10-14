@@ -97,7 +97,7 @@
 
 ### 2.1 token 与权限范围
 
-token 由管理员在后台创建，只显示一次。每个 token 绑定一个 bot 账号：创建时填 bot 的 QQ 号，没同步过就先建号，角色固定为 `bot`；登录过的群友不能用作 bot，返回 `409 bot_qq_taken`。不带 `X-Act-As` 时以这个账号操作。token 无效或已吊销返回 `401 invalid_token`。
+token 由站长在后台创建，只显示一次。每个 token 绑定一个 bot 账号：创建时填 bot 的 QQ 号，没同步过就先建号，角色固定为 `bot`；登录过的群友不能用作 bot，返回 `409 bot_qq_taken`。不带 `X-Act-As` 时以这个账号操作。token 无效或已吊销返回 `401 invalid_token`。
 
 一个 token 可以有多个范围，接口要的范围不在其中时返回 `403 scope_missing`：
 
@@ -106,7 +106,7 @@ token 由管理员在后台创建，只显示一次。每个 token 绑定一个 
 | `read` | 读取全部内容，包括仅成员版块和 QQ 号 |
 | `act` | 以群友身份做普通操作：发帖、回复、编辑、删除、点赞、短评、收藏、关注、举报、上传、读通知 |
 | `moderate` | 版主操作：审核（通过、隐藏）、置顶、精华、锁定、移动、删除短评、处理举报、禁言、管理标签 |
-| `admin` | 管理员操作：封禁、设置角色、管理版块、站点设置、关联 QQ 群、查看操作日志 |
+| `admin` | 管理员操作：封禁、设置角色和等级、管理版块。站点设置、发信邮箱、QQ 群、token 和操作日志只有站长在网页上能动，什么范围的 token 都不行 |
 | `sync` | 推送 QQ 群资料和成员数据 |
 | `auth` | 确认登录口令、签发登录链接 |
 | `events` | 订阅事件流 |
@@ -122,7 +122,7 @@ token 由管理员在后台创建，只显示一次。每个 token 绑定一个 
 ### 2.3 规则
 
 - **权限取交集**：以 bot 自己的账号操作时，能做什么由 token 的范围决定；代表某位成员时，还要这位成员自己有这个权限。例如代表普通成员时，即使 token 有 `moderate`，也不能锁帖。
-- **只能代表成员**：被代表的人必须是同步过的账号，否则返回 `404 unknown_member`。冻结的账号只能读，写操作返回 `403 member_frozen`。有人刚进群、论坛还没同步到时，插件先推送一条增量。
+- **只能代表成员**：被代表的人必须是同步过的账号，否则返回 `404 unknown_member`；站长账号也是这样，bot 不能代表站长，站长也不能做操作人。冻结的账号只能读，写操作返回 `403 member_frozen`。有人刚进群、论坛还没同步到时，插件先推送一条增量。
 - **代发开关**：成员在设置里关掉"群聊收录"（`allow_proxy`）后，只有他本人让 bot 操作（`X-Operator` 就是本人）时才放行，否则写操作返回 `403 proxy_disabled`。读操作不受影响。
 - **操作人校验**：带 `X-Operator` 时，论坛会检查操作人有没有资格：代表别人操作时，操作人必须是版主或管理员；执行版主或管理员操作时，操作人自己也必须有这个权限。不通过返回 `403 operator_not_allowed`。没有操作人的场景（例如定时任务、成员同步）可以不带这个头；后台可以设为代表成员时必须带，没带的返回 `400 operator_required`，bot 以自己的账号操作不受影响。
 - **来源标注**：代表成员发的内容，带来源消息时 `via` 为 `qq`，页面标"整理自群聊"；否则为 `bot`。本人可以编辑和删除。
@@ -188,7 +188,7 @@ token 由管理员在后台创建，只显示一次。每个 token 绑定一个 
 | POST | `/auth/email` | `{ qq }`：把验证码发到 `QQ号@qq.com`，返回 204；没同步过的 QQ 号返回 `403 not_member`；同一个 QQ 号 60 秒内只能发一次、每天最多 10 次，同一个 IP 10 分钟内最多 10 次；发信失败返回 `502 email_failed` | 访客 |
 | POST | `/auth/email/verify` | `{ qq, code }`：校验验证码，建立会话，返回 204；不对、过期或输错 5 次作废都返回 `400 email_code_invalid`，`message` 说明是哪种 | 访客 |
 | POST | `/auth/logout` | 退出当前会话；没有登录时也返回成功 | 访客 |
-| GET | `/me` | 当前用户；bot 代表某人时返回这个人 | 已登录 / `read` |
+| GET | `/me` | 当前用户；bot 代表某人时返回这个人。站长账号的 `qq` 为 `null` | 已登录 / `read` |
 | GET | `/me/settings` | 自己的设置：`custom_name`（自己起的名字，`null` 是跟着 QQ）、`custom_bio`（自己写的个性签名，`null` 是跟着 QQ）、`qq_bio`（QQ 的个性签名）、`avatar_custom`（头像是不是自己上传的）、`allow_proxy`、`hide_from_guests`（我的内容不给访客看）、`notify_email`（邮件提醒的总开关）、`notify_prefs`（每类通知的 `{ site, email }` 开关，含默认值） | 已登录 / `read` |
 | PATCH | `/me` | 修改设置，只改带了的字段，返回改好的设置：`custom_name`（最多 24 个字，`null` 改回跟着 QQ，显示名随即重算）、`custom_bio`（最多 60 个字，`null` 改回跟着 QQ）、`allow_proxy`、`hide_from_guests`、`notify_email`、`notify_prefs`（带了的类型整体替换） | 成员 / `act` |
 | PUT | `/me/avatar` | 上传头像：multipart 的 `file` 字段，最大 20MB，格式同图片上传，裁成 96px 的方图；之后不再跟着 QQ 刷新。返回 `{ avatar_url }` | 没被禁言的成员 / `act` |
@@ -318,21 +318,21 @@ token 由管理员在后台创建，只显示一次。每个 token 绑定一个 
 
 | 方法 | 路径 | 说明 | 权限 |
 | --- | --- | --- | --- |
-| GET | `/admin/overview` | 概览：`members`（`total`、`activated`、`frozen`，不算 bot）、`content`（`threads_today`、`posts_today`：今天公开的帖子和回复，按北京时间；`pending`：待审核；`reports`：待处理的举报）、`events`（`streams`：现在连着的事件流；`polled_at`：最近一次按游标拉取的时间，进程重启后为 `null`）、`storage`（`database`、`uploads`：数据库和上传图片占用的字节数）；群的同步状态见 `/admin/groups` | 管理员 / `admin` |
-| GET | `/admin/settings` | 站点设置，按分组返回：`site`（`banner` 公告横幅，`qq_public` 访客能否看到 QQ 号，`review_mode` 新建版块不指定时的审核方式）、`login`（三种登录方式的开关和口令提示）、`smtp`（`accounts`：发信邮箱，按使用的顺序，每个是 `host`、`port`、`secure`、`user`，密码只返回 `password_set`）、`bot`（`require_operator`） | 管理员 / `admin` |
-| PATCH | `/admin/settings` | 修改站点设置，立即生效：只改带了的分组和字段。`smtp.accounts` 整组替换，最多 10 个；某个邮箱不带 `password` 就沿用这个账号原来的密码 | 管理员 / `admin` |
-| POST | `/admin/settings/test-email` | `{ qq }`：每个发信邮箱各发一封测试邮件，返回 `results`，每项是 `user` 和失败的原因 `error`（成功为 `null`）；发出去的邮箱不再歇着 | 管理员 / `admin` |
+| GET | `/admin/overview` | 概览：`members`（`total`、`activated`、`frozen`，不算 bot 和站长）、`content`（`threads_today`、`posts_today`：今天公开的帖子和回复，按北京时间；`pending`：待审核；`reports`：待处理的举报）、`events`（`streams`：现在连着的事件流；`polled_at`：最近一次按游标拉取的时间，进程重启后为 `null`）、`storage`（`database`、`uploads`：数据库和上传图片占用的字节数）；群的同步状态见 `/admin/groups` | 管理员 / `admin` |
+| GET | `/admin/settings` | 站点设置，按分组返回：`site`（`banner` 公告横幅，`qq_public` 访客能否看到 QQ 号，`review_mode` 新建版块不指定时的审核方式）、`login`（三种登录方式的开关和口令提示）、`smtp`（`accounts`：发信邮箱，按使用的顺序，每个是 `host`、`port`、`secure`、`user`，密码只返回 `password_set`）、`bot`（`require_operator`） | 站长，只能在网页上操作 |
+| PATCH | `/admin/settings` | 修改站点设置，立即生效：只改带了的分组和字段。`smtp.accounts` 整组替换，最多 10 个；某个邮箱不带 `password` 就沿用这个账号原来的密码 | 站长，只能在网页上操作 |
+| POST | `/admin/settings/test-email` | `{ qq }`：每个发信邮箱各发一封测试邮件，返回 `results`，每项是 `user` 和失败的原因 `error`（成功为 `null`）；发出去的邮箱不再歇着 | 站长，只能在网页上操作 |
 | GET | `/admin/groups` | 已关联的群和同步状态：最近一次增量、全量、群资料的时间，被拦下的全量 | 管理员 / `admin` |
-| POST | `/admin/groups` | 关联群：`{ group_id }`；第一个关联的群自动成为主群；已关联返回 `409 group_exists` | 管理员 / `admin` |
-| PATCH | `/admin/groups/{group_id}` | 启用、停用、设为主群：`{ enabled?, is_primary?: true }`；相关成员的成员资格和显示名随即重算 | 管理员 / `admin` |
+| POST | `/admin/groups` | 关联群：`{ group_id }`；第一个关联的群自动成为主群；已关联返回 `409 group_exists` | 站长，只能在网页上操作 |
+| PATCH | `/admin/groups/{group_id}` | 启用、停用、设为主群：`{ enabled?, is_primary?: true }`；相关成员的成员资格和显示名随即重算 | 站长，只能在网页上操作 |
 | GET | `/admin/members` | 成员列表，新建的在前，每页 50 个：`q`（名字，或者 5–12 位数字时也按 QQ 号）、`status`（`member`、`frozen`）、`role`、`level`、`restricted`（只看禁言或封禁中的）、`cursor`；每人带 `level` 和 `level_locked` | 版主 / `moderate` |
 | GET | `/admin/content` | 待审核或已隐藏的内容，最新的在前，每页 30 条：`status`（`pending`，默认；`hidden`）、`cursor`（上一页最后一条的 ID）；帖子以主楼出现，每条带楼层号、帖子、版块、作者和摘要 | 版主 / `moderate` |
 | GET | `/admin/reports` | 举报列表，最新的在前，每页 30 条：`status`（默认 `open`）、`cursor`（上一页最后一条的 ID）；每条带举报人、理由、被举报的楼层（帖子、楼层号、作者、摘要、是否已删除）或短评、处理人 | 版主 / `moderate` |
 | PATCH | `/admin/reports/{id}` | 处理举报：`{ status }`，可选 `resolved`（已处理，内容另外删除或隐藏）、`dismissed`（驳回）；记操作日志 | 版主 / `moderate` |
-| GET | `/admin/audit-logs` | 操作日志，最新的在前，每页 50 条：`actor`（用户 ID 或 `qq:号码`）、`ip`、`action`、`target_type`、`target_id`、`cursor`；每条带以谁的身份、经由哪个 token、谁让 bot 做的、`data`、IP、`user_agent` 和从它看出的 `device` | 管理员 / `admin` |
-| GET | `/admin/tokens` | bot token 列表，包括已吊销的；不含 token 本身 | 管理员，只能在网页上操作 |
-| POST | `/admin/tokens` | 创建：`{ name, bot_qq, scopes }`，返回 `{ id, token }`，token 只出现这一次 | 管理员，只能在网页上操作 |
-| DELETE | `/admin/tokens/{id}` | 吊销 | 管理员，只能在网页上操作 |
+| GET | `/admin/audit-logs` | 操作日志，最新的在前，每页 50 条：`actor`（用户 ID 或 `qq:号码`）、`ip`、`action`、`target_type`、`target_id`、`cursor`；每条带以谁的身份、经由哪个 token、谁让 bot 做的、`data`、IP、`user_agent` 和从它看出的 `device` | 站长，只能在网页上操作 |
+| GET | `/admin/tokens` | bot token 列表，包括已吊销的；不含 token 本身 | 站长，只能在网页上操作 |
+| POST | `/admin/tokens` | 创建：`{ name, bot_qq, scopes }`，返回 `{ id, token }`，token 只出现这一次 | 站长，只能在网页上操作 |
+| DELETE | `/admin/tokens/{id}` | 吊销 | 站长，只能在网页上操作 |
 
 审核通过或隐藏内容，用 `PATCH /threads/{id}` 或 `PATCH /posts/{id}` 修改 `status`：待审核的改成 `visible` 是通过，改成 `hidden` 是不通过；公开的可以隐藏，隐藏的可以恢复。内容公开时才算进计数、列表和搜索，第一次公开时产生 `thread.created` 或 `post.created`，相关的人收到通知；隐藏时从计数里扣掉，产生带 `reason` 的 `post.deleted`。每次改动都通知作者，记操作日志。
 
@@ -559,8 +559,8 @@ sequenceDiagram
 
 然后登录后台：
 
-1. 在服务器上运行 `docker exec mousehole node scripts/bootstrap.ts --qq 你的QQ号`（本地开发用 `pnpm bootstrap --qq 你的QQ号`），得到一次性登录链接，10 分钟内有效。这个 QQ 号的账号设为管理员，并锁定角色。
-2. 打开链接登录后台：关联 QQ 群、设主群，创建 bot token（按插件需要选择范围），配置发信邮箱并发测试邮件。
+1. 在服务器上运行 `docker exec mousehole node scripts/bootstrap.ts --owner`（本地开发用 `pnpm bootstrap --owner`），得到站长的一次性登录链接，10 分钟内有效。第一次运行时建好站长账号，之后再运行还是这个账号；站长只能这样登录。
+2. 打开链接登录后台：关联 QQ 群、设主群，创建 bot token（按插件需要选择范围），配置发信邮箱并发测试邮件。群主同步过来就是管理员，也可以在成员页指定。
 3. 把 token 配到插件里。插件推送第一次全量后，群成员就都能登录了。
 
 ## 7. 示例
