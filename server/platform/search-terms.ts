@@ -25,9 +25,11 @@ export function documentTokens(text: string) {
 
 // For to_tsquery('simple', …): each term a phrase of its tokens, all terms required. Tokens are
 // letters and digits only, so they need no quoting beyond this.
-export function phraseQuery(text: string) {
+export function phraseQuery(text: string, titleOnly = false) {
+  // Titles are indexed with weight A.
+  const weight = titleOnly ? ":A" : "";
   return terms(text)
-    .map((tokens) => tokens.map((t) => `'${t}'`).join(" <-> "))
+    .map((tokens) => tokens.map((t) => `'${t}'${weight}`).join(" <-> "))
     .join(" & ");
 }
 

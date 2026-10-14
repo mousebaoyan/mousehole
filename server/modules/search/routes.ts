@@ -6,7 +6,7 @@ import { threadJson, ThreadSchema } from "../threads/schemas.ts";
 import { threadsByIds } from "../threads/service.ts";
 import { UserRefSchema } from "../users/schemas.ts";
 import { findUserId } from "../users/service.ts";
-import { search, similar } from "./service.ts";
+import { search, similar, SORTS } from "./service.ts";
 
 export const searchRoutes = createRouter()
   .openapi(
@@ -19,13 +19,31 @@ export const searchRoutes = createRouter()
           q: z.string().trim().min(1).max(100),
           board: z.string().optional(),
           tag: z.string().optional(),
-          author: UserRefSchema.optional(),
+          author: UserRefSchema.optional().openapi({ description: "楼主" }),
+          kind: z.enum(["discussion", "question"]).optional(),
+          solved: z
+            .enum(["true", "false"])
+            .optional()
+            .transform((v) => (v === undefined ? undefined : v === "true"))
+            .openapi({ description: "true：已解决；false：还在等回答的问答帖" }),
+          since: z
+            .enum(["week", "month", "year"])
+            .optional()
+            .openapi({ description: "一周、一个月、一年内发的帖子" }),
+          title_only: z
+            .enum(["true", "false"])
+            .optional()
+            .transform((v) => v === "true"),
+          sort: z.enum(SORTS).default("relevance").openapi({
+            description:
+              "relevance 相关度，旧的逐渐靠后；created 最新发布；last_post 最新回复；replies 回复最多；likes 点赞最多",
+          }),
           cursor: z.coerce.number().int().min(0).default(0),
         }),
       },
       responses: {
         200: {
-          description: "结果，按相关度排，旧的逐渐靠后",
+          description: "结果",
           content: {
             "application/json": {
               schema: z.object({
@@ -45,15 +63,17 @@ export const searchRoutes = createRouter()
       },
     }),
     async (c) => {
-      const { q, board, tag, author, cursor } = c.req.valid("query");
+      const { q, board, tag, author, title_only, cursor, ...rest } = c.req.valid("query");
       const { viewer, bot } = c.var;
       const members = isMember(viewer, bot);
-      const scope = {
+      const filter = {
+        ...rest,
+        titleOnly: title_only,
         boardId: board === undefined ? undefined : (await getBoard(board, members)).id,
         tagId: tag === undefined ? undefined : await getTagId(tag),
         authorId: author === undefined ? undefined : await findUserId(author),
       };
-      const { hits, next_cursor } = await search(members, q, scope, cursor);
+      const { hits, next_cursor } = await search(members, q, filter, cursor);
       const threads = await threadsByIds(
         members,
         viewer?.id ?? null,
