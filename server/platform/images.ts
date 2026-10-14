@@ -67,14 +67,20 @@ export async function processImage(input: Buffer) {
   });
 }
 
-// Avatars show at 40px at most, so 96px covers screens at twice the density.
+// Avatars show at 40px at most, so 96px covers screens at twice the density. An animated
+// picture keeps its first frame.
 const AVATAR = 96;
 
 export async function processAvatar(input: Buffer) {
-  return oneOf(() =>
-    sharp(input, { limitInputPixels: MAX_PIXELS, failOn: "error" })
+  return oneOf(async () => {
+    const image = sharp(input, { limitInputPixels: MAX_PIXELS, failOn: "error" });
+    const meta = await image.metadata().catch(invalid);
+    if (!FORMATS.has(meta.format)) invalid();
+    return image
+      .rotate()
       .resize(AVATAR, AVATAR, { fit: "cover" })
       .webp({ quality: 80 })
-      .toBuffer(),
-  );
+      .toBuffer()
+      .catch(invalid);
+  });
 }

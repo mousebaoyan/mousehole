@@ -163,8 +163,10 @@ token 由管理员在后台创建，只显示一次。每个 token 绑定一个 
 | POST | `/auth/email/verify` | `{ qq, code }`：校验验证码，建立会话，返回 204；不对、过期或输错 5 次作废都返回 `400 email_code_invalid`，`message` 说明是哪种 | 访客 |
 | POST | `/auth/logout` | 退出当前会话；没有登录时也返回成功 | 访客 |
 | GET | `/me` | 当前用户；bot 代表某人时返回这个人 | 已登录 / `read` |
-| GET | `/me/settings` | 自己的设置：`custom_name`（自己起的名字，`null` 是跟着 QQ）、`bio`、`allow_proxy`、`notify_prefs`（每类通知的 `{ site, qq }` 开关，含默认值） | 已登录 / `read` |
-| PATCH | `/me` | 修改设置，只改带了的字段，返回改好的设置：`custom_name`（最多 24 个字，`null` 改回跟着 QQ，显示名随即重算）、`bio`（最多 60 个字）、`allow_proxy`、`notify_prefs`（带了的类型整体替换） | 成员 / `act` |
+| GET | `/me/settings` | 自己的设置：`custom_name`（自己起的名字，`null` 是跟着 QQ）、`custom_bio`（自己写的个性签名，`null` 是跟着 QQ）、`qq_bio`（QQ 的个性签名）、`avatar_custom`（头像是不是自己上传的）、`allow_proxy`、`notify_prefs`（每类通知的 `{ site, qq }` 开关，含默认值） | 已登录 / `read` |
+| PATCH | `/me` | 修改设置，只改带了的字段，返回改好的设置：`custom_name`（最多 24 个字，`null` 改回跟着 QQ，显示名随即重算）、`custom_bio`（最多 60 个字，`null` 改回跟着 QQ）、`allow_proxy`、`notify_prefs`（带了的类型整体替换） | 成员 / `act` |
+| PUT | `/me/avatar` | 上传头像：multipart 的 `file` 字段，最大 20MB，格式同图片上传，裁成 96px 的方图；之后不再跟着 QQ 刷新。返回 `{ avatar_url }` | 没被禁言的成员 / `act` |
+| DELETE | `/me/avatar` | 头像改回跟着 QQ，立刻拉一次 QQ 头像，返回 `{ avatar_url }`；拉取失败返回 `502 fetch_failed`，头像不变 | 成员 / `act` |
 | GET | `/me/export` | 导出自己的全部内容，作为附件 `mousehole-{id}.json` 下载：`user`（`id`、`qq`、`display_name`、`bio`）、`posts`（发过的主楼和回复，Markdown 原文，含待审核和已隐藏的，不含删掉的；`floor` 为 1 的就是自己发的帖子）、`boosts`、`bookmarks`；每小时最多 3 次 | 已登录，只能在网页上 |
 | GET | `/me/sessions` | 已登录的设备：`user_agent`、`device`（例如"Chrome · macOS"）、`ip`、时间、是否当前设备 | 已登录 |
 | DELETE | `/me/sessions/{id}` | 让某个设备下线 | 已登录 |
@@ -302,6 +304,7 @@ token 由管理员在后台创建，只显示一次。每个 token 绑定一个 
 | PUT | `/bot/groups/{group_id}/info` | 推送群资料，见 4.4 | `sync` |
 | PUT | `/bot/groups/{group_id}/members` | 全量同步成员，见第 4 节 | `sync` |
 | PATCH | `/bot/groups/{group_id}/members` | 增量同步成员，见第 4 节 | `sync` |
+| PUT | `/bot/users/{user}/bio` | 推送 QQ 的个性签名：`{ bio }`，超过 60 个字的截掉；本人没写过自己的签名时显示它。插件在收到 `member.activated` 时查询后推送 | `sync` |
 | GET | `/bot/messages/{chat_type}/{chat_id}/{message_id}` | 某条 QQ 消息对应的论坛内容：`{ kind, thread_id, post_id }`，`kind` 为 `source`（内容来自这条消息）或 `notice`（bot 发的转存回执）；没有对应时返回 `404 message_not_linked` | `read` |
 | PUT | `/bot/messages/{chat_type}/{chat_id}/{message_id}` | 记录 bot 发出的转存回执：`{ thread_id, post_id? }`；同一条消息再记一次就覆盖；这条消息已经是某条内容的来源时返回 `409 source_exists` | `act` |
 | GET | `/bot/events` | SSE 事件流，见第 5 节 | `events` |
@@ -403,7 +406,7 @@ data: {"post":{…},"thread":{…},"author":{…},"qq_text":"……","url":"http
 | `thread.solved` | 采纳答案 | `thread`（`id`、`title`）、`post`（`id`、`floor`、`body`）、`answerer`、`url`、`qq_text` |
 | `content.pending` | 先审后发的版块有新内容等待审核；帖子是它的主楼 | `thread`（`id`、`title`）、`board`、`post`（`id`、`floor`、`body`）、`author`、`url` |
 | `notification.created` | 给某位成员产生通知，且他开启了这类通知的 QQ 提醒 | `user`、`type`、`actor`、`thread`、`post`、`url`、`qq_text` |
-| `member.activated` | 成员第一次登录 | `user` |
+| `member.activated` | 成员第一次登录；插件收到后查这个人的 QQ 个性签名，推给 `/bot/users/{user}/bio` | `user` |
 | `report.created` | 有新举报 | `report`（`id`、`reason`）、`post`（`id`、`floor`、`thread_id`）、`boost`（举报的是短评时：`id`、`body`、`author`，否则为 `null`）、`reporter`、`url` |
 
 - `qq_text` 是可以直接发到 QQ 的纯文本，例如"【保研问答】rank 30% 能冲夏令营吗\n鼠鼠：……\nhttps://bbs.mousebaoyan.cn/t/42"。

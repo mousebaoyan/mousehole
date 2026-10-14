@@ -360,6 +360,19 @@ async function demo() {
   const viaCode = await call("/me", { token: null, headers: { cookie: session } });
   check("口令登录：浏览器下一次查询就登录了", field(viaCode.data, "qq") === member, viaCode.data);
 
+  // What the plugin does on member.activated: looks up the QQ signature and pushes it.
+  const signature = "鼠鼠的 QQ 签名";
+  const bio = await call(`/bot/users/qq:${member}/bio`, {
+    method: "PUT",
+    body: { bio: signature },
+  });
+  const card = await call(`/users/qq:${member}`);
+  check(
+    "激活后推送 QQ 个性签名，资料卡上显示",
+    bio.status === 204 && field(card.data, "bio") === signature,
+    card.data,
+  );
+
   const key = { "idempotency-key": `demo-${run}-link` };
   const asMember = { "x-act-as": `qq:${member}` };
   const link = await call("/bot/auth/links", { method: "POST", headers: { ...asMember, ...key } });

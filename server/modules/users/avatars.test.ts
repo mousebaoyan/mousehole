@@ -62,4 +62,41 @@ describe("头像", () => {
     await refreshAvatars();
     expect(await avatarUrl()).toBe(`/avatars/${user.id}.webp?v=2`);
   });
+
+  test("上传的头像不再被 QQ 头像刷新覆盖；改回 QQ 头像时立刻拉一次", async () => {
+    const user = await createUser();
+    const me = as(await login(user.id));
+    const png = await sharp({
+      create: { width: 300, height: 200, channels: 3, background: "#fff" },
+    })
+      .png()
+      .toBuffer();
+
+    const uploaded = await api.me.avatar.$put({ form: { file: new File([png], "我.png") } }, me);
+    if (!uploaded.ok) throw new Error(`status ${uploaded.status}`);
+    expect(await uploaded.json()).toEqual({ avatar_url: `/avatars/${user.id}.webp?v=1` });
+    const file = await app.request(`/avatars/${user.id}.webp?v=1`);
+    const { width, height } = await sharp(await file.arrayBuffer()).metadata();
+    expect([width, height]).toEqual([96, 96]);
+
+    await aDayLater(`${AVATARS_DIR}/${user.id}.webp`);
+    qqAvatar("#e07b53");
+    await refreshAvatars();
+    const settings = await api.me.settings.$get({}, me);
+    if (!settings.ok) throw new Error(`status ${settings.status}`);
+    expect(await settings.json()).toMatchObject({ avatar_custom: true });
+    const profile = await api.me.$get({}, me);
+    if (!profile.ok) throw new Error(`status ${profile.status}`);
+    expect((await profile.json()).avatar_url).toBe(`/avatars/${user.id}.webp?v=1`);
+
+    const restored = await api.me.avatar.$delete({}, me);
+    if (!restored.ok) throw new Error(`status ${restored.status}`);
+    expect(await restored.json()).toEqual({ avatar_url: `/avatars/${user.id}.webp?v=2` });
+  });
+
+  test("不是图片的文件上传不了", async () => {
+    const me = as(await login((await createUser()).id));
+    const res = await api.me.avatar.$put({ form: { file: new File(["不是图"], "a.png") } }, me);
+    expect(res.status).toBe(400);
+  });
 });

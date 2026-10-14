@@ -307,9 +307,10 @@ export interface UserFollows {
 export interface Users {
   activated_at: Timestamp | null;
   allow_proxy: Generated<boolean>;
+  avatar_custom: Generated<boolean>;
   avatar_version: Generated<number>;
-  bio: Generated<string>;
   created_at: Generated<Timestamp>;
+  custom_bio: string | null;
   custom_name: string | null;
   days_visited: Generated<number>;
   deleted_at: Timestamp | null;
@@ -322,6 +323,7 @@ export interface Users {
   post_count: Generated<number>;
   posts_read: Generated<number>;
   qq: number | null;
+  qq_bio: Generated<string>;
   qq_nickname: Generated<string>;
   read_seconds: Generated<number>;
   restricted_until: Timestamp | null;

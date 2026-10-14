@@ -211,7 +211,7 @@ export async function getUser(ref: UserRef, viewerId: number | null) {
       "group_members.card",
       "group_members.joined_at",
       "group_members.last_sent_at",
-      "users.bio",
+      eb.fn.coalesce("users.custom_bio", "users.qq_bio").as("bio"),
       "users.qq",
       "users.member_status",
       "users.activated_at",
@@ -248,12 +248,16 @@ export async function getUser(ref: UserRef, viewerId: number | null) {
 
 // ---- One's own settings: see design §6.1 and §9.
 
+export const MAX_BIO = 60;
+
 export async function getSettings(userId: number) {
   return db
     .selectFrom("users")
     .select([
       "custom_name",
-      "bio",
+      "custom_bio",
+      "qq_bio",
+      "avatar_custom",
       "allow_proxy",
       sql<Record<string, { site?: boolean; qq?: boolean }>>`notify_prefs`.as("notify_prefs"),
     ])
@@ -265,7 +269,7 @@ export async function getSettings(userId: number) {
 export async function updateSettings(
   userId: number,
   change: {
-    bio?: string;
+    custom_bio?: string | null;
     allow_proxy?: boolean;
     notify_prefs?: Record<string, { site: boolean; qq: boolean }>;
   },
@@ -280,6 +284,18 @@ export async function updateSettings(
         notify_prefs: sql`notify_prefs || ${JSON.stringify(notify_prefs)}::jsonb`,
       }),
     })
+    .where("id", "=", userId)
+    .execute();
+}
+
+// The QQ signature, which the bot looks up when someone first logs in. Shown until they write
+// their own; longer ones are cut to fit, by characters as people see them so an emoji stays
+// whole.
+export async function setQqBio(userId: number, bio: string) {
+  const characters = Array.from(new Intl.Segmenter().segment(bio), (s) => s.segment);
+  await db
+    .updateTable("users")
+    .set({ qq_bio: characters.slice(0, MAX_BIO).join("") })
     .where("id", "=", userId)
     .execute();
 }
@@ -536,8 +552,8 @@ export async function countLikes(trx: Transaction<DB>, userId: number, likes: nu
     .execute();
 }
 
-// ---- Avatars: copies of QQ avatars, so pages don't carry links with QQ numbers in them. See
-// design §6.1.
+// ---- Avatars: copies of QQ avatars, so pages don't carry links with QQ numbers in them, or
+// pictures people uploaded instead. See design §6.1.
 
 export const AVATARS_DIR = "data/avatars";
 // Each copy is fetched again once it is this old. The job runs hourly, so new members don't wait.
@@ -572,17 +588,50 @@ async function modifiedAt(path: string) {
   );
 }
 
+async function saveAvatar(id: number, avatar: Buffer, custom: boolean) {
+  await mkdir(AVATARS_DIR, { recursive: true });
+  const path = `${AVATARS_DIR}/${id}.webp`;
+  await writeFile(`${path}.tmp`, avatar);
+  await rename(`${path}.tmp`, path);
+  const { avatar_version } = await db
+    .updateTable("users")
+    .set((eb) => ({ avatar_version: eb("avatar_version", "+", 1), avatar_custom: custom }))
+    .where("id", "=", id)
+    .returning("avatar_version")
+    .executeTakeFirstOrThrow();
+  return avatarUrl(id, avatar_version);
+}
+
+export async function uploadAvatar(userId: number, file: Buffer) {
+  return saveAvatar(userId, await processAvatar(file), true);
+}
+
+// Back to the QQ avatar, fetched right away so the page shows it.
+export async function restoreQqAvatar(userId: number) {
+  const { qq } = await db
+    .selectFrom("users")
+    .select("qq")
+    .where("id", "=", userId)
+    .$narrowType<{ qq: number }>()
+    .executeTakeFirstOrThrow();
+  const avatar = await fetchAvatar(qq).catch((error: unknown) => {
+    throw new AppError(502, "fetch_failed", "QQ 头像获取失败，请稍后再试", { cause: error });
+  });
+  return saveAvatar(userId, avatar, false);
+}
+
 // One at a time: a daily trickle to QQ rather than a burst. A picture that didn't change only
-// has its copy's time renewed; one that couldn't be fetched is tried again next hour.
+// has its copy's time renewed; one that couldn't be fetched is tried again next hour. Uploaded
+// avatars are left alone.
 export async function refreshAvatars() {
   const users = await db
     .selectFrom("users")
     .select(["id", "qq"])
     .where("qq", "is not", null)
+    .where("avatar_custom", "=", false)
     .where("deleted_at", "is", null)
     .$narrowType<{ qq: number }>()
     .execute();
-  await mkdir(AVATARS_DIR, { recursive: true });
   const failed: { id: number; error: unknown }[] = [];
   for (const { id, qq } of users) {
     const path = `${AVATARS_DIR}/${id}.webp`;
@@ -595,13 +644,7 @@ export async function refreshAvatars() {
         await utimes(path, now, now);
         continue;
       }
-      await writeFile(`${path}.tmp`, avatar);
-      await rename(`${path}.tmp`, path);
-      await db
-        .updateTable("users")
-        .set((eb) => ({ avatar_version: eb("avatar_version", "+", 1) }))
-        .where("id", "=", id)
-        .execute();
+      await saveAvatar(id, avatar, false);
     } catch (error) {
       failed.push({ id, error });
     }
