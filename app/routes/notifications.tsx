@@ -6,6 +6,7 @@ import {
   Heart,
   Reply,
   Rocket,
+  ShieldCheck,
   UserPlus,
 } from "lucide-react";
 import { useRef } from "react";
@@ -68,6 +69,15 @@ const ICONS: Record<string, typeof Reply> = {
   watching: BellRing,
   following: UserPlus,
   solved: CircleCheck,
+  moderation: ShieldCheck,
+};
+
+// What a moderator did; see design §8.4.
+const MODERATED: Record<string, string> = {
+  approve: "通过了你的",
+  reject: "没有通过你的",
+  hide: "隐藏了你的",
+  unhide: "恢复了你的",
 };
 
 // What happened, in a sentence; merged ones count people or floors.
@@ -87,6 +97,8 @@ function headline(n: Item) {
       return many ? `关注的主题有 ${n.count} 层新回复` : `${who} 回复了你关注的主题`;
     case "solved":
       return `${who} 采纳了你的回答`;
+    case "moderation":
+      return `${who} ${MODERATED[n.data.action] ?? "处理了你的"}${n.post.floor === 1 ? "主题" : "回复"}${n.data.reason ? `：${n.data.reason}` : ""}`;
     default:
       return `${who} 发了新主题`;
   }

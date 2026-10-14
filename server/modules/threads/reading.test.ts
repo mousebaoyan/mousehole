@@ -104,6 +104,23 @@ describe("阅读记录", () => {
     expect(await readState(thread)).toEqual({ read_floors: [[4, 4]], last_read_floor: 4 });
   });
 
+  test("看不到的楼层，读过它后面的一楼或者读到最后一楼时一并算读过，不计入阅读统计", async () => {
+    const thread = await newThread(4);
+    await db
+      .updateTable("posts")
+      .set({ status: "hidden" })
+      .where("thread_id", "=", thread)
+      .where("floor", "in", [3, 5])
+      .execute();
+    const before = await stats();
+
+    await report(thread, [[1, 2]], 5);
+    expect(await readState(thread)).toEqual({ read_floors: [[1, 2]], last_read_floor: 2 });
+    await report(thread, [[4, 4]], 5);
+    expect(await readState(thread)).toEqual({ read_floors: [[1, 5]], last_read_floor: 5 });
+    expect((await stats()).posts_read - before.posts_read).toBe(3);
+  });
+
   test("北京时间的新一天第一次上报，访问天数加一", async () => {
     const thread = await newThread(0);
     const { days_visited } = await stats();

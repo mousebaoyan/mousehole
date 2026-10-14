@@ -1,7 +1,9 @@
 import {
   ArrowRightLeft,
   CircleCheck,
+  Clock,
   Eye,
+  EyeOff,
   Lock,
   LockOpen,
   MessageSquare,
@@ -21,9 +23,10 @@ import { Input } from "~/components/ui/input";
 import { NativeSelect } from "~/components/ui/native-select";
 import { useBoards } from "~/forum";
 import type { ThreadDetail } from "~/api-types";
+import { ReviewItems } from "./review-items.tsx";
 
 // The title and what is known about the thread. Its author can retitle and retag it; moderators
-// also pin, feature, lock and move it.
+// also pin, feature, lock, move and review it.
 export function TopicHeader({
   thread,
   current,
@@ -187,6 +190,7 @@ export function TopicHeader({
                     >
                       <ArrowRightLeft /> 移动到…
                     </button>
+                    <ReviewItems status={thread.status} close={close} onReview={change} />
                   </>
                 );
               }}
@@ -194,6 +198,19 @@ export function TopicHeader({
           </div>
         )}
       </div>
+      {thread.status !== "visible" && (
+        <p className="mt-3 flex items-center gap-2 rounded-xl bg-warning/10 px-3 py-2 text-meta text-warning">
+          {thread.status === "pending" ? (
+            <>
+              <Clock className="size-4 shrink-0" /> 等待审核：通过后其他人才能看到和回复
+            </>
+          ) : (
+            <>
+              <EyeOff className="size-4 shrink-0" /> 已隐藏：只有作者和版主能看到
+            </>
+          )}
+        </p>
+      )}
       {save.data && !save.data.ok && (
         <p role="alert" className="mt-2 text-meta text-destructive">
           {save.data.message}

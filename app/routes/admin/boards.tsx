@@ -27,6 +27,11 @@ const KIND = [
   { value: "question", label: "问答" },
 ] as const;
 
+const REVIEW = [
+  { value: "after", label: "先发后审" },
+  { value: "before", label: "先审后发" },
+] as const;
+
 export async function loader({ request, context }: Route.LoaderArgs) {
   const res = await context.get(apiContext).boards.$get();
   // The board being edited, if any: ?edit=slug.
@@ -45,6 +50,7 @@ export async function action({ request, context }: Route.ActionArgs) {
     visibility: choice(VISIBILITY, field("visibility")),
     post_role: choice(POST_ROLE, field("post_role")),
     default_kind: choice(KIND, field("default_kind")),
+    review_mode: choice(REVIEW, field("review_mode")),
   });
   const res =
     intent === "create"
@@ -124,6 +130,7 @@ export default function Boards({ loaderData: { boards, edit }, actionData }: Rou
                     {b.visibility === "members" && <Badge>仅成员</Badge>}
                     {b.post_role === "moderator" && <Badge>版主发主题</Badge>}
                     {b.default_kind === "question" && <Badge>问答</Badge>}
+                    {b.review_mode === "before" && <Badge>先审后发</Badge>}
                   </div>
                   <div className="truncate text-xs text-muted-foreground">
                     /b/{b.slug} · {b.thread_count} 个主题
@@ -214,6 +221,9 @@ function BoardFields({ board }: { board?: Board }) {
       </Field>
       <Field label="默认类型" hint="问答主题可以采纳答案">
         <Options name="default_kind" options={KIND} value={board?.default_kind} />
+      </Field>
+      <Field label="审核方式" hint="先审后发：版主以外的人发的内容，通过审核才公开">
+        <Options name="review_mode" options={REVIEW} value={board?.review_mode} />
       </Field>
       <Field label="颜色" hint="列表和导航里的圆点">
         <input

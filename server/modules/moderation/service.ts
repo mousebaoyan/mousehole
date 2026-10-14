@@ -91,7 +91,8 @@ async function boostOf(id: number) {
 }
 
 export async function reportPost(viewer: Viewer, members: boolean, postId: number, reason: string) {
-  await fileReport(viewer, await getPost(postId, members), null, reason);
+  const post = await getPost(postId, { members, id: viewer.id, staff: false });
+  await fileReport(viewer, post, null, reason);
 }
 
 export async function reportBoost(
@@ -101,7 +102,8 @@ export async function reportBoost(
   reason: string,
 ) {
   const boost = await boostOf(boostId);
-  await fileReport(viewer, await getPost(boost.post_id, members), boost, reason);
+  const post = await getPost(boost.post_id, { members, id: viewer.id, staff: false });
+  await fileReport(viewer, post, boost, reason);
 }
 
 // Each person once for each floor or boost. The bot plugin hears of it.

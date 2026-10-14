@@ -1,6 +1,6 @@
 import { sql, type ExpressionBuilder, type RawBuilder, type Transaction } from "kysely";
 import type { DB, Json } from "../../../db/types.ts";
-import { STAFF, type Actor, type Viewer } from "../../platform/access.ts";
+import { STAFF, type Actor, type Reader, type Viewer } from "../../platform/access.ts";
 import { db } from "../../platform/db.ts";
 import { AppError } from "../../platform/errors.ts";
 import { log } from "../../platform/log.ts";
@@ -20,6 +20,7 @@ import {
   userBriefs,
 } from "../users/service.ts";
 import {
+  contentPending,
   postCreated,
   postDeleted,
   postUpdated,
@@ -54,17 +55,28 @@ function threadNotFound() {
 
 // What a viewer may open: published, not deleted, and in a board they can see.
 function visibleThreads(members: boolean) {
+  return openableThreads({ members, id: null, staff: false });
+}
+
+// Also threads waiting for review or hidden, for moderators and their authors. See design §8.4.
+function openableThreads(reader: Reader) {
   return db
     .selectFrom("threads")
     .innerJoin("boards", "boards.id", "threads.board_id")
     .where("threads.deleted_at", "is", null)
-    .where("threads.status", "=", "visible")
-    .$if(!members, (qb) => qb.where("boards.visibility", "=", "public"));
+    .$if(!reader.staff, (qb) =>
+      qb.where((eb) =>
+        reader.id === null
+          ? eb("threads.status", "=", "visible")
+          : eb.or([eb("threads.status", "=", "visible"), eb("threads.author_id", "=", reader.id)]),
+      ),
+    )
+    .$if(!reader.members, (qb) => qb.where("boards.visibility", "=", "public"));
 }
 
 // With the reader's own row in thread_users, which a guest doesn't have.
-function selectThreads(members: boolean, userId: number | null) {
-  return visibleThreads(members)
+function selectThreads(from: ReturnType<typeof openableThreads>, userId: number | null) {
+  return from
     .leftJoin("thread_users as mine", (join) =>
       join.onRef("mine.thread_id", "=", "threads.id").on(sql<boolean>`mine.user_id = ${userId}`),
     )
@@ -77,6 +89,7 @@ function selectThreads(members: boolean, userId: number | null) {
       "threads.pinned",
       "threads.featured",
       "threads.locked",
+      "threads.status",
       "threads.solved_post_id",
       "threads.reply_count",
       "threads.floor_count",
@@ -201,7 +214,7 @@ export async function listThreads(
         ? "mine.last_read_at"
         : "threads.last_post_at";
 
-  let query = selectThreads(members, userId)
+  let query = selectThreads(visibleThreads(members), userId)
     // Microseconds, exact for PostgreSQL timestamps, unlike a JavaScript Date.
     .select(sql<number>`(extract(epoch FROM ${sql.ref(time)}) * 1000000)::bigint`.as("micros"))
     .where(inScope(scope))
@@ -314,6 +327,7 @@ export async function listUserPosts(members: boolean, authorId: number, cursor?:
     ])
     .where("posts.author_id", "=", authorId)
     .where("posts.floor", ">", 1)
+    .where("posts.status", "=", "visible")
     .where("posts.deleted_at", "is", null)
     .orderBy("posts.id", "desc")
     .limit(PAGE_SIZE);
@@ -329,14 +343,16 @@ export async function listUserPosts(members: boolean, authorId: number, cursor?:
 // These threads as lists show them, for search results; ones the viewer can't see are left out.
 export async function threadsByIds(members: boolean, userId: number | null, ids: number[]) {
   if (ids.length === 0) return new Map<number, Awaited<ReturnType<typeof withUsers>>[number]>();
-  const rows = await selectThreads(members, userId).where("threads.id", "in", ids).execute();
+  const rows = await selectThreads(visibleThreads(members), userId)
+    .where("threads.id", "in", ids)
+    .execute();
   return new Map((await withUsers(rows)).map((t) => [t.id, t]));
 }
 
 // ---- One thread and its floors
 
-export async function getThread(id: number, members: boolean, userId: number | null) {
-  const row = await selectThreads(members, userId)
+export async function getThread(id: number, reader: Reader) {
+  const row = await selectThreads(openableThreads(reader), reader.id)
     .select([
       sql<[number, number][]>`(
         SELECT coalesce(json_agg(json_build_array(lower(r), upper(r) - 1) ORDER BY lower(r)), '[]')
@@ -352,7 +368,8 @@ export async function getThread(id: number, members: boolean, userId: number | n
   return thread;
 }
 
-function selectPosts() {
+// Floors waiting for review or hidden show to moderators and their authors only.
+function selectPosts(reader: Reader) {
   return db
     .selectFrom("posts")
     .leftJoin("posts as target", "target.id", "posts.reply_to_id")
@@ -374,8 +391,15 @@ function selectPosts() {
       "target.id as target_id",
       "target.floor as target_floor",
       "target.author_id as target_author_id",
+      "posts.status",
     ])
-    .where("posts.status", "=", "visible");
+    .$if(!reader.staff, (qb) =>
+      qb.where((eb) =>
+        reader.id === null
+          ? eb("posts.status", "=", "visible")
+          : eb.or([eb("posts.status", "=", "visible"), eb("posts.author_id", "=", reader.id)]),
+      ),
+    );
 }
 
 type PostRow = Awaited<ReturnType<ReturnType<typeof selectPosts>["execute"]>>[number];
@@ -396,9 +420,16 @@ async function withPostUsers(rows: PostRow[]) {
   }));
 }
 
-async function assertVisible(threadId: number, members: boolean) {
-  const thread = await visibleThreads(members)
-    .select(["threads.id", "threads.locked", "threads.board_id", "threads.floor_count"])
+async function assertVisible(threadId: number, reader: Reader) {
+  const thread = await openableThreads(reader)
+    .select([
+      "threads.id",
+      "threads.locked",
+      "threads.board_id",
+      "threads.floor_count",
+      "threads.status",
+      "boards.review_mode",
+    ])
     .where("threads.id", "=", threadId)
     .executeTakeFirst();
   if (!thread) throw threadNotFound();
@@ -408,11 +439,11 @@ async function assertVisible(threadId: number, members: boolean) {
 // Up to a batch of floors after or before one; fewer means that end of the thread was reached.
 export async function listPosts(
   threadId: number,
-  members: boolean,
+  reader: Reader,
   range: { after: number } | { before: number },
 ) {
-  await assertVisible(threadId, members);
-  let query = selectPosts().where("posts.thread_id", "=", threadId).limit(FLOOR_BATCH);
+  await assertVisible(threadId, reader);
+  let query = selectPosts(reader).where("posts.thread_id", "=", threadId).limit(FLOOR_BATCH);
   query =
     "after" in range
       ? query.where("posts.floor", ">", range.after).orderBy("posts.floor")
@@ -422,18 +453,18 @@ export async function listPosts(
   return withPostUsers(rows);
 }
 
-export async function getPost(id: number, members: boolean) {
-  const row = await selectPosts().where("posts.id", "=", id).executeTakeFirst();
+export async function getPost(id: number, reader: Reader) {
+  const row = await selectPosts(reader).where("posts.id", "=", id).executeTakeFirst();
   if (!row) throw new AppError(404, "post_not_found", "回复不存在");
-  await assertVisible(row.thread_id, members);
+  await assertVisible(row.thread_id, reader);
   const [post] = await withPostUsers([row]);
   return post;
 }
 
 // The floors that answer a post, in floor order, a batch at a time.
-export async function listReplies(postId: number, members: boolean, after: number) {
-  const post = await getPost(postId, members);
-  const rows = await selectPosts()
+export async function listReplies(postId: number, reader: Reader, after: number) {
+  const post = await getPost(postId, reader);
+  const rows = await selectPosts(reader)
     .where("posts.thread_id", "=", post.thread_id)
     .where("posts.reply_to_id", "=", postId)
     .where("posts.deleted_at", "is", null)
@@ -514,6 +545,7 @@ export async function createThread(
     source?: Source;
   },
 ) {
+  const reader: Reader = { members, id: viewer.id, staff: false };
   const board = await getBoard(input.board, members);
   if (board.post_role === "moderator" && !STAFF.includes(viewer.role)) {
     throw new AppError(403, "forbidden", "这个版块只有版主能发主题");
@@ -523,6 +555,7 @@ export async function createThread(
   const { markdown } = await resolveContent(viewer, input.content, input.source, null);
   const { html, images, mentions } = await renderMarkdown(markdown, showImages);
 
+  const status = statusFor(board.review_mode, viewer);
   const id = await db.transaction().execute(async (trx) => {
     const thread = await trx
       .insertInto("threads")
@@ -532,6 +565,7 @@ export async function createThread(
         kind: input.kind ?? board.default_kind,
         title: input.title,
         last_poster_id: viewer.id,
+        status,
       })
       .returning(["id", "last_post_at"])
       .executeTakeFirstOrThrow();
@@ -544,6 +578,7 @@ export async function createThread(
         body: markdown,
         html,
         via: via(actor, input.source),
+        status,
       })
       .returning("id")
       .executeTakeFirstOrThrow();
@@ -561,9 +596,6 @@ export async function createThread(
         )
         .execute();
     }
-    await countBoard(trx, board.id, { threads: 1, posts: 0 });
-    await countTags(trx, tagIds, 1);
-    await countUserPosts(trx, viewer.id, { threads: 1, posts: 0 });
     await trx
       .insertInto("thread_users")
       .values({
@@ -575,12 +607,12 @@ export async function createThread(
       })
       .execute();
     await indexPost(trx, opening.id);
-    await threadCreated(trx, opening.id);
-    await notifyThread(trx, { id: thread.id, postId: opening.id, authorId: viewer.id, mentions });
+    if (status === "visible") await publishThread(trx, thread.id, { mentions });
+    else await contentPending(trx, opening.id);
     await auditBot(trx, actor, "thread.create", "thread", thread.id);
     return thread.id;
   });
-  return getThread(id, members, viewer.id);
+  return getThread(id, reader);
 }
 
 export async function createPost(
@@ -590,7 +622,9 @@ export async function createPost(
   threadId: number,
   input: { content: Content; reply_to_id?: number; source?: Source },
 ) {
-  const thread = await assertVisible(threadId, members);
+  const reader: Reader = { members, id: viewer.id, staff: false };
+  const thread = await assertVisible(threadId, reader);
+  assertPublic(thread);
   if (thread.locked && !STAFF.includes(viewer.role)) {
     throw new AppError(403, "thread_locked", "主题已锁定");
   }
@@ -604,33 +638,26 @@ export async function createPost(
   const replyTo = input.reply_to_id ?? replyToId ?? undefined;
   const { html, images, mentions } = await renderMarkdown(markdown, showImages);
 
+  const status = statusFor(thread.review_mode, viewer);
   const id = await db.transaction().execute(async (trx) => {
-    let replyToAuthor: number | null = null;
     if (replyTo !== undefined) {
       const target = await trx
-        .updateTable("posts")
-        .set((eb) => ({ reply_count: eb("reply_count", "+", 1) }))
+        .selectFrom("posts")
+        .select("id")
         .where("id", "=", replyTo)
         .where("thread_id", "=", threadId)
         .where("deleted_at", "is", null)
-        .returning("author_id")
         .executeTakeFirst();
       if (!target) {
         throw new AppError(400, "invalid_request", "回复的那一层不在这个主题里，或者已删除");
       }
-      replyToAuthor = target.author_id;
     }
     // Locks the thread row, so concurrent replies take floor numbers one after another.
     const numbered = await trx
       .updateTable("threads")
-      .set((eb) => ({
-        floor_count: eb("floor_count", "+", 1),
-        reply_count: eb("reply_count", "+", 1),
-        last_post_at: sql<Date>`now()`,
-        last_poster_id: viewer.id,
-      }))
+      .set((eb) => ({ floor_count: eb("floor_count", "+", 1) }))
       .where("id", "=", threadId)
-      .returning(["floor_count", "last_post_at"])
+      .returning("floor_count")
       .executeTakeFirstOrThrow();
     const post = await trx
       .insertInto("posts")
@@ -642,26 +669,20 @@ export async function createPost(
         body: markdown,
         html,
         via: via(actor, input.source),
+        status,
       })
       .returning("id")
       .executeTakeFirstOrThrow();
     await linkUploads(trx, post.id, images);
     if (input.source) await linkSource(trx, input.source, threadId, post.id);
-    await trx
-      .updateTable("thread_tags")
-      .set({ last_post_at: numbered.last_post_at })
-      .where("thread_id", "=", threadId)
-      .execute();
-    await countBoard(trx, thread.board_id, { threads: 0, posts: 1 });
-    await countUserPosts(trx, viewer.id, { threads: 0, posts: 1 });
     await addReadFloors(trx, viewer.id, threadId, [[numbered.floor_count, numbered.floor_count]]);
     await indexPost(trx, post.id);
-    await postCreated(trx, post.id);
-    await notifyPost(trx, { id: post.id, threadId, authorId: viewer.id, mentions }, replyToAuthor);
+    if (status === "visible") await publishPost(trx, post.id, { mentions });
+    else await contentPending(trx, post.id);
     await auditBot(trx, actor, "post.create", "post", post.id);
     return post.id;
   });
-  return getPost(id, members);
+  return getPost(id, reader);
 }
 
 // ---- Changing and removing
@@ -697,11 +718,13 @@ export async function editPost(
   postId: number,
   markdown: string,
 ) {
-  const post = await getPost(postId, members);
+  const reader: Reader = { members, id: viewer.id, staff };
+  const post = await getPost(postId, reader);
   if (post.deleted_at !== null) throw new AppError(404, "post_not_found", "回复不存在");
-  const thread = await assertVisible(post.thread_id, members);
+  const thread = await assertVisible(post.thread_id, reader);
   assertMayChange(staff, viewer, post.author_id, thread.locked);
   if (markdown === post.body) return post;
+  const shown = post.status === "visible" && thread.status === "visible";
   const { html, images } = await renderMarkdown(markdown, showImages);
 
   await db.transaction().execute(async (trx) => {
@@ -727,14 +750,14 @@ export async function editPost(
       .execute();
     await linkUploads(trx, postId, images);
     await indexPost(trx, postId);
-    await postUpdated(trx, postId, viewer.id);
+    if (shown) await postUpdated(trx, postId, viewer.id);
     await auditChange(trx, actor, post.author_id, {
       action: "post.edit",
       target_type: "post",
       target_id: postId,
     });
   });
-  return getPost(postId, members);
+  return getPost(postId, reader);
 }
 
 export async function listRevisions(
@@ -743,7 +766,8 @@ export async function listRevisions(
   members: boolean,
   postId: number,
 ) {
-  const post = await getPost(postId, members);
+  const reader: Reader = { members, id: viewer.id, staff };
+  const post = await getPost(postId, reader);
   if (!staff && post.author_id !== viewer.id) throw forbidden("只有作者和版主能看编辑记录");
   const rows = await db
     .selectFrom("post_revisions")
@@ -773,8 +797,9 @@ export async function editThread(
   threadId: number,
   change: ThreadChange,
 ) {
+  const reader: Reader = { members, id: viewer.id, staff };
   const { title, tags, board: slug, ...moderation } = change;
-  const thread = await getThread(threadId, members, viewer.id);
+  const thread = await getThread(threadId, reader);
   assertMayChange(staff, viewer, thread.author_id, thread.locked);
   if (!staff && (slug !== undefined || Object.keys(moderation).length > 0)) {
     throw forbidden("只有版主能移动、置顶、加精和锁定主题");
@@ -841,11 +866,13 @@ export async function editThread(
           )
           .execute();
       }
-      await countTags(trx, removed, -1);
-      await countTags(trx, added, 1);
+      if (thread.status === "visible") {
+        await countTags(trx, removed, -1);
+        await countTags(trx, added, 1);
+      }
     }
 
-    if (board && board.id !== old.board_id) {
+    if (board && board.id !== old.board_id && thread.status === "visible") {
       await countBoard(trx, old.board_id, { threads: -1, posts: -old.reply_count });
       await countBoard(trx, board.id, { threads: 1, posts: old.reply_count });
     }
@@ -862,7 +889,7 @@ export async function editThread(
       data: change,
     });
   });
-  return getThread(threadId, members, viewer.id);
+  return getThread(threadId, reader);
 }
 
 // Authors can take back a thread nobody has replied to; moderators can remove any.
@@ -873,7 +900,8 @@ export async function deleteThread(
   members: boolean,
   threadId: number,
 ) {
-  const thread = await getThread(threadId, members, viewer.id);
+  const reader: Reader = { members, id: viewer.id, staff };
+  const thread = await getThread(threadId, reader);
   assertMayChange(staff, viewer, thread.author_id, thread.locked);
   if (!staff && thread.reply_count > 0) {
     throw forbidden("已经有人回复了，不能删除；需要的话请联系版主");
@@ -884,19 +912,7 @@ export async function deleteThread(
       .set({ deleted_at: sql<Date>`now()` })
       .where("id", "=", threadId)
       .execute();
-    const tags = await trx
-      .selectFrom("thread_tags")
-      .select("tag_id")
-      .where("thread_id", "=", threadId)
-      .execute();
-    await countBoard(trx, thread.board_id, { threads: -1, posts: -thread.reply_count });
-    await countTags(
-      trx,
-      tags.map((t) => t.tag_id),
-      -1,
-    );
-    await countUserPosts(trx, thread.author_id, { threads: -1, posts: 0 });
-    await threadDeleted(trx, threadId, viewer.id);
+    if (thread.status === "visible") await withdrawThread(trx, threadId, viewer.id, null);
     await auditChange(trx, actor, thread.author_id, {
       action: "thread.delete",
       target_type: "thread",
@@ -913,12 +929,13 @@ export async function deletePost(
   members: boolean,
   postId: number,
 ) {
-  const post = await getPost(postId, members);
+  const reader: Reader = { members, id: viewer.id, staff };
+  const post = await getPost(postId, reader);
   if (post.deleted_at !== null) throw new AppError(404, "post_not_found", "回复不存在");
   if (post.floor === 1) {
     throw new AppError(400, "invalid_request", "主楼不能单独删除，可以删除整个主题");
   }
-  const thread = await assertVisible(post.thread_id, members);
+  const thread = await assertVisible(post.thread_id, reader);
   assertMayChange(staff, viewer, post.author_id, thread.locked);
 
   await db.transaction().execute(async (trx) => {
@@ -927,35 +944,327 @@ export async function deletePost(
       .set({ deleted_at: sql<Date>`now()` })
       .where("id", "=", postId)
       .where("deleted_at", "is", null)
-      .returning("reply_to_id")
+      .returning("id")
       .executeTakeFirst();
     if (!deleted) throw new AppError(404, "post_not_found", "回复不存在");
     // A deleted answer is no longer the accepted one.
     await trx
       .updateTable("threads")
-      .set((eb) => ({
-        reply_count: eb("reply_count", "-", 1),
-        solved_post_id: sql<number | null>`nullif(solved_post_id, ${postId}::integer)`,
-      }))
+      .set({ solved_post_id: sql<number | null>`nullif(solved_post_id, ${postId}::integer)` })
       .where("id", "=", post.thread_id)
       .execute();
-    if (deleted.reply_to_id !== null) {
-      await trx
-        .updateTable("posts")
-        .set((eb) => ({ reply_count: eb("reply_count", "-", 1) }))
-        .where("id", "=", deleted.reply_to_id)
-        .execute();
-    }
-    await countBoard(trx, thread.board_id, { threads: 0, posts: -1 });
-    await countUserPosts(trx, post.author_id, { threads: 0, posts: -1 });
     await unindexPost(trx, postId);
-    await postDeleted(trx, postId, viewer.id);
+    if (post.status === "visible") await withdrawPost(trx, postId, viewer.id, null);
     await auditChange(trx, actor, post.author_id, {
       action: "post.delete",
       target_type: "post",
       target_id: postId,
     });
   });
+}
+
+// ---- Review: see design §8.4. In a board reviewed before publishing, what anyone but a
+// moderator posts waits as pending. Content becoming visible is counted, indexed and told of;
+// hidden again, it is taken back out of all of these.
+
+type Status = "visible" | "pending" | "hidden";
+
+function statusFor(reviewMode: string, viewer: Viewer): Status {
+  return reviewMode === "before" && !STAFF.includes(viewer.role) ? "pending" : "visible";
+}
+
+// `announce` is for the first time: the bot plugin and those it concerns hear of it then.
+async function publishThread(
+  trx: Transaction<DB>,
+  threadId: number,
+  announce: { mentions: number[] } | null,
+) {
+  const thread = await trx
+    .selectFrom("threads")
+    .innerJoin("posts", (join) =>
+      join.onRef("posts.thread_id", "=", "threads.id").on("posts.floor", "=", 1),
+    )
+    .select(["threads.board_id", "threads.author_id", "threads.reply_count", "posts.id as opening"])
+    .where("threads.id", "=", threadId)
+    .executeTakeFirstOrThrow();
+  await countThread(trx, threadId, thread, 1);
+  if (announce) {
+    await threadCreated(trx, thread.opening);
+    await notifyThread(trx, {
+      id: threadId,
+      postId: thread.opening,
+      authorId: thread.author_id,
+      mentions: announce.mentions,
+    });
+  }
+}
+
+async function withdrawThread(
+  trx: Transaction<DB>,
+  threadId: number,
+  byId: number,
+  reason: string | null,
+) {
+  const thread = await trx
+    .selectFrom("threads")
+    .select(["board_id", "author_id", "reply_count"])
+    .where("id", "=", threadId)
+    .executeTakeFirstOrThrow();
+  await countThread(trx, threadId, thread, -1);
+  await threadDeleted(trx, threadId, byId, reason);
+}
+
+// A thread in or out of its board's, tags' and author's counts, with the replies in it.
+async function countThread(
+  trx: Transaction<DB>,
+  threadId: number,
+  thread: { board_id: number; author_id: number; reply_count: number },
+  delta: 1 | -1,
+) {
+  const tags = await trx
+    .selectFrom("thread_tags")
+    .select("tag_id")
+    .where("thread_id", "=", threadId)
+    .execute();
+  await countBoard(trx, thread.board_id, { threads: delta, posts: delta * thread.reply_count });
+  await countTags(
+    trx,
+    tags.map((t) => t.tag_id),
+    delta,
+  );
+  await countUserPosts(trx, thread.author_id, { threads: delta, posts: 0 });
+}
+
+// A reply going public: its thread's replies and, the first time, last activity; the board's
+// and author's counts; the floor it answers; the index.
+async function publishPost(
+  trx: Transaction<DB>,
+  postId: number,
+  announce: { mentions: number[] } | null,
+) {
+  const post = await trx
+    .selectFrom("posts")
+    .innerJoin("threads", "threads.id", "posts.thread_id")
+    .select([
+      "posts.thread_id",
+      "posts.author_id",
+      "posts.reply_to_id",
+      "threads.board_id",
+      "threads.status as thread_status",
+    ])
+    .where("posts.id", "=", postId)
+    .executeTakeFirstOrThrow();
+  const replyTo = await countReply(trx, post, 1);
+  if (announce) {
+    const { last_post_at } = await trx
+      .updateTable("threads")
+      .set({ last_post_at: sql<Date>`now()`, last_poster_id: post.author_id })
+      .where("id", "=", post.thread_id)
+      .returning("last_post_at")
+      .executeTakeFirstOrThrow();
+    await trx
+      .updateTable("thread_tags")
+      .set({ last_post_at })
+      .where("thread_id", "=", post.thread_id)
+      .execute();
+  }
+  if (announce) {
+    await postCreated(trx, postId);
+    await notifyPost(
+      trx,
+      {
+        id: postId,
+        threadId: post.thread_id,
+        authorId: post.author_id,
+        mentions: announce.mentions,
+      },
+      replyTo,
+    );
+  }
+}
+
+async function withdrawPost(
+  trx: Transaction<DB>,
+  postId: number,
+  byId: number,
+  reason: string | null,
+) {
+  const post = await trx
+    .selectFrom("posts")
+    .innerJoin("threads", "threads.id", "posts.thread_id")
+    .select([
+      "posts.thread_id",
+      "posts.author_id",
+      "posts.reply_to_id",
+      "threads.board_id",
+      "threads.status as thread_status",
+    ])
+    .where("posts.id", "=", postId)
+    .executeTakeFirstOrThrow();
+  await countReply(trx, post, -1);
+  await postDeleted(trx, postId, byId, reason);
+}
+
+// A reply in or out of the counts: its thread's, its author's, the floor it answers, and its
+// board's while the thread is public; countThread moves the rest. Returns who wrote that floor.
+async function countReply(
+  trx: Transaction<DB>,
+  post: {
+    thread_id: number;
+    author_id: number;
+    reply_to_id: number | null;
+    board_id: number;
+    thread_status: string;
+  },
+  delta: 1 | -1,
+) {
+  await trx
+    .updateTable("threads")
+    .set((eb) => ({ reply_count: eb("reply_count", "+", delta) }))
+    .where("id", "=", post.thread_id)
+    .execute();
+  if (post.thread_status === "visible") {
+    await countBoard(trx, post.board_id, { threads: 0, posts: delta });
+  }
+  await countUserPosts(trx, post.author_id, { threads: 0, posts: delta });
+  if (post.reply_to_id === null) return null;
+  const target = await trx
+    .updateTable("posts")
+    .set((eb) => ({ reply_count: eb("reply_count", "+", delta) }))
+    .where("id", "=", post.reply_to_id)
+    .returning("author_id")
+    .executeTakeFirstOrThrow();
+  return target.author_id;
+}
+
+// Who was @-ed in a post, to tell them when it is published after review.
+async function mentionsOf(body: string) {
+  return (await renderMarkdown(body, showImages)).mentions;
+}
+
+// Replying, accepting an answer and reviewing a reply wait until the thread itself is public.
+function assertPublic(thread: { status: string }) {
+  if (thread.status !== "visible") throw forbidden("主题待审核或已隐藏，暂时不能这样做");
+}
+
+// What the audit log and the author's notice call a change of status.
+function statusAction(from: string, to: "visible" | "hidden") {
+  if (from === "pending") return to === "visible" ? "approve" : "reject";
+  return to === "hidden" ? "hide" : "unhide";
+}
+
+// Moderators approve what waits, hide what is visible and show again what was hidden. The
+// opening post goes with its thread. The author is told, with the reason when it is hidden.
+export async function setThreadStatus(
+  actor: Actor,
+  viewer: Viewer,
+  members: boolean,
+  threadId: number,
+  status: "visible" | "hidden",
+  reason: string | null,
+) {
+  const reader: Reader = { members, id: viewer.id, staff: true };
+  const thread = await getThread(threadId, reader);
+  if (thread.status === status) return;
+  const opening = await db
+    .selectFrom("posts")
+    .select(["id", "body"])
+    .where("thread_id", "=", threadId)
+    .where("floor", "=", 1)
+    .executeTakeFirstOrThrow();
+  const action = statusAction(thread.status, status);
+  const mentions = action === "approve" ? await mentionsOf(opening.body) : [];
+  await db.transaction().execute(async (trx) => {
+    await trx.updateTable("threads").set({ status }).where("id", "=", threadId).execute();
+    await trx.updateTable("posts").set({ status }).where("id", "=", opening.id).execute();
+    if (status === "visible") {
+      await publishThread(trx, threadId, action === "approve" ? { mentions } : null);
+    } else if (action === "hide") {
+      await withdrawThread(trx, threadId, viewer.id, reason);
+    }
+    const post = { id: opening.id, thread_id: threadId, author_id: thread.author_id };
+    await notifyOnPost(trx, "moderation", post, viewer.id, { action, reason: reason ?? "" });
+    await recordAudit(trx, actor, {
+      action: `thread.${action}`,
+      target_type: "thread",
+      target_id: threadId,
+      data: { reason },
+    });
+  });
+}
+
+export async function setPostStatus(
+  actor: Actor,
+  viewer: Viewer,
+  members: boolean,
+  postId: number,
+  status: "visible" | "hidden",
+  reason: string | null,
+) {
+  const reader: Reader = { members, id: viewer.id, staff: true };
+  const post = await getPost(postId, reader);
+  if (post.deleted_at !== null) throw new AppError(404, "post_not_found", "回复不存在");
+  if (post.floor === 1) {
+    throw new AppError(400, "invalid_request", "主楼随主题，请修改主题的状态");
+  }
+  assertPublic(await assertVisible(post.thread_id, reader));
+  if (post.status === status) return;
+  const action = statusAction(post.status, status);
+  const mentions = action === "approve" ? await mentionsOf(post.body) : [];
+  await db.transaction().execute(async (trx) => {
+    await trx.updateTable("posts").set({ status }).where("id", "=", postId).execute();
+    if (status === "visible") {
+      await publishPost(trx, postId, action === "approve" ? { mentions } : null);
+    } else if (action === "hide") {
+      await withdrawPost(trx, postId, viewer.id, reason);
+    }
+    await notifyOnPost(trx, "moderation", post, viewer.id, { action, reason: reason ?? "" });
+    await recordAudit(trx, actor, {
+      action: `post.${action}`,
+      target_type: "post",
+      target_id: postId,
+      data: { reason },
+    });
+  });
+}
+
+const MODERATED_PAGE = 30;
+
+// For moderators: what waits for review, or was hidden, newest first; a thread shows as its
+// opening post. The cursor is the last one's ID.
+export async function listModerated(status: "pending" | "hidden", cursor: number | undefined) {
+  let query = db
+    .selectFrom("posts")
+    .innerJoin("threads", "threads.id", "posts.thread_id")
+    .innerJoin("boards", "boards.id", "threads.board_id")
+    .select([
+      "posts.id",
+      "posts.floor",
+      "posts.html",
+      "posts.author_id",
+      "posts.created_at",
+      "threads.id as thread_id",
+      "threads.title",
+      "boards.slug as board_slug",
+      "boards.name as board_name",
+    ])
+    .where("posts.status", "=", status)
+    .where("posts.deleted_at", "is", null)
+    .where("threads.deleted_at", "is", null)
+    .orderBy("posts.id", "desc")
+    .limit(MODERATED_PAGE);
+  if (cursor !== undefined) query = query.where("posts.id", "<", cursor);
+  const rows = await query.execute();
+  const user = await userBriefs(rows.map((r) => r.author_id));
+  const last = rows.at(-1);
+  return {
+    items: rows.map(({ html, author_id, ...r }) => ({
+      ...r,
+      author: user(author_id),
+      excerpt: excerpt(html, EXCERPT),
+    })),
+    next_cursor: rows.length === MODERATED_PAGE && last ? String(last.id) : null,
+  };
 }
 
 // ---- Accepted answers
@@ -970,8 +1279,10 @@ export async function setSolution(
   threadId: number,
   postId: number | null,
 ) {
-  const thread = await getThread(threadId, members, viewer.id);
+  const reader: Reader = { members, id: viewer.id, staff };
+  const thread = await getThread(threadId, reader);
   assertMayChange(staff, viewer, thread.author_id, thread.locked);
+  assertPublic(thread);
   if (thread.kind !== "question") {
     throw new AppError(400, "invalid_request", "只有问答主题能采纳答案");
   }
@@ -984,10 +1295,11 @@ export async function setSolution(
           .where("id", "=", postId)
           .where("thread_id", "=", threadId)
           .where("floor", ">", 1)
+          .where("status", "=", "visible")
           .where("deleted_at", "is", null)
           .executeTakeFirst();
   if (answer === undefined) {
-    throw new AppError(400, "invalid_request", "只能采纳这个主题里没删的回复");
+    throw new AppError(400, "invalid_request", "只能采纳这个主题里公开的回复");
   }
   await db.transaction().execute(async (trx) => {
     await trx
@@ -1012,7 +1324,7 @@ export async function setSolution(
       data: { post_id: answer?.id ?? null },
     });
   });
-  return getThread(threadId, members, viewer.id);
+  return getThread(threadId, reader);
 }
 
 // ---- Reactions
@@ -1073,7 +1385,8 @@ export async function setBookmark(
   threadId: number,
   bookmarked: boolean,
 ) {
-  await assertVisible(threadId, members);
+  const reader: Reader = { members, id: viewer.id, staff: false };
+  await assertVisible(threadId, reader);
   await db
     .insertInto("thread_users")
     .values({
@@ -1095,7 +1408,8 @@ export async function setNotifyLevel(
   threadId: number,
   level: NotifyLevel,
 ) {
-  await assertVisible(threadId, members);
+  const reader: Reader = { members, id: viewer.id, staff: false };
+  await assertVisible(threadId, reader);
   await db
     .insertInto("thread_users")
     .values({ user_id: viewer.id, thread_id: threadId, notify_level: level })
@@ -1147,7 +1461,9 @@ async function addReadFloors(
 }
 
 // What the browser reports: the floors read since the last report and for how long. Floors past
-// the end of the thread are dropped.
+// the end of the thread are dropped. Floors the reader can't see, waiting for review or hidden,
+// are taken as read once they read past them, or reach the last floor they can see, so the
+// thread doesn't stay unread; they don't count as reading. See design §8.9.
 export async function recordReading(
   viewer: Viewer,
   members: boolean,
@@ -1155,12 +1471,30 @@ export async function recordReading(
   ranges: [number, number][],
   seconds: number,
 ) {
-  const thread = await assertVisible(threadId, members);
+  const reader: Reader = { members, id: viewer.id, staff: false };
+  const thread = await assertVisible(threadId, reader);
   const floors = ranges
     .map(([from, to]): [number, number] => [from, Math.min(to, thread.floor_count)])
     .filter(([from, to]) => from <= to);
+  const reached = Math.max(0, ...floors.map(([, to]) => to));
+  const unseen = new Set(
+    (
+      await db
+        .selectFrom("posts")
+        .select("floor")
+        .where("thread_id", "=", threadId)
+        .where("status", "<>", "visible")
+        .where("author_id", "<>", viewer.id)
+        .execute()
+    ).map((p) => p.floor),
+  );
+  let lastSeen = thread.floor_count;
+  while (unseen.has(lastSeen)) lastSeen--;
+  const upTo = reached >= lastSeen ? thread.floor_count : reached;
+  const skipped = [...unseen].filter((f) => f <= upTo).map((f): [number, number] => [f, f]);
   await db.transaction().execute(async (trx) => {
     const added = await addReadFloors(trx, viewer.id, threadId, floors);
+    if (skipped.length > 0) await addReadFloors(trx, viewer.id, threadId, skipped);
     await countReading(trx, viewer.id, {
       posts: added,
       seconds: Math.min(seconds, MAX_READ_SECONDS),

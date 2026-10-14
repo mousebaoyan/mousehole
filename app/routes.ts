@@ -31,6 +31,7 @@ export default [
   route("logout", "routes/logout.ts"),
   route("admin", "routes/admin/layout.tsx", [
     index("routes/admin/overview.tsx"),
+    route("content", "routes/admin/content.tsx"),
     route("reports", "routes/admin/reports.tsx"),
     route("members", "routes/admin/members.tsx"),
     route("logs", "routes/admin/logs.tsx"),

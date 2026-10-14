@@ -1,6 +1,7 @@
 import {
   ArrowLeft,
   Bot,
+  ClipboardCheck,
   Flag,
   LayoutDashboard,
   LayoutList,
@@ -34,9 +35,9 @@ export async function loader({ context, request }: Route.LoaderArgs) {
   return { admin: false };
 }
 
-// Pages appear here as they are built; pending and hidden content come later.
 const pages = [
   { to: "/admin", label: "概览", icon: LayoutDashboard, end: true, admin: true },
+  { to: "/admin/content", label: "内容", icon: ClipboardCheck, admin: false },
   { to: "/admin/reports", label: "举报", icon: Flag, admin: false },
   { to: "/admin/members", label: "成员", icon: Users, admin: false },
   { to: "/admin/groups", label: "QQ 群", icon: UsersRound, admin: true },

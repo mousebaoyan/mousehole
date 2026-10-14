@@ -4,6 +4,8 @@ import { HTTPException } from "hono/http-exception";
 import {
   assertNotMuted,
   checkPermission,
+  isMember,
+  type Reader,
   type Actor,
   type Bot,
   type Scope,
@@ -78,6 +80,11 @@ export function can(c: Context<AppEnv>, need: Scope) {
     if (error instanceof AppError) return false;
     throw error;
   }
+}
+
+export function readerOf(c: Context<AppEnv>): Reader {
+  const { viewer, bot } = c.var;
+  return { members: isMember(viewer, bot), id: viewer?.id ?? null, staff: can(c, "moderate") };
 }
 
 // For signed-in people only: login devices, bot tokens.

@@ -119,24 +119,48 @@ export async function postUpdated(trx: Transaction<DB>, postId: number, editorId
   });
 }
 
-export async function postDeleted(trx: Transaction<DB>, postId: number, byId: number) {
+// Deleted, or hidden by a moderator with a reason.
+export async function postDeleted(
+  trx: Transaction<DB>,
+  postId: number,
+  byId: number,
+  reason: string | null,
+) {
   const f = await floorOf(trx, postId);
   await recordEvent(trx, "post.deleted", {
     post_id: f.id,
     thread_id: f.thread_id,
     floor: f.floor,
     by: await person(trx, byId),
-    reason: null,
+    reason,
+  });
+}
+
+// Waiting for review in a board reviewed before publishing; a thread's is its opening post. The
+// plugin may review it and set its status.
+export async function contentPending(trx: Transaction<DB>, postId: number) {
+  const f = await floorOf(trx, postId);
+  await recordEvent(trx, "content.pending", {
+    thread: { id: f.thread_id, title: f.title },
+    board: { slug: f.board_slug, name: f.board_name },
+    post: { id: f.id, floor: f.floor, body: f.body },
+    author: f.author,
+    url: link(f.thread_id, f.floor),
   });
 }
 
 // Told of as the deletion of its opening post.
-export async function threadDeleted(trx: Transaction<DB>, threadId: number, byId: number) {
+export async function threadDeleted(
+  trx: Transaction<DB>,
+  threadId: number,
+  byId: number,
+  reason: string | null,
+) {
   const opening = await trx
     .selectFrom("posts")
     .select("id")
     .where("thread_id", "=", threadId)
     .where("floor", "=", 1)
     .executeTakeFirstOrThrow();
-  await postDeleted(trx, opening.id, byId);
+  await postDeleted(trx, opening.id, byId, reason);
 }

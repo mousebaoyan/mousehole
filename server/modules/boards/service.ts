@@ -15,6 +15,7 @@ const BOARD = [
   "visibility",
   "post_role",
   "default_kind",
+  "review_mode",
   "thread_count",
 ] as const;
 
@@ -22,7 +23,7 @@ const TAG = ["id", "name", "kind", "thread_count"] as const;
 
 export type BoardFields = Pick<
   Updateable<Boards>,
-  "name" | "description" | "color" | "visibility" | "post_role" | "default_kind"
+  "name" | "description" | "color" | "visibility" | "post_role" | "default_kind" | "review_mode"
 >;
 
 export type TagFields = Pick<Updateable<Tags>, "name" | "kind">;

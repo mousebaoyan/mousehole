@@ -516,6 +516,54 @@ async function demo() {
     `${events.length} 个事件`,
   );
 
+  // The plugin reviewing: while the board is reviewed before publishing, the member's thread
+  // waits until the bot, having heard of it, lets it through; a reply it finds to be an ad is
+  // hidden with the reason.
+  await call(`/boards/${slug}`, { method: "PATCH", body: { review_mode: "before" } });
+  const pending = await call("/threads", {
+    method: "POST",
+    headers: asMember,
+    body: { board: slug, title: "先审后发的主题", content: { markdown: "等 bot 审核" } },
+  });
+  await call(`/boards/${slug}`, { method: "PATCH", body: { review_mode: "after" } });
+  const pendingId = Number(field(pending.data, "id"));
+  const approved = await call(`/threads/${pendingId}`, {
+    method: "PATCH",
+    body: { status: "visible" },
+  });
+  const replyId = Number(field(replied.data, "id"));
+  const ad = await call(`/posts/${replyId}`, {
+    method: "PATCH",
+    body: { status: "hidden", reason: "广告" },
+  });
+  const reviewed = Fields.array().parse(
+    field(
+      (
+        await call(
+          `/bot/events/batch?after=${since}&types=content.pending,thread.created,post.deleted&limit=500`,
+        )
+      ).data,
+      "items",
+    ),
+  );
+  const told = (type: string, data: (d: unknown) => boolean) =>
+    reviewed.some((e) => e.type === type && data(e.data));
+  const ofPending = (d: unknown) => field(field(d, "thread"), "id") === pendingId;
+  check(
+    "先审后发：主题等待审核，bot 收到 content.pending 后通过，这时才有 thread.created",
+    field(pending.data, "status") === "pending" &&
+      field(approved.data, "status") === "visible" &&
+      told("content.pending", ofPending) &&
+      told("thread.created", ofPending),
+    `主题 ${pendingId}`,
+  );
+  check(
+    "bot 隐藏一层回复，事件流收到带理由的 post.deleted",
+    ad.status === 200 &&
+      told("post.deleted", (d) => field(d, "post_id") === replyId && field(d, "reason") === "广告"),
+    `HTTP ${ad.status}`,
+  );
+
   const hidden = await call(`/threads/${threadId}`, { token: null });
   check("访客打不开仅成员版块里的主题", hidden.status === 404, `HTTP ${hidden.status}`);
   const removed = await call(`/boards/${slug}`, { method: "DELETE" });

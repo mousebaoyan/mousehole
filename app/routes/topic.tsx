@@ -69,6 +69,14 @@ export async function action({ params, request, context }: Route.ActionArgs) {
     const value = form.get(name);
     return typeof value === "string" ? value : "";
   };
+  // A moderator's review, from the thread's or a floor's menu.
+  const review = () =>
+    form.has("status")
+      ? {
+          status: text("status") === "hidden" ? ("hidden" as const) : ("visible" as const),
+          reason: text("reason") || undefined,
+        }
+      : {};
   const post = { id: text("post_id") };
   const floor = Number(text("floor"));
   const thread = { id: params.id };
@@ -84,6 +92,7 @@ export async function action({ params, request, context }: Route.ActionArgs) {
         pinned: form.has("pinned") ? Number(text("pinned")) : undefined,
         featured: form.has("featured") ? text("featured") === "true" : undefined,
         locked: form.has("locked") ? text("locked") === "true" : undefined,
+        ...review(),
       },
     });
     if (res.ok) return { ok: true as const, floor };
@@ -155,7 +164,10 @@ export async function action({ params, request, context }: Route.ActionArgs) {
       ? await api.posts[":id"].$delete({ param: post })
       : await api.posts[":id"].$patch({
           param: post,
-          json: { content: { markdown: text("markdown") } },
+          json:
+            text("intent") === "review-post"
+              ? review()
+              : { content: { markdown: text("markdown") } },
         });
   if (res.ok) return { ok: true as const, floor };
   return { ok: false as const, message: (await res.json()).error.message };
@@ -270,6 +282,8 @@ function TopicPage({
   }
 
   const target = { id: thread.id, title: thread.title };
+  // Replies, and answers to accept, wait until the thread itself is public.
+  const published = thread.status === "visible";
   const floors: Floors = {
     posts,
     total: thread.floor_count,
@@ -323,7 +337,10 @@ function TopicPage({
                 accept:
                   thread.kind === "question" &&
                   post.floor > 1 &&
+                  published &&
                   (staff || (me?.id === thread.author.id && !thread.locked)),
+                // The opening post is reviewed with its thread, above.
+                review: staff && published && post.floor > 1,
               }}
               onJump={jump}
               onEdit={(markdown) =>
@@ -351,11 +368,20 @@ function TopicPage({
                   { method: "post", defaultShouldRevalidate: false },
                 );
               }}
-              onReply={() =>
-                openComposer({
-                  thread: target,
-                  replyTo: { id: post.id, floor: post.floor, name: post.author.display_name },
-                })
+              onReview={(review) =>
+                void changes.submit(
+                  { intent: "review-post", post_id: post.id, floor: post.floor, ...review },
+                  { method: "post", defaultShouldRevalidate: false },
+                )
+              }
+              onReply={
+                published
+                  ? () =>
+                      openComposer({
+                        thread: target,
+                        replyTo: { id: post.id, floor: post.floor, name: post.author.display_name },
+                      })
+                  : undefined
               }
             />
           ))}
@@ -373,9 +399,11 @@ function TopicPage({
 
         {/* Lined up with the avatars above. */}
         <div className="mt-4 flex flex-wrap items-center gap-2 border-t px-3 pt-5 sm:px-4">
-          <Button size="lg" onClick={() => openComposer({ thread: target, replyTo: null })}>
-            <Reply /> 回复
-          </Button>
+          {published && (
+            <Button size="lg" onClick={() => openComposer({ thread: target, replyTo: null })}>
+              <Reply /> 回复
+            </Button>
+          )}
           <BookmarkButton threadId={thread.id} initial={thread.bookmarked ?? false} />
           <NotifyButton threadId={thread.id} initial={thread.notify_level} />
           <Button size="icon-lg" variant="ghost" aria-label="复制链接" title="复制链接">

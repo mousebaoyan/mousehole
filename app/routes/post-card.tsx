@@ -29,13 +29,14 @@ import { stamp } from "~/time";
 import { BoostButton, BoostChip, useBoosts } from "./boosts.tsx";
 import { LikeButton, ReactionSummary, useReaction } from "./reactions.tsx";
 import { ReportDialog, type ReportTarget } from "./report-dialog.tsx";
+import { ReviewItems, type Review } from "./review-items.tsx";
 
 // `parent` is the floor this one replies to when it is on the page; otherwise it is fetched when
 // the reader opens it. The floors that reply to this one are fetched the same way.
 // `manage` holds what the reader may do to this floor besides replying: change it (edit or
 // delete), read its edit history, delete the whole thread from its opening post, remove other
-// people's boosts, accept it as the answer. `unread` is left out for guests, whose reading isn't
-// tracked.
+// people's boosts, accept it as the answer, review it. `unread` is left out for guests, whose
+// reading isn't tracked; `onReply` for a thread that isn't public yet.
 export function PostCard({
   post,
   threadId,
@@ -50,6 +51,7 @@ export function PostCard({
   onEdit,
   onAccept,
   onDelete,
+  onReview,
 }: {
   post: PostItem;
   threadId: number;
@@ -64,12 +66,14 @@ export function PostCard({
     deleteThread: boolean;
     moderate: boolean;
     accept: boolean;
+    review: boolean;
   };
-  onReply: () => void;
+  onReply: (() => void) | undefined;
   onJump: (floor: number) => void;
   onEdit: (markdown: string) => void;
   onAccept: () => void;
   onDelete: () => void;
+  onReview: (review: Review) => void;
 }) {
   const [parentOpen, setParentOpen] = useState(false);
   const [repliesOpen, setRepliesOpen] = useState(false);
@@ -133,6 +137,12 @@ export function PostCard({
             {post.author.display_name}
           </UserCard>
           <UserBadges user={post.author} op={op} />
+          {/* The opening post's state is the thread's, shown above it. */}
+          {post.floor > 1 && post.status !== "visible" && (
+            <span className="rounded bg-warning/10 px-1.5 py-px text-2xs font-medium text-warning">
+              {post.status === "pending" ? "待审核" : "已隐藏"}
+            </span>
+          )}
           <span className="ml-auto flex items-center gap-2 text-xs whitespace-nowrap text-muted-foreground">
             {post.via === "qq" && (
               <MessagesSquare className="size-3.5" aria-label="来自群聊">
@@ -288,6 +298,9 @@ export function PostCard({
                       <CircleCheck /> {accepted ? "取消采纳" : "采纳为答案"}
                     </button>
                   )}
+                  {manage.review && (
+                    <ReviewItems status={post.status} close={close} onReview={onReview} />
+                  )}
                   {(post.floor === 1 ? manage.deleteThread : manage.change) && (
                     <button
                       type="button"
@@ -313,9 +326,11 @@ export function PostCard({
                 </>
               )}
             </Dropdown>
-            <Button variant="ghost" size="sm" onClick={onReply}>
-              <Reply /> 回复
-            </Button>
+            {onReply && (
+              <Button variant="ghost" size="sm" onClick={onReply}>
+                <Reply /> 回复
+              </Button>
+            )}
           </div>
         </div>
 
