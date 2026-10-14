@@ -3,7 +3,6 @@ import type { Kysely, NotNull, Transaction } from "kysely";
 import type { DB } from "../../../db/types.ts";
 import {
   restrictionOf,
-  STAFF,
   type Actor,
   type Bot,
   type Scope,
@@ -19,7 +18,7 @@ import { hashToken, newToken } from "../../platform/tokens.ts";
 import { recordAudit } from "../audit/service.ts";
 import { deviceSummary } from "./device.ts";
 import { ensureBotUser, findMember, recordLogin, recordSeen } from "../users/service.ts";
-import { SITE_NAME } from "../../platform/site.ts";
+import { SITE_NAME, STAFF } from "../../platform/site.ts";
 
 export const SESSION_TTL_MS = 90 * 24 * 60 * 60 * 1000;
 const LINK_TTL_MS = 10 * 60 * 1000;
@@ -298,22 +297,26 @@ export async function createBotToken(
 }
 
 export async function listBotTokens() {
-  return db
-    .selectFrom("api_tokens")
-    .innerJoin("users", "users.id", "api_tokens.bot_user_id")
-    .select([
-      "api_tokens.id",
-      "api_tokens.name",
-      "api_tokens.scopes",
-      "api_tokens.created_at",
-      "api_tokens.last_used_at",
-      "api_tokens.revoked_at",
-      "users.id as bot_user_id",
-      "users.qq as bot_qq",
-      "users.display_name as bot_name",
-    ])
-    .orderBy("api_tokens.id", "desc")
-    .execute();
+  return (
+    db
+      .selectFrom("api_tokens")
+      .innerJoin("users", "users.id", "api_tokens.bot_user_id")
+      .select([
+        "api_tokens.id",
+        "api_tokens.name",
+        "api_tokens.scopes",
+        "api_tokens.created_at",
+        "api_tokens.last_used_at",
+        "api_tokens.revoked_at",
+        "users.id as bot_user_id",
+        "users.qq as bot_qq",
+        "users.display_name as bot_name",
+      ])
+      // A bot's account always has its QQ number; only the owner's has none.
+      .$narrowType<{ bot_qq: NotNull }>()
+      .orderBy("api_tokens.id", "desc")
+      .execute()
+  );
 }
 
 export async function revokeBotToken(actor: Actor, id: number) {

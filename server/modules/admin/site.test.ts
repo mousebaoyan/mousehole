@@ -1,21 +1,28 @@
 import { testClient } from "hono/testing";
 import { beforeAll, describe, expect, test } from "vitest";
-import { as, createUser, login } from "../../../test/fixtures.ts";
+import { as, createUser, login, ownerSession } from "../../../test/fixtures.ts";
 import { app } from "../../app.ts";
 
 const api = testClient(app).api.v1;
 
 let admin = as("");
+let owner = as("");
 
 beforeAll(async () => {
   admin = as(await login((await createUser("admin")).id));
+  owner = await ownerSession();
 });
 
 function save(site: { banner?: string; qq_public?: boolean; review_mode?: "after" | "before" }) {
-  return api.admin.settings.$patch({ json: { site } }, admin);
+  return api.admin.settings.$patch({ json: { site } }, owner);
 }
 
 describe("站点设置", () => {
+  test("只有站长能改，管理员不行", async () => {
+    const res = await api.admin.settings.$patch({ json: { site: { banner: "" } } }, admin);
+    expect(res.status).toBe(403);
+  });
+
   test("公告横幅改了立即生效，谁都能读到", async () => {
     expect((await save({ banner: "  周六晚上停机维护一小时  " })).status).toBe(204);
     const res = await api.site.$get();

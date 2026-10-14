@@ -17,7 +17,7 @@ const SCOPES = [
   { scope: "read", hint: "读取全部内容，包括仅成员版块和 QQ 号" },
   { scope: "act", hint: "以群友身份发帖、回复、点赞等" },
   { scope: "moderate", hint: "版主操作：审核、置顶、锁定、禁言等" },
-  { scope: "admin", hint: "管理员操作：封禁、设置角色、站点设置等" },
+  { scope: "admin", hint: "管理员操作：封禁、设置角色、管理版块等" },
   { scope: "sync", hint: "推送 QQ 群资料和成员名单" },
   { scope: "auth", hint: "确认登录口令、签发登录链接" },
   { scope: "events", hint: "订阅事件流" },

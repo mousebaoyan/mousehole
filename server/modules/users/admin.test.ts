@@ -1,6 +1,6 @@
 import { testClient } from "hono/testing";
 import { beforeAll, describe, expect, test } from "vitest";
-import { as, createUser, login } from "../../../test/fixtures.ts";
+import { as, createUser, login, ownerSession } from "../../../test/fixtures.ts";
 import { app } from "../../app.ts";
 import { db } from "../../platform/db.ts";
 
@@ -54,7 +54,10 @@ describe("后台的成员页", () => {
       .executeTakeFirstOrThrow();
     expect(row).toEqual({ role: "moderator", role_locked: true });
 
-    const logs = await api.admin["audit-logs"].$get({ query: { action: "member.role" } }, admin);
+    const logs = await api.admin["audit-logs"].$get(
+      { query: { action: "member.role" } },
+      await ownerSession(),
+    );
     if (!logs.ok) throw new Error(`status ${logs.status}`);
     expect((await logs.json()).items[0]).toMatchObject({
       target_id: user.id,

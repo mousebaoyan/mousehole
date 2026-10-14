@@ -73,8 +73,8 @@ export async function action({ request, context }: Route.ActionArgs) {
 
 export default function Members({ loaderData, actionData }: Route.ComponentProps) {
   const { q, status, level, items, next_cursor } = loaderData;
-  // From the admin layout: whether this is an admin, who may set roles.
-  const admin = useRouteLoaderData<typeof adminLoader>("routes/admin/layout")?.admin === true;
+  // From the admin layout: whether this is an admin or the owner, who may set roles.
+  const admin = useRouteLoaderData<typeof adminLoader>("routes/admin/layout")?.rank !== "moderator";
   return (
     <>
       <h1 className="text-xl font-semibold">成员</h1>
@@ -120,8 +120,8 @@ export default function Members({ loaderData, actionData }: Route.ComponentProps
               <span className="min-w-0">
                 <span className="block truncate font-medium">{m.display_name}</span>
                 <span className="text-meta text-muted-foreground">
-                  {m.qq} · 最近 <Time value={m.last_seen_at} never="没来过" /> · {m.thread_count}{" "}
-                  帖子 {m.post_count} 回复
+                  {m.qq ?? "站长账号"} · 最近 <Time value={m.last_seen_at} never="没来过" /> ·{" "}
+                  {m.thread_count} 帖子 {m.post_count} 回复
                 </span>
               </span>
             </Link>
@@ -130,7 +130,7 @@ export default function Members({ loaderData, actionData }: Route.ComponentProps
               {!m.activated && <Badge>未激活</Badge>}
               {m.restriction && <Badge>{restrictionText(m.restriction)}</Badge>}
             </span>
-            {admin && m.role !== "bot" ? (
+            {admin && m.role !== "bot" && m.role !== "owner" ? (
               <Form method="post" className="flex items-center gap-1">
                 <input type="hidden" name="intent" value="level" />
                 <input type="hidden" name="id" value={m.id} />
@@ -150,7 +150,7 @@ export default function Members({ loaderData, actionData }: Route.ComponentProps
             ) : (
               <LevelBadge level={m.level} />
             )}
-            {admin && m.role !== "bot" ? (
+            {admin && m.role !== "bot" && m.role !== "owner" ? (
               <Form method="post" className="flex items-center gap-1">
                 <input type="hidden" name="intent" value="role" />
                 <input type="hidden" name="id" value={m.id} />
@@ -171,7 +171,11 @@ export default function Members({ loaderData, actionData }: Route.ComponentProps
               </Form>
             ) : (
               <Badge>
-                {m.role === "bot" ? "bot" : ROLES.find((r) => r.value === m.role)?.label}
+                {m.role === "bot"
+                  ? "bot"
+                  : m.role === "owner"
+                    ? "站长"
+                    : ROLES.find((r) => r.value === m.role)?.label}
               </Badge>
             )}
           </li>

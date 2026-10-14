@@ -8,6 +8,7 @@ import { Logo } from "~/components/logo";
 import { ThemeToggle } from "~/components/theme-toggle";
 import { UserAvatar } from "~/components/user-avatar";
 import { buttonVariants } from "~/components/ui/button";
+import { STAFF } from "../../server/platform/site.ts";
 
 type Me = { id: number; display_name: string; avatar_url: string | null; role: string };
 
@@ -95,7 +96,7 @@ export function SiteHeader({ me, unread: loaded }: { me: Me | null; unread: numb
           <ThemeToggle />
           {me ? (
             <>
-              {(me.role === "admin" || me.role === "moderator") && (
+              {STAFF.includes(me.role) && (
                 <Link
                   to="/admin"
                   aria-label="管理后台"
@@ -144,7 +145,7 @@ export function SiteHeader({ me, unread: loaded }: { me: Me | null; unread: numb
                     <Link to="/settings" className={menuItem}>
                       <Settings /> 设置
                     </Link>
-                    {(me.role === "admin" || me.role === "moderator") && (
+                    {STAFF.includes(me.role) && (
                       <Link to="/admin" className={menuItem}>
                         <Wrench /> 管理后台
                       </Link>

@@ -20,6 +20,19 @@ export async function createUser(role: "user" | "moderator" | "admin" = "user", 
   return { id, qq };
 }
 
+// The one site owner, made once and shared by the tests that set the system up.
+export async function ownerSession() {
+  const { id } = await db
+    .insertInto("users")
+    .values({ qq: null, display_name: "站长", role: "owner", role_locked: true })
+    .onConflict((oc) =>
+      oc.column("role").where("role", "=", "owner").doUpdateSet({ role: "owner" }),
+    )
+    .returning("id")
+    .executeTakeFirstOrThrow();
+  return as(await login(id));
+}
+
 export function sessionCookie(res: Response) {
   return res.headers
     .getSetCookie()

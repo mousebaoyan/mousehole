@@ -1,5 +1,5 @@
 import { EventEmitter } from "node:events";
-import { sql, type Kysely, type Transaction } from "kysely";
+import { sql, type Kysely, type NotNull, type Transaction } from "kysely";
 import type { DB } from "../../../db/types.ts";
 import { db } from "../../platform/db.ts";
 import { env } from "../../platform/env.ts";
@@ -111,7 +111,7 @@ function mailbox(qq: number) {
 const MAIL_FOOTER = `\n\n——\n不想收到这类邮件，可以在${SITE_NAME}的设置里关掉：${env.PUBLIC_URL}/settings`;
 
 // Written in the transaction that caused it. Nobody hears of their own doing, nor anyone who left
-// the groups or muted the thread. Each type shows on the site and goes by email, as each person
+// the groups or muted the thread, nor the owner, who has no QQ and is in no group. Each type shows on the site and goes by email, as each person
 // set it.
 async function notify(trx: Transaction<DB>, userIds: number[], notice: Notice) {
   const ids = [...new Set(userIds)].filter((id) => id !== notice.actorId);
@@ -127,6 +127,8 @@ async function notify(trx: Transaction<DB>, userIds: number[], notice: Notice) {
     .where("users.id", "in", ids)
     .where("users.member_status", "=", "member")
     .where(sql<boolean>`thread_users.notify_level IS DISTINCT FROM 'muted'`)
+    .where("users.qq", "is not", null)
+    .$narrowType<{ qq: NotNull }>()
     .execute();
   const onSite = recipients.filter((r) => r.site);
   if (onSite.length > 0) {
@@ -192,14 +194,18 @@ async function remindByEmail(trx: Transaction<DB>, people: { qq: number }[], not
   );
 }
 
-// Going up a level, automatically or from an admin (design §6.6); going down is not told.
+// Going up a level, automatically or from an admin (design §6.6); going down is not told, nor
+// the owner, who has no QQ.
 export async function notifyLevel(trx: Transaction<DB>, userId: number, level: number) {
   const type = "level";
   const person = await trx
     .selectFrom("users")
     .select(["qq", ...switches(type)])
     .where("id", "=", userId)
-    .executeTakeFirstOrThrow();
+    .where("qq", "is not", null)
+    .$narrowType<{ qq: NotNull }>()
+    .executeTakeFirst();
+  if (!person) return;
   if (person.site) {
     await trx
       .insertInto("notifications")
@@ -238,6 +244,8 @@ export async function notifyLottery(
       told.map((t) => t.userId),
     )
     .where("member_status", "=", "member")
+    .where("qq", "is not", null)
+    .$narrowType<{ qq: NotNull }>()
     .execute();
   const person = new Map(people.map((p) => [p.id, p]));
   const onSite = told.filter((t) => person.get(t.userId)?.site);

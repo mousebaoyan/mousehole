@@ -415,7 +415,7 @@ export interface Users {
   notify_prefs: Generated<Json>;
   post_count: Generated<number>;
   posts_read: Generated<number>;
-  qq: number;
+  qq: number | null;
   qq_bio: Generated<string>;
   qq_nickname: Generated<string>;
   read_seconds: Generated<number>;

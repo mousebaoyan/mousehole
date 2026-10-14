@@ -19,9 +19,10 @@
 
 表：`users`、`qq_groups`、`group_members`。
 
-- **成员资格**：在任意一个启用的群里（`left_at IS NULL`）为 `member`，否则为 `frozen`。这个人的群成员记录变化、或者群的启用状态变化时重算。没有任何群成员记录的账号（首次部署命令创建的管理员、创建 token 时新建的 bot 账号）保持创建时的状态。重算只写有变化的账号；冻结、恢复和角色变化写入审计日志。
+- **成员资格**：在任意一个启用的群里（`left_at IS NULL`）为 `member`，否则为 `frozen`。这个人的群成员记录变化、或者群的启用状态变化时重算。没有任何群成员记录的账号（站长、本地用首次部署命令建的管理员、创建 token 时新建的 bot 账号）保持创建时的状态。重算只写有变化的账号；冻结、恢复和角色变化写入审计日志。
 - **同步时间**：`qq_groups` 的 `full_synced_at`、`delta_synced_at`、`info_synced_at` 记的是最近一次生效推送的 `observed_at`（插件读到数据的时间），不是收到的时间。早于 `full_synced_at` 的推送一律忽略：那次全量已经反映了之前的变化，所以没变化的成员行不用每次改写 `observed_at`。同一个群的推送在事务里锁住群这一行，依次处理。
 - **角色**：未锁定角色的用户，取所在的启用群里最高的群角色，群主对应 `admin`，群管理员对应 `moderator`；冻结后变回 `user`。机器人（`is_robot`）同步为 `bot`。
+- **站长**（[总体设计 §6.4](design.md#64-角色与权限)）：`role` 为 `owner` 的账号，最多一个（部分唯一索引 `users_owner`），由首次部署命令创建。只有它的 `qq` 为空（`CHECK ((qq IS NULL) = (role = 'owner'))`），所以不收通知和邮件、没有 QQ 头像，也不自动升降级；按 QQ 号或用户 ID 找成员时排除它。
 - **显示名**：取主群的群名片；不在主群时，取其他启用群里最早加入的那个，入群时间不知道的排在最后。
 - **个性签名**：`custom_bio` 是自己写的，为 `NULL` 时显示 bot 推送的 `qq_bio`。
 - **等级**（[总体设计 §6.6](design.md#66-等级)）：`users.level`，`level_locked` 是管理员定下的、不再自动升降，`level_since` 是升到现在这一级的时间，L4 头两周不降级看它。规则是 `levels/rules.ts` 里的纯函数和常量；累计的数直接用 `users` 上的计数（`posts_read`、`read_seconds`、`days_visited`、`like_received`），进入的帖子数和回复过的帖子数现查（`thread_users`、`posts_author`）。最近 30 天的访问和阅读来自 `user_days`：每人每天（北京时间）一行，在会话续期、阅读上报和发帖、回复时写入，当天第一次写入时 `days_visited` 加一；超过 35 天的每天清理。最近 30 天的获赞现查表情回应。禁言封禁看 `restricted_through`：最近一次禁言或封禁到期或解除的时间（没有期限的，在解除前记的是开始的时间），过期后也留着。每小时取 `user_days` 里今天和昨天有记录的人检查升级，走 `user_days_day`。

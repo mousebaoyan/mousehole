@@ -1,7 +1,7 @@
 import { testClient } from "hono/testing";
 import { sql } from "kysely";
 import { beforeAll, describe, expect, test } from "vitest";
-import { as, createUser, login, nextQq, sessionCookie } from "../../../test/fixtures.ts";
+import { as, createUser, nextQq, ownerSession, sessionCookie } from "../../../test/fixtures.ts";
 import { app } from "../../app.ts";
 import { db } from "../../platform/db.ts";
 import { env } from "../../platform/env.ts";
@@ -103,11 +103,11 @@ describe("口令登录", () => {
   });
 
   test("口令登录关闭后不能申请", async () => {
-    const admin = as(await login((await createUser("admin")).id));
-    await api.admin.settings.$patch({ json: { login: { code: false } } }, admin);
+    const owner = await ownerSession();
+    await api.admin.settings.$patch({ json: { login: { code: false } } }, owner);
     const res = await api.auth.code.$post({}, { headers: { origin: env.PUBLIC_URL } });
     expect(await res.json()).toMatchObject({ error: { code: "login_method_disabled" } });
-    await api.admin.settings.$patch({ json: { login: { code: true } } }, admin);
+    await api.admin.settings.$patch({ json: { login: { code: true } } }, owner);
   });
 });
 

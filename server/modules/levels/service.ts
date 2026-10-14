@@ -103,13 +103,13 @@ function standing(row: Row): { totals: Totals; recent: Recent } {
   };
 }
 
-// Whose levels change by themselves: members, not bots, and not fixed by an admin. Frozen
-// accounts keep theirs for when they come back.
+// Whose levels change by themselves: members, not bots or the owner, and not fixed by an admin.
+// Frozen accounts keep theirs for when they come back.
 function automatic() {
   return selectStanding()
     .where("users.level_locked", "=", false)
     .where("users.member_status", "=", "member")
-    .where("users.role", "<>", "bot");
+    .where("users.role", "not in", ["bot", "owner"]);
 }
 
 // Hourly: whoever was active today or yesterday and has earned more goes up, several levels at

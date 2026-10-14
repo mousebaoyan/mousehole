@@ -2,7 +2,8 @@ import { readFile } from "node:fs/promises";
 import { createRoute, z } from "@hono/zod-openapi";
 import type { Context } from "hono";
 import { AppError } from "../../platform/errors.ts";
-import { isMember, restrictionOf, STAFF, type Restriction } from "../../platform/access.ts";
+import { isMember, restrictionOf, type Restriction } from "../../platform/access.ts";
+import { STAFF } from "../../platform/site.ts";
 import {
   actorOf,
   authorize,
@@ -43,7 +44,7 @@ const MeSchema = z
     avatar_url: z.string().nullable(),
     role: z.string(),
     level: z.number(),
-    qq: z.number(),
+    qq: z.number().nullable().openapi({ description: "站长账号没有 QQ 号，为 null" }),
     member_status: z.string(),
     activated: z.boolean(),
   })
@@ -55,9 +56,9 @@ const UserSchema = UserBriefSchema.extend({
   bio: z.string(),
   joined_at: z.number().nullable().openapi({ description: "加入主群的时间" }),
   last_sent_at: z.number().nullable().openapi({ description: "最近一次在主群发言，精确到小时" }),
-  qq: z.number().optional().openapi({
+  qq: z.number().nullable().optional().openapi({
     description:
-      "qq 只给成员和 bot，站点设置为公开时也给访客；member_status、activated 只给成员和 bot",
+      "qq 只给成员和 bot，站点设置为公开时也给访客，站长账号为 null；member_status、activated 只给成员和 bot",
   }),
   restriction: z
     .object({ type: z.string(), until: z.number().nullable() })
@@ -97,7 +98,7 @@ const ExportSchema = z.object({
   exported_at: z.number(),
   user: z.object({
     id: z.number(),
-    qq: z.number(),
+    qq: z.number().nullable(),
     display_name: z.string(),
     bio: z.string(),
   }),
@@ -508,7 +509,7 @@ export const usersRoutes = createRouter()
         query: z.object({
           q: z.string().trim().min(1).max(30).optional(),
           status: z.enum(["member", "frozen"]).optional(),
-          role: z.enum(["user", "moderator", "admin", "bot"]).optional(),
+          role: z.enum(["user", "moderator", "admin", "owner", "bot"]).optional(),
           level: z.coerce.number().int().min(0).max(5).optional(),
           restricted: z
             .enum(["true", "false"])
@@ -528,7 +529,7 @@ export const usersRoutes = createRouter()
                     id: z.number(),
                     display_name: z.string(),
                     avatar_url: z.string().nullable(),
-                    qq: z.number(),
+                    qq: z.number().nullable(),
                     role: z.string(),
                     role_locked: z.boolean(),
                     level: z.number(),

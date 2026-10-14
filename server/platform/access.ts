@@ -1,4 +1,5 @@
 import { AppError } from "./errors.ts";
+import { STAFF } from "./site.ts";
 
 // A mute or ban in force; see design §6.4. One whose time is up no longer counts.
 export type Restriction = { type: "mute" | "ban"; until: Date | null } | null;
@@ -45,11 +46,9 @@ export type Actor = {
 export const SCOPES = ["read", "act", "moderate", "admin", "sync", "auth", "events"] as const;
 export type Scope = (typeof SCOPES)[number];
 
-export const STAFF = ["moderator", "admin"];
-
 const WRITES = new Set<Scope>(["act", "moderate", "admin"]);
 const BOT_ONLY = new Set<Scope>(["sync", "auth", "events"]);
-const ROLES: Partial<Record<Scope, string[]>> = { moderate: STAFF, admin: ["admin"] };
+const ROLES: Partial<Record<Scope, string[]>> = { moderate: STAFF, admin: ["admin", "owner"] };
 
 export function checkPermission(viewer: Viewer | null, bot: Bot | null, need: Scope) {
   if (!viewer) throw new AppError(401, "unauthorized", "请先登录");
@@ -70,6 +69,10 @@ export function checkPermission(viewer: Viewer | null, bot: Bot | null, need: Sc
       throw new AppError(403, "proxy_disabled", "这位成员关闭了代发，只有本人能让 bot 操作");
     }
   }
+  // Not anyone in the groups, so it neither writes nor joins in.
+  if (need === "act" && viewer.role === "owner") {
+    throw new AppError(403, "forbidden", "站长账号只用来管理，不能发帖、回复和互动");
+  }
 
   const roles = ROLES[need];
   if (roles) {
@@ -81,6 +84,13 @@ export function checkPermission(viewer: Viewer | null, bot: Bot | null, need: Sc
       throw new AppError(403, "operator_not_allowed", "操作人没有这个权限");
     }
   }
+  return viewer;
+}
+
+// The system's settings, mail, QQ groups, bot tokens and logs are the owner's alone, on the web.
+export function checkOwner(viewer: Viewer | null, bot: Bot | null) {
+  if (!viewer) throw new AppError(401, "unauthorized", "请先登录");
+  if (bot || viewer.role !== "owner") throw new AppError(403, "forbidden", "只有站长能操作");
   return viewer;
 }
 

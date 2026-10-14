@@ -9,3 +9,6 @@ export const LEVEL_NAMES = ["鼠鼠", "小鼠", "学鼠", "硕鼠", "博鼠", "�
 export function levelName(level: number) {
   return `L${level} ${LEVEL_NAMES[level]}`;
 }
+
+// Moderators and up (design §6.4). The owner runs the system and may do whatever admins do.
+export const STAFF = ["moderator", "admin", "owner"];

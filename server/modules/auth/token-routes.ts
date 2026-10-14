@@ -1,13 +1,6 @@
 import { createRoute, z } from "@hono/zod-openapi";
 import { SCOPES } from "../../platform/access.ts";
-import {
-  actorOf,
-  authorize,
-  createRouter,
-  errorResponse,
-  requireWeb,
-  unix,
-} from "../../platform/http.ts";
+import { actorOf, authorizeOwner, createRouter, errorResponse, unix } from "../../platform/http.ts";
 import { createBotToken, listBotTokens, revokeBotToken } from "./service.ts";
 
 const BotTokenSchema = z
@@ -37,12 +30,11 @@ export const tokenRoutes = createRouter()
           },
         },
         401: errorResponse("没有登录"),
-        403: errorResponse("不是管理员，或者用 bot token 调用"),
+        403: errorResponse("不是站长，或者用 bot token 调用"),
       },
     }),
     async (c) => {
-      requireWeb(c);
-      authorize(c, "admin");
+      authorizeOwner(c);
       const tokens = await listBotTokens();
       const items = tokens.map((t) => ({
         id: t.id,
@@ -86,13 +78,12 @@ export const tokenRoutes = createRouter()
           },
         },
         401: errorResponse("没有登录"),
-        403: errorResponse("不是管理员，或者用 bot token 调用"),
+        403: errorResponse("不是站长，或者用 bot token 调用"),
         409: errorResponse("这个 QQ 号是登录过的群友"),
       },
     }),
     async (c) => {
-      requireWeb(c);
-      const viewer = authorize(c, "admin");
+      const viewer = authorizeOwner(c);
       const { name, bot_qq, scopes } = c.req.valid("json");
       const created = await createBotToken(actorOf(c, viewer), { name, botQq: bot_qq, scopes });
       return c.json(created, 201);
@@ -107,13 +98,12 @@ export const tokenRoutes = createRouter()
       responses: {
         204: { description: "已吊销" },
         401: errorResponse("没有登录"),
-        403: errorResponse("不是管理员，或者用 bot token 调用"),
+        403: errorResponse("不是站长，或者用 bot token 调用"),
         404: errorResponse("token 不存在或已吊销"),
       },
     }),
     async (c) => {
-      requireWeb(c);
-      const viewer = authorize(c, "admin");
+      const viewer = authorizeOwner(c);
       await revokeBotToken(actorOf(c, viewer), c.req.valid("param").id);
       return c.body(null, 204);
     },

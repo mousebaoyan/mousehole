@@ -14,7 +14,7 @@ import { useNearView } from "~/near-view";
 import { ago, unixNow } from "~/time";
 import type { Route } from "./+types/user.ts";
 import { ModerationButtons } from "./user-moderation.tsx";
-import { levelName, SITE_NAME } from "../../server/platform/site.ts";
+import { levelName, SITE_NAME, STAFF } from "../../server/platform/site.ts";
 
 export function meta({ loaderData }: Route.MetaArgs) {
   return [{ title: `${loaderData.user.display_name} · ${SITE_NAME}` }];
@@ -142,12 +142,12 @@ function Profile({
   actionData: Route.ComponentProps["actionData"];
 }) {
   const me = useMe();
-  const staff = me?.role === "moderator" || me?.role === "admin";
+  const staff = me !== null && STAFF.includes(me.role);
   const { stats } = user;
   const relations = useRelations(user);
   // What the group shows about them; the QQ number only to members.
   const facts: string[] = [];
-  if (user.qq !== undefined) facts.push(`QQ ${user.qq}`);
+  if (typeof user.qq === "number") facts.push(`QQ ${user.qq}`);
   if (user.card && user.card !== user.display_name) facts.push(`群名片 ${user.card}`);
   if (user.joined_at !== null) facts.push(`群龄 ${age(user.joined_at, now)}`);
   if (user.last_sent_at !== null) facts.push(`${ago(user.last_sent_at, now)}在群里发言`);
@@ -205,7 +205,10 @@ function Profile({
             <p className="mt-3 text-meta text-destructive">{restrictionText(user.restriction)}</p>
           )}
           {staff && user.role === "user" && (
-            <ModerationButtons restriction={user.restriction ?? null} admin={me.role === "admin"} />
+            <ModerationButtons
+              restriction={user.restriction ?? null}
+              admin={me.role === "admin" || me.role === "owner"}
+            />
           )}
           {actionData?.ok === false && (
             <p role="alert" className="mt-2 text-meta text-destructive">

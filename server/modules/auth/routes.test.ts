@@ -5,7 +5,14 @@ import { describe, expect, test } from "vitest";
 import { app } from "../../app.ts";
 import type { Scope } from "../../platform/access.ts";
 import { db } from "../../platform/db.ts";
-import { as, createUser, login, nextQq, sessionCookie } from "../../../test/fixtures.ts";
+import {
+  as,
+  createUser,
+  login,
+  nextQq,
+  ownerSession,
+  sessionCookie,
+} from "../../../test/fixtures.ts";
 import { issueLoginLink } from "./service.ts";
 
 const api = testClient(app).api.v1;
@@ -142,13 +149,13 @@ function bearer(token: string, headers: Record<string, string> = {}) {
 }
 
 async function createToken(scopes: Scope[] = ["read", "act"]) {
-  const admin = await login((await createUser("admin")).id);
+  const owner = await ownerSession();
   const res = await api.admin.tokens.$post(
     { json: { name: "测试 bot", bot_qq: nextQq(), scopes } },
-    as(admin),
+    owner,
   );
   if (!res.ok) throw new Error(`status ${res.status}`);
-  return { admin, ...(await res.json()) };
+  return { owner, ...(await res.json()) };
 }
 
 async function meAs(token: string, headers: Record<string, string> = {}) {
@@ -158,9 +165,9 @@ async function meAs(token: string, headers: Record<string, string> = {}) {
 
 describe("bot token", () => {
   test("token 只在创建时返回一次，bot 账号固定为 bot 角色", async () => {
-    const { admin, id, token } = await createToken();
+    const { owner, id, token } = await createToken();
 
-    const list = await api.admin.tokens.$get({}, as(admin));
+    const list = await api.admin.tokens.$get({}, owner);
     if (!list.ok) throw new Error(`status ${list.status}`);
     const listed = (await list.json()).items.find((t) => t.id === id);
     expect(listed).toMatchObject({ scopes: ["read", "act"], revoked_at: null });
@@ -202,10 +209,10 @@ describe("bot token", () => {
   });
 
   test("后台要求必须带操作人时，代表成员却没带 X-Operator 的请求被拒", async () => {
-    const { admin, token } = await createToken();
+    const { owner, token } = await createToken();
     const member = String((await createUser()).id);
     const setRequired = (on: boolean) =>
-      api.admin.settings.$patch({ json: { bot: { require_operator: on } } }, as(admin));
+      api.admin.settings.$patch({ json: { bot: { require_operator: on } } }, owner);
     await setRequired(true);
 
     expect(await meAs(token, { "X-Act-As": member })).toMatchObject({
@@ -227,8 +234,8 @@ describe("bot token", () => {
   });
 
   test("吊销后不能再用", async () => {
-    const { admin, id, token } = await createToken();
-    const res = await api.admin.tokens[":id"].$delete({ param: { id: String(id) } }, as(admin));
+    const { owner, id, token } = await createToken();
+    const res = await api.admin.tokens[":id"].$delete({ param: { id: String(id) } }, owner);
     expect(res.status).toBe(204);
     expect(await meAs(token)).toMatchObject({
       status: 401,
@@ -245,15 +252,41 @@ describe("bot token", () => {
   });
 
   test("登录过的群友不能用作 bot", async () => {
-    const admin = await login((await createUser("admin")).id);
+    const owner = await ownerSession();
     const taken = await createUser();
     await login(taken.id);
 
     const res = await api.admin.tokens.$post(
       { json: { name: "误填", bot_qq: taken.qq, scopes: ["read"] } },
-      as(admin),
+      owner,
     );
     expect(res.status).toBe(409);
     expect(await res.json()).toMatchObject({ error: { code: "bot_qq_taken" } });
+  });
+});
+
+describe("站长", () => {
+  test("没有 QQ 号，只管系统：不能发帖，bot 不能代表站长；系统设置管理员动不了", async () => {
+    const owner = await ownerSession();
+    const me = await api.me.$get({}, owner);
+    if (!me.ok) throw new Error(`status ${me.status}`);
+    const { id, role, qq } = await me.json();
+    expect({ role, qq }).toEqual({ role: "owner", qq: null });
+
+    const posted = await api.threads.$post(
+      { json: { board: "none", title: "站长发的帖子", content: { markdown: "正文" } } },
+      owner,
+    );
+    expect(posted.status).toBe(403);
+
+    const { token } = await createToken();
+    expect(await meAs(token, { "X-Act-As": String(id) })).toMatchObject({
+      status: 404,
+      body: { error: { code: "unknown_member" } },
+    });
+
+    const admin = as(await login((await createUser("admin")).id));
+    expect((await api.admin.tokens.$get({}, admin)).status).toBe(403);
+    expect((await api.admin.settings.$get({}, admin)).status).toBe(403);
   });
 });
