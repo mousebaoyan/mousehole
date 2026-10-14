@@ -1,12 +1,26 @@
 import { sql, type ExpressionBuilder, type RawBuilder, type Transaction } from "kysely";
 import type { DB, Json } from "../../../db/types.ts";
-import { STAFF, type Actor, type Reader, type Viewer } from "../../platform/access.ts";
+import {
+  EVERY_BOARD,
+  GUEST,
+  STAFF,
+  type Actor,
+  type Reader,
+  type Viewer,
+} from "../../platform/access.ts";
 import { db } from "../../platform/db.ts";
 import { AppError } from "../../platform/errors.ts";
 import { log } from "../../platform/log.ts";
 import { excerpt, renderMarkdown } from "../../platform/markdown.ts";
 import { recordAudit } from "../audit/service.ts";
-import { countBoard, countTags, findTags, getBoard, getTagId } from "../boards/service.ts";
+import {
+  countBoard,
+  countTags,
+  findTags,
+  getBoard,
+  getTagId,
+  readable,
+} from "../boards/service.ts";
 import { discardDraft } from "../drafts/service.ts";
 import { onebotToMarkdown, type Segment } from "../qq/onebot.ts";
 import { notifyOnPost, notifyPost, notifyThread } from "../notifications/service.ts";
@@ -60,8 +74,8 @@ function threadNotFound() {
 
 // What a viewer may open: published, not deleted, in a board they can see, and for guests not by
 // someone who keeps their content from them.
-function visibleThreads(members: boolean) {
-  return openableThreads({ members, id: null, staff: false });
+function visibleThreads(reach: number) {
+  return openableThreads({ reach, id: null, staff: false });
 }
 
 // Also threads waiting for review or hidden, for moderators and their authors. See design §8.4.
@@ -77,9 +91,8 @@ function openableThreads(reader: Reader) {
           : eb.or([eb("threads.status", "=", "visible"), eb("threads.author_id", "=", reader.id)]),
       ),
     )
-    .$if(!reader.members, (qb) =>
-      qb.where("boards.visibility", "=", "public").where(shownToGuests("threads.author_id")),
-    );
+    .where(readable(reader.reach))
+    .$if(reader.reach === GUEST, (qb) => qb.where(shownToGuests("threads.author_id")));
 }
 
 // With the reader's own row in thread_users, which a guest doesn't have.
@@ -183,12 +196,18 @@ const NEW = sql<boolean>`threads.created_at > now() - interval '7 days'
 const UNREAD = sql<boolean>`mine.last_read_at IS NOT NULL
   AND coalesce(upper(mine.read_floors) - 1, 0) < threads.floor_count`;
 
-// A board and a tag to narrow a list to; either may be left out.
-async function scopeOf(members: boolean, filter: { board?: string; tag?: string }) {
-  return {
-    board: filter.board === undefined ? null : await getBoard(filter.board, members),
-    tagId: filter.tag === undefined ? null : await getTagId(filter.tag),
-  };
+// A board and a tag to narrow a list to; either may be left out. Members are told the level a
+// board needs when theirs is short of it.
+async function scopeOf(reach: number, filter: { board?: string; tag?: string }) {
+  const board = filter.board === undefined ? null : await getBoard(filter.board, reach);
+  if (board && reach !== GUEST && board.read_level > reach) {
+    throw needsLevelToRead(board.read_level);
+  }
+  return { board, tagId: filter.tag === undefined ? null : await getTagId(filter.tag) };
+}
+
+function needsLevelToRead(level: number) {
+  return levelRequired(`这个版块 L${level} 起才能看`);
 }
 
 function inScope({ board, tagId }: Awaited<ReturnType<typeof scopeOf>>) {
@@ -212,12 +231,12 @@ function inScope({ board, tagId }: Awaited<ReturnType<typeof scopeOf>>) {
 // is ordered by (last activity, or when the reader bookmarked or last read it) and the ID. The
 // reader's own lists are empty for guests.
 export async function listThreads(
-  members: boolean,
+  reach: number,
   userId: number | null,
   filter: { board?: string; tag?: string; author?: number; view: ThreadView; cursor?: string },
 ) {
   const { view, cursor } = filter;
-  const scope = await scopeOf(members, filter);
+  const scope = await scopeOf(reach, filter);
   const { board, tagId } = scope;
   const time =
     view === "bookmarked"
@@ -226,7 +245,7 @@ export async function listThreads(
         ? "mine.last_read_at"
         : "threads.last_post_at";
 
-  let query = selectThreads(visibleThreads(members), userId)
+  let query = selectThreads(visibleThreads(reach), userId)
     // Microseconds, exact for PostgreSQL timestamps, unlike a JavaScript Date.
     .select(sql<number>`(extract(epoch FROM ${sql.ref(time)}) * 1000000)::bigint`.as("micros"))
     .where(inScope(scope))
@@ -312,11 +331,11 @@ export async function listThreads(
 
 // For the list's tabs: how many threads in this board or tag are new and unread to the reader.
 export async function countUnread(
-  members: boolean,
+  reach: number,
   userId: number,
   filter: { board?: string; tag?: string },
 ) {
-  return visibleThreads(members)
+  return visibleThreads(reach)
     .leftJoin("thread_users as mine", (join) =>
       join.onRef("mine.thread_id", "=", "threads.id").on("mine.user_id", "=", userId),
     )
@@ -324,13 +343,13 @@ export async function countUnread(
       sql<number>`(count(*) FILTER (WHERE ${NEW}))::integer`.as("new"),
       sql<number>`(count(*) FILTER (WHERE ${UNREAD}))::integer`.as("unread"),
     ])
-    .where(inScope(await scopeOf(members, filter)))
+    .where(inScope(await scopeOf(reach, filter)))
     .executeTakeFirstOrThrow();
 }
 
 // Someone's replies, newest first, with the thread each is in; the cursor is the last one's ID.
-export async function listUserPosts(members: boolean, authorId: number, cursor?: number) {
-  let query = visibleThreads(members)
+export async function listUserPosts(reach: number, authorId: number, cursor?: number) {
+  let query = visibleThreads(reach)
     .innerJoin("posts", "posts.thread_id", "threads.id")
     .select([
       "posts.id",
@@ -343,7 +362,7 @@ export async function listUserPosts(members: boolean, authorId: number, cursor?:
     ])
     .where("posts.author_id", "=", authorId)
     .where("posts.anonymous", "=", false)
-    .$if(!members, (qb) => qb.where(shownToGuests("posts.author_id")))
+    .$if(reach === GUEST, (qb) => qb.where(shownToGuests("posts.author_id")))
     .where("posts.floor", ">", 1)
     .where("posts.status", "=", "visible")
     .where("posts.deleted_at", "is", null)
@@ -360,7 +379,7 @@ export async function listUserPosts(members: boolean, authorId: number, cursor?:
 
 // For the sitemap: what guests may read, most recently active first.
 export async function publicThreads(limit: number) {
-  return visibleThreads(false)
+  return visibleThreads(GUEST)
     .select(["threads.id", "threads.last_post_at"])
     .orderBy("threads.last_post_at", "desc")
     .limit(limit)
@@ -368,9 +387,9 @@ export async function publicThreads(limit: number) {
 }
 
 // These threads as lists show them, for search results; ones the viewer can't see are left out.
-export async function threadsByIds(members: boolean, userId: number | null, ids: number[]) {
+export async function threadsByIds(reach: number, userId: number | null, ids: number[]) {
   if (ids.length === 0) return new Map<number, Awaited<ReturnType<typeof withUsers>>[number]>();
-  const rows = await selectThreads(visibleThreads(members), userId)
+  const rows = await selectThreads(visibleThreads(reach), userId)
     .where("threads.id", "in", ids)
     .execute();
   return new Map((await withUsers(rows)).map((t) => [t.id, t]));
@@ -397,19 +416,30 @@ export async function getThread(id: number, reader: Reader) {
     .where("threads.id", "=", id)
     .executeTakeFirst();
   if (!row) {
-    if (!reader.members && (await keptFromGuests(id))) {
+    if (reader.reach === GUEST && (await keptFromGuests(id))) {
       throw new AppError(401, "login_required", "楼主设置了仅成员可见");
     }
+    const above = reader.reach === GUEST ? undefined : await boardLevel(id);
+    if (above !== undefined && above > reader.reach) throw needsLevelToRead(above);
     throw threadNotFound();
   }
   const [thread] = await withUsers([row]);
   return { ...thread, poll: thread.kind === "poll" ? await getPoll(id, reader.id) : null };
 }
 
+// The level a thread's board needs to be read, for a member it is out of reach of.
+async function boardLevel(id: number) {
+  const row = await visibleThreads(EVERY_BOARD)
+    .select("boards.read_level")
+    .where("threads.id", "=", id)
+    .executeTakeFirst();
+  return row?.read_level;
+}
+
 // A thread guests could read but for its author's switch: they are asked to log in rather than
 // told it is gone.
 async function keptFromGuests(id: number) {
-  const row = await openableThreads({ members: true, id: null, staff: false })
+  const row = await openableThreads({ reach: 0, id: null, staff: false })
     .innerJoin("users", "users.id", "threads.author_id")
     .select("threads.id")
     .where("threads.id", "=", id)
@@ -458,7 +488,7 @@ function selectPosts(reader: Reader) {
       "target_alias.number as target_alias",
       "posts.status",
       // Floors guests get without their content (design §8.10).
-      (reader.members
+      (reader.reach !== GUEST
         ? sql<boolean>`false`
         : sql<boolean>`NOT ${shownToGuests("posts.author_id")}`
       ).as("members_only"),
@@ -670,10 +700,16 @@ async function assertWithinL0(
   }
 }
 
-function assertMayPost(viewer: Viewer, board: { post_role: string }) {
-  if (board.post_role === "moderator" && !STAFF.includes(viewer.role)) {
-    throw forbidden("这个版块只有版主能发帖");
-  }
+// Starting threads in a board, or moving them there: some boards are for moderators, some want a
+// level, for reading them and for posting (design §8.1).
+function assertMayPost(
+  viewer: Viewer,
+  board: { post_role: string; read_level: number; post_level: number },
+) {
+  if (STAFF.includes(viewer.role)) return;
+  if (board.post_role === "moderator") throw forbidden("这个版块只有版主能发帖");
+  const level = Math.max(board.read_level, board.post_level);
+  if (viewer.level < level) throw levelRequired(`这个版块 L${level} 起才能发帖`);
 }
 
 // The power a level gives over someone else's content, from L3 up: the viewer's level when the
@@ -692,7 +728,7 @@ async function levelPower(viewer: Viewer, authorId: number, anonymous: boolean) 
 export async function createThread(
   actor: Actor,
   viewer: Viewer,
-  members: boolean,
+  reach: number,
   input: {
     board: string;
     title: string;
@@ -705,8 +741,8 @@ export async function createThread(
     anonymous_replies?: boolean;
   },
 ) {
-  const reader: Reader = { members, id: viewer.id, staff: false };
-  const board = await getBoard(input.board, members);
+  const reader: Reader = { reach, id: viewer.id, staff: false };
+  const board = await getBoard(input.board, reach);
   const anonymous = input.anonymous ?? false;
   assertMayPost(viewer, board);
   if (input.poll && viewer.level < POLL_LEVEL && !STAFF.includes(viewer.role)) {
@@ -795,11 +831,11 @@ export async function createThread(
 export async function createPost(
   actor: Actor,
   viewer: Viewer,
-  members: boolean,
+  reach: number,
   threadId: number,
   input: { content: Content; reply_to_id?: number; source?: Source },
 ) {
-  const reader: Reader = { members, id: viewer.id, staff: false };
+  const reader: Reader = { reach, id: viewer.id, staff: false };
   const thread = await assertVisible(threadId, reader);
   assertPublic(thread);
   if (thread.locked && !STAFF.includes(viewer.role)) {
@@ -895,11 +931,11 @@ export async function editPost(
   actor: Actor,
   viewer: Viewer,
   staff: boolean,
-  members: boolean,
+  reach: number,
   postId: number,
   markdown: string,
 ) {
-  const reader: Reader = { members, id: viewer.id, staff };
+  const reader: Reader = { reach, id: viewer.id, staff };
   const post = await getPost(postId, reader);
   if (post.deleted_at !== null) throw new AppError(404, "post_not_found", "回复不存在");
   const thread = await assertVisible(post.thread_id, reader);
@@ -975,13 +1011,8 @@ export async function revealAliases(actor: Actor, threadId: number) {
   return rows.map((r) => ({ number: r.number, user: user(r.user_id) }));
 }
 
-export async function listRevisions(
-  viewer: Viewer,
-  staff: boolean,
-  members: boolean,
-  postId: number,
-) {
-  const reader: Reader = { members, id: viewer.id, staff };
+export async function listRevisions(viewer: Viewer, staff: boolean, reach: number, postId: number) {
+  const reader: Reader = { reach, id: viewer.id, staff };
   const post = await getPost(postId, reader);
   if (!staff && post.author_id !== viewer.id) throw forbidden("只有作者和版主能看编辑记录");
   const rows = await db
@@ -1013,11 +1044,11 @@ export async function editThread(
   actor: Actor,
   viewer: Viewer,
   staff: boolean,
-  members: boolean,
+  reach: number,
   threadId: number,
   change: ThreadChange,
 ) {
-  const reader: Reader = { members, id: viewer.id, staff };
+  const reader: Reader = { reach, id: viewer.id, staff };
   const { title, tags, board: slug, locked, ...moderation } = change;
   const thread = await getThread(threadId, reader);
   // L3 changes the title, tags and board of threads by those below them, L5 also locks them; a
@@ -1031,7 +1062,7 @@ export async function editThread(
   if (!staff && locked !== undefined && power < 5) {
     throw forbidden("只有版主和 L5 能锁定帖子，L5 只能锁定等级比自己低的人的帖子");
   }
-  const board = slug === undefined ? null : await getBoard(slug, members);
+  const board = slug === undefined ? null : await getBoard(slug, reach);
   if (board && !staff) assertMayPost(viewer, board);
   const tagIds = tags === undefined ? null : await findTags(tags);
 
@@ -1125,10 +1156,10 @@ export async function deleteThread(
   actor: Actor,
   viewer: Viewer,
   staff: boolean,
-  members: boolean,
+  reach: number,
   threadId: number,
 ) {
-  const reader: Reader = { members, id: viewer.id, staff };
+  const reader: Reader = { reach, id: viewer.id, staff };
   const thread = await getThread(threadId, reader);
   assertMayChange(staff, viewer, thread.author_id, thread.locked);
   if (!staff && thread.reply_count > 0) {
@@ -1155,10 +1186,10 @@ export async function deletePost(
   actor: Actor,
   viewer: Viewer,
   staff: boolean,
-  members: boolean,
+  reach: number,
   postId: number,
 ) {
-  const reader: Reader = { members, id: viewer.id, staff };
+  const reader: Reader = { reach, id: viewer.id, staff };
   const post = await getPost(postId, reader);
   if (post.deleted_at !== null) throw new AppError(404, "post_not_found", "回复不存在");
   if (post.floor === 1) {
@@ -1428,12 +1459,12 @@ function statusAction(from: string, to: "visible" | "hidden") {
 export async function setThreadStatus(
   actor: Actor,
   viewer: Viewer,
-  members: boolean,
+  reach: number,
   threadId: number,
   status: "visible" | "hidden",
   reason: string | null,
 ) {
-  const reader: Reader = { members, id: viewer.id, staff: true };
+  const reader: Reader = { reach, id: viewer.id, staff: true };
   const thread = await getThread(threadId, reader);
   if (thread.status === status) return;
   const opening = await db
@@ -1469,12 +1500,12 @@ export async function setThreadStatus(
 export async function setPostStatus(
   actor: Actor,
   viewer: Viewer,
-  members: boolean,
+  reach: number,
   postId: number,
   status: "visible" | "hidden",
   reason: string | null,
 ) {
-  const reader: Reader = { members, id: viewer.id, staff: true };
+  const reader: Reader = { reach, id: viewer.id, staff: true };
   const post = await getPost(postId, reader);
   if (post.deleted_at !== null) throw new AppError(404, "post_not_found", "回复不存在");
   if (post.floor === 1) {
@@ -1583,11 +1614,11 @@ export async function setSolution(
   actor: Actor,
   viewer: Viewer,
   staff: boolean,
-  members: boolean,
+  reach: number,
   threadId: number,
   postId: number | null,
 ) {
-  const reader: Reader = { members, id: viewer.id, staff };
+  const reader: Reader = { reach, id: viewer.id, staff };
   const thread = await getThread(threadId, reader);
   assertMayChange(staff, viewer, thread.author_id, thread.locked);
   assertPublic(thread);
@@ -1726,11 +1757,11 @@ export async function exportOwnPosts(userId: number) {
 // Bookmarking again keeps the first time, which the bookmark list is ordered by.
 export async function setBookmark(
   viewer: Viewer,
-  members: boolean,
+  reach: number,
   threadId: number,
   bookmarked: boolean,
 ) {
-  const reader: Reader = { members, id: viewer.id, staff: false };
+  const reader: Reader = { reach, id: viewer.id, staff: false };
   await assertVisible(threadId, reader);
   await db
     .insertInto("thread_users")
@@ -1749,11 +1780,11 @@ export async function setBookmark(
 
 export async function setNotifyLevel(
   viewer: Viewer,
-  members: boolean,
+  reach: number,
   threadId: number,
   level: NotifyLevel,
 ) {
-  const reader: Reader = { members, id: viewer.id, staff: false };
+  const reader: Reader = { reach, id: viewer.id, staff: false };
   await assertVisible(threadId, reader);
   await db
     .insertInto("thread_users")
@@ -1811,12 +1842,12 @@ async function addReadFloors(
 // thread doesn't stay unread; they don't count as reading. See design §8.9.
 export async function recordReading(
   viewer: Viewer,
-  members: boolean,
+  reach: number,
   threadId: number,
   ranges: [number, number][],
   seconds: number,
 ) {
-  const reader: Reader = { members, id: viewer.id, staff: false };
+  const reader: Reader = { reach, id: viewer.id, staff: false };
   const thread = await assertVisible(threadId, reader);
   const floors = ranges
     .map(([from, to]): [number, number] => [from, Math.min(to, thread.floor_count)])

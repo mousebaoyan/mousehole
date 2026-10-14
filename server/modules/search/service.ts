@@ -1,5 +1,6 @@
 import { sql, type Transaction } from "kysely";
 import type { DB } from "../../../db/types.ts";
+import { GUEST } from "../../platform/access.ts";
 import { db } from "../../platform/db.ts";
 import { plainText } from "../../platform/markdown.ts";
 import {
@@ -9,6 +10,7 @@ import {
   snippet,
   terms,
 } from "../../platform/search-terms.ts";
+import { readable } from "../boards/service.ts";
 import { shownToGuests } from "../users/service.ts";
 
 // ---- The index: one row per post, its text and, for an opening post, its thread's title weighted
@@ -61,7 +63,7 @@ const SIMILAR = 5;
 // Posts people may see: published, not deleted, in a thread and board they can open, and for
 // guests not by someone who keeps their content from them. The same rules as the threads
 // module's lists.
-function visiblePosts(members: boolean) {
+function visiblePosts(reach: number) {
   return db
     .selectFrom("post_search")
     .innerJoin("posts", "posts.id", "post_search.post_id")
@@ -71,11 +73,9 @@ function visiblePosts(members: boolean) {
     .where("posts.status", "=", "visible")
     .where("threads.deleted_at", "is", null)
     .where("threads.status", "=", "visible")
-    .$if(!members, (qb) =>
-      qb
-        .where("boards.visibility", "=", "public")
-        .where(shownToGuests("threads.author_id"))
-        .where(shownToGuests("posts.author_id")),
+    .where(readable(reach))
+    .$if(reach === GUEST, (qb) =>
+      qb.where(shownToGuests("threads.author_id")).where(shownToGuests("posts.author_id")),
     );
 }
 
@@ -106,12 +106,12 @@ export type SearchFilter = {
 // Threads with the best-matching post of each; the cursor is how many were shown. By relevance,
 // older ones gradually behind, or by one of the threads' own orders. A single Han character is
 // too short to index, so it is looked for in titles instead.
-export async function search(members: boolean, q: string, filter: SearchFilter, offset: number) {
+export async function search(reach: number, q: string, filter: SearchFilter, offset: number) {
   const words = terms(q);
   if (words.length === 0) return { hits: [], next_cursor: null };
   const single = words.length === 1 && words[0].length === 1 && words[0][0].length === 1;
   const query = sql`to_tsquery('simple', ${phraseQuery(q, filter.titleOnly)})`;
-  let matches = visiblePosts(members).select([
+  let matches = visiblePosts(reach).select([
     "posts.thread_id",
     "posts.id as post_id",
     "posts.floor",
@@ -191,13 +191,13 @@ export async function search(members: boolean, q: string, filter: SearchFilter, 
 
 // The threads most like a question, for the bot to point to before anyone answers it again.
 // Any shared token counts; the score is between 0 and 1.
-export async function similar(members: boolean, text: string) {
+export async function similar(reach: number, text: string) {
   const query = anyQuery(text);
   if (query === "") return [];
   const tsquery = sql`to_tsquery('simple', ${query})`;
   return db
     .selectFrom(
-      visiblePosts(members)
+      visiblePosts(reach)
         .select([
           "posts.thread_id",
           sql<number>`ts_rank_cd(post_search.document, ${tsquery}, 32)`.as("score"),

@@ -1,6 +1,6 @@
 import { createRoute, z } from "@hono/zod-openapi";
 import type { Context } from "hono";
-import { isMember } from "../../platform/access.ts";
+import { GUEST, reachOf } from "../../platform/access.ts";
 import { env } from "../../platform/env.ts";
 import {
   actorOf,
@@ -124,7 +124,7 @@ function sitemapEntry(path: string, changed?: Date) {
 }
 
 export async function serveSitemap(c: Context) {
-  const boards = await listBoards(false);
+  const boards = await listBoards(GUEST);
   const threads = await publicThreads(SITEMAP_URLS - 1 - boards.length);
   const urls = [
     sitemapEntry("/"),
@@ -352,13 +352,14 @@ export const threadsRoutes = createRouter()
           },
         },
         401: errorResponse("自己的列表要先登录"),
+        403: errorResponse("等级不够看这个版块（level_required），message 里有要几级"),
         404: errorResponse("版块或标签不存在"),
       },
     }),
     async (c) => {
       const query = c.req.valid("query");
       const viewer = OWN_VIEWS.has(query.view) ? authorize(c, "read") : c.var.viewer;
-      const page = await listThreads(isMember(viewer, c.var.bot), viewer?.id ?? null, query);
+      const page = await listThreads(reachOf(viewer, c.var.bot), viewer?.id ?? null, query);
       const items = page.items.map((t) => threadJson(t, viewer !== null));
       return c.json({ items, next_cursor: page.next_cursor }, 200);
     },
@@ -390,7 +391,7 @@ export const threadsRoutes = createRouter()
     async (c) => {
       const author = await findUserId(c.req.valid("param").user);
       const { viewer, bot } = c.var;
-      const page = await listThreads(isMember(viewer, bot), viewer?.id ?? null, {
+      const page = await listThreads(reachOf(viewer, bot), viewer?.id ?? null, {
         author,
         view: "created",
         cursor: c.req.valid("query").cursor,
@@ -434,8 +435,8 @@ export const threadsRoutes = createRouter()
     }),
     async (c) => {
       const author = await findUserId(c.req.valid("param").user);
-      const members = isMember(c.var.viewer, c.var.bot);
-      const page = await listUserPosts(members, author, c.req.valid("query").cursor);
+      const reach = reachOf(c.var.viewer, c.var.bot);
+      const page = await listUserPosts(reach, author, c.req.valid("query").cursor);
       return c.json(
         {
           items: page.items.map((p) => ({
@@ -472,8 +473,8 @@ export const threadsRoutes = createRouter()
     }),
     async (c) => {
       const viewer = authorize(c, "read");
-      const members = isMember(viewer, c.var.bot);
-      return c.json(await countUnread(members, viewer.id, c.req.valid("query")), 200);
+      const reach = reachOf(viewer, c.var.bot);
+      return c.json(await countUnread(reach, viewer.id, c.req.valid("query")), 200);
     },
   )
   .openapi(
@@ -485,6 +486,7 @@ export const threadsRoutes = createRouter()
       responses: {
         200: threadResponse,
         401: errorResponse("楼主设置了不给访客看，访客要登录后查看"),
+        403: errorResponse("等级不够看这个版块（level_required），message 里有要几级"),
         404: errorResponse("帖子不存在"),
       },
     }),
@@ -649,8 +651,8 @@ export const threadsRoutes = createRouter()
       const viewer = authorizePosting(c);
       rateLimit(`thread:${viewer.id}`, THREADS_PER_HOUR, HOUR);
       limitBot(c);
-      const members = isMember(viewer, c.var.bot);
-      const thread = await createThread(actorOf(c, viewer), viewer, members, c.req.valid("json"));
+      const reach = reachOf(viewer, c.var.bot);
+      const thread = await createThread(actorOf(c, viewer), viewer, reach, c.req.valid("json"));
       return c.json(threadDetailJson(thread, true), 201);
     },
   )
@@ -684,7 +686,7 @@ export const threadsRoutes = createRouter()
       const post = await createPost(
         actorOf(c, viewer),
         viewer,
-        isMember(viewer, c.var.bot),
+        reachOf(viewer, c.var.bot),
         c.req.valid("param").id,
         c.req.valid("json"),
       );
@@ -720,16 +722,16 @@ export const threadsRoutes = createRouter()
     async (c) => {
       const viewer = authorizePosting(c);
       const { status, reason, ...change } = c.req.valid("json");
-      const members = isMember(viewer, c.var.bot);
+      const reach = reachOf(viewer, c.var.bot);
       const id = c.req.valid("param").id;
       if (status !== undefined) {
         authorize(c, "moderate");
-        await setThreadStatus(actorOf(c, viewer), viewer, members, id, status, reason ?? null);
+        await setThreadStatus(actorOf(c, viewer), viewer, reach, id, status, reason ?? null);
       }
       const thread =
         Object.keys(change).length === 0
           ? await getThread(id, readerOf(c))
-          : await editThread(actorOf(c, viewer), viewer, can(c, "moderate"), members, id, change);
+          : await editThread(actorOf(c, viewer), viewer, can(c, "moderate"), reach, id, change);
       return c.json(threadDetailJson(thread, true), 200);
     },
   )
@@ -747,9 +749,9 @@ export const threadsRoutes = createRouter()
     }),
     async (c) => {
       const viewer = authorize(c, "act");
-      const members = isMember(viewer, c.var.bot);
+      const reach = reachOf(viewer, c.var.bot);
       const id = c.req.valid("param").id;
-      await deleteThread(actorOf(c, viewer), viewer, can(c, "moderate"), members, id);
+      await deleteThread(actorOf(c, viewer), viewer, can(c, "moderate"), reach, id);
       return c.body(null, 204);
     },
   )
@@ -781,21 +783,14 @@ export const threadsRoutes = createRouter()
     async (c) => {
       const viewer = authorizePosting(c);
       const { content, status, reason } = c.req.valid("json");
-      const members = isMember(viewer, c.var.bot);
+      const reach = reachOf(viewer, c.var.bot);
       const id = c.req.valid("param").id;
       if (status !== undefined) {
         authorize(c, "moderate");
-        await setPostStatus(actorOf(c, viewer), viewer, members, id, status, reason ?? null);
+        await setPostStatus(actorOf(c, viewer), viewer, reach, id, status, reason ?? null);
       }
       if (content) {
-        await editPost(
-          actorOf(c, viewer),
-          viewer,
-          can(c, "moderate"),
-          members,
-          id,
-          content.markdown,
-        );
+        await editPost(actorOf(c, viewer), viewer, can(c, "moderate"), reach, id, content.markdown);
       }
       const post = await getPost(id, readerOf(c));
       return c.json(postJson(post, "html", await floorExtras(readerOf(c), [post.id])), 200);
@@ -816,9 +811,9 @@ export const threadsRoutes = createRouter()
     }),
     async (c) => {
       const viewer = authorize(c, "act");
-      const members = isMember(viewer, c.var.bot);
+      const reach = reachOf(viewer, c.var.bot);
       const id = c.req.valid("param").id;
-      await deletePost(actorOf(c, viewer), viewer, can(c, "moderate"), members, id);
+      await deletePost(actorOf(c, viewer), viewer, can(c, "moderate"), reach, id);
       return c.body(null, 204);
     },
   )
@@ -844,7 +839,7 @@ export const threadsRoutes = createRouter()
       const revisions = await listRevisions(
         viewer,
         can(c, "moderate"),
-        isMember(viewer, c.var.bot),
+        reachOf(viewer, c.var.bot),
         c.req.valid("param").id,
       );
       const items = revisions.map((r) => ({ ...r, created_at: unix(r.created_at) }));
@@ -911,8 +906,8 @@ export const threadsRoutes = createRouter()
     async (c) => {
       const viewer = requireWeb(c);
       const { floors, seconds } = c.req.valid("json");
-      const members = isMember(viewer, c.var.bot);
-      await recordReading(viewer, members, c.req.valid("param").id, floors, seconds);
+      const reach = reachOf(viewer, c.var.bot);
+      await recordReading(viewer, reach, c.req.valid("param").id, floors, seconds);
       return c.body(null, 204);
     },
   )
@@ -989,7 +984,7 @@ export const threadsRoutes = createRouter()
         actorOf(c, viewer),
         viewer,
         can(c, "moderate"),
-        isMember(viewer, c.var.bot),
+        reachOf(viewer, c.var.bot),
         c.req.valid("param").id,
         c.req.valid("json").post_id,
       );
@@ -1015,7 +1010,7 @@ export const threadsRoutes = createRouter()
         actorOf(c, viewer),
         viewer,
         can(c, "moderate"),
-        isMember(viewer, c.var.bot),
+        reachOf(viewer, c.var.bot),
         c.req.valid("param").id,
         null,
       );
@@ -1032,7 +1027,7 @@ export const threadsRoutes = createRouter()
     }),
     async (c) => {
       const viewer = authorize(c, "act");
-      await setBookmark(viewer, isMember(viewer, c.var.bot), c.req.valid("param").id, true);
+      await setBookmark(viewer, reachOf(viewer, c.var.bot), c.req.valid("param").id, true);
       return c.body(null, 204);
     },
   )
@@ -1046,7 +1041,7 @@ export const threadsRoutes = createRouter()
     }),
     async (c) => {
       const viewer = authorize(c, "act");
-      await setBookmark(viewer, isMember(viewer, c.var.bot), c.req.valid("param").id, false);
+      await setBookmark(viewer, reachOf(viewer, c.var.bot), c.req.valid("param").id, false);
       return c.body(null, 204);
     },
   )
@@ -1061,7 +1056,7 @@ export const threadsRoutes = createRouter()
     async (c) => {
       const viewer = authorize(c, "act");
       const { id } = c.req.valid("param");
-      await setNotifyLevel(viewer, isMember(viewer, c.var.bot), id, c.req.valid("json").level);
+      await setNotifyLevel(viewer, reachOf(viewer, c.var.bot), id, c.req.valid("json").level);
       return c.body(null, 204);
     },
   )

@@ -1,5 +1,5 @@
 import { createRoute, z } from "@hono/zod-openapi";
-import { isMember } from "../../platform/access.ts";
+import { reachOf } from "../../platform/access.ts";
 import { actorOf, authorize, createRouter, errorResponse } from "../../platform/http.ts";
 import {
   createBoard,
@@ -22,7 +22,11 @@ const BoardSchema = z
     description: z.string(),
     color: z.string(),
     visibility: z.string().openapi({ description: "public：公开；members：仅成员" }),
+    read_level: z.number().openapi({
+      description: "仅成员的版块还要几级才能看，0 不限；版主和管理员不受限",
+    }),
     post_role: z.string().openapi({ description: "谁能发帖。user：成员；moderator：版主" }),
+    post_level: z.number().openapi({ description: "成员要几级才能发帖，0 不限" }),
     default_kind: z.string().openapi({ description: "发帖时默认的类型：discussion 或 question" }),
     review_mode: z.string().openapi({
       description: "after：先发后审；before：先审后发，版主以外的人发的内容通过审核才公开",
@@ -48,7 +52,14 @@ const BoardFields = z.object({
     .regex(/^#[0-9a-f]{6}$/i, "颜色要写成 #rrggbb")
     .transform((c) => c.toLowerCase()),
   visibility: z.enum(["public", "members"]),
+  read_level: z
+    .number()
+    .int()
+    .min(0)
+    .max(5)
+    .openapi({ description: "大于 0 时版块自动变为仅成员；改成公开时归零" }),
   post_role: z.enum(["user", "moderator"]),
+  post_level: z.number().int().min(0).max(5),
   default_kind: z.enum(["discussion", "question"]),
   review_mode: z.enum(["after", "before"]),
 });
@@ -91,7 +102,7 @@ export const boardsRoutes = createRouter()
       },
     }),
     async (c) => {
-      const items = await listBoards(isMember(c.var.viewer, c.var.bot));
+      const items = await listBoards(reachOf(c.var.viewer, c.var.bot));
       return c.json({ items }, 200);
     },
   )
@@ -104,7 +115,7 @@ export const boardsRoutes = createRouter()
       responses: { 200: boardResponse, 404: errorResponse("版块不存在，或者访客看仅成员版块") },
     }),
     async (c) => {
-      const board = await getBoard(c.req.valid("param").slug, isMember(c.var.viewer, c.var.bot));
+      const board = await getBoard(c.req.valid("param").slug, reachOf(c.var.viewer, c.var.bot));
       return c.json(board, 200);
     },
   )

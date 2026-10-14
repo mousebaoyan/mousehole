@@ -1,5 +1,5 @@
 import { createRoute, z } from "@hono/zod-openapi";
-import { isMember } from "../../platform/access.ts";
+import { reachOf } from "../../platform/access.ts";
 import {
   actorOf,
   authorize,
@@ -55,7 +55,7 @@ export const reactionsRoutes = createRouter()
     async (c) => {
       const viewer = authorizePosting(c);
       const { emoji } = c.req.valid("json");
-      await react(viewer, isMember(viewer, c.var.bot), c.req.valid("param").id, emoji);
+      await react(viewer, reachOf(viewer, c.var.bot), c.req.valid("param").id, emoji);
       return c.body(null, 204);
     },
   )
@@ -69,7 +69,7 @@ export const reactionsRoutes = createRouter()
     }),
     async (c) => {
       const viewer = authorize(c, "act");
-      await react(viewer, isMember(viewer, c.var.bot), c.req.valid("param").id, null);
+      await react(viewer, reachOf(viewer, c.var.bot), c.req.valid("param").id, null);
       return c.body(null, 204);
     },
   )
@@ -104,8 +104,8 @@ export const reactionsRoutes = createRouter()
     }),
     async (c) => {
       const { emoji, cursor } = c.req.valid("query");
-      const members = isMember(c.var.viewer, c.var.bot);
-      const page = await listReactions(members, c.req.valid("param").id, emoji, cursor);
+      const reach = reachOf(c.var.viewer, c.var.bot);
+      const page = await listReactions(reach, c.req.valid("param").id, emoji, cursor);
       return c.json(
         {
           items: page.items.map((r) => ({ ...r, created_at: unix(r.created_at) })),
@@ -138,11 +138,11 @@ export const reactionsRoutes = createRouter()
     }),
     async (c) => {
       const viewer = authorizePosting(c);
-      const members = isMember(viewer, c.var.bot);
+      const reach = reachOf(viewer, c.var.bot);
       const boost = await setBoost(
         actorOf(c, viewer),
         viewer,
-        members,
+        reach,
         c.req.valid("param").id,
         c.req.valid("json").body,
       );
@@ -178,8 +178,8 @@ export const reactionsRoutes = createRouter()
       },
     }),
     async (c) => {
-      const members = isMember(c.var.viewer, c.var.bot);
-      const boosts = await listBoosts(members, c.req.valid("param").id);
+      const reach = reachOf(c.var.viewer, c.var.bot);
+      const boosts = await listBoosts(reach, c.req.valid("param").id);
       return c.json({ items: boosts.map(boostJson) }, 200);
     },
   )

@@ -1,7 +1,7 @@
-import { sql, type Transaction, type Updateable } from "kysely";
+import { sql, type ExpressionBuilder, type Transaction, type Updateable } from "kysely";
 import { DatabaseError } from "pg";
 import type { Boards, DB, Tags } from "../../../db/types.ts";
-import type { Actor } from "../../platform/access.ts";
+import { GUEST, type Actor } from "../../platform/access.ts";
 import { db } from "../../platform/db.ts";
 import { AppError } from "../../platform/errors.ts";
 import { getSettings } from "../../platform/settings.ts";
@@ -14,7 +14,9 @@ const BOARD = [
   "description",
   "color",
   "visibility",
+  "read_level",
   "post_role",
+  "post_level",
   "default_kind",
   "review_mode",
   "thread_count",
@@ -24,8 +26,23 @@ const TAG = ["id", "name", "kind", "thread_count"] as const;
 
 export type BoardFields = Pick<
   Updateable<Boards>,
-  "name" | "description" | "color" | "visibility" | "post_role" | "default_kind" | "review_mode"
+  | "name"
+  | "description"
+  | "color"
+  | "visibility"
+  | "read_level"
+  | "post_role"
+  | "post_level"
+  | "default_kind"
+  | "review_mode"
 >;
+
+// A level to read makes a board members-only; a public one needs none.
+function readAccess<T extends BoardFields>(fields: T): T {
+  if (fields.read_level) return { ...fields, visibility: "members" };
+  if (fields.visibility === "public") return { ...fields, read_level: 0 };
+  return fields;
+}
 
 export type TagFields = Pick<Updateable<Tags>, "name" | "kind">;
 
@@ -37,23 +54,31 @@ function tagNotFound() {
   return new AppError(404, "tag_not_found", "标签不存在");
 }
 
-// Guests don't learn that members-only boards exist.
-export async function listBoards(members: boolean) {
+// The boards someone reads: public ones for guests, and for members those up to their level
+// (design §8.10). For the modules whose queries join boards.
+export function readable(reach: number) {
+  return (eb: ExpressionBuilder<DB, "boards">) =>
+    reach === GUEST ? eb("boards.visibility", "=", "public") : eb("boards.read_level", "<=", reach);
+}
+
+// Guests don't learn that members-only boards exist; members see those above their level too,
+// with the level they need.
+export async function listBoards(reach: number) {
   return db
     .selectFrom("boards")
     .select(BOARD)
-    .$if(!members, (qb) => qb.where("visibility", "=", "public"))
+    .$if(reach === GUEST, (qb) => qb.where("visibility", "=", "public"))
     .orderBy("position")
     .orderBy("id")
     .execute();
 }
 
-export async function getBoard(slug: string, members: boolean) {
+export async function getBoard(slug: string, reach: number) {
   const board = await db
     .selectFrom("boards")
     .select(BOARD)
     .where("slug", "=", slug)
-    .$if(!members, (qb) => qb.where("visibility", "=", "public"))
+    .$if(reach === GUEST, (qb) => qb.where("visibility", "=", "public"))
     .executeTakeFirst();
   if (!board) throw boardNotFound();
   return board;
@@ -69,7 +94,7 @@ export async function createBoard(
     const created = await trx
       .insertInto("boards")
       .values({
-        ...board,
+        ...readAccess(board),
         review_mode: board.review_mode ?? site.review_mode,
         position: sql<number>`(SELECT coalesce(max(position) + 1, 0) FROM boards)`,
       })
@@ -106,7 +131,7 @@ export async function updateBoard(
     if (!board) throw boardNotFound();
 
     if (Object.keys(change).length > 0) {
-      await trx.updateTable("boards").set(change).where("id", "=", board.id).execute();
+      await trx.updateTable("boards").set(readAccess(change)).where("id", "=", board.id).execute();
     }
     if (position !== undefined) {
       const order = boards.filter((b) => b !== board);

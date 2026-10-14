@@ -57,7 +57,9 @@ export interface Boards {
   name: string;
   position: Generated<number>;
   post_count: Generated<number>;
+  post_level: Generated<number>;
   post_role: Generated<string>;
+  read_level: Generated<number>;
   review_mode: Generated<string>;
   slug: string;
   thread_count: Generated<number>;

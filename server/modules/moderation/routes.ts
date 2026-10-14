@@ -1,5 +1,5 @@
 import { createRoute, z } from "@hono/zod-openapi";
-import { isMember } from "../../platform/access.ts";
+import { reachOf } from "../../platform/access.ts";
 import {
   actorOf,
   authorize,
@@ -132,11 +132,11 @@ export const moderationRoutes = createRouter()
     }),
     async (c) => {
       const viewer = authorizePosting(c);
-      const members = isMember(viewer, c.var.bot);
+      const reach = reachOf(viewer, c.var.bot);
       await reportPost(
         actorOf(c, viewer),
         viewer,
-        members,
+        reach,
         c.req.valid("param").id,
         c.req.valid("json").reason,
       );
@@ -153,11 +153,11 @@ export const moderationRoutes = createRouter()
     }),
     async (c) => {
       const viewer = authorizePosting(c);
-      const members = isMember(viewer, c.var.bot);
+      const reach = reachOf(viewer, c.var.bot);
       await reportBoost(
         actorOf(c, viewer),
         viewer,
-        members,
+        reach,
         c.req.valid("param").id,
         c.req.valid("json").reason,
       );

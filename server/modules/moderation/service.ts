@@ -113,23 +113,23 @@ async function boostOf(id: number) {
 export async function reportPost(
   actor: Actor,
   viewer: Viewer,
-  members: boolean,
+  reach: number,
   postId: number,
   reason: string,
 ) {
-  const post = await getPost(postId, { members, id: viewer.id, staff: false });
+  const post = await getPost(postId, { reach, id: viewer.id, staff: false });
   await fileReport(actor, viewer, post, null, reason);
 }
 
 export async function reportBoost(
   actor: Actor,
   viewer: Viewer,
-  members: boolean,
+  reach: number,
   boostId: number,
   reason: string,
 ) {
   const boost = await boostOf(boostId);
-  const post = await getPost(boost.post_id, { members, id: viewer.id, staff: false });
+  const post = await getPost(boost.post_id, { reach, id: viewer.id, staff: false });
   await fileReport(actor, viewer, post, boost, reason);
 }
 

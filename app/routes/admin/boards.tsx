@@ -8,20 +8,31 @@ import { Select } from "~/components/ui/select";
 import type { Route } from "./+types/boards.ts";
 import { Badge, choice, Field, readForm, Result, Section } from "~/components/form-parts";
 import { confirmSubmit } from "~/components/ui/dialog";
+import { LEVEL_NAMES, levelName } from "../../../server/platform/site.ts";
 
 export function meta() {
   return [{ title: "版块 · 管理后台" }];
 }
 
-const VISIBILITY = [
-  { value: "public", label: "公开" },
-  { value: "members", label: "仅成员" },
-] as const;
+// Thresholds as one choice each: who reads the board, and who starts threads in it (design §8.1).
+const LEVELS = LEVEL_NAMES.slice(1).map((_, i) => ({
+  value: String(i + 1),
+  label: `${levelName(i + 1)} 起`,
+}));
+const READ = [{ value: "public", label: "访客（公开）" }, { value: "0", label: "成员" }, ...LEVELS];
+const POST = [{ value: "0", label: "成员" }, ...LEVELS, { value: "moderator", label: "只有版主" }];
 
-const POST_ROLE = [
-  { value: "user", label: "成员" },
-  { value: "moderator", label: "版主" },
-] as const;
+function readFields(value: string) {
+  return value === "public"
+    ? { visibility: "public" as const, read_level: 0 }
+    : { visibility: "members" as const, read_level: Number(choice(READ, value)) };
+}
+
+function postFields(value: string) {
+  return value === "moderator"
+    ? { post_role: "moderator" as const, post_level: 0 }
+    : { post_role: "user" as const, post_level: Number(choice(POST, value)) };
+}
 
 const KIND = [
   { value: "discussion", label: "讨论" },
@@ -54,8 +65,8 @@ export async function action({ request, context }: Route.ActionArgs) {
     name: field("name"),
     description: field("description"),
     color: field("color"),
-    visibility: choice(VISIBILITY, field("visibility")),
-    post_role: choice(POST_ROLE, field("post_role")),
+    ...readFields(field("read")),
+    ...postFields(field("post")),
     default_kind: choice(KIND, field("default_kind")),
     review_mode: choice(REVIEW, field("review_mode")),
   });
@@ -136,8 +147,11 @@ export default function Boards({
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2 font-medium">
                     {b.name}
-                    {b.visibility === "members" && <Badge>仅成员</Badge>}
+                    {b.visibility === "members" && (
+                      <Badge>{b.read_level > 0 ? `L${b.read_level} 起可看` : "仅成员"}</Badge>
+                    )}
                     {b.post_role === "moderator" && <Badge>版主发帖</Badge>}
+                    {b.post_level > 0 && <Badge>L{b.post_level} 起发帖</Badge>}
                     {b.default_kind === "question" && <Badge>问答</Badge>}
                     {b.review_mode === "before" && <Badge>先审后发</Badge>}
                   </div>
@@ -223,11 +237,23 @@ function BoardFields({ board, review }: { board?: Board; review?: string }) {
       <Field label="简介">
         <Input name="description" defaultValue={board?.description} maxLength={100} />
       </Field>
-      <Field label="可见范围">
-        <Select name="visibility" options={VISIBILITY} defaultValue={board?.visibility} />
+      <Field label="谁能看" hint="版主和管理员不受等级限制">
+        <Select
+          name="read"
+          options={READ}
+          defaultValue={
+            board && (board.visibility === "public" ? "public" : String(board.read_level))
+          }
+        />
       </Field>
-      <Field label="谁能发帖" hint="回复不受限制">
-        <Select name="post_role" options={POST_ROLE} defaultValue={board?.post_role} />
+      <Field label="谁能发帖" hint="能看到版块的成员都能回复">
+        <Select
+          name="post"
+          options={POST}
+          defaultValue={
+            board && (board.post_role === "moderator" ? "moderator" : String(board.post_level))
+          }
+        />
       </Field>
       <Field label="默认类型" hint="问答帖子可以采纳答案">
         <Select name="default_kind" options={KIND} defaultValue={board?.default_kind} />
