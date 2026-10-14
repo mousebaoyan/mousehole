@@ -13,8 +13,9 @@ import {
 } from "./access.ts";
 import { AppError } from "./errors.ts";
 import { log } from "./log.ts";
+import { describeIssue } from "./validation.ts";
 
-z.config(z.locales.zhCN());
+z.config({ ...z.locales.zhCN(), customError: describeIssue });
 
 export type AppEnv = {
   Variables: { viewer: Viewer | null; sessionId: number | null; bot: Bot | null };
@@ -32,9 +33,7 @@ export function createRouter() {
   return new OpenAPIHono<AppEnv>({
     defaultHook(result) {
       if (result.success) return;
-      const issue = result.error.issues[0];
-      const where = issue.path.length ? `${issue.path.join(".")}：` : "";
-      throw new AppError(400, "invalid_request", where + issue.message);
+      throw new AppError(400, "invalid_request", result.error.issues[0].message);
     },
   });
 }

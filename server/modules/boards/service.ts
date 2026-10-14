@@ -308,7 +308,7 @@ export async function findTags(names: string[]) {
     .execute();
   const missing = names.find((n) => !rows.some((r) => r.name === n));
   if (missing !== undefined) {
-    throw new AppError(400, "invalid_request", `tags：没有「${missing}」这个标签`);
+    throw new AppError(400, "invalid_request", `没有「${missing}」这个标签`);
   }
   return rows.map((r) => r.id);
 }
