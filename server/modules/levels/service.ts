@@ -67,7 +67,7 @@ function selectStanding() {
       "recent.read_seconds as recent_read_seconds",
       sql<number>`(SELECT count(*)::integer FROM reactions
         JOIN posts ON posts.id = reactions.post_id
-        WHERE posts.author_id = users.id AND posts.deleted_at IS NULL
+        WHERE posts.author_id = users.id AND posts.deleted_at IS NULL AND NOT posts.anonymous
           AND reactions.created_at > ${SINCE})`.as("recent_likes"),
     ]);
 }

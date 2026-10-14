@@ -84,6 +84,36 @@ describe("表情回应", () => {
     expect((await react("heart", author.who)).status).toBe(403);
   });
 
+  test("匿名楼层的赞照常算进楼层和帖子，但不算进作者的获赞数", async () => {
+    const res = await api.threads.$post(
+      {
+        json: {
+          board: "r",
+          title: "匿名求点赞",
+          content: { markdown: "匿名的主楼" },
+          anonymous: true,
+        },
+      },
+      author.who,
+    );
+    if (!res.ok) throw new Error(`status ${res.status}`);
+    const posts = await api.threads[":id"].posts.$get({
+      param: { id: String((await res.json()).id) },
+      query: {},
+    });
+    if (!posts.ok) throw new Error(`status ${posts.status}`);
+    const before = (await counts()).author;
+    const param = { id: String((await posts.json()).items[0].id) };
+    await api.posts[":id"].reaction.$put({ param, json: { emoji: "heart" } }, fan);
+    const liked = await db
+      .selectFrom("posts")
+      .select("like_count")
+      .where("id", "=", Number(param.id))
+      .executeTakeFirstOrThrow();
+    expect(liked.like_count).toBe(1);
+    expect((await counts()).author).toBe(before);
+  });
+
   test("楼层里带自己的回应；能按表情列出是谁", async () => {
     await react("heart", other);
     const posts = await api.threads[":id"].posts.$get(

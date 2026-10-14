@@ -25,7 +25,7 @@
 - **站长**（[总体设计 §6.4](design.md#64-角色与权限)）：`role` 为 `owner` 的账号，最多一个（部分唯一索引 `users_owner`），由首次部署命令创建。只有它的 `qq` 为空（`CHECK ((qq IS NULL) = (role = 'owner'))`），所以不收通知和邮件、没有 QQ 头像，也不自动升降级；按 QQ 号或用户 ID 找成员时排除它。
 - **显示名**：取主群的群名片；不在主群时，取其他启用群里最早加入的那个，入群时间不知道的排在最后。
 - **个性签名**：`custom_bio` 是自己写的，为 `NULL` 时显示 bot 推送的 `qq_bio`。
-- **等级**（[总体设计 §6.6](design.md#66-等级)）：`users.level`，`level_locked` 是管理员定下的、不再自动升降，`level_since` 是升到现在这一级的时间，L4 头两周不降级看它。规则是 `levels/rules.ts` 里的纯函数和常量；累计的数直接用 `users` 上的计数（`posts_read`、`read_seconds`、`days_visited`、`like_received`），进入的帖子数和回复过的帖子数现查（`thread_users`、`posts_author`）。最近 30 天的访问和阅读来自 `user_days`：每人每天（北京时间）一行，在会话续期、阅读上报和发帖、回复时写入，当天第一次写入时 `days_visited` 加一；超过 35 天的每天清理。最近 30 天的获赞现查表情回应。禁言封禁看 `restricted_through`：最近一次禁言或封禁到期或解除的时间（没有期限的，在解除前记的是开始的时间），过期后也留着。每小时取 `user_days` 里今天和昨天有记录的人检查升级，走 `user_days_day`。
+- **等级**（[总体设计 §6.6](design.md#66-等级)）：`users.level`，`level_locked` 是管理员定下的、不再自动升降，`level_since` 是升到现在这一级的时间，L4 头两周不降级看它。规则是 `levels/rules.ts` 里的纯函数和常量；累计的数直接用 `users` 上的计数（`posts_read`、`read_seconds`、`days_visited`、`like_received`），进入的帖子数和回复过的帖子数现查（`thread_users`、`posts_author`）。最近 30 天的访问和阅读来自 `user_days`：每人每天（北京时间）一行，在会话续期、阅读上报和发帖、回复时写入，当天第一次写入时 `days_visited` 加一；超过 35 天的每天清理。最近 30 天的获赞现查表情回应。`like_received` 和最近 30 天的获赞都不算匿名楼层得到的赞。禁言封禁看 `restricted_through`：最近一次禁言或封禁到期或解除的时间（没有期限的，在解除前记的是开始的时间），过期后也留着。每小时取 `user_days` 里今天和昨天有记录的人检查升级，走 `user_days_day`。
 - **不给访客看**（[总体设计 §8.10](design.md#810-可见范围)）：`users.hide_from_guests`。访客的帖子、楼层、短评和搜索查询都加上"作者没有打开它"的条件（`NOT EXISTS`），走只收打开了的人的部分索引 `users_hidden_from_guests`，不扫 `users` 全表。
 - **全量同步**：
   - 名单里的人逐个合并：没带的字段保持原值；只有字段有变化、且推送的读取时间不早于这行的 `observed_at` 时才写入。
