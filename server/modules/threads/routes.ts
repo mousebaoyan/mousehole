@@ -11,6 +11,7 @@ import {
   createRouter,
   errorResponse,
   readerOf,
+  type AppEnv,
   requireWeb,
   unix,
 } from "../../platform/http.ts";
@@ -123,6 +124,19 @@ export async function serveSitemap(c: Context) {
     200,
     { "content-type": "application/xml; charset=utf-8", "cache-control": "public, max-age=3600" },
   );
+}
+
+// Abuse limits on posting (design §13): generous for a person, and for a bot token across everyone
+// it posts for, so a runaway plugin stops there.
+const MINUTE = 60_000;
+const HOUR = 60 * MINUTE;
+const THREADS_PER_HOUR = 20;
+const REPLIES_PER_10_MINUTES = 60;
+const BOT_POSTS_PER_MINUTE = 120;
+
+function limitBot(c: Context<AppEnv>) {
+  const { bot } = c.var;
+  if (bot) rateLimit(`bot:${bot.tokenId}`, BOT_POSTS_PER_MINUTE, MINUTE);
 }
 
 type Thread = Awaited<ReturnType<typeof getThread>>;
@@ -566,6 +580,8 @@ export const threadsRoutes = createRouter()
     }),
     async (c) => {
       const viewer = authorizePosting(c);
+      rateLimit(`thread:${viewer.id}`, THREADS_PER_HOUR, HOUR);
+      limitBot(c);
       const members = isMember(viewer, c.var.bot);
       const thread = await createThread(actorOf(c, viewer), viewer, members, c.req.valid("json"));
       return c.json(threadDetailJson(thread, true), 201);
@@ -596,6 +612,8 @@ export const threadsRoutes = createRouter()
     }),
     async (c) => {
       const viewer = authorizePosting(c);
+      rateLimit(`post:${viewer.id}`, REPLIES_PER_10_MINUTES, 10 * MINUTE);
+      limitBot(c);
       const post = await createPost(
         actorOf(c, viewer),
         viewer,
