@@ -16,11 +16,12 @@ export async function action({ request, context }: Route.ActionArgs) {
   };
   const kind = text("kind");
   const number = (name: string) => (text(name) ? Number(text(name)) : null);
+  const winners = form.getAll("prize_winners");
   const res = await context.get(apiContext).threads.$post({
     json: {
       board: text("board"),
       title: text("title"),
-      kind: kind === "question" || kind === "poll" ? kind : "discussion",
+      kind: kind === "question" || kind === "poll" || kind === "lottery" ? kind : "discussion",
       poll:
         kind === "poll"
           ? {
@@ -30,6 +31,19 @@ export async function action({ request, context }: Route.ActionArgs) {
               anonymous: text("poll_anonymous") === "true",
               results: text("results") === "always" ? "always" : "voted",
               closes_at: number("closes_at"),
+            }
+          : undefined,
+      lottery:
+        kind === "lottery"
+          ? {
+              prizes: form
+                .getAll("prize_names")
+                .flatMap((name, i) =>
+                  typeof name === "string" ? [{ name, winners: Number(winners[i]) }] : [],
+                ),
+              entry: text("entry") === "reply" ? "reply" : "button",
+              min_level: Number(text("min_level")),
+              draws_at: Number(text("draws_at")),
             }
           : undefined,
       tags: form.getAll("tags").filter((t) => typeof t === "string"),

@@ -1,14 +1,13 @@
 import { ChartBar, Check } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
-import { Link, useFetcher } from "react-router";
+import { useEffect, useState } from "react";
+import { useFetcher } from "react-router";
 import { cn } from "cn";
-import type { ThreadDetail, UserBrief } from "~/api-types";
-import { useDismiss } from "~/components/disclosure";
+import type { ThreadDetail } from "~/api-types";
+import { PeoplePopover } from "~/components/people-popover";
 import { Button } from "~/components/ui/button";
 import { Checkbox, Radio } from "~/components/ui/checkbox";
 import { confirmDialog } from "~/components/ui/dialog";
 import { toast } from "~/components/ui/toast";
-import { UserAvatar } from "~/components/user-avatar";
 import { stamp } from "~/time";
 
 type Poll = NonNullable<ThreadDetail["poll"]>;
@@ -197,7 +196,11 @@ function Result({
           <span className="shrink-0 text-meta text-muted-foreground tabular-nums">
             {percent}% ·{" "}
             {voters && option.votes > 0 ? (
-              <Voters source={voters} count={option.votes} />
+              <PeoplePopover
+                source={voters}
+                label={`${option.votes} 票`}
+                title={`${option.votes} 票，查看是谁`}
+              />
             ) : (
               `${option.votes} 票`
             )}
@@ -213,41 +216,5 @@ function Result({
         </div>
       )}
     </li>
-  );
-}
-
-function Voters({ source, count }: { source: string; count: number }) {
-  const [open, setOpen] = useState(false);
-  const root = useRef<HTMLSpanElement>(null);
-  const list = useFetcher<{ items: UserBrief[] }>();
-  useDismiss(open, () => setOpen(false), root);
-  return (
-    <span ref={root} className="relative">
-      <button
-        type="button"
-        aria-expanded={open}
-        aria-label={`${count} 票，查看是谁`}
-        onClick={() => {
-          if (!open && list.state === "idle") void list.load(source);
-          setOpen(!open);
-        }}
-        className="underline-offset-2 hover:text-foreground hover:underline"
-      >
-        {count} 票
-      </button>
-      {open && (
-        <ul className="absolute top-full right-0 z-30 mt-2 max-h-72 w-[min(16rem,calc(100vw-2rem))] overflow-y-auto rounded-xl border bg-popover py-1 text-sm text-popover-foreground shadow-lg animate-in fade-in zoom-in-95">
-          {!list.data && <li className="px-3 py-2 text-muted-foreground">加载中…</li>}
-          {list.data?.items.map((u) => (
-            <li key={u.id}>
-              <Link to={`/u/${u.id}`} className="flex items-center gap-3 px-3 py-2 hover:bg-accent">
-                <UserAvatar user={u} className="size-7" />
-                <span className="min-w-0 truncate font-medium">{u.display_name}</span>
-              </Link>
-            </li>
-          ))}
-        </ul>
-      )}
-    </span>
   );
 }

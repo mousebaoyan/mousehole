@@ -13,6 +13,7 @@ import { stamp, unixNow } from "~/time";
 import type { Route } from "./+types/thread.ts";
 import { FloorNav, FloorProgress, useCurrentFloor, type Floors } from "./floor-timeline.tsx";
 import { BookmarkButton, NOTIFY_LEVELS, NotifyButton } from "./follow-buttons.tsx";
+import { LotteryCard } from "./lottery-card.tsx";
 import { PollCard } from "./poll-card.tsx";
 import { PostCard } from "./post-card.tsx";
 import { REACTIONS } from "./reactions.tsx";
@@ -178,6 +179,19 @@ export async function action({ params, request, context }: Route.ActionArgs) {
           })
         : await api.threads[":id"].poll.close.$post({ param: thread });
     if (res.ok) return { ok: true as const, poll: await res.json() };
+    return { ok: false as const, message: (await res.json()).error.message };
+  }
+  if (text("intent") === "enter-lottery" || text("intent") === "leave-lottery") {
+    const res =
+      text("intent") === "enter-lottery"
+        ? await api.threads[":id"].lottery.entry.$put({ param: thread })
+        : await api.threads[":id"].lottery.entry.$delete({ param: thread });
+    if (res.ok) return { ok: true as const, lottery: await res.json() };
+    return { ok: false as const, message: (await res.json()).error.message };
+  }
+  if (text("intent") === "cancel-lottery") {
+    const res = await api.threads[":id"].lottery.cancel.$post({ param: thread });
+    if (res.ok) return { ok: true as const, lottery: await res.json() };
     return { ok: false as const, message: (await res.json()).error.message };
   }
   if (text("intent") === "delete-thread") {
@@ -438,13 +452,22 @@ function ThreadPage({
                     { method: "post", defaultShouldRevalidate: false },
                   )
                 }
-                poll={
-                  post.floor === 1 && thread.poll ? (
+                card={
+                  post.floor !== 1 ? null : thread.poll ? (
                     <PollCard
                       poll={thread.poll}
                       threadId={thread.id}
                       canVote={me !== null && published && !thread.locked}
                       canClose={staff || authored}
+                      now={now}
+                    />
+                  ) : thread.lottery ? (
+                    <LotteryCard
+                      lottery={thread.lottery}
+                      threadId={thread.id}
+                      me={me && { id: me.id, level: me.level, staff }}
+                      canEnter={me !== null && published && !thread.locked && !authored}
+                      canCancel={staff || authored}
                       now={now}
                     />
                   ) : null

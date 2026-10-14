@@ -49,7 +49,7 @@ export function PostCard({
   parent,
   manage,
   self,
-  poll,
+  card,
   onReply,
   onJump,
   onEdit,
@@ -74,8 +74,8 @@ export function PostCard({
     review: boolean;
   };
   self: Self;
-  // A poll thread's poll, under its opening post.
-  poll: ReactNode;
+  // A poll's or lottery's card, under its opening post.
+  card: ReactNode;
   onReply: (() => void) | undefined;
   onJump: (floor: number) => void;
   onEdit: (markdown: string) => void;
@@ -237,7 +237,7 @@ export function PostCard({
           </div>
         )}
         <div className={cn(PROSE, "mt-2")} dangerouslySetInnerHTML={{ __html: post.html ?? "" }} />
-        {poll}
+        {card}
 
         {/* Relative: the boost input floats from this row when there are no boosts yet. */}
         <div className="relative mt-4 flex flex-wrap items-center gap-x-1 gap-y-2">
