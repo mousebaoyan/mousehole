@@ -11,7 +11,7 @@
 - **指代用户**：路径、请求头和请求体里的用户，可以写论坛用户 ID（`123`），也可以写 QQ 号（`qq:123456789`）。
 - **QQ 号**：返回给已登录的成员、bot 和管理员；访客和冻结的账号看不到（站点设置可以改成公开）。
 - **分页**：列表返回 `{ "items": [...], "next_cursor": "..." }`，取下一页时带 `?cursor=`。帖子里的楼层不用游标，按楼层号取，见[楼层](#35-楼层)。
-- **错误**：HTTP 状态码加 `{ "error": { "code": "thread_locked", "message": "帖子已锁定" } }`。`code` 固定不变，插件据此判断；`message` 给人看，以后可能调整。各接口都可能返回的错误码：`invalid_request`（400，参数不对，`message` 指出哪个字段）、`unauthorized`（401，没有登录）、`forbidden`（403，没有权限）、`level_required`（403，等级不够：L0 的链接数和每天的帖子、回复数，L2 才能发投票帖和抽奖帖，版块的阅读和发帖门槛，抽奖的参与等级；`message` 里有要几级）、`not_found`（404）、`internal_error`（500）。
+- **错误**：HTTP 状态码加 `{ "error": { "code": "thread_locked", "message": "帖子已锁定" } }`。`code` 固定不变，插件据此判断；`message` 给人看，以后可能调整。各接口都可能返回的错误码：`invalid_request`（400，参数不对，`message` 是一句写明哪个字段的话，可以直接转给群友）、`unauthorized`（401，没有登录）、`forbidden`（403，没有权限）、`level_required`（403，等级不够：L0 的链接数和每天的帖子、回复数，L2 才能发投票帖和抽奖帖，版块的阅读和发帖门槛，抽奖的参与等级；`message` 里有要几级）、`not_found`（404）、`internal_error`（500）。
 - **限流**：按 IP、用户和 token 分别限流，超出时返回 `429 rate_limited` 和 `Retry-After`（秒）。
 - **CSRF**：网页的写请求校验 Origin；带 Bearer token 的请求不受影响。
 

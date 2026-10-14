@@ -79,6 +79,15 @@ async function bookmarked() {
 }
 
 describe("发帖和回复", () => {
+  test("校验不通过时，提示是一句写明字段的话", async () => {
+    const res = await api.threads.$post(
+      { json: { board: await newBoard(), title: "两字", content: { markdown: "正文" } } },
+      member,
+    );
+    expect(res.status).toBe(400);
+    expect(await res.json()).toMatchObject({ error: { message: "标题至少 4 个字" } });
+  });
+
   test("并发回复按顺序拿到楼层号，计数都对", async () => {
     const board = await newBoard();
     const thread = await newThread(board);

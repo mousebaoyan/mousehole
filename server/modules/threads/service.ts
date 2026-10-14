@@ -665,10 +665,10 @@ async function resolveContent(
     },
   });
   if (!converted.markdown) {
-    throw new AppError(400, "invalid_request", "content：消息里没有能转成正文的内容");
+    throw new AppError(400, "invalid_request", "消息里没有能转成正文的内容");
   }
   if (converted.markdown.length > MAX_BODY) {
-    throw new AppError(400, "invalid_request", "content：消息太长");
+    throw new AppError(400, "invalid_request", "消息太长");
   }
   return converted;
 }

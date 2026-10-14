@@ -216,7 +216,7 @@ export const authRoutes = createRouter()
           required: true,
           content: {
             "application/json": {
-              schema: z.object({ code: z.string().regex(/^\d{6}$/, "应为 6 位数字") }),
+              schema: z.object({ code: z.string().regex(/^\d{6}$/, "验证码应为 6 位数字") }),
             },
           },
         },
@@ -298,7 +298,10 @@ export const authRoutes = createRouter()
           required: true,
           content: {
             "application/json": {
-              schema: z.object({ qq: Qq, code: z.string().regex(/^\d{6}$/, "应为 6 位数字") }),
+              schema: z.object({
+                qq: Qq,
+                code: z.string().regex(/^\d{6}$/, "验证码应为 6 位数字"),
+              }),
             },
           },
         },
