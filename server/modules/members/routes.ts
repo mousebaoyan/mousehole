@@ -1,6 +1,14 @@
 import { createRoute, z } from "@hono/zod-openapi";
 import { actorOf, authorize, createRouter, errorResponse, unix } from "../../platform/http.ts";
-import { linkGroup, listGroups, syncMembers, updateGroup, updateGroupInfo } from "./service.ts";
+import { UserRefSchema } from "../users/schemas.ts";
+import {
+  linkGroup,
+  listGroups,
+  setRole,
+  syncMembers,
+  updateGroup,
+  updateGroupInfo,
+} from "./service.ts";
 
 // A clock far ahead would make every later push look stale, so it is refused at the door.
 const MAX_CLOCK_AHEAD_S = 10 * 60;
@@ -269,6 +277,34 @@ export const membersRoutes = createRouter()
         enabled,
         isPrimary: is_primary,
       });
+      return c.body(null, 204);
+    },
+  )
+  .openapi(
+    createRoute({
+      method: "patch",
+      path: "/users/{user}",
+      summary: "设置角色：指定的角色会锁定，同步不再覆盖；null 改回跟着群里的角色",
+      request: {
+        params: z.object({ user: UserRefSchema }),
+        body: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: z.object({ role: z.enum(["user", "moderator", "admin"]).nullable() }),
+            },
+          },
+        },
+      },
+      responses: {
+        204: { description: "已设置" },
+        403: errorResponse("不是管理员，或者是 bot 账号、自己"),
+        404: errorResponse("用户不存在"),
+      },
+    }),
+    async (c) => {
+      const viewer = authorize(c, "admin");
+      await setRole(actorOf(c, viewer), c.req.valid("param").user, c.req.valid("json").role);
       return c.body(null, 204);
     },
   );
