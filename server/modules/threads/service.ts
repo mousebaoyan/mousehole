@@ -653,7 +653,11 @@ async function resolveContent(
       ),
     quoted: async (messageId) => {
       if (!source || threadId === null) return null;
-      const link = await findLink({ ...source, message_id: messageId });
+      const link = await findLink({
+        chat_type: source.chat_type,
+        chat_id: source.chat_id,
+        message_id: messageId,
+      });
       return link?.thread_id === threadId ? link.post_id : null;
     },
   });
@@ -756,7 +760,7 @@ export async function createThread(
     throw levelRequired(`L${KIND_LEVEL} 起才能发${input.poll ? "投票帖" : "抽奖帖"}`);
   }
   const tagIds = await findTags(input.tags);
-  if (input.source) await assertNotLinked(input.source);
+  if (input.source) await assertNotLinked(input.source, null);
   const { markdown } = await resolveContent(viewer, input.content, input.source, null);
   const { html, images, mentions, links } = await renderMarkdown(markdown, showImages);
   await assertWithinL0(viewer, input.source, links, "thread");
@@ -849,7 +853,7 @@ export async function createPost(
   if (thread.locked && !STAFF.includes(viewer.role)) {
     throw new AppError(403, "thread_locked", "帖子已锁定");
   }
-  if (input.source) await assertNotLinked(input.source);
+  if (input.source) await assertNotLinked(input.source, null);
   const { markdown, replyToId } = await resolveContent(
     viewer,
     input.content,
@@ -934,14 +938,15 @@ function assertMayChange(staff: boolean, viewer: Viewer, authorId: number, locke
   if (locked) throw new AppError(403, "thread_locked", "帖子已锁定");
 }
 
-// The old text goes into the post's edit history.
+// The old text goes into the post's edit history. A floor archived from a group is organized
+// anew from its messages, which come along in full.
 export async function editPost(
   actor: Actor,
   viewer: Viewer,
   staff: boolean,
   reach: number,
   postId: number,
-  markdown: string,
+  change: { content: Content; source?: Source },
 ) {
   const reader: Reader = { reach, id: viewer.id, staff };
   const post = await getPost(postId, reader);
@@ -950,11 +955,16 @@ export async function editPost(
   // L5 edits the floors of those below them.
   const power = staff ? 0 : await levelPower(viewer, post.author_id, "anonymous" in post.author);
   if (power < 5) assertMayChange(staff, viewer, post.author_id, thread.locked);
-  if (markdown === post.body) return post;
+  const { source } = change;
+  if (source) await assertNotLinked(source, postId);
+  const { markdown } = await resolveContent(viewer, change.content, source, post.thread_id);
+  if (markdown === post.body && !source) return post;
   const shown = post.status === "visible" && thread.status === "visible";
   const { html, images } = await renderMarkdown(markdown, showImages);
 
   await db.transaction().execute(async (trx) => {
+    if (source) await linkSource(trx, source, post.thread_id, postId);
+    if (markdown === post.body) return;
     const edited = await trx
       .updateTable("posts")
       .set((eb) => ({

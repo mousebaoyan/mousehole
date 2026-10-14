@@ -233,8 +233,6 @@ const Markdown = z
   .max(MAX_BODY)
   .refine((s) => s.trim().length > 0, "正文不能为空");
 
-const MarkdownContent = z.object({ markdown: Markdown });
-
 const Status = z.enum(["visible", "hidden"]).openapi({
   description: "版主：visible 审核通过或恢复，hidden 隐藏",
 });
@@ -245,7 +243,7 @@ const Reason = z
   .openapi({ description: "隐藏的理由，告诉作者，记进操作日志" });
 
 const Content = z.union([
-  MarkdownContent,
+  z.object({ markdown: Markdown }),
   z.object({
     onebot: z
       .array(z.object({ type: z.string(), data: z.record(z.string(), z.unknown()) }))
@@ -259,9 +257,13 @@ const Source = z
   .object({
     chat_type: z.enum(["group", "private"]),
     chat_id: z.number().int().positive(),
-    message_id: z.number().int(),
+    message_ids: z
+      .array(z.number().int())
+      .min(1)
+      .max(50)
+      .refine((ids) => new Set(ids).size === ids.length, "消息不能重复"),
   })
-  .openapi("Source", { description: "内容来自哪条 QQ 消息" });
+  .openapi("Source", { description: "内容整理自同一个聊天里的哪几条 QQ 消息" });
 
 const Title = z.string().trim().min(4).max(80);
 
@@ -696,7 +698,7 @@ export const threadsRoutes = createRouter()
         400: errorResponse("标签不存在等"),
         403: errorResponse("不是成员，或者这个版块只有版主能发帖"),
         404: errorResponse("版块不存在"),
-        409: errorResponse("这条 QQ 消息已经转到论坛了，附上已有的 thread_id 和 post_id"),
+        409: errorResponse("有消息已经收录到论坛了，附上它所在的 thread_id 和 post_id"),
       },
     }),
     async (c) => {
@@ -728,7 +730,7 @@ export const threadsRoutes = createRouter()
         400: errorResponse("回复的那一层不在这个帖子里"),
         403: errorResponse("不是成员，或者帖子已锁定"),
         404: errorResponse("帖子不存在"),
-        409: errorResponse("这条 QQ 消息已经转到论坛了，附上已有的 thread_id 和 post_id"),
+        409: errorResponse("有消息已经收录到论坛了，附上它所在的 thread_id 和 post_id"),
       },
     }),
     async (c) => {
@@ -812,17 +814,22 @@ export const threadsRoutes = createRouter()
       method: "patch",
       path: "/posts/{id}",
       summary:
-        "修改回复或主楼的正文，旧的正文进编辑记录；版主还可以审核通过、隐藏或恢复（主楼随帖子）",
+        "修改回复或主楼的正文，旧的正文进编辑记录；收录的楼层可以带上完整的来源消息；版主还可以审核通过、隐藏或恢复（主楼随帖子）",
       request: {
         params: IdParam,
         body: json(
           z
             .object({
-              content: MarkdownContent.optional(),
+              content: Content.optional(),
+              source: Source.optional().openapi({ description: "这一层整理自的全部消息" }),
               status: Status.optional(),
               reason: Reason.optional(),
             })
-            .refine((b) => b.content || b.status, "content 和 status 至少带一个"),
+            .refine((b) => b.content || b.status, "content 和 status 至少带一个")
+            .refine((b) => !b.source || b.content, {
+              message: "source 要和 content 一起带",
+              path: ["source"],
+            }),
         ),
       },
       responses: {
@@ -830,11 +837,12 @@ export const threadsRoutes = createRouter()
         400: errorResponse("改的是主楼的状态"),
         403: errorResponse("不是作者或版主，或者帖子已锁定"),
         404: errorResponse("回复不存在"),
+        409: errorResponse("有消息已经收录在别的楼层，附上它所在的 thread_id 和 post_id"),
       },
     }),
     async (c) => {
       const viewer = authorizePosting(c);
-      const { content, status, reason } = c.req.valid("json");
+      const { content, source, status, reason } = c.req.valid("json");
       const reach = reachOf(viewer, c.var.bot);
       const id = c.req.valid("param").id;
       if (status !== undefined) {
@@ -842,7 +850,10 @@ export const threadsRoutes = createRouter()
         await setPostStatus(actorOf(c, viewer), viewer, reach, id, status, reason ?? null);
       }
       if (content) {
-        await editPost(actorOf(c, viewer), viewer, can(c, "moderate"), reach, id, content.markdown);
+        await editPost(actorOf(c, viewer), viewer, can(c, "moderate"), reach, id, {
+          content,
+          source,
+        });
       }
       const post = await getPost(id, readerOf(c));
       return c.json(postJson(post, "html", await floorExtras(readerOf(c), [post.id])), 200);

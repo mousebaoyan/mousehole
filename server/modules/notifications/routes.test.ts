@@ -224,7 +224,7 @@ describe("邮件", () => {
           board: "n",
           title: "群里的提问",
           content: { markdown: `[@某人](/u/${other.id}) 知道吗` },
-          source: { ...source, message_id: 1 },
+          source: { ...source, message_ids: [1] },
         },
       },
       bot,
@@ -233,7 +233,7 @@ describe("邮件", () => {
     await api.threads[":id"].posts.$post(
       {
         param: { id: String(t.id) },
-        json: { content: { markdown: "群里的回答" }, source: { ...source, message_id: 2 } },
+        json: { content: { markdown: "群里的回答" }, source: { ...source, message_ids: [2] } },
       },
       bot,
     );

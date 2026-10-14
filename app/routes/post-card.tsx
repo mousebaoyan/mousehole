@@ -156,9 +156,10 @@ export function PostCard({
           )}
           <span className="ml-auto flex items-center gap-2 text-xs whitespace-nowrap text-muted-foreground">
             {post.via === "qq" && (
-              <MessagesSquare className="size-3.5" aria-label="来自群聊">
-                <title>来自群聊</title>
-              </MessagesSquare>
+              <span className="inline-flex items-center gap-1">
+                <MessagesSquare className="size-3.5" />
+                整理自群聊
+              </span>
             )}
             {replyTo && (
               <button

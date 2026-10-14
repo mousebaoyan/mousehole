@@ -20,9 +20,9 @@ async function person(trx: Transaction<DB>, id: number) {
     .executeTakeFirstOrThrow();
 }
 
-// A floor with its thread and board, its author, and the QQ message it came from, if any.
+// A floor with its thread and board, and its author.
 async function floorOf(trx: Transaction<DB>, postId: number) {
-  const { chat_type, chat_id, message_id, alias, ...row } = await trx
+  const { alias, ...row } = await trx
     .selectFrom("posts")
     .innerJoin("threads", "threads.id", "posts.thread_id")
     .innerJoin("boards", "boards.id", "threads.board_id")
@@ -31,9 +31,6 @@ async function floorOf(trx: Transaction<DB>, postId: number) {
         .onRef("alias.thread_id", "=", "posts.thread_id")
         .onRef("alias.user_id", "=", "posts.author_id")
         .on("posts.anonymous", "=", true),
-    )
-    .leftJoin("qq_message_links as link", (join) =>
-      join.onRef("link.post_id", "=", "posts.id").on("link.kind", "=", "source"),
     )
     .select([
       "posts.id",
@@ -46,9 +43,6 @@ async function floorOf(trx: Transaction<DB>, postId: number) {
       "threads.kind",
       "boards.slug as board_slug",
       "boards.name as board_name",
-      "link.chat_type",
-      "link.chat_id",
-      "link.message_id",
       "alias.number as alias",
     ])
     .where("posts.id", "=", postId)
@@ -56,10 +50,6 @@ async function floorOf(trx: Transaction<DB>, postId: number) {
   return {
     ...row,
     author: alias === null ? await person(trx, row.author_id) : anonymousBrief(alias),
-    source:
-      chat_type === null || chat_id === null || message_id === null
-        ? null
-        : { chat_type, chat_id, message_id },
   };
 }
 
@@ -76,12 +66,11 @@ export async function threadCreated(trx: Transaction<DB>, openingPostId: number)
     thread: { id: f.thread_id, title: f.title, kind: f.kind },
     board: { slug: f.board_slug, name: f.board_name },
     author: f.author,
-    source: f.source,
     url: link(f.thread_id, 1),
   });
 }
 
-// With the floor it answers and the QQ message that floor came from, if any.
+// With the floor it answers.
 export async function postCreated(trx: Transaction<DB>, postId: number) {
   const f = await floorOf(trx, postId);
   const target = f.reply_to_id === null ? null : await floorOf(trx, f.reply_to_id);
@@ -93,9 +82,7 @@ export async function postCreated(trx: Transaction<DB>, postId: number) {
       id: target.id,
       floor: target.floor,
       author: target.author,
-      source: target.source,
     },
-    source: f.source,
     url: link(f.thread_id, f.floor),
   });
 }
