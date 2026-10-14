@@ -30,9 +30,11 @@ test("管理员登录，建版块、设公告，发帖再回复", async ({ page 
   await page.getByRole("button", { name: "保存" }).click();
   await expect(page.getByText("已保存，立即生效")).toBeVisible();
 
-  await page.goto("/new");
-  await page.getByRole("button", { name: "版块" }).click();
-  await page.getByRole("button", { name: "端到端" }).click();
+  await page.goto("/");
+  await page.getByRole("button", { name: "发帖" }).click();
+  const composer = page.getByRole("region", { name: "发帖" });
+  await composer.getByRole("button", { name: "版块" }).click();
+  await composer.getByRole("button", { name: "端到端" }).click();
   await page.getByLabel("标题").fill("端到端测试发的帖子");
   await page.getByLabel("正文").fill("**正文**里有加粗");
   await page.getByRole("button", { name: "发布" }).click();

@@ -5,11 +5,11 @@ export default [
     index("routes/home.tsx"),
     route("b/:slug", "routes/board.tsx"),
     route("t/:id", "routes/thread.tsx"),
-    route("new", "routes/new-thread.tsx"),
     route("my/:list", "routes/my-threads.tsx"),
     route("u/:id", "routes/user.tsx"),
     route("notifications", "routes/notifications.tsx"),
     route("settings", "routes/settings.tsx"),
+    route("drafts", "routes/drafts.tsx"),
     route("search", "routes/search.tsx"),
   ]),
   layout("routes/login-layout.tsx", [
@@ -17,6 +17,7 @@ export default [
     route("login/link", "routes/login-link.tsx"),
   ]),
   // For fetchers on the forum's pages.
+  route("new", "routes/new-thread.ts"),
   route("t/:id/floors", "routes/thread-floors.ts"),
   route("t/:id/p/:post", "routes/thread-post.ts"),
   route("t/:id/p/:post/replies", "routes/thread-replies.ts"),

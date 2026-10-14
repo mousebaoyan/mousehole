@@ -1,6 +1,7 @@
-import { Bell, LogOut, Menu, PenSquare, Search, Settings, User, Wrench, X } from "lucide-react";
+import { Bell, LogOut, Menu, Search, Settings, User, Wrench, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Form, Link, useLocation, useParams } from "react-router";
+import { NewThreadButton } from "~/components/composer";
 import { Drawer, Dropdown, menuItem } from "~/components/disclosure";
 import { ForumNav } from "~/components/forum-nav";
 import { Logo } from "~/components/logo";
@@ -125,12 +126,7 @@ export function SiteHeader({ me, unread: loaded }: { me: Me | null; unread: numb
                   </span>
                 )}
               </Link>
-              <Link
-                to={slug ? `/new?board=${slug}` : "/new"}
-                className={buttonVariants({ className: "mx-1 hidden sm:inline-flex" })}
-              >
-                <PenSquare /> 发帖
-              </Link>
+              <NewThreadButton board={slug ?? null} className="mx-1 hidden sm:inline-flex" />
               <Dropdown
                 key={pathname}
                 label="我的账号"
