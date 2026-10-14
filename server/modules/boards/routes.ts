@@ -24,6 +24,9 @@ const BoardSchema = z
     visibility: z.string().openapi({ description: "public：公开；members：仅成员" }),
     post_role: z.string().openapi({ description: "谁能发主题。user：成员；moderator：版主" }),
     default_kind: z.string().openapi({ description: "发主题时默认的类型：discussion 或 question" }),
+    review_mode: z.string().openapi({
+      description: "after：先发后审；before：先审后发，版主以外的人发的内容通过审核才公开",
+    }),
     thread_count: z.number(),
   })
   .openapi("Board");
@@ -47,6 +50,7 @@ const BoardFields = z.object({
   visibility: z.enum(["public", "members"]),
   post_role: z.enum(["user", "moderator"]),
   default_kind: z.enum(["discussion", "question"]),
+  review_mode: z.enum(["after", "before"]),
 });
 
 const TagFields = z.object({

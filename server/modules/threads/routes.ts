@@ -37,6 +37,7 @@ import {
   listReplies,
   listRevisions,
   listThreads,
+  listModerated,
   listUserPosts,
   MAX_BODY,
   NOTIFY_LEVELS,
@@ -44,7 +45,9 @@ import {
   recordView,
   setBookmark,
   setNotifyLevel,
+  setPostStatus,
   setSolution,
+  setThreadStatus,
   VIEWS,
   type ThreadView,
 } from "./service.ts";
@@ -52,6 +55,9 @@ import {
 const ThreadDetailSchema = ThreadSchema.extend({
   url: z.string(),
   solved_floor: z.number().nullable().openapi({ description: "采纳的回答在第几楼" }),
+  status: z.string().openapi({
+    description: "visible 公开；pending 待审核、hidden 已隐藏，这两种只有作者和版主打得开",
+  }),
   read_floors: z
     .array(z.tuple([z.number(), z.number()]))
     .optional()
@@ -83,6 +89,9 @@ const PostSchema = z
     boost_count: z.number(),
     my_boost: z.string().nullable().openapi({ description: "自己的短评；访客为 null" }),
     deleted: z.boolean().openapi({ description: "已删除的楼层保留楼层号，没有正文" }),
+    status: z.string().openapi({
+      description: "visible 公开；pending 待审核、hidden 已隐藏，这两种只有作者和版主看得到",
+    }),
     edited_at: z.number().nullable(),
     created_at: z.number(),
   })
@@ -97,6 +106,7 @@ function threadDetailJson(t: Thread, signedIn: boolean) {
     ...threadJson(t, signedIn),
     url: `${env.PUBLIC_URL}/t/${t.id}`,
     solved_floor: t.solved_floor,
+    status: t.status,
     ...(signedIn && {
       read_floors: t.read_floors,
       bookmarked: t.bookmarked_at !== null,
@@ -125,6 +135,7 @@ function postJson(p: Post, form: "html" | "markdown", extras: Extras) {
     boost_count: p.boost_count,
     my_boost: extras.myBoost.get(p.id) ?? null,
     deleted,
+    status: p.status,
     edited_at: p.edited_at && unix(p.edited_at),
     created_at: unix(p.created_at),
   };
@@ -150,6 +161,15 @@ const Markdown = z
   .refine((s) => s.trim().length > 0, "正文不能为空");
 
 const MarkdownContent = z.object({ markdown: Markdown });
+
+const Status = z.enum(["visible", "hidden"]).openapi({
+  description: "版主：visible 审核通过或恢复，hidden 隐藏",
+});
+const Reason = z
+  .string()
+  .trim()
+  .max(200)
+  .openapi({ description: "隐藏的理由，告诉作者，记进操作日志" });
 
 const Content = z.union([
   MarkdownContent,
@@ -566,6 +586,8 @@ export const threadsRoutes = createRouter()
             pinned: z.number().int().min(0).max(2).optional(),
             featured: z.boolean().optional(),
             locked: z.boolean().optional(),
+            status: Status.optional(),
+            reason: Reason.optional(),
           }),
         ),
       },
@@ -577,14 +599,17 @@ export const threadsRoutes = createRouter()
     }),
     async (c) => {
       const viewer = authorizePosting(c);
-      const thread = await editThread(
-        actorOf(c, viewer),
-        viewer,
-        can(c, "moderate"),
-        isMember(viewer, c.var.bot),
-        c.req.valid("param").id,
-        c.req.valid("json"),
-      );
+      const { status, reason, ...change } = c.req.valid("json");
+      const members = isMember(viewer, c.var.bot);
+      const id = c.req.valid("param").id;
+      if (status !== undefined) {
+        authorize(c, "moderate");
+        await setThreadStatus(actorOf(c, viewer), viewer, members, id, status, reason ?? null);
+      }
+      const thread =
+        Object.keys(change).length === 0
+          ? await getThread(id, readerOf(c))
+          : await editThread(actorOf(c, viewer), viewer, can(c, "moderate"), members, id, change);
       return c.json(threadDetailJson(thread, true), 200);
     },
   )
@@ -612,24 +637,47 @@ export const threadsRoutes = createRouter()
     createRoute({
       method: "patch",
       path: "/posts/{id}",
-      summary: "修改回复或主楼的正文，旧的正文进编辑记录",
-      request: { params: IdParam, body: json(z.object({ content: MarkdownContent })) },
+      summary:
+        "修改回复或主楼的正文，旧的正文进编辑记录；版主还可以审核通过、隐藏或恢复（主楼随主题）",
+      request: {
+        params: IdParam,
+        body: json(
+          z
+            .object({
+              content: MarkdownContent.optional(),
+              status: Status.optional(),
+              reason: Reason.optional(),
+            })
+            .refine((b) => b.content || b.status, "content 和 status 至少带一个"),
+        ),
+      },
       responses: {
         200: postResponse,
+        400: errorResponse("改的是主楼的状态"),
         403: errorResponse("不是作者或版主，或者主题已锁定"),
         404: errorResponse("回复不存在"),
       },
     }),
     async (c) => {
       const viewer = authorizePosting(c);
-      const post = await editPost(
-        actorOf(c, viewer),
-        viewer,
-        can(c, "moderate"),
-        isMember(viewer, c.var.bot),
-        c.req.valid("param").id,
-        c.req.valid("json").content.markdown,
-      );
+      const { content, status, reason } = c.req.valid("json");
+      const members = isMember(viewer, c.var.bot);
+      const id = c.req.valid("param").id;
+      if (status !== undefined) {
+        authorize(c, "moderate");
+        await setPostStatus(actorOf(c, viewer), viewer, members, id, status, reason ?? null);
+      }
+      if (content) {
+        await editPost(
+          actorOf(c, viewer),
+          viewer,
+          can(c, "moderate"),
+          members,
+          id,
+          content.markdown,
+        );
+      }
+      const post = await getPost(id, readerOf(c));
       return c.json(postJson(post, "html", await floorExtras(viewer.id, [post.id])), 200);
     },
   )
@@ -717,6 +765,60 @@ export const threadsRoutes = createRouter()
       const members = isMember(viewer, c.var.bot);
       await recordReading(viewer, members, c.req.valid("param").id, floors, seconds);
       return c.body(null, 204);
+    },
+  )
+  .openapi(
+    createRoute({
+      method: "get",
+      path: "/admin/content",
+      summary: "待审核或已隐藏的内容，最新的在前，每页 30 条；主题以主楼出现",
+      request: {
+        query: z.object({
+          status: z.enum(["pending", "hidden"]).default("pending"),
+          cursor: z.coerce.number().int().optional(),
+        }),
+      },
+      responses: {
+        200: {
+          description: "内容",
+          content: {
+            "application/json": {
+              schema: z.object({
+                items: z.array(
+                  z.object({
+                    id: z.number(),
+                    floor: z.number(),
+                    thread_id: z.number(),
+                    title: z.string(),
+                    board: z.object({ slug: z.string(), name: z.string() }),
+                    author: UserBriefSchema,
+                    excerpt: z.string(),
+                    created_at: z.number(),
+                  }),
+                ),
+                next_cursor: z.string().nullable(),
+              }),
+            },
+          },
+        },
+        403: errorResponse("不是版主"),
+      },
+    }),
+    async (c) => {
+      authorize(c, "moderate");
+      const { status, cursor } = c.req.valid("query");
+      const page = await listModerated(status, cursor);
+      return c.json(
+        {
+          items: page.items.map(({ board_slug, board_name, created_at, ...r }) => ({
+            ...r,
+            board: { slug: board_slug, name: board_name },
+            created_at: unix(created_at),
+          })),
+          next_cursor: page.next_cursor,
+        },
+        200,
+      );
     },
   )
   .openapi(

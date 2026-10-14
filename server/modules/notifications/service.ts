@@ -10,7 +10,8 @@ import { userBriefs } from "../users/service.ts";
 
 // What people are told of; see design §8.6. reply: someone replied to my floor; mention: @ me;
 // like and boost: on my floor; watching: a new floor in a thread I watch; following: a new thread
-// by someone I follow; solved: my answer was accepted.
+// by someone I follow; solved: my answer was accepted; moderation: something of mine was
+// approved, rejected, hidden or shown again.
 export const NOTIFICATION_TYPES = [
   "reply",
   "mention",
@@ -19,6 +20,7 @@ export const NOTIFICATION_TYPES = [
   "watching",
   "following",
   "solved",
+  "moderation",
 ] as const;
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
 
@@ -35,7 +37,7 @@ type Notice = {
 };
 
 // Unless turned off, every type shows on the site; QQ reminders only come for these.
-const QQ_BY_DEFAULT = new Set<NotificationType>(["reply", "mention", "solved"]);
+const QQ_BY_DEFAULT = new Set<NotificationType>(["reply", "mention", "solved", "moderation"]);
 
 // Someone's switches for every type, what they set over the defaults.
 export function notifyPrefs(saved: Record<string, { site?: boolean; qq?: boolean }>) {
@@ -56,6 +58,15 @@ const SAID: Record<NotificationType, string> = {
   watching: "回复了你关注的主题",
   following: "发了新主题",
   solved: "采纳了你的回答",
+  moderation: "处理了你的内容",
+};
+
+// What a moderator did, for moderation notices.
+const MODERATED: Record<string, string> = {
+  approve: "通过了你的内容",
+  reject: "没有通过你的内容",
+  hide: "隐藏了你的内容",
+  unhide: "恢复了你的内容",
 };
 
 // Characters of the floor in a QQ reminder.
@@ -147,7 +158,10 @@ async function remindOnQq(
     .where("posts.id", "=", notice.postId)
     .executeTakeFirstOrThrow();
   const url = `${env.PUBLIC_URL}/t/${notice.threadId}${about.floor > 1 ? `?floor=${about.floor}` : ""}`;
-  const text = `${about.actor_name} ${SAID[notice.type]}：${excerpt(about.html, QQ_EXCERPT)}\n${about.title}\n${url}`;
+  const said =
+    notice.type === "moderation" ? MODERATED[notice.data?.action ?? ""] : SAID[notice.type];
+  const reason = notice.data?.reason ? `（${notice.data.reason}）` : "";
+  const text = `${about.actor_name} ${said}${reason}：${excerpt(about.html, QQ_EXCERPT)}\n${about.title}\n${url}`;
   for (const person of people) {
     await recordEvent(trx, "notification.created", {
       user: { id: person.id, display_name: person.display_name, qq: person.qq },
@@ -214,7 +228,7 @@ export async function notifyThread(
 // likes and boosts merge with others on that floor.
 export async function notifyOnPost(
   trx: Transaction<DB>,
-  type: "like" | "boost" | "solved",
+  type: "like" | "boost" | "solved" | "moderation",
   post: { id: number; thread_id: number; author_id: number },
   actorId: number,
   data: Record<string, string>,
@@ -290,6 +304,8 @@ export async function listNotifications(userId: number, unreadOnly: boolean, cur
       "posts.id as post_id",
       "posts.floor",
       "posts.html",
+      "posts.author_id",
+      "posts.status",
       "posts.deleted_at",
     ])
     .where("notifications.user_id", "=", userId)
@@ -321,7 +337,11 @@ export async function listNotifications(userId: number, unreadOnly: boolean, cur
       count: r.count,
       thread: { id: r.thread_id, title: r.title },
       post: { id: r.post_id, floor: r.floor },
-      excerpt: r.deleted_at === null ? excerpt(r.html, EXCERPT) : "",
+      // Content waiting for review or hidden shows to its author only.
+      excerpt:
+        r.deleted_at === null && (r.status === "visible" || r.author_id === userId)
+          ? excerpt(r.html, EXCERPT)
+          : "",
       data: r.data,
       read: r.read_at !== null,
       created_at: r.created_at,
