@@ -7,6 +7,7 @@ import { apiContext, createApi } from "../app/api.server.ts";
 import { nonceContext } from "../app/nonce.ts";
 import { app } from "./app.ts";
 import { clearExpiredLogins } from "./modules/auth/service.ts";
+import { clearOldDrafts } from "./modules/drafts/service.ts";
 import { clearOldEvents, EVENTS_CHANNEL, eventsArrived } from "./modules/events/service.ts";
 import {
   clearOldNotifications,
@@ -38,6 +39,7 @@ every(DAY_MS, "Clearing expired logins", clearExpiredLogins);
 every(DAY_MS, "Clearing old idempotency keys", clearIdempotencyKeys);
 every(DAY_MS, "Clearing old notifications", clearOldNotifications);
 every(DAY_MS, "Clearing old events", clearOldEvents);
+every(DAY_MS, "Clearing old drafts", clearOldDrafts);
 
 // A thread served from the guest page cache skips the loader that counts its view.
 function countCachedView(c: Context) {

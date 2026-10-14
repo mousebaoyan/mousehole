@@ -7,6 +7,7 @@ import { log } from "../../platform/log.ts";
 import { excerpt, renderMarkdown } from "../../platform/markdown.ts";
 import { recordAudit } from "../audit/service.ts";
 import { countBoard, countTags, findTags, getBoard, getTagId } from "../boards/service.ts";
+import { discardDraft } from "../drafts/service.ts";
 import { onebotToMarkdown, type Segment } from "../qq/onebot.ts";
 import { notifyOnPost, notifyPost, notifyThread } from "../notifications/service.ts";
 import { assertNotLinked, findLink, linkSource, type Source } from "../qq/service.ts";
@@ -624,6 +625,8 @@ export async function createThread(
       .executeTakeFirstOrThrow();
     await linkUploads(trx, opening.id, images);
     if (input.source) await linkSource(trx, input.source, thread.id, opening.id);
+    // Posted from the composer; what a bot posts for them leaves their draft alone.
+    if (actor.tokenId === null) await discardDraft(trx, viewer.id, null);
     if (tagIds.length > 0) {
       await trx
         .insertInto("thread_tags")
@@ -680,6 +683,7 @@ export async function createPost(
 
   const status = statusFor(thread.review_mode, viewer);
   const id = await db.transaction().execute(async (trx) => {
+    if (actor.tokenId === null) await discardDraft(trx, viewer.id, threadId);
     if (replyTo !== undefined) {
       const target = await trx
         .selectFrom("posts")
