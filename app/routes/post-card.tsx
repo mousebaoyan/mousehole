@@ -25,6 +25,7 @@ import { UserBadges } from "~/components/user-badges";
 import { Button, buttonVariants } from "~/components/ui/button";
 import type { PostItem, UserBrief } from "~/api-types";
 import { useMe } from "~/forum";
+import { Dialog } from "~/components/ui/dialog";
 import { stamp } from "~/time";
 import { BoostButton, BoostChip, useBoosts } from "./boosts.tsx";
 import { LikeButton, ReactionSummary, useReaction } from "./reactions.tsx";
@@ -412,9 +413,9 @@ function HistoryDialog({
   now: number;
 }) {
   return (
-    <dialog
+    <Dialog
       ref={ref}
-      className="m-auto max-h-[min(40rem,calc(100svh-2rem))] w-[min(36rem,calc(100%-2rem))] rounded-2xl border bg-popover p-0 text-popover-foreground shadow-xl backdrop:bg-black/30"
+      className="max-h-[min(40rem,calc(100svh-2rem))] w-[min(36rem,calc(100%-2rem))] overflow-auto p-0"
     >
       <div className="flex items-center border-b px-5 py-3">
         <h2 className="font-semibold">#{floor} 的编辑记录</h2>
@@ -439,7 +440,7 @@ function HistoryDialog({
           </li>
         ))}
       </ol>
-    </dialog>
+    </Dialog>
   );
 }
 

@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { data } from "react-router";
 import { cn } from "cn";
+import { Checkbox } from "~/components/ui/checkbox";
 
 // Pieces of the forms on the settings and admin pages.
 
@@ -54,12 +55,7 @@ export function Check({
 }) {
   return (
     <label className="flex items-start gap-3 py-1.5 text-sm">
-      <input
-        type="checkbox"
-        name={name}
-        defaultChecked={checked}
-        className="mt-0.5 size-4 accent-primary"
-      />
+      <Checkbox name={name} defaultChecked={checked} className="mt-0.5" />
       <span>
         {label}
         {hint && <span className="block text-meta text-muted-foreground">{hint}</span>}
@@ -112,7 +108,7 @@ export async function readForm(request: Request) {
   };
 }
 
-// A <select>'s value as one of its options, typed for the API client.
+// A Select's value as one of its options, typed for the API client.
 export function choice<T extends string>(options: readonly { value: T }[], value: string) {
   const option = options.find((o) => o.value === value);
   if (!option) throw data("表单有误", { status: 400 });

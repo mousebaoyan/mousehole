@@ -5,9 +5,10 @@ import { apiContext } from "../../api.server.ts";
 import { cn } from "cn";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
-import { NativeSelect } from "~/components/ui/native-select";
+import { Select } from "~/components/ui/select";
 import type { Route } from "./+types/tags.ts";
 import { choice, Field, readForm, Result, Section } from "~/components/form-parts";
+import { confirmSubmit } from "~/components/ui/dialog";
 
 export function meta() {
   return [{ title: "标签 · 管理后台" }];
@@ -148,22 +149,18 @@ function EditTag({ tag, tags, busy }: { tag: Tag; tags: Tag[]; busy: boolean }) 
       <Form method="post" action="/admin/tags" className="flex flex-wrap items-end gap-2">
         <input type="hidden" name="id" value={tag.id} />
         <Field label="合并到">
-          <NativeSelect name="into" required defaultValue="" className="w-48">
-            <option value="" disabled>
-              选择标签
-            </option>
-            {KINDS.map((k) => (
-              <optgroup key={k.value} label={k.label}>
-                {tags
-                  .filter((t) => t.kind === k.value && t.id !== tag.id)
-                  .map((t) => (
-                    <option key={t.id} value={t.id}>
-                      {t.name}
-                    </option>
-                  ))}
-              </optgroup>
-            ))}
-          </NativeSelect>
+          <Select
+            name="into"
+            required
+            defaultValue=""
+            placeholder="选择标签"
+            options={KINDS.flatMap((k) =>
+              tags
+                .filter((t) => t.kind === k.value && t.id !== tag.id)
+                .map((t) => ({ value: String(t.id), label: t.name, group: k.label })),
+            )}
+            className="w-48"
+          />
         </Field>
         <Button type="submit" name="intent" value="merge" variant="outline" disabled={busy}>
           合并
@@ -176,11 +173,7 @@ function EditTag({ tag, tags, busy }: { tag: Tag; tags: Tag[]; busy: boolean }) 
           className="ml-auto"
           formNoValidate
           disabled={busy}
-          onClick={(e) => {
-            if (!confirm(`删除标签「${tag.name}」？帖子上的这个标签会一并去掉。`)) {
-              e.preventDefault();
-            }
-          }}
+          onClick={confirmSubmit(`删除标签「${tag.name}」？帖子上的这个标签会一并去掉。`, "删除")}
         >
           删除
         </Button>
@@ -193,13 +186,5 @@ function EditTag({ tag, tags, busy }: { tag: Tag; tags: Tag[]; busy: boolean }) 
 }
 
 function Kinds({ value }: { value?: string }) {
-  return (
-    <NativeSelect name="kind" defaultValue={value} className="w-28">
-      {KINDS.map((k) => (
-        <option key={k.value} value={k.value}>
-          {k.label}
-        </option>
-      ))}
-    </NativeSelect>
-  );
+  return <Select name="kind" defaultValue={value} options={KINDS} className="w-28" />;
 }

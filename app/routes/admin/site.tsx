@@ -2,7 +2,7 @@ import { Form, useNavigation } from "react-router";
 import { apiContext } from "../../api.server.ts";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
-import { NativeSelect } from "~/components/ui/native-select";
+import { Select } from "~/components/ui/select";
 import type { Route } from "./+types/site.ts";
 import { Check, Field, readForm, Result, Section } from "~/components/form-parts";
 
@@ -55,10 +55,14 @@ export default function Site({
             <Input name="banner" defaultValue={site.banner} maxLength={200} />
           </Field>
           <Field label="新版块的审核方式" hint="新建版块时默认选这个，建好后每个版块可以单独改">
-            <NativeSelect name="review_mode" defaultValue={site.review_mode}>
-              <option value="after">先发后审</option>
-              <option value="before">先审后发</option>
-            </NativeSelect>
+            <Select
+              name="review_mode"
+              defaultValue={site.review_mode}
+              options={[
+                { value: "after", label: "先发后审" },
+                { value: "before", label: "先审后发" },
+              ]}
+            />
           </Field>
           <Check
             name="qq_public"

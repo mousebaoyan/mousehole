@@ -1,5 +1,6 @@
 import { Check, Eye, EyeOff } from "lucide-react";
 import { menuItem } from "~/components/disclosure";
+import { promptDialog } from "~/components/ui/dialog";
 
 export type Review = { status: "visible" | "hidden"; reason: string };
 
@@ -14,9 +15,16 @@ export function ReviewItems({
   close: () => void;
   onReview: (review: Review) => void;
 }) {
-  function review(to: Review["status"]) {
+  async function review(to: Review["status"]) {
     close();
-    const reason = to === "hidden" ? prompt("理由，会告诉作者；可以不填") : "";
+    const reason =
+      to === "hidden"
+        ? await promptDialog(
+            "理由会告诉作者，可以不填。",
+            "理由",
+            status === "pending" ? "不通过" : "隐藏",
+          )
+        : "";
     if (reason !== null) onReview({ status: to, reason: reason.trim() });
   }
   if (status === "pending") {

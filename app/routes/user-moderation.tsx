@@ -4,7 +4,9 @@ import { Form } from "react-router";
 import { Field } from "~/components/form-parts";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
-import { NativeSelect } from "~/components/ui/native-select";
+import { Radio } from "~/components/ui/checkbox";
+import { Dialog } from "~/components/ui/dialog";
+import { Select } from "~/components/ui/select";
 import type { Restriction } from "~/restriction";
 
 const DAYS = [
@@ -50,10 +52,7 @@ export function ModerationButtons({
       >
         <MicOff /> 禁言{admin && "或封禁"}
       </Button>
-      <dialog
-        ref={dialog}
-        className="m-auto w-[min(24rem,calc(100%-2rem))] rounded-2xl border bg-popover p-5 text-popover-foreground shadow-xl backdrop:bg-black/30"
-      >
+      <Dialog ref={dialog}>
         <Form method="post" onSubmit={() => dialog.current?.close()}>
           <input type="hidden" name="intent" value="restrict" />
           <h2 className="font-semibold">{admin ? "禁言或封禁" : "禁言"}</h2>
@@ -70,12 +69,11 @@ export function ModerationButtons({
                   key={type}
                   className="flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 has-checked:border-brand has-checked:bg-brand/10"
                 >
-                  <input
-                    type="radio"
+                  <Radio
                     name="type"
                     value={type}
                     defaultChecked={type === "mute"}
-                    className="accent-brand"
+                    className="checked:border-brand"
                   />
                   <Icon className="size-4" /> {label}
                 </label>
@@ -84,13 +82,11 @@ export function ModerationButtons({
           )}
           <div className="mt-4 flex flex-col gap-3">
             <Field label="时长">
-              <NativeSelect name="days" defaultValue="1">
-                {DAYS.map((d) => (
-                  <option key={d.days} value={d.days}>
-                    {d.label}
-                  </option>
-                ))}
-              </NativeSelect>
+              <Select
+                name="days"
+                defaultValue="1"
+                options={DAYS.map((d) => ({ value: String(d.days), label: d.label }))}
+              />
             </Field>
             <Field label="理由">
               <Input name="reason" required maxLength={200} placeholder="记进操作日志" />
@@ -105,7 +101,7 @@ export function ModerationButtons({
             </Button>
           </div>
         </Form>
-      </dialog>
+      </Dialog>
     </>
   );
 }

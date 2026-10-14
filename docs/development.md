@@ -87,7 +87,7 @@ test/                   Vitest 的全局准备：测试用的数据库
 - 数据走 loader 和 action，提交用 `<Form>` 或 `useFetcher`。上传图片是例外：编辑器用 `app/browser-api.ts` 直接 `POST /api/v1/uploads`，文件大，经过 action 要多读一遍、多传一次。不用 `useEffect` 拉数据或同步派生状态，不引入全局状态库和请求库（Redux、Zustand、TanStack Query 等）。
 - React Compiler 已开启，不手写 `useMemo`、`useCallback`、`memo`。
 - 组件先用 shadcn/ui（用它的 CLI 加进仓库再改）；样式写 Tailwind 工具类，除了主题变量不写单独的 CSS。
-- 界面控件统一用 `components/ui/` 里的组件：按钮、输入框、下拉框、复选框、单选、开关、对话框、确认框和轻提示。页面里不直接写原生的 `<select>`、复选框和单选框，也不用浏览器的 `confirm`、`alert`、`prompt`：它们的样子跟着系统走，和站点对不上。缺的组件先补进 `components/ui/`，再在页面里用。下拉框和菜单一样，弹出的是站点自己的面板，不是系统的选择列表。
+- 界面控件统一用 `components/ui/` 里的组件：按钮、输入框、下拉框、复选框、单选、开关、对话框、确认框和轻提示。页面里不直接写原生的 `<select>`、复选框和单选框，也不用浏览器的 `confirm`、`alert`、`prompt`：它们的样子跟着系统走，和站点对不上。缺的组件先补进 `components/ui/`，再在页面里用。下拉框（`Select`）和菜单一样，弹出的是站点自己的面板，不是系统的选择列表；确认和填理由用 `confirmDialog`、`promptDialog`，失败提示用 `toast`，都可以在事件处理里直接调用，lint 的 `no-alert` 会拦下浏览器自带的那几个。
 - 这些组件要轻。每个页面都会加载的部分不用 Base UI，它的菜单和对话框连同定位库要多出约 40KB gzip：菜单、下拉框和抽屉基于 `components/disclosure.tsx` 手写；对话框和确认框基于原生 `<dialog>`（`showModal()` 自带遮罩、Esc 关闭和焦点管理）；复选框、单选和开关是加了样式的原生 `<input>`。Base UI 只用在这些做不了的复杂控件上（标签页等），它们随路由拆分，只在用到的页面加载。
 - 类名冲突要靠 `cn()` 合并才能覆盖（`cva` 只拼接不合并），比如 `buttonVariants({ className: "hidden" })` 已经合并过，可以直接用。
 - 字号和尺寸用 rem，不写 px：桌面端（`lg` 以上）的根字号放大到 106.25%，整个界面一起变大。常用的小字号是主题变量 `text-2xs`（11px）、`text-meta`（13px，元信息）、`text-body`（15px，正文和标题）。

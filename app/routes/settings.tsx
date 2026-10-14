@@ -6,6 +6,7 @@ import { Button, buttonVariants } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Textarea } from "~/components/ui/textarea";
 import type { Route } from "./+types/settings.ts";
+import { Checkbox } from "~/components/ui/checkbox";
 import { SITE_NAME } from "../../server/platform/site.ts";
 
 export function meta() {
@@ -106,12 +107,10 @@ export default function Settings({ loaderData, actionData }: Route.ComponentProp
                   <td className="py-2">{label}</td>
                   {(["site", "qq"] as const).map((where) => (
                     <td key={where} className="text-center">
-                      <input
-                        type="checkbox"
+                      <Checkbox
                         name={`${type}.${where}`}
                         defaultChecked={settings.notify_prefs[type][where]}
                         aria-label={`${label}：${where === "site" ? "站内" : "QQ 提醒"}`}
-                        className="size-4 accent-primary"
                       />
                     </td>
                   ))}

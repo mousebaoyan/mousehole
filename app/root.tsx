@@ -11,6 +11,8 @@ import { use } from "react";
 import type { Route } from "./+types/root.ts";
 import { Nonce } from "./nonce.ts";
 import { SITE_URL } from "./site.server.ts";
+import { DialogHost } from "~/components/ui/dialog";
+import { Toaster } from "~/components/ui/toast";
 import "./app.css";
 import { SITE_NAME } from "../server/platform/site.ts";
 
@@ -47,6 +49,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
       </head>
       <body>
         {children}
+        <DialogHost />
+        <Toaster />
         <ScrollRestoration nonce={nonce} />
         <Scripts nonce={nonce} />
       </body>

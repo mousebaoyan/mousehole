@@ -6,6 +6,8 @@ import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import type { Route } from "./+types/tokens.ts";
 import { Badge, Field, readForm, Result, Section, Time } from "~/components/form-parts";
+import { confirmSubmit } from "~/components/ui/dialog";
+import { Checkbox } from "~/components/ui/checkbox";
 
 export function meta() {
   return [{ title: "bot · 管理后台" }];
@@ -79,14 +81,7 @@ export default function Tokens({ loaderData: { tokens }, actionData }: Route.Com
                 </div>
               </div>
               {t.revoked_at === null && (
-                <Form
-                  method="post"
-                  onSubmit={(e) => {
-                    if (!confirm(`吊销「${t.name}」后，用它的插件会立刻无法调用接口。确定吗？`)) {
-                      e.preventDefault();
-                    }
-                  }}
-                >
+                <Form method="post">
                   <input type="hidden" name="id" value={t.id} />
                   <Button
                     type="submit"
@@ -95,6 +90,10 @@ export default function Tokens({ loaderData: { tokens }, actionData }: Route.Com
                     variant="destructive"
                     size="sm"
                     disabled={busy}
+                    onClick={confirmSubmit(
+                      `吊销「${t.name}」后，用它的插件会立刻无法调用接口。确定吗？`,
+                      "吊销",
+                    )}
                   >
                     吊销
                   </Button>
@@ -123,7 +122,7 @@ export default function Tokens({ loaderData: { tokens }, actionData }: Route.Com
                   key={s.scope}
                   className="grid grid-cols-[auto_1fr] items-start gap-x-3 py-1.5 text-sm"
                 >
-                  <input type="checkbox" name={s.scope} className="mt-0.5 size-4 accent-primary" />
+                  <Checkbox name={s.scope} className="mt-0.5" />
                   <code className="font-mono">{s.scope}</code>
                   <span className="col-start-2 text-meta text-muted-foreground">{s.hint}</span>
                 </label>
