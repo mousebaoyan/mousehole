@@ -23,6 +23,7 @@ import { clearOldDays, refreshAvatars } from "./modules/users/service.ts";
 import { compressResponses } from "./platform/compress.ts";
 import { clientIp } from "./platform/http.ts";
 import { guestPages } from "./platform/page-cache.ts";
+import { atPublicOrigin } from "./platform/public-origin.ts";
 import { securityHeaders } from "./platform/security-headers.ts";
 import { listen } from "./platform/db.ts";
 import { log } from "./platform/log.ts";
@@ -90,6 +91,8 @@ export default await createHonoServer<{ Variables: SecureHeadersVariables }>({
   configure(server) {
     server.use(compressResponses);
     server.route("/", app);
+    // Only the pages, which React Router serves after these routes.
+    server.use(atPublicOrigin);
   },
   getLoadContext(c) {
     const context = new RouterContextProvider();
