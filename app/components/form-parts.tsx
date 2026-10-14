@@ -6,16 +6,18 @@ import { Checkbox } from "~/components/ui/checkbox";
 // Pieces of the forms on the settings and admin pages.
 
 export function Section({
+  id,
   title,
   description,
   children,
 }: {
+  id?: string;
   title: string;
   description?: string;
   children: ReactNode;
 }) {
   return (
-    <section className="mt-6 rounded-2xl border bg-card p-5">
+    <section id={id} className="mt-6 scroll-mt-20 rounded-2xl border bg-card p-5">
       <h2 className="font-semibold">{title}</h2>
       {description && <p className="mt-1 text-meta text-muted-foreground">{description}</p>}
       <div className="mt-4">{children}</div>
