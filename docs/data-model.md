@@ -64,7 +64,7 @@
 - 删除只设 `deleted_at`，楼层号保留，页面显示"该楼已删除"，指向某一楼的链接不会错位。删除回复时帖子的回复数、被回复那层的 `reply_count`、版块和作者的回复数都减一；删除帖子时版块、标签和作者的帖子数减一，版块的回复数减去这个帖子的回复数。
 - 编辑：`UPDATE posts ... RETURNING edit_count, old.body` 一步拿到新的版本号和旧正文，再插入 `post_revisions`，并发编辑不会撞号。改标题也算主楼的一次编辑，旧标题存在 `post_revisions.title`。
 - "最新发布"排序直接按 `id DESC` 走主键，不用单独建索引。热门和"新"从最近 7 天的帖子开始找，走部分索引 `threads_recent`。
-- 计数：`threads.reply_count` 和 `boards.post_count`、`users.post_count` 只算公开的回复（不含主楼），`users.thread_count` 算发过的帖子，都和发帖在同一个事务里更新。
+- 计数：`threads.reply_count` 和 `boards.post_count`、`users.post_count` 只算公开的回复（不含主楼），`users.thread_count` 算发过的帖子；`users` 的两个数不算匿名的内容；都和发帖在同一个事务里更新。
 - 列表翻页的游标是最后一个帖子的 `last_post_at`（微秒，JavaScript 的 Date 只到毫秒）和 ID，"最新发布"是 ID，收藏列表是 `thread_users.bookmarked_at`（微秒）和 ID。
 - 热门：最近 7 天发布的帖子按 `(回复数 × 2 + 赞数 + 浏览数 / 20 + 1) / (发布至今的小时数 + 2)^1.5` 排序，取前 500 个，在内存里存 10 分钟；读列表时再按可见范围和筛选条件过滤。
 - 浏览数在内存里累计，每分钟批量写一次；同一个人（登录用户按 ID，访客按 IP）一分钟内只算一次，bot 的请求不算。

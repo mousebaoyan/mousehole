@@ -64,6 +64,14 @@ async function detail(thread: number, who: Who) {
   return res.json();
 }
 
+function counts(user: number) {
+  return db
+    .selectFrom("users")
+    .select(["thread_count", "post_count"])
+    .where("id", "=", user)
+    .executeTakeFirstOrThrow();
+}
+
 const anonymous = (number: number) => ({
   anonymous: true,
   number,
@@ -120,6 +128,22 @@ describe("匿名", () => {
     const inbox = await api.notifications.$get({ query: {} }, people.first);
     if (!inbox.ok) throw new Error(`status ${inbox.status}`);
     expect((await inbox.json()).items[0]).toMatchObject({ type: "reply", actor: anonymous(1) });
+  });
+
+  test("匿名的帖子和回复不算进本人的发帖数和回复数，删除时也不减", async () => {
+    const before = { author: await counts(ids.author), first: await counts(ids.first) };
+    const thread = await newThread({ anonymous: true, anonymous_replies: true });
+    const { id } = await reply(thread, people.first, "匿名回复");
+    expect(await counts(ids.author)).toEqual(before.author);
+    expect(await counts(ids.first)).toEqual(before.first);
+
+    const deleted = [
+      await api.posts[":id"].$delete({ param: { id: String(id) } }, people.first),
+      await api.threads[":id"].$delete({ param: { id: String(thread) } }, people.author),
+    ];
+    expect(deleted.map((res) => res.status)).toEqual([204, 204]);
+    expect(await counts(ids.author)).toEqual(before.author);
+    expect(await counts(ids.first)).toEqual(before.first);
   });
 
   test("回复匿名、楼主公开：楼主自己回复照常实名，别人匿名；短评跟着匿名", async () => {
