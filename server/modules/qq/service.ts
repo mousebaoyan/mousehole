@@ -1,71 +1,71 @@
-import type { Transaction } from "kysely";
+import type { Kysely, Transaction } from "kysely";
 import type { DB } from "../../../db/types.ts";
 import { db } from "../../platform/db.ts";
 import { AppError } from "../../platform/errors.ts";
 
-// A QQ message: in a group, or in a private chat with someone.
-export type Source = { chat_type: "group" | "private"; chat_id: number; message_id: number };
+// QQ messages in one chat: a group, or a private chat with someone. A floor archived from a
+// group is organized from one or more of them (plugin design §8).
+export type Source = { chat_type: "group" | "private"; chat_id: number; message_ids: number[] };
 
-function sourceExists(link: { thread_id: number; post_id: number | null }) {
-  return new AppError(409, "source_exists", "这条 QQ 消息已经转到论坛了", {
+type Message = { chat_type: "group" | "private"; chat_id: number; message_id: number };
+
+function sourceExists(link: { thread_id: number; post_id: number }) {
+  return new AppError(409, "source_exists", "这条 QQ 消息已经收录到论坛了", {
     details: { thread_id: link.thread_id, post_id: link.post_id },
   });
 }
 
-export async function findLink(source: Source) {
+export async function findLink(message: Message) {
   return db
     .selectFrom("qq_message_links")
-    .select(["kind", "thread_id", "post_id"])
-    .where("chat_type", "=", source.chat_type)
-    .where("chat_id", "=", source.chat_id)
-    .where("message_id", "=", source.message_id)
+    .select(["thread_id", "post_id"])
+    .where("chat_type", "=", message.chat_type)
+    .where("chat_id", "=", message.chat_id)
+    .where("message_id", "=", message.message_id)
     .executeTakeFirst();
 }
 
+// Floors the messages already belong to, other than the one being written.
+function linkedElsewhere(executor: Kysely<DB>, source: Source, postId: number | null) {
+  return executor
+    .selectFrom("qq_message_links")
+    .select(["thread_id", "post_id"])
+    .where("chat_type", "=", source.chat_type)
+    .where("chat_id", "=", source.chat_id)
+    .where("message_id", "in", source.message_ids)
+    .where("post_id", "is distinct from", postId);
+}
+
 // Refused early, before any images are fetched for nothing.
-export async function assertNotLinked(source: Source) {
-  const link = await findLink(source);
+export async function assertNotLinked(source: Source, postId: number | null) {
+  const link = await linkedElsewhere(db, source, postId).executeTakeFirst();
   if (link) throw sourceExists(link);
 }
 
-// The message content came from, in the transaction that posts it.
+// The messages a floor came from, in the transaction that posts or edits it; they replace what
+// it had. A message belongs to one floor only.
 export async function linkSource(
   trx: Transaction<DB>,
   source: Source,
   threadId: number,
   postId: number,
 ) {
+  await trx.deleteFrom("qq_message_links").where("post_id", "=", postId).execute();
   const linked = await trx
     .insertInto("qq_message_links")
-    .values({ ...source, kind: "source", thread_id: threadId, post_id: postId })
-    .onConflict((oc) => oc.columns(["chat_type", "chat_id", "message_id"]).doNothing())
-    .returning("thread_id")
-    .executeTakeFirst();
-  if (!linked) {
-    const link = await trx
-      .selectFrom("qq_message_links")
-      .select(["thread_id", "post_id"])
-      .where("chat_type", "=", source.chat_type)
-      .where("chat_id", "=", source.chat_id)
-      .where("message_id", "=", source.message_id)
-      .executeTakeFirstOrThrow();
-    throw sourceExists(link);
-  }
-}
-
-// A bot's message telling the group about a thread or a floor. Sending it again for the same
-// message replaces the target; a message that is some content's source stays that.
-export async function linkNotice(source: Source, threadId: number, postId: number | null) {
-  const linked = await db
-    .insertInto("qq_message_links")
-    .values({ ...source, kind: "notice", thread_id: threadId, post_id: postId })
-    .onConflict((oc) =>
-      oc
-        .columns(["chat_type", "chat_id", "message_id"])
-        .doUpdateSet({ thread_id: threadId, post_id: postId })
-        .where("qq_message_links.kind", "=", "notice"),
+    .values(
+      source.message_ids.map((message_id) => ({
+        chat_type: source.chat_type,
+        chat_id: source.chat_id,
+        message_id,
+        thread_id: threadId,
+        post_id: postId,
+      })),
     )
-    .returning("thread_id")
-    .executeTakeFirst();
-  if (!linked) throw new AppError(409, "source_exists", "这条 QQ 消息是论坛内容的来源");
+    .onConflict((oc) => oc.columns(["chat_type", "chat_id", "message_id"]).doNothing())
+    .returning("message_id")
+    .execute();
+  if (linked.length < source.message_ids.length) {
+    throw sourceExists(await linkedElsewhere(trx, source, postId).executeTakeFirstOrThrow());
+  }
 }

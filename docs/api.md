@@ -70,12 +70,11 @@
   "entry": "button", "min_level": 1, "draws_at": 1760600000, "drawn_at": 1760600030, "cancelled": false,
   "seed_hash": "9f86d0…", "seed": "3a7bd3…", "entry_count": 25, "entered": true }
 
-// 楼层。source 只返回给 bot 和管理员；正文只带 html 或 body 中的一个，见上面的「正文」；
+// 楼层。正文只带 html 或 body 中的一个，见上面的「正文」；via 为 qq 的是从群聊收录的；
 // 删除的楼层 deleted 为 true，正文为空字符串；status 同帖子，主楼的跟着帖子；
 // 作者设置了不给访客看时，访客拿到的 members_only 为 true，正文为空，没有表情和短评（总体设计 §8.10）
 { "id": 108, "thread_id": 42, "floor": 3, "reply_to": { "id": 105, "floor": 2, "author": { … } },
   "author": { … }, "html": "<p>…</p>", "via": "qq", "deleted": false, "members_only": false,
-  "source": { "chat_type": "group", "chat_id": 987654321, "message_id": 7731 },
   "status": "visible", "reactions": { "heart": 2, "+1": 1 }, "my_reaction": "heart", "reply_count": 1,
   "boosts": [ { "id": 31, "user": { … }, "body": "学到了", "created_at": 1760000100 } ],
   "boost_count": 9, "my_boost": "已收藏",
@@ -124,9 +123,9 @@ token 由管理员在后台创建，只显示一次。每个 token 绑定一个 
 
 - **权限取交集**：以 bot 自己的账号操作时，能做什么由 token 的范围决定；代表某位成员时，还要这位成员自己有这个权限。例如代表普通成员时，即使 token 有 `moderate`，也不能锁帖。
 - **只能代表成员**：被代表的人必须是同步过的账号，否则返回 `404 unknown_member`。冻结的账号只能读，写操作返回 `403 member_frozen`。有人刚进群、论坛还没同步到时，插件先推送一条增量。
-- **代发开关**：成员关闭"允许代发"后，只有他本人让 bot 操作（`X-Operator` 就是本人）时才放行，否则写操作返回 `403 proxy_disabled`。读操作不受影响。
+- **代发开关**：成员在设置里关掉"群聊收录"（`allow_proxy`）后，只有他本人让 bot 操作（`X-Operator` 就是本人）时才放行，否则写操作返回 `403 proxy_disabled`。读操作不受影响。
 - **操作人校验**：带 `X-Operator` 时，论坛会检查操作人有没有资格：代表别人操作时，操作人必须是版主或管理员；执行版主或管理员操作时，操作人自己也必须有这个权限。不通过返回 `403 operator_not_allowed`。没有操作人的场景（例如定时任务、成员同步）可以不带这个头；后台可以设为代表成员时必须带，没带的返回 `400 operator_required`，bot 以自己的账号操作不受影响。
-- **来源标注**：代表成员发的内容，带来源消息时 `via` 为 `qq`，页面标"来自群聊"；否则为 `bot`，标"由机器人代发"。本人可以编辑和删除。
+- **来源标注**：代表成员发的内容，带来源消息时 `via` 为 `qq`，页面标"整理自群聊"；否则为 `bot`。本人可以编辑和删除。
 - **审计**：经由 bot 的写操作都写入审计日志，记录以谁的身份、操作人、token、来源消息和 IP。
 
 ### 2.4 幂等
@@ -135,7 +134,7 @@ token 由管理员在后台创建，只显示一次。每个 token 绑定一个 
 - 同一个 token 用同一个键在 7 天内再次请求时，直接返回第一次的结果，不会重复执行。
 - 第一次请求还在处理时（例如正在下载图片），重复请求返回 `409 idempotency_in_progress`，稍后重试即可。处理中超过 5 分钟视为中断，可以重新执行。第一次出了服务器错误（5xx）不算结果，重试会重新执行。
 - 同一个键用在别的接口上，返回 `422 idempotency_key_reused`。
-- 另外，如果创建请求带的 `source` 已经对应了论坛内容，返回 `409 source_exists`，和 `error` 并列附上已有内容的 `thread_id` 和 `post_id`，避免同一条群消息被转两次。
+- 另外，如果请求带的 `source` 里有消息已经收录在别的楼层，返回 `409 source_exists`，和 `error` 并列附上那一层的 `thread_id` 和 `post_id`，避免同一条群消息被收两次。
 
 ### 2.5 内容格式
 
@@ -162,14 +161,14 @@ token 由管理员在后台创建，只显示一次。每个 token 绑定一个 
 | `video`、`record`、`forward`、`json` | "[视频]""[语音]""[聊天记录]""[卡片]" |
 | 其他 | "[消息]" |
 
-转换后没有内容（例如只有一个 `@全体成员`）返回 `400 invalid_request`。带 `source` 的内容标为来自群聊（`via: "qq"`）。
+转换后没有内容（例如只有一个 `@全体成员`）返回 `400 invalid_request`。带 `source` 的内容标为整理自群聊（`via: "qq"`）。
 
 `chat_log` 用来发"聊天记录帖"（`kind: "chatlog"`，二期），每条消息的 `message` 同样是 OneBot 消息段。插件把合并转发的节点展开后传进来即可。
 
-`source` 表示内容来自哪条 QQ 消息：
+`source` 表示内容整理自同一个聊天里的哪几条 QQ 消息（1–50 条，不能重复），一条消息只能属于一层：
 
 ```json
-{ "chat_type": "group", "chat_id": 987654321, "message_id": 7731 }
+{ "chat_type": "group", "chat_id": 987654321, "message_ids": [7731, 7733] }
 ```
 
 ## 3. 接口清单
@@ -277,7 +276,7 @@ token 由管理员在后台创建，只显示一次。每个 token 绑定一个 
 | POST | `/threads/{id}/posts` | 回复：`content`、`reply_to_id`（回复同一帖子里的哪一层，可选）、`source`；锁定的帖子只有版主能回复，否则返回 `403 thread_locked`；帖子待审核或已隐藏时不能回复（`403 forbidden`）。先审后发的版块里，版主以外的人发的回复 `status` 为 `pending` | 成员 / `act` |
 | GET | `/posts/{id}` | 单个楼层 | 访客 |
 | GET | `/posts/{id}/replies` | 回复这一层的楼层，按楼层号升序，每次最多 20 层：`after=N` 取第 N 楼之后的，不足 20 层说明取完了 | 访客 |
-| PATCH | `/posts/{id}` | 修改 `content`，旧的正文进编辑记录；版主也能改别人的，L5 能改等级比自己低的人的（不含版主的和匿名的），版主还可以改 `status` 和 `reason`，同帖子。主楼的状态跟着帖子（`400`）；帖子待审核或已隐藏时不能改回复的状态（`403`）；锁定的帖子只有版主能改 | 作者、版主 / `act`、`moderate` |
+| PATCH | `/posts/{id}` | 修改 `content`（Markdown 或 OneBot 消息段），旧的正文进编辑记录；收录的楼层更新时带上 `source`，是这一层整理自的全部消息，替换原来的，其中有消息属于别的楼层时返回 `409 source_exists`；版主也能改别人的，L5 能改等级比自己低的人的（不含版主的和匿名的），版主还可以改 `status` 和 `reason`，同帖子。主楼的状态跟着帖子（`400`）；帖子待审核或已隐藏时不能改回复的状态（`403`）；锁定的帖子只有版主能改 | 作者、版主 / `act`、`moderate` |
 | DELETE | `/posts/{id}` | 删除；楼层号保留，显示"该楼已删除"。主楼不能单独删除（`400`），要删就删整个帖子 | 作者、版主 / `act`、`moderate` |
 | GET | `/posts/{id}/revisions` | 编辑记录，最近的在前：每次修改之前的 `body`，改标题时还有旧的 `title`，以及修改人 | 作者、版主 / `read` |
 | PUT | `/posts/{id}/reaction` | 表情回应：`{ emoji }`，取 `heart`（点赞）、`+1`、`laughing`、`open_mouth`、`clap`、`tada`、`hugs`、`thinking`、`sob`、`mouse` 之一；每人一个，已有就替换；不能回应自己的楼层 | 成员 / `act` |
@@ -346,8 +345,7 @@ token 由管理员在后台创建，只显示一次。每个 token 绑定一个 
 | PUT | `/bot/groups/{group_id}/members` | 全量同步成员，见第 4 节 | `sync` |
 | PATCH | `/bot/groups/{group_id}/members` | 增量同步成员，见第 4 节 | `sync` |
 | PUT | `/bot/users/{user}/bio` | 推送 QQ 的个性签名：`{ bio }`，超过 60 个字的截掉；本人没写过自己的签名时显示它。插件在收到 `member.activated` 时查询后推送 | `sync` |
-| GET | `/bot/messages/{chat_type}/{chat_id}/{message_id}` | 某条 QQ 消息对应的论坛内容：`{ kind, thread_id, post_id }`，`kind` 为 `source`（内容来自这条消息）或 `notice`（bot 发的转存回执）；没有对应时返回 `404 message_not_linked` | `read` |
-| PUT | `/bot/messages/{chat_type}/{chat_id}/{message_id}` | 记录 bot 发出的转存回执：`{ thread_id, post_id? }`；同一条消息再记一次就覆盖；这条消息已经是某条内容的来源时返回 `409 source_exists` | `act` |
+| GET | `/bot/messages/{chat_type}/{chat_id}/{message_id}` | 某条 QQ 消息收录在哪一层：`{ thread_id, post_id }`；没有收录时返回 `404 message_not_linked` | `read` |
 | GET | `/bot/events` | SSE 事件流，见第 5 节 | `events` |
 | GET | `/bot/events/batch` | 按游标拉取事件：`after`、`limit`（1–500，默认 100）、`types`，返回 `{ items: [{ id, type, data, created_at }], next_after }`，`next_after` 是下次的 `after` | `events` |
 
@@ -440,8 +438,8 @@ data: {"post":{…},"thread":{…},"author":{…},"url":"https://bbs.mousebaoyan
 
 | 类型 | 触发时机 | 主要字段 |
 | --- | --- | --- |
-| `thread.created` | 新帖公开（先审后发的版块在审核通过时） | `thread`（`id`、`title`、`kind`）、`board`（`slug`、`name`）、`author`、`source`、`url` |
-| `post.created` | 新回复公开 | `post`（`id`、`floor`、`body`）、`thread`（`id`、`title`）、`author`、`reply_to`（被回复的那一层：`id`、`floor`、`author`、`source`，没有为 `null`）、`source`、`url` |
+| `thread.created` | 新帖公开（先审后发的版块在审核通过时） | `thread`（`id`、`title`、`kind`）、`board`（`slug`、`name`）、`author`、`url` |
+| `post.created` | 新回复公开 | `post`（`id`、`floor`、`body`）、`thread`（`id`、`title`）、`author`、`reply_to`（被回复的那一层：`id`、`floor`、`author`，没有为 `null`）、`url` |
 | `post.updated` | 回复或主楼被编辑 | `post`、`thread`、`editor` |
 | `post.deleted` | 回复或帖子被删除、隐藏；删除帖子时是它的主楼 | `post_id`、`thread_id`、`floor`、`by`、`reason` |
 | `thread.solved` | 采纳答案 | `thread`（`id`、`title`）、`post`（`id`、`floor`、`body`）、`answerer`、`url` |
@@ -450,7 +448,7 @@ data: {"post":{…},"thread":{…},"author":{…},"url":"https://bbs.mousebaoyan
 | `lottery.drawn` | 抽奖开奖 | `thread`（`id`、`title`）、`author`、`prizes`（每项 `name` 和 `winners`，按抽中的先后）、`entry_count`、`url` |
 | `report.created` | 有新举报 | `report`（`id`、`reason`、`held`：这一层是否因 L4 的举报先隐藏了）、`post`（`id`、`floor`、`thread_id`）、`boost`（举报的是短评时：`id`、`body`、`author`，否则为 `null`）、`reporter`、`url` |
 
-- 事件里的用户对象是 `{ id, display_name, qq }`，插件发开奖结果时用它 @ 本人。匿名写的人是 `{ anonymous: true, number, display_name }`，没有 `id` 和 `qq`；本人编辑、删除自己的匿名内容时，`editor`、`by` 也是这样。`source` 是内容来自的 QQ 消息，没有为 `null`。
+- 事件里的用户对象是 `{ id, display_name, qq }`，插件发开奖结果时用它 @ 本人。匿名写的人是 `{ anonymous: true, number, display_name }`，没有 `id` 和 `qq`；本人编辑、删除自己的匿名内容时，`editor`、`by` 也是这样。
 - 审核可以挂在事件上：先发后审的版块监听 `thread.created`、`post.created`，先审后发的版块监听 `content.pending`，判定后调用 `PATCH` 修改 `status`。恢复隐藏的内容不会再发 `thread.created`、`post.created`。
 
 ## 6. 流程
@@ -506,45 +504,33 @@ sequenceDiagram
 2. 同步过的 QQ 号才会收到验证码，发到 `QQ号@qq.com`，10 分钟有效；没同步过的返回 `403 not_member`。冻结的账号也能收到，登录后只能管理自己的账号。
 3. 浏览器 `POST /auth/email/verify`，提交 QQ 号和验证码；校验通过就建立会话，输错 5 次作废。
 
-### 6.4 群里的提问转到论坛
+### 6.4 群聊收录
+
+插件把群里的提问整理成帖子，回答整理成回复，同一个人的几条消息整理成一层；后来补充的，更新进原来那一层（[插件设计](https://github.com/mousebaoyan/astrbot_plugin_mousehole/blob/main/docs/design.md)第 8 节）。
 
 ```mermaid
 sequenceDiagram
     actor A as 提问的群友
-    actor M as 管理员
-    participant P as 插件
-    participant F as 论坛
-    A->>P: 在群里提问，消息 7731
-    M->>P: 让 bot 把这条转到论坛
-    P->>F: GET /search/similar，可选，先看有没有类似讨论
-    P->>F: POST /threads，X-Act-As 为 A，X-Operator 为 M，带 Idempotency-Key 和 source
-    F-->>P: 帖子 42，标“来自群聊”
-    F--)P: 事件 thread.created
-    P->>A: 在群里发转存回执，消息 7735
-    P->>F: PUT /bot/messages/group/群号/7735，thread_id 为 42
-```
-
-### 6.5 群里的回复同步到论坛
-
-```mermaid
-sequenceDiagram
     actor C as 回答的群友
     participant P as 插件
     participant F as 论坛
-    C->>P: 引用转存回执 7735 回复
-    P->>F: GET /bot/messages/group/群号/7735
-    F-->>P: 帖子 42
-    P->>F: POST /threads/42/posts，X-Act-As 为 C，source 为 C 的消息
-    F--)P: 事件 post.created
+    A->>P: 分两条消息提问：7731、7733
+    P->>F: POST /threads，X-Act-As 为 A，带 Idempotency-Key，source 为 7731、7733
+    F-->>P: 帖子 42，主楼是楼层 108，标"整理自群聊"
+    C->>P: 引用 7731 回答：7736
+    P->>F: POST /threads/42/posts，X-Act-As 为 C，source 为 7736
+    F-->>P: 记为回复主楼
+    A->>P: 补充背景：7740
+    P->>F: PATCH /posts/108，X-Act-As 为 A，重新整理的 content，source 为 7731、7733、7740
 ```
 
-论坛上的回复不转回群里（[总体设计 §8.6](design.md#86-通知与实时)）。
+插件重启后，有人引用以前收录的消息时，用 `GET /bot/messages` 查到它在哪个帖子。从群里收录的内容不产生通知；论坛上的回复不转回群里（[总体设计 §8.6](design.md#86-通知与实时)）。
 
-### 6.6 通知
+### 6.5 通知
 
 论坛直接发邮件到本人的 `QQ号@qq.com`，不经过插件（[总体设计 §8.6](design.md#86-通知与实时)）。
 
-### 6.7 成员同步
+### 6.6 成员同步
 
 ```mermaid
 sequenceDiagram
@@ -561,7 +547,7 @@ sequenceDiagram
     end
 ```
 
-### 6.8 首次部署
+### 6.7 首次部署
 
 服务器上（`deploy/` 里的文件是现成的配置）：
 
@@ -579,13 +565,12 @@ sequenceDiagram
 
 ## 7. 示例
 
-以群友的身份发一个问答帖：
+把群友分两条发的提问收录成问答帖：
 
 ```http
 POST /api/v1/threads
 Authorization: Bearer <bot token>
 X-Act-As: qq:123456789
-X-Operator: qq:10001
 Idempotency-Key: qq-987654321-7731-thread
 Content-Type: application/json
 
@@ -597,7 +582,7 @@ Content-Type: application/json
     { "type": "text", "data": { "text": "……" } },
     { "type": "image", "data": { "url": "https://multimedia.nt.qq.com.cn/……" } }
   ] },
-  "source": { "chat_type": "group", "chat_id": 987654321, "message_id": 7731 }
+  "source": { "chat_type": "group", "chat_id": 987654321, "message_ids": [7731, 7733] }
 }
 ```
 

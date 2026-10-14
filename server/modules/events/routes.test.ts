@@ -42,9 +42,9 @@ async function batch(after: number, count: number, types?: string) {
 }
 
 describe("事件流", () => {
-  test("群里转来的提问和网页上的回答：事件带来源消息，回答带被回复那层的来源，方便引用", async () => {
+  test("群里收录的提问和网页上的回答：回答的事件带被回复的那一层", async () => {
     const start = await latestEventId();
-    const source = { chat_type: "group" as const, chat_id: 123456, message_id: 42 };
+    const source = { chat_type: "group" as const, chat_id: 123456, message_ids: [42] };
     const res = await api.threads.$post(
       {
         json: {
@@ -74,11 +74,10 @@ describe("事件流", () => {
 
     const { items, next_after } = await batch(start, 2);
     expect(items.map((e) => e.type)).toEqual(["thread.created", "post.created"]);
-    expect(items[0].data).toMatchObject({ author: { qq: askerQq }, source });
+    expect(items[0].data).toMatchObject({ author: { qq: askerQq } });
     expect(items[1].data).toMatchObject({
       post: { floor: 2, body: "能冲" },
-      reply_to: { floor: 1, author: { qq: askerQq }, source },
-      source: null,
+      reply_to: { floor: 1, author: { qq: askerQq } },
     });
     expect(next_after).toBe(items[1].id);
 

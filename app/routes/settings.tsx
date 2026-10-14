@@ -107,11 +107,11 @@ export default function Settings({ loaderData, actionData }: Route.ComponentProp
           />
         </Section>
 
-        <Section title="机器人代发">
+        <Section title="群聊收录">
           <Check
             name="allow_proxy"
-            label="允许群里的机器人代我发帖、回复和点赞"
-            hint="关掉后，只有我自己在群里让机器人操作时才放行"
+            label="允许把我在群里的提问和回答整理到论坛"
+            hint="整理好的内容记在我名下，我可以编辑和删除。关掉后，我在群里说的话不会再收录"
             checked={settings.allow_proxy}
           />
         </Section>

@@ -454,9 +454,10 @@ async function demo() {
       Fields.safeParse(field(replied.data, "reply_to")).data?.floor === 1,
     replied.data,
   );
-  // A question asked in the group, turned into a thread; the bot announces it, and a member
-  // answers by quoting the question.
-  const question = { chat_type: "group", chat_id: group, message_id: run * 10 + 1 };
+  // A question asked in the group in two messages, archived as a thread; a member answers by
+  // quoting it, and the asker adds to the question later.
+  const chat = { chat_type: "group", chat_id: group };
+  const question = { ...chat, message_ids: [run * 10 + 1, run * 10 + 2] };
   const fromGroup = await call("/threads", {
     method: "POST",
     headers: asMember,
@@ -478,25 +479,17 @@ async function demo() {
     headers: asMember,
     body: {
       board: slug,
-      title: "群里的提问：再转一次",
+      title: "群里的提问：再收一次",
       content: { markdown: "x" },
-      source: question,
+      source: { ...chat, message_ids: [run * 10 + 2] },
     },
   });
   check(
-    "群消息转成帖子；同一条消息再转返回已有的帖子",
+    "两条群消息整理成帖子；其中一条再收返回已有的帖子",
     fromGroup.status === 201 &&
       twice.status === 409 &&
       field(twice.data, "thread_id") === fromGroupId,
-    `帖子 ${fromGroupId}，再转 HTTP ${twice.status}`,
-  );
-  const noticeAt = `/bot/messages/group/${group}/${run * 10 + 2}`;
-  const notice = await call(noticeAt, { method: "PUT", body: { thread_id: fromGroupId } });
-  const lookedUp = await call(noticeAt);
-  check(
-    "记下转存回执，再按消息查得到帖子",
-    notice.status === 204 && field(lookedUp.data, "thread_id") === fromGroupId,
-    lookedUp.data,
+    `帖子 ${fromGroupId}，再收 HTTP ${twice.status}`,
   );
   const answer = await call(`/threads/${fromGroupId}/posts`, {
     method: "POST",
@@ -504,35 +497,38 @@ async function demo() {
     body: {
       content: {
         onebot: [
-          { type: "reply", data: { id: String(question.message_id) } },
+          { type: "reply", data: { id: String(question.message_ids[0]) } },
           { type: "text", data: { text: "成绩单和推荐信" } },
         ],
       },
-      source: { ...question, message_id: run * 10 + 3 },
+      source: { ...chat, message_ids: [run * 10 + 3] },
     },
   });
   check(
-    "引用提问回答：记为回复主楼，标为来自群聊",
+    "引用提问回答：记为回复主楼，标为整理自群聊",
     Fields.safeParse(field(answer.data, "reply_to")).data?.floor === 1 &&
       field(answer.data, "via") === "qq",
     answer.data,
   );
-
-  // What the plugin hears: the question with the message it came from, and the answer with the
-  // message it answers, which the plugin can quote back in the group.
-  const heard = await call(
-    `/bot/events/batch?after=${since}&types=thread.created,post.created&limit=500`,
-  );
-  const events = Fields.array().parse(field(heard.data, "items"));
-  const about = (type: string) =>
-    events.findLast((e) => e.type === type && field(field(e.data, "thread"), "id") === fromGroupId);
-  const same = (source: unknown) =>
-    Object.entries(question).every(([k, v]) => field(source, k) === v);
+  const questionFloor = Fields.array()
+    .parse(field((await call(`/threads/${fromGroupId}/posts`)).data, "items"))
+    .at(0);
+  const added = run * 10 + 4;
+  const updated = await call(`/posts/${String(field(questionFloor, "id"))}`, {
+    method: "PATCH",
+    headers: asMember,
+    body: {
+      content: {
+        onebot: [{ type: "text", data: { text: "夏令营要准备哪些材料？我是 rank 前 10%。" } }],
+      },
+      source: { ...question, message_ids: [...question.message_ids, added] },
+    },
+  });
+  const lookedUp = await call(`/bot/messages/group/${group}/${added}`);
   check(
-    "事件流：群里的提问带来源消息，回答带被回复那条的来源",
-    same(field(about("thread.created")?.data, "source")) &&
-      same(field(field(about("post.created")?.data, "reply_to"), "source")),
-    `${events.length} 个事件`,
+    "提问的人补充以后更新主楼，补充的消息也查得到这一层",
+    updated.status === 200 && field(lookedUp.data, "post_id") === field(questionFloor, "id"),
+    lookedUp.data,
   );
 
   // The plugin reviewing: while the board is reviewed before publishing, the member's thread

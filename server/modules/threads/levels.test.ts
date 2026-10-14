@@ -84,7 +84,7 @@ describe("等级的权限", () => {
           board: "lv",
           title: "群里转来的问题",
           content: { markdown: links },
-          source: { chat_type: "group", chat_id: 1, message_id: 1 },
+          source: { chat_type: "group", chat_id: 1, message_ids: [1] },
         },
       },
       { headers: { ...bot.headers, "x-act-as": `qq:${newcomer.qq}` } },
