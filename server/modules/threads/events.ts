@@ -178,3 +178,34 @@ export async function threadDeleted(
     .executeTakeFirstOrThrow();
   await postDeleted(trx, opening.id, byId, reason);
 }
+
+// A lottery drawn: who won each prize, so the plugin can announce it in a group and @ them.
+export async function lotteryDrawn(
+  trx: Transaction<DB>,
+  lottery: {
+    thread: { id: number; title: string };
+    authorId: number;
+    prizes: { name: string; winners: number[] }[];
+    entryCount: number;
+  },
+) {
+  const prizes = [];
+  for (const p of lottery.prizes) {
+    prizes.push({
+      name: p.name,
+      winners: await Promise.all(p.winners.map((id) => person(trx, id))),
+    });
+  }
+  const url = link(lottery.thread.id, 1);
+  const lines = prizes.map(
+    (p) => `${p.name}：${p.winners.map((w) => w.display_name).join("、") || "无人中奖"}`,
+  );
+  await recordEvent(trx, "lottery.drawn", {
+    thread: lottery.thread,
+    author: await person(trx, lottery.authorId),
+    prizes,
+    entry_count: lottery.entryCount,
+    url,
+    qq_text: `【抽奖】${lottery.thread.title}\n共 ${lottery.entryCount} 人参与，开奖结果：\n${lines.join("\n")}\n${url}`,
+  });
+}

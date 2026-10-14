@@ -2,21 +2,28 @@ import { sql, type Transaction } from "kysely";
 import type { DB } from "../../../db/types.ts";
 import { db } from "../../platform/db.ts";
 import { AppError } from "../../platform/errors.ts";
+import type { LotterySpec } from "../threads/lotteries.ts";
 import type { PollSpec } from "../threads/polls.ts";
 
 // What people are still writing, saved by the composer as they type; see design §8.2. A null
 // thread is the one new thread each person may have in progress.
 
 type DraftPoll = PollSpec & { days: number | null };
+type DraftLottery = Omit<LotterySpec, "draws_at"> & {
+  days: number | null;
+  draws_at: number | null;
+};
 
 export type DraftContent = {
   body: string;
   title?: string;
   board?: string | null;
-  kind?: "discussion" | "question" | "poll" | null;
+  kind?: "discussion" | "question" | "poll" | "lottery" | null;
   // As far as it has been written: options may still be blank, and the end may be a number of
   // days still to count from posting.
   poll?: DraftPoll | null;
+  // Likewise: prizes may still be unnamed, and the time a number of days.
+  lottery?: DraftLottery | null;
   tags?: string[];
   author_anonymous?: boolean;
   anonymous_replies?: boolean;
@@ -68,6 +75,7 @@ export async function getDraft(userId: number, threadId: number | null) {
       "boards.slug as board",
       "drafts.kind",
       sql<DraftPoll | null>`drafts.poll`.as("poll"),
+      sql<DraftLottery | null>`drafts.lottery`.as("lottery"),
       "drafts.tags",
       "drafts.author_anonymous",
       "drafts.anonymous_replies",
@@ -112,6 +120,7 @@ export async function saveDraft(userId: number, threadId: number | null, content
       : null,
     kind: content.kind ?? null,
     poll: content.poll ?? null,
+    lottery: content.lottery ?? null,
     tags: content.tags ?? [],
     author_anonymous: content.author_anonymous ?? false,
     anonymous_replies: content.anonymous_replies ?? false,
@@ -132,6 +141,7 @@ export async function saveDraft(userId: number, threadId: number | null, content
         board_id: eb.ref("excluded.board_id"),
         kind: eb.ref("excluded.kind"),
         poll: eb.ref("excluded.poll"),
+        lottery: eb.ref("excluded.lottery"),
         tags: eb.ref("excluded.tags"),
         author_anonymous: eb.ref("excluded.author_anonymous"),
         anonymous_replies: eb.ref("excluded.anonymous_replies"),

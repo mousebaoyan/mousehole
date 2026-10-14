@@ -11,7 +11,7 @@
 - **指代用户**：路径、请求头和请求体里的用户，可以写论坛用户 ID（`123`），也可以写 QQ 号（`qq:123456789`）。
 - **QQ 号**：返回给已登录的成员、bot 和管理员；访客和冻结的账号看不到（站点设置可以改成公开）。
 - **分页**：列表返回 `{ "items": [...], "next_cursor": "..." }`，取下一页时带 `?cursor=`。帖子里的楼层不用游标，按楼层号取，见[楼层](#35-楼层)。
-- **错误**：HTTP 状态码加 `{ "error": { "code": "thread_locked", "message": "帖子已锁定" } }`。`code` 固定不变，插件据此判断；`message` 给人看，以后可能调整。各接口都可能返回的错误码：`invalid_request`（400，参数不对，`message` 指出哪个字段）、`unauthorized`（401，没有登录）、`forbidden`（403，没有权限）、`level_required`（403，等级不够：L0 的链接数和每天的帖子、回复数，L2 才能发投票帖，版块的阅读和发帖门槛；`message` 里有要几级）、`not_found`（404）、`internal_error`（500）。
+- **错误**：HTTP 状态码加 `{ "error": { "code": "thread_locked", "message": "帖子已锁定" } }`。`code` 固定不变，插件据此判断；`message` 给人看，以后可能调整。各接口都可能返回的错误码：`invalid_request`（400，参数不对，`message` 指出哪个字段）、`unauthorized`（401，没有登录）、`forbidden`（403，没有权限）、`level_required`（403，等级不够：L0 的链接数和每天的帖子、回复数，L2 才能发投票帖和抽奖帖，版块的阅读和发帖门槛，抽奖的参与等级；`message` 里有要几级）、`not_found`（404）、`internal_error`（500）。
 - **限流**：按 IP、用户和 token 分别限流，超出时返回 `429 rate_limited` 和 `Retry-After`（秒）。
 - **CSRF**：网页的写请求校验 Origin；带 Bearer token 的请求不受影响。
 
@@ -40,12 +40,12 @@
 // number 是这个人在这个帖子里的编号，楼主匿名时是 1 号；没有 id、头像和 QQ 号
 { "anonymous": true, "number": 3, "display_name": "匿名鼠 3" }
 
-// 帖子。kind：discussion 讨论、question 问答、poll 投票；楼主匿名时 author 是匿名的样子；帖子详情里有 author_anonymous、anonymous_replies（楼主以外的人回复时匿名），
+// 帖子。kind：discussion 讨论、question 问答、poll 投票、lottery 抽奖；楼主匿名时 author 是匿名的样子；帖子详情里有 author_anonymous、anonymous_replies（楼主以外的人回复时匿名），
 // 登录时还有 my_alias（自己在这个帖子里匿名时的编号，没有为 null）；floor_count 是最大的楼层号；帖子详情里的 solved_floor 是采纳的回答在第几楼，excerpt 是主楼正文的前 100 个字；pinned：0 不置顶，1 版块内置顶，2 全站置顶；
 // posters 是楼主以外、最近 20 层里最近回复的最多 4 个人，不含匿名回复的；url 只在帖子详情里有；
 // last_read_floor 是自己读过的最高一楼，没打开过为 0，只在登录时返回；帖子详情里还有 read_floors，是读过的楼层区间，例如 [[1, 20], [480, 495]]，
 // 以及 bookmarked（是否收藏）和 notify_level（关注级别，见 /threads/{id}/subscription），也只在登录时返回；
-// 帖子详情里的 poll 是投票帖的投票（见下面的「投票」），其他类型为 null；
+// 帖子详情里的 poll 是投票帖的投票（见下面的「投票」），lottery 是抽奖帖的抽奖（见下面的「抽奖」），其他类型为 null；
 // status：visible 公开，pending 待审核，hidden 已隐藏，后两种只有作者和版主能看到
 { "id": 42, "board": { "slug": "qa", "name": "保研问答", "color": "#e07b53" }, "kind": "question",
   "title": "rank 30% 能冲夏令营吗", "author": { … }, "posters": [ { … } ], "tags": ["夏令营"],
@@ -61,6 +61,15 @@
   "options": [ { "id": 5, "label": "1–3 个", "votes": 4 }, { "id": 6, "label": "4–6 个", "votes": 9 } ],
   "my_votes": [6] }
 
+// 抽奖（总体设计 §8.13）。entry：button 点按钮参与，reply 开奖前回复过就算参与；min_level 参与要几级（版主和管理员不受限制）；
+// prizes 按开奖的顺序排，won_by 是中奖的人、按抽中的先后，开奖前为 null；drawn_at 是实际开奖的时间，没开奖为 null；
+// seed_hash 是种子的 SHA-256，发帖时就公布，seed 开奖后才有；entry_count 是参与人数，回复参与的开奖前现算；entered 是自己是否参与了，访客为 null。
+// 复核：SHA-256(seed) 等于 seed_hash；参与的人按 SHA-256("seed:用户 ID") 的十六进制从小到大排，依次抽满各个奖项
+{ "prizes": [ { "name": "一等奖：机械键盘", "winners": 1, "won_by": [ { … } ] },
+              { "name": "二等奖：鼠群周边", "winners": 3, "won_by": [ { … }, { … }, { … } ] } ],
+  "entry": "button", "min_level": 1, "draws_at": 1760600000, "drawn_at": 1760600030, "cancelled": false,
+  "seed_hash": "9f86d0…", "seed": "3a7bd3…", "entry_count": 25, "entered": true }
+
 // 楼层。source 只返回给 bot 和管理员；正文只带 html 或 body 中的一个，见上面的「正文」；
 // 删除的楼层 deleted 为 true，正文为空字符串；status 同帖子，主楼的跟着帖子；
 // 作者设置了不给访客看时，访客拿到的 members_only 为 true，正文为空，没有表情和短评（总体设计 §8.10）
@@ -75,7 +84,8 @@
 // 通知。type：reply 回复了我的楼层，mention @了我，like 赞了我的楼层，boost 给我的楼层留了短评，
 // watching 关注的帖子有新楼层，following 关注的人发了新帖，solved 我的回答被采纳，
 // moderation 版主审核或隐藏了我的内容（data 带 action：approve 通过、reject 不通过、hide 隐藏、unhide 恢复，以及 reason），
-// level 我升级了（data 带 level，没有 actor、thread、post，都为 null）。
+// level 我升级了（data 带 level，没有 actor、thread、post，都为 null），
+// lottery 抽奖开奖或取消了（data 带 result：won 中奖、lost 没中、drawn 自己发起的开奖了、cancelled 取消了；中奖的还带 prize，奖项名；没有 actor、post）。
 // like、boost 按楼层，watching 按帖子，
 // 未读期间合并成一条：actor 是最近的人，count 是次数。post 是新的那一层，点赞和短评是被赞的那一层；
 // excerpt 是它正文的前 80 个字，待审核和已隐藏的只给作者看，别人为空字符串；data 里点赞带最近的 emoji，短评带最近的 body
@@ -186,8 +196,8 @@ token 由管理员在后台创建，只显示一次。每个 token 绑定一个 
 | DELETE | `/me/avatar` | 头像改回跟着 QQ，立刻拉一次 QQ 头像，返回 `{ avatar_url }`；拉取失败返回 `502 fetch_failed`，头像不变 | 成员 / `act` |
 | GET | `/me/export` | 导出自己的全部内容，作为附件 `mousehole-{id}.json` 下载：`user`（`id`、`qq`、`display_name`、`bio`）、`posts`（发过的主楼和回复，Markdown 原文，含待审核和已隐藏的，不含删掉的；`floor` 为 1 的就是自己发的帖子）、`boosts`、`bookmarks`；每小时最多 3 次 | 已登录，只能在网页上 |
 | GET | `/me/drafts` | 自己的草稿，最近改过的在前：`thread`（回复的帖子 `{ id, title }`，发帖的为 `null`）、`title`、`excerpt`（正文前 100 个字）、`updated_at` | 已登录，只能在网页上 |
-| GET | `/me/drafts/{key}` | 一份草稿，`key` 为 `new` 是发帖的，为帖子 ID 是回复这个帖子的：`title`、`board`、`kind`、`poll`（写了一半的投票，选项可以是空的；截止时间是 `days`（选了几天后截止，发帖时从那时算起）或 `closes_at`（自定义的时间），其余字段同发帖；没有为 `null`）、`tags`、`author_anonymous`、`anonymous_replies`、`body`、`reply_to`（`{ id, floor, name }` 或 `null`）、`updated_at`；没有返回 `404 draft_not_found` | 已登录，只能在网页上 |
-| PUT | `/me/drafts/{key}` | 保存草稿，整份替换：`{ body, title?, board?, kind?, poll?, tags?, author_anonymous?, anonymous_replies?, reply_to_id? }`；回复的帖子不存在返回 `404`，不在这个帖子里的 `reply_to_id`、不存在的版块不保存。发帖、回复成功后论坛删掉对应的草稿，180 天没动过的每天清理 | 已登录，只能在网页上 |
+| GET | `/me/drafts/{key}` | 一份草稿，`key` 为 `new` 是发帖的，为帖子 ID 是回复这个帖子的：`title`、`board`、`kind`、`poll`（写了一半的投票，选项可以是空的；截止时间是 `days`（选了几天后截止，发帖时从那时算起）或 `closes_at`（自定义的时间），其余字段同发帖；没有为 `null`）、`lottery`（写了一半的抽奖，奖品可以是空的；开奖时间是 `days` 或 `draws_at`，同投票；没有为 `null`）、`tags`、`author_anonymous`、`anonymous_replies`、`body`、`reply_to`（`{ id, floor, name }` 或 `null`）、`updated_at`；没有返回 `404 draft_not_found` | 已登录，只能在网页上 |
+| PUT | `/me/drafts/{key}` | 保存草稿，整份替换：`{ body, title?, board?, kind?, poll?, lottery?, tags?, author_anonymous?, anonymous_replies?, reply_to_id? }`；回复的帖子不存在返回 `404`，不在这个帖子里的 `reply_to_id`、不存在的版块不保存。发帖、回复成功后论坛删掉对应的草稿，180 天没动过的每天清理 | 已登录，只能在网页上 |
 | DELETE | `/me/drafts/{key}` | 放弃草稿 | 已登录，只能在网页上 |
 | GET | `/me/sessions` | 已登录的设备：`user_agent`、`device`（例如"Chrome · macOS"）、`ip`、时间、是否当前设备 | 已登录 |
 | DELETE | `/me/sessions/{id}` | 让某个设备下线 | 已登录 |
@@ -236,7 +246,7 @@ token 由管理员在后台创建，只显示一次。每个 token 绑定一个 
 | --- | --- | --- | --- |
 | GET | `/threads` | 帖子列表，每页 30 个：`board`、`tag`、`author`、`kind`、`view`、`cursor`；版块或标签不存在返回 404。`view` 默认 `latest`（按最后回复），还可以是 `created`（按发布时间）、`hot`（热门）、`unsolved`（待解答）；以下几种要登录：`new`（最近 7 天发布、自己还没打开过）、`unread`（读过、之后有新楼层）、`read`（读过的，按最后阅读时间）、`posted`（自己发过或回复过的，删掉的回复不算，按最后回复）、`bookmarked`（收藏的，按收藏时间）。`latest` 的第一页先列置顶的帖子：首页是全站置顶，版块页还有版块内置顶；按标签筛选时不置顶 | 访客 |
 | GET | `/threads/counts` | 当前范围里新和未读的帖子各有几个：`board`、`tag`，返回 `{ new, unread }` | 成员 |
-| POST | `/threads` | 发帖：`board`、`title`（4–80 个字）、`content`、`kind`（不带时用版块的默认类型）、`tags`（最多 5 个，只能用已有的）、`source`、`anonymous`（楼主匿名）、`anonymous_replies`（楼主以外的人回复时匿名），后两个发出后不能改。`kind` 为 `poll` 时要带 `poll`，别的类型不能带：`options`（2–20 个，每个最多 50 个字，不能重复）、`multiple`、`max_choices`（多选时最多选几项，要少于选项数，`null` 不限）、`anonymous`（匿名投票）、`results`（`voted` 或 `always`）、`closes_at`（截止时间，Unix 秒，10 分钟以后、一年以内，`null` 不限），发出后都不能改；只有版主能发的版块返回 `403 forbidden`。先审后发的版块里，版主以外的人发的帖子 `status` 为 `pending`，通过后才公开 | 成员 / `act` |
+| POST | `/threads` | 发帖：`board`、`title`（4–80 个字）、`content`、`kind`（不带时用版块的默认类型）、`tags`（最多 5 个，只能用已有的）、`source`、`anonymous`（楼主匿名）、`anonymous_replies`（楼主以外的人回复时匿名），后两个发出后不能改。`kind` 为 `poll` 时要带 `poll`，别的类型不能带：`options`（2–20 个，每个最多 50 个字，不能重复）、`multiple`、`max_choices`（多选时最多选几项，要少于选项数，`null` 不限）、`anonymous`（匿名投票）、`results`（`voted` 或 `always`）、`closes_at`（截止时间，Unix 秒，10 分钟以后、一年以内，`null` 不限），发出后都不能改。`kind` 为 `lottery` 时要带 `lottery`，别的类型不能带，也不能匿名：`prizes`（1–10 个奖项，每个 `{ name, winners }`：奖品最多 50 个字，抽 1–100 人）、`entry`（`button` 或 `reply`，默认 `button`）、`min_level`（0–5，默认 0）、`draws_at`（开奖时间，Unix 秒，10 分钟以后、一年以内），发出后都不能改。L2 起才能发投票帖和抽奖帖，否则返回 `403 level_required`。只有版主能发的版块返回 `403 forbidden`。先审后发的版块里，版主以外的人发的帖子 `status` 为 `pending`，通过后才公开 | 成员 / `act` |
 | GET | `/threads/{id}` | 帖子详情；楼层（包括主楼）用 `/threads/{id}/posts` 取。楼主设置了不给访客看时，访客得到 `401 login_required` | 访客 |
 | PATCH | `/threads/{id}` | 只改带了的字段：楼主可以改 `title`、`tags`；版主还可以改 `board`（移动版块）、`pinned`（0–2）、`featured`、`locked`、`status`（`visible` 或 `hidden`，见下面的「审核」）和 `reason`（隐藏的理由，最多 200 个字，会告诉作者）。L3 起可以改等级比自己低的人的 `title`、`tags`、`board`（只能移到自己能发帖的版块），L5 还可以改 `locked`；版主的和匿名的帖子不行（总体设计 §6.6）。改标题记在主楼的编辑记录里；锁定后只有版主和 L5 能改 | 楼主、版主、L3 / `act`、`moderate` |
 | DELETE | `/threads/{id}` | 删除帖子；有人回复后楼主不能删，只有版主能删 | 楼主、版主 / `act`、`moderate` |
@@ -245,6 +255,10 @@ token 由管理员在后台创建，只显示一次。每个 token 绑定一个 
 | PUT | `/threads/{id}/poll/vote` | 投票：`{ options }`，选项 ID；再投就换掉原来的，空数组是撤票。单选选了几项、超过 `max_choices`、选项不在这个投票里返回 `400`；投票已结束返回 `403 poll_closed`，帖子锁定返回 `403 thread_locked`，待审核或已隐藏返回 `403`；不是投票帖返回 `404 poll_not_found`。返回投票 | 没被禁言的成员 / `act` |
 | POST | `/threads/{id}/poll/close` | 提前结束投票，已经结束的不变；返回投票 | 楼主、版主 / `act`、`moderate` |
 | GET | `/threads/{id}/poll/options/{option}/voters` | 投了这一项的人，先投的在前：`{ items }`；匿名投票，或者自己还看不到结果时返回 `403` | 成员 / `read` |
+| PUT | `/threads/{id}/lottery/entry` | 参与抽奖，已经参与的不变；只用于 `entry` 为 `button` 的抽奖，回复参与的返回 `403`。楼主、帖子锁定（`thread_locked`）、待审核或已隐藏返回 `403`，等级不够返回 `403 level_required`，已开奖、过了开奖时间或已取消返回 `403 lottery_closed`；不是抽奖帖返回 `404 lottery_not_found`。返回抽奖 | 没被禁言的成员 / `act` |
+| DELETE | `/threads/{id}/lottery/entry` | 退出抽奖，没参与的不变；错误同上。返回抽奖 | 成员 / `act` |
+| POST | `/threads/{id}/lottery/cancel` | 开奖前取消抽奖，参与的人收到站内通知；已开奖或已取消返回 `403 lottery_closed`。返回抽奖 | 楼主、版主 / `act`、`moderate` |
+| GET | `/threads/{id}/lottery/entries` | 参与的人：`{ items: [{ user, prize }] }`，`prize` 是中了第几个奖项（从 0 数），没中为 `null`。开奖前按参与的先后，开奖后按抽中的先后，就是复核时排出的顺序 | 成员 / `read` |
 | PUT | `/threads/{id}/subscription` | 关注级别：`{ level }`，`watching` 每个新楼层都通知，`normal` 回复我、@我时通知，`muted` 都不通知；没设置过是 `normal`，发帖的人是 `watching` | 成员 / `act` |
 | PUT | `/threads/{id}/bookmark` | 收藏；已经收藏的不变，收藏列表里的位置也不变 | 成员 / `act` |
 | DELETE | `/threads/{id}/bookmark` | 取消收藏 | 成员 / `act` |
@@ -432,13 +446,14 @@ data: {"post":{…},"thread":{…},"author":{…},"qq_text":"……","url":"http
 | `post.deleted` | 回复或帖子被删除、隐藏；删除帖子时是它的主楼 | `post_id`、`thread_id`、`floor`、`by`、`reason` |
 | `thread.solved` | 采纳答案 | `thread`（`id`、`title`）、`post`（`id`、`floor`、`body`）、`answerer`、`url`、`qq_text` |
 | `content.pending` | 先审后发的版块有新内容等待审核；帖子是它的主楼 | `thread`（`id`、`title`）、`board`、`post`（`id`、`floor`、`body`）、`author`、`url` |
-| `notification.created` | 给某位成员产生通知，且他开启了这类通知的 QQ 提醒 | `user`、`type`、`actor`、`thread`、`post`、`url`、`qq_text`；升级（`level`）的没有 `actor`、`thread`、`post`，带 `level` |
+| `notification.created` | 给某位成员产生通知，且他开启了这类通知的 QQ 提醒 | `user`、`type`、`actor`、`thread`、`post`、`url`、`qq_text`；升级（`level`）的没有 `actor`、`thread`、`post`，带 `level`；抽奖（`lottery`）的没有 `actor`、`post`，带 `result` 和 `prize` |
 | `member.activated` | 成员第一次登录；插件收到后查这个人的 QQ 个性签名，推给 `/bot/users/{user}/bio` | `user` |
+| `lottery.drawn` | 抽奖开奖 | `thread`（`id`、`title`）、`author`、`prizes`（每项 `name` 和 `winners`，按抽中的先后）、`entry_count`、`url`、`qq_text` |
 | `report.created` | 有新举报 | `report`（`id`、`reason`、`held`：这一层是否因 L4 的举报先隐藏了）、`post`（`id`、`floor`、`thread_id`）、`boost`（举报的是短评时：`id`、`body`、`author`，否则为 `null`）、`reporter`、`url` |
 
 - `qq_text` 是可以直接发到 QQ 的纯文本，例如"【保研问答】rank 30% 能冲夏令营吗\n鼠鼠：……\nhttps://bbs.mousebaoyan.cn/t/42"。
 - 事件里的用户对象是 `{ id, display_name, qq }`，插件可以直接私聊。匿名写的人是 `{ anonymous: true, number, display_name }`，没有 `id` 和 `qq`；本人编辑、删除自己的匿名内容时，`editor`、`by` 也是这样。`source` 是内容来自的 QQ 消息，没有为 `null`。
-- `notification.created`：每类通知的 QQ 提醒由本人在设置里开关；没设置过时，回复我、@我、回答被采纳、审核和升级的通知默认开，其余默认关。`qq_text` 例如"鼠鼠 回复了你：……\nrank 30% 能冲夏令营吗\nhttps://bbs.mousebaoyan.cn/t/42?floor=3"。
+- `notification.created`：每类通知的 QQ 提醒由本人在设置里开关；没设置过时，回复我、@我、回答被采纳、审核、升级和抽奖的通知默认开，其余默认关。抽奖的只在中奖（`result` 为 `won`，带 `prize`）和自己发起的开奖了（`drawn`）时才有，没中和取消的只发站内通知。`qq_text` 例如"鼠鼠 回复了你：……\nrank 30% 能冲夏令营吗\nhttps://bbs.mousebaoyan.cn/t/42?floor=3"。
 - 审核可以挂在事件上：先发后审的版块监听 `thread.created`、`post.created`，先审后发的版块监听 `content.pending`，判定后调用 `PATCH` 修改 `status`。恢复隐藏的内容不会再发 `thread.created`、`post.created`。
 
 ## 6. 流程

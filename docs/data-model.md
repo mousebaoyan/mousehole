@@ -53,7 +53,7 @@
 
 ## 帖子与楼层
 
-表：`threads`、`posts`、`post_revisions`、`drafts`、`thread_aliases`、`polls`、`poll_options`、`poll_votes`。
+表：`threads`、`posts`、`post_revisions`、`drafts`、`thread_aliases`、`polls`、`poll_options`、`poll_votes`、`lotteries`、`lottery_entries`。
 
 - 帖子里的每一层都是 `posts` 的一行，主楼是 `floor = 1` 的那层，没有楼中楼。`reply_to_id` 记回复的是同一帖子里的哪一层，`reply_count` 冗余有几条回复它，和发帖在同一个事务里更新。
 - 列表里的参与者：楼主加最近 20 层里最近回复的 4 个人。列表查询时按 `posts_floor` 倒着取，每个帖子最多读 20 行，不另存。
@@ -68,8 +68,9 @@
 - 热门：最近 7 天发布的帖子按 `(回复数 × 2 + 赞数 + 浏览数 / 20 + 1) / (发布至今的小时数 + 2)^1.5` 排序，取前 500 个，在内存里存 10 分钟；读列表时再按可见范围和筛选条件过滤。
 - 浏览数在内存里累计，每分钟批量写一次；同一个人（登录用户按 ID，访客按 IP）一分钟内只算一次，bot 的请求不算。
 - 匿名（[总体设计 §8.12](design.md#812-匿名)）：`threads.author_anonymous`、`threads.anonymous_replies` 是发帖时的两个开关，`posts.anonymous`、`boosts.anonymous` 在写入时按"楼主看前者、别人看后者"定下。`thread_aliases` 记每个人在一个帖子里的编号，第一次匿名写入时分配：锁住帖子那一行，取已有的最大编号加一，楼主匿名时是 1 号。读的时候 left join `thread_aliases`（只在 `anonymous` 为真时连上），有编号的显示成"匿名鼠 N"。通知的 `actor_alias` 是触发的人匿名时的编号。`author_id`、`user_id` 照常记真实的人。
-- 草稿（[总体设计 §8.2](design.md#82-正文)）存在 `drafts`，每人每个帖子一行，`thread_id` 为 `NULL` 的是发帖的那份，唯一约束用 `NULLS NOT DISTINCT`，所以发帖的也只有一份。整份覆盖保存；发帖、回复时在同一个事务里删掉对应的草稿（bot 代发的不删）。`updated_at` 超过 180 天的每天清理，走 `drafts_updated`。写了一半的投票整个存在 `drafts.poll`（jsonb），只在发帖时按接口校验。
+- 草稿（[总体设计 §8.2](design.md#82-正文)）存在 `drafts`，每人每个帖子一行，`thread_id` 为 `NULL` 的是发帖的那份，唯一约束用 `NULLS NOT DISTINCT`，所以发帖的也只有一份。整份覆盖保存；发帖、回复时在同一个事务里删掉对应的草稿（bot 代发的不删）。`updated_at` 超过 180 天的每天清理，走 `drafts_updated`。写了一半的投票和抽奖整个存在 `drafts.poll`、`drafts.lottery`（jsonb），只在发帖时按接口校验。
 - 投票（[总体设计 §8.11](design.md#811-投票)）：`threads.kind = 'poll'` 的帖子在 `polls` 里有一行，和帖子在同一个事务里建，`poll_options` 按 `position` 排。`polls.closes_at` 是截止时间，`closed_at` 是提前结束的时间，二者有一个到了就算结束。每人每个选项一行 `poll_votes`，改票是删掉自己的再插入新的；`poll_options.vote_count` 和 `polls.voter_count` 冗余计数，投票时先锁住 `polls` 那一行，同一个投票的票按顺序计。取自己投了什么走 `poll_votes_voter`。
+- 抽奖（[总体设计 §8.13](design.md#813-抽奖)）：`threads.kind = 'lottery'` 的帖子在 `lotteries` 里有一行，和帖子在同一个事务里建。`prizes` 是按顺序排的奖项（jsonb，`[{ name, winners }]`），发出后不改。`seed` 是建抽奖时生成的 32 个随机字节（十六进制），开奖前不出现在任何接口和日志里；`seed_hash` 是它的 SHA-256，一开始就公布。点按钮参与的每人一行 `lottery_entries`；回复参与的开奖前现查回复（公开、没删、楼层号大于 1、不晚于 `draws_at`），开奖时才写进 `lottery_entries`。每分钟查一次到点的抽奖（走 `lotteries_due`），逐个在事务里锁住那一行开奖：先删掉开奖时不符合条件的参与者，这时 `lottery_entries` 就是参与开奖的全部人，再按 `SHA-256(seed:用户 ID)` 排序，依次给前面的人填上 `prize`（中的是第几个奖项），最后写 `drawn_at`。取消写 `cancelled_at`，之后不再开奖。
 
 ## 互动与通知
 

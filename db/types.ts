@@ -81,6 +81,7 @@ export interface Drafts {
   board_id: number | null;
   body: Generated<string>;
   kind: string | null;
+  lottery: Json | null;
   poll: Json | null;
   reply_to_id: number | null;
   tags: Generated<string[]>;
@@ -145,6 +146,25 @@ export interface LoginTickets {
   secret_hash: Buffer;
   user_agent: Generated<string>;
   user_id: number | null;
+}
+
+export interface Lotteries {
+  cancelled_at: Timestamp | null;
+  drawn_at: Timestamp | null;
+  draws_at: Timestamp;
+  entry: string;
+  min_level: Generated<number>;
+  prizes: Json;
+  seed: string;
+  seed_hash: string;
+  thread_id: number;
+}
+
+export interface LotteryEntries {
+  created_at: Generated<Timestamp>;
+  prize: number | null;
+  thread_id: number;
+  user_id: number;
 }
 
 export interface Notifications {
@@ -410,6 +430,8 @@ export interface DB {
   group_members: GroupMembers;
   idempotency_keys: IdempotencyKeys;
   login_tickets: LoginTickets;
+  lotteries: Lotteries;
+  lottery_entries: LotteryEntries;
   notifications: Notifications;
   poll_options: PollOptions;
   poll_votes: PollVotes;
