@@ -423,7 +423,10 @@ export const threadsRoutes = createRouter()
       const { viewer, bot } = c.var;
       const thread = await getThread(id, readerOf(c));
       // People reading, not bots fetching.
-      if (!bot) recordView(id, viewer ? `u${viewer.id}` : (clientIp(c) ?? ""));
+      // Requests from inside the server, such as the guest page cache refreshing a page, have
+      // no reader to count.
+      const reader = viewer ? `u${viewer.id}` : clientIp(c);
+      if (!bot && reader !== null) recordView(id, reader);
       return c.json(threadDetailJson(thread, viewer !== null), 200);
     },
   )
