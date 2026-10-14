@@ -8,6 +8,7 @@ import { ThreadList } from "~/components/thread-list";
 import { Button } from "~/components/ui/button";
 import { useMe } from "~/forum";
 import { useNearView } from "~/near-view";
+import { shareMeta } from "~/share-meta";
 import { stamp, unixNow } from "~/time";
 import type { Route } from "./+types/topic.ts";
 import { FloorNav, FloorProgress, useCurrentFloor, type Floors } from "./floor-timeline.tsx";
@@ -21,7 +22,12 @@ import { TopicHeader } from "./topic-header.tsx";
 const BATCH = 20;
 
 export function meta({ loaderData }: Route.MetaArgs) {
-  return [{ title: `${loaderData.thread.title} · 鼠洞` }];
+  const { thread } = loaderData;
+  return [
+    ...shareMeta(thread.title, thread.excerpt),
+    { property: "og:type", content: "article" },
+    { property: "og:url", content: thread.url },
+  ];
 }
 
 // The page opens at ?floor=N, or the opening post, and shows the 20 floors from there. Near the

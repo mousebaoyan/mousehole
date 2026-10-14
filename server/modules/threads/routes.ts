@@ -1,4 +1,5 @@
 import { createRoute, z } from "@hono/zod-openapi";
+import type { Context } from "hono";
 import { isMember } from "../../platform/access.ts";
 import { env } from "../../platform/env.ts";
 import {
@@ -13,9 +14,10 @@ import {
   requireWeb,
   unix,
 } from "../../platform/http.ts";
-import { renderMarkdown } from "../../platform/markdown.ts";
+import { excerpt, renderMarkdown } from "../../platform/markdown.ts";
 import { liveStream } from "../../platform/sse.ts";
 import { rateLimit } from "../../platform/rate-limit.ts";
+import { listBoards } from "../boards/service.ts";
 import { onEvent } from "../events/service.ts";
 import { BoostSchema, boostJson } from "../reactions/schemas.ts";
 import { floorExtras } from "../reactions/service.ts";
@@ -41,6 +43,7 @@ import {
   listUserPosts,
   MAX_BODY,
   NOTIFY_LEVELS,
+  publicThreads,
   recordReading,
   recordView,
   setBookmark,
@@ -55,6 +58,7 @@ import {
 const ThreadDetailSchema = ThreadSchema.extend({
   url: z.string(),
   solved_floor: z.number().nullable().openapi({ description: "采纳的回答在第几楼" }),
+  excerpt: z.string().openapi({ description: "主楼正文的前 100 个字，分享卡片用" }),
   status: z.string().openapi({
     description: "visible 公开；pending 待审核、hidden 已隐藏，这两种只有作者和版主打得开",
   }),
@@ -97,7 +101,34 @@ const PostSchema = z
   })
   .openapi("Post");
 
+// Search engines' list of what to read: the home page, the public boards and their threads, as
+// many as one sitemap holds. See design §8.5.
+const SITEMAP_URLS = 50_000;
+
+function sitemapEntry(path: string, changed?: Date) {
+  const lastmod = changed ? `<lastmod>${changed.toISOString()}</lastmod>` : "";
+  return `<url><loc>${env.PUBLIC_URL}${path}</loc>${lastmod}</url>`;
+}
+
+export async function serveSitemap(c: Context) {
+  const boards = await listBoards(false);
+  const threads = await publicThreads(SITEMAP_URLS - 1 - boards.length);
+  const urls = [
+    sitemapEntry("/"),
+    ...boards.map((b) => sitemapEntry(`/b/${b.slug}`)),
+    ...threads.map((t) => sitemapEntry(`/t/${t.id}`, t.last_post_at)),
+  ];
+  return c.body(
+    `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${urls.join("")}</urlset>`,
+    200,
+    { "content-type": "application/xml; charset=utf-8", "cache-control": "public, max-age=3600" },
+  );
+}
+
 type Thread = Awaited<ReturnType<typeof getThread>>;
+
+// Characters of the opening post in a thread's details, for the card a shared link shows.
+const SHARE_EXCERPT = 100;
 type Post = Awaited<ReturnType<typeof getPost>>;
 type Extras = Awaited<ReturnType<typeof floorExtras>>;
 
@@ -106,6 +137,7 @@ function threadDetailJson(t: Thread, signedIn: boolean) {
     ...threadJson(t, signedIn),
     url: `${env.PUBLIC_URL}/t/${t.id}`,
     solved_floor: t.solved_floor,
+    excerpt: excerpt(t.opening_html, SHARE_EXCERPT),
     status: t.status,
     ...(signedIn && {
       read_floors: t.read_floors,

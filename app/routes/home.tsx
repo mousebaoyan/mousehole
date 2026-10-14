@@ -1,11 +1,16 @@
 import { data, redirect } from "react-router";
 import { apiContext } from "../api.server.ts";
 import { readCounts, readFilter, ThreadFeed } from "~/components/thread-feed";
+import { shareMeta } from "~/share-meta";
 import { unixNow } from "~/time";
 import type { Route } from "./+types/home.ts";
 
 export function meta() {
-  return [{ title: "鼠洞 · 四非计算机保研鼠群的论坛" }];
+  return shareMeta(
+    "鼠洞",
+    "四非计算机保研鼠群的论坛：保研经验、院校信息、夏令营和预推免",
+    "鼠洞 · 四非计算机保研鼠群的论坛",
+  );
 }
 
 export async function loader({ request, context }: Route.LoaderArgs) {
