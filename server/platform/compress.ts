@@ -1,7 +1,14 @@
+import type { Context } from "hono";
 import { COMPRESSIBLE_CONTENT_TYPE_REGEX } from "hono/compress";
 import { createMiddleware } from "hono/factory";
 import { pipeline, Readable } from "node:stream";
 import { constants, createBrotliCompress, createGzip } from "node:zlib";
+
+// What the browser takes: Brotli where it can, else gzip, else neither.
+export function acceptedEncoding(c: Context) {
+  const accepted = c.req.header("accept-encoding") ?? "";
+  return /\bbr\b/.test(accepted) ? "br" : /\bgzip\b/.test(accepted) ? "gzip" : null;
+}
 
 // Pages and API responses, compressed here because the reverse proxy doesn't (design §11.2):
 // Brotli for browsers that take it, else gzip. Brotli at quality 5 with a 256KB window is quick
@@ -19,8 +26,7 @@ export const compressResponses = createMiddleware(async (c, next) => {
     return;
   }
   c.res.headers.append("vary", "accept-encoding");
-  const accepted = c.req.header("accept-encoding") ?? "";
-  const encoding = /\bbr\b/.test(accepted) ? "br" : /\bgzip\b/.test(accepted) ? "gzip" : null;
+  const encoding = acceptedEncoding(c);
   if (encoding === null) return;
   const compressor =
     encoding === "br"

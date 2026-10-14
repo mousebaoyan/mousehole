@@ -1,4 +1,5 @@
 import { RouterContextProvider } from "react-router";
+import type { Context } from "hono";
 import type { SecureHeadersVariables } from "hono/secure-headers";
 import { createHonoServer } from "react-router-hono-server/node";
 import { apiContext, createApi } from "../app/api.server.ts";
@@ -12,10 +13,12 @@ import {
   unreadChanged,
 } from "./modules/notifications/service.ts";
 import { indexMissingPosts } from "./modules/search/service.ts";
-import { flushViews } from "./modules/threads/service.ts";
+import { flushViews, recordView } from "./modules/threads/service.ts";
 import { clearUnusedUploads } from "./modules/uploads/service.ts";
 import { refreshAvatars } from "./modules/users/service.ts";
 import { compressResponses } from "./platform/compress.ts";
+import { clientIp } from "./platform/http.ts";
+import { guestPages } from "./platform/page-cache.ts";
 import { securityHeaders } from "./platform/security-headers.ts";
 import { listen } from "./platform/db.ts";
 import { log } from "./platform/log.ts";
@@ -35,6 +38,13 @@ every(DAY_MS, "Clearing old idempotency keys", clearIdempotencyKeys);
 every(DAY_MS, "Clearing old notifications", clearOldNotifications);
 every(DAY_MS, "Clearing old events", clearOldEvents);
 
+// A topic served from the guest page cache skips the loader that counts its view.
+function countCachedView(c: Context) {
+  const thread = /^\/t\/(\d+)/.exec(c.req.path)?.[1];
+  const ip = clientIp(c);
+  if (thread !== undefined && ip !== null) recordView(Number(thread), ip);
+}
+
 // Docker stops the container with SIGTERM; the view counts not yet written go out first.
 process.once("SIGTERM", () => {
   void flushViews().finally(() => process.exit(0));
@@ -43,8 +53,10 @@ process.once("SIGTERM", () => {
 export default await createHonoServer<{ Variables: SecureHeadersVariables }>({
   defaultLogger: false,
   listeningListener: ({ port }) => log("info", "Listening", { port }),
-  // Before the static files, so they get the headers too.
+  // Before the static files, so they get the headers too; the guest page cache keeps pages
+  // with theirs.
   beforeAll(server) {
+    server.use(guestPages(server, countCachedView));
     server.use(securityHeaders);
   },
   // Built files have Brotli and gzip copies beside them; see scripts/compress-assets.ts.
