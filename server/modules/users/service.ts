@@ -328,6 +328,7 @@ export async function getSettings(userId: number) {
       "avatar_custom",
       "allow_proxy",
       "hide_from_guests",
+      "notify_email",
       sql<Record<string, { site?: boolean; email?: boolean }>>`notify_prefs`.as("notify_prefs"),
     ])
     .where("id", "=", userId)
@@ -341,6 +342,7 @@ export async function updateSettings(
     custom_bio?: string | null;
     allow_proxy?: boolean;
     hide_from_guests?: boolean;
+    notify_email?: boolean;
     notify_prefs?: Record<string, { site: boolean; email: boolean }>;
   },
 ) {

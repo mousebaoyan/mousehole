@@ -80,12 +80,12 @@
   "boost_count": 9, "my_boost": "已收藏",
   "edited_at": null, "created_at": 1760000000 }
 
-// 通知。type：reply 回复了我的楼层，mention @了我，like 赞了我的楼层，boost 给我的楼层留了短评，
+// 通知。type：reply 回复了我的楼层，thread_reply 回复了我的帖子、没指定哪一层，mention @了我，like 赞了我的楼层，boost 给我的楼层留了短评，
 // watching 关注的帖子有新楼层，following 关注的人发了新帖，solved 我的回答被采纳，
 // moderation 版主审核或隐藏了我的内容（data 带 action：approve 通过、reject 不通过、hide 隐藏、unhide 恢复，以及 reason），
 // level 我升级了（data 带 level，没有 actor、thread、post，都为 null），
 // lottery 抽奖开奖或取消了（data 带 result：won 中奖、lost 没中、drawn 自己发起的开奖了、cancelled 取消了；中奖的还带 prize，奖项名；没有 actor、post）。
-// like、boost 按楼层，watching 按帖子，
+// like、boost 按楼层，thread_reply、watching 按帖子，
 // 未读期间合并成一条：actor 是最近的人，count 是次数。post 是新的那一层，点赞和短评是被赞的那一层；
 // excerpt 是它正文的前 80 个字，待审核和已隐藏的只给作者看，别人为空字符串；data 里点赞带最近的 emoji，短评带最近的 body
 { "id": 9001, "type": "like", "actor": { … }, "count": 3, "thread": { "id": 42, "title": "…" },
@@ -189,8 +189,8 @@ token 由管理员在后台创建，只显示一次。每个 token 绑定一个 
 | POST | `/auth/email/verify` | `{ qq, code }`：校验验证码，建立会话，返回 204；不对、过期或输错 5 次作废都返回 `400 email_code_invalid`，`message` 说明是哪种 | 访客 |
 | POST | `/auth/logout` | 退出当前会话；没有登录时也返回成功 | 访客 |
 | GET | `/me` | 当前用户；bot 代表某人时返回这个人 | 已登录 / `read` |
-| GET | `/me/settings` | 自己的设置：`custom_name`（自己起的名字，`null` 是跟着 QQ）、`custom_bio`（自己写的个性签名，`null` 是跟着 QQ）、`qq_bio`（QQ 的个性签名）、`avatar_custom`（头像是不是自己上传的）、`allow_proxy`、`hide_from_guests`（我的内容不给访客看）、`notify_prefs`（每类通知的 `{ site, email }` 开关，含默认值） | 已登录 / `read` |
-| PATCH | `/me` | 修改设置，只改带了的字段，返回改好的设置：`custom_name`（最多 24 个字，`null` 改回跟着 QQ，显示名随即重算）、`custom_bio`（最多 60 个字，`null` 改回跟着 QQ）、`allow_proxy`、`hide_from_guests`、`notify_prefs`（带了的类型整体替换） | 成员 / `act` |
+| GET | `/me/settings` | 自己的设置：`custom_name`（自己起的名字，`null` 是跟着 QQ）、`custom_bio`（自己写的个性签名，`null` 是跟着 QQ）、`qq_bio`（QQ 的个性签名）、`avatar_custom`（头像是不是自己上传的）、`allow_proxy`、`hide_from_guests`（我的内容不给访客看）、`notify_email`（邮件提醒的总开关）、`notify_prefs`（每类通知的 `{ site, email }` 开关，含默认值） | 已登录 / `read` |
+| PATCH | `/me` | 修改设置，只改带了的字段，返回改好的设置：`custom_name`（最多 24 个字，`null` 改回跟着 QQ，显示名随即重算）、`custom_bio`（最多 60 个字，`null` 改回跟着 QQ）、`allow_proxy`、`hide_from_guests`、`notify_email`、`notify_prefs`（带了的类型整体替换） | 成员 / `act` |
 | PUT | `/me/avatar` | 上传头像：multipart 的 `file` 字段，最大 20MB，格式同图片上传，裁成 96px 的方图；之后不再跟着 QQ 刷新。返回 `{ avatar_url }` | 没被禁言的成员 / `act` |
 | DELETE | `/me/avatar` | 头像改回跟着 QQ，立刻拉一次 QQ 头像，返回 `{ avatar_url }`；拉取失败返回 `502 fetch_failed`，头像不变 | 成员 / `act` |
 | GET | `/me/export` | 导出自己的全部内容，作为附件 `mousehole-{id}.json` 下载：`user`（`id`、`qq`、`display_name`、`bio`）、`posts`（发过的主楼和回复，Markdown 原文，含待审核和已隐藏的，不含删掉的；`floor` 为 1 的就是自己发的帖子）、`boosts`、`bookmarks`；每小时最多 3 次 | 已登录，只能在网页上 |

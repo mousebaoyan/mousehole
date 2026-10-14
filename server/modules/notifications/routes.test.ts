@@ -77,17 +77,21 @@ describe("通知", () => {
     expect(await inbox(watcher.who)).toEqual([`watching:${replier.id}x1`]);
     expect(await inbox(replier.who)).toEqual([]);
 
-    // Not naming a floor replies to the thread, so to its author.
+    // Not naming a floor replies to the thread; its author hears of those merged.
     await reply(other.who, t.id, "我也来");
-    expect(await inbox(author.who)).toEqual([`reply:${other.id}x1`, `reply:${replier.id}x1`]);
-    expect(await inbox(watcher.who)).toEqual([`watching:${other.id}x2`]);
+    await reply(other.who, t.id, "再来一条");
+    expect(await inbox(author.who)).toEqual([
+      `thread_reply:${other.id}x2`,
+      `reply:${replier.id}x1`,
+    ]);
+    expect(await inbox(watcher.who)).toEqual([`watching:${other.id}x3`]);
 
     // A reply to someone else's floor is theirs; the author only sees the thread move on.
     await reply(other.who, t.id, "你也是吗", asked);
     expect(await inbox(replier.who)).toEqual([`reply:${other.id}x1`]);
     expect(await inbox(author.who)).toEqual([
       `watching:${other.id}x1`,
-      `reply:${other.id}x1`,
+      `thread_reply:${other.id}x2`,
       `reply:${replier.id}x1`,
     ]);
     await clear(author, replier, other, watcher);
@@ -189,7 +193,7 @@ describe("邮件", () => {
   test("开着邮件的通知发到 QQ 邮箱，没登录过论坛的成员也发；默认不发邮件的类型不发", async () => {
     const t = await thread(author.who);
     const newcomer = await createUser();
-    await reply(replier.who, t.id, `[@新人](/u/${newcomer.id}) 也来看看`);
+    await reply(replier.who, t.id, `[@新人](/u/${newcomer.id}) 也来看看`, t.opening);
     const { qq } = await db
       .selectFrom("users")
       .select("qq")
@@ -206,6 +210,29 @@ describe("邮件", () => {
     );
     expect(await mails()).toEqual([]);
     await clear(author, replier);
+  });
+
+  test("没指定楼层的回复默认不给楼主发邮件，@了楼主的照发；关掉邮件提醒后都不发", async () => {
+    const t = await thread(author.who);
+    const { qq } = await db
+      .selectFrom("users")
+      .select("qq")
+      .where("id", "=", author.id)
+      .executeTakeFirstOrThrow();
+    await reply(replier.who, t.id, "顶一下");
+    expect(await mails()).toEqual([]);
+    await reply(replier.who, t.id, `[@楼主](/u/${author.id}) 看看这个`);
+    expect(await mails()).toEqual([`${qq}@qq.com 鼠鼠 提到了你：等通知的帖子`]);
+
+    await api.me.$patch({ json: { notify_email: false } }, author.who);
+    await reply(replier.who, t.id, "回复主楼", t.opening);
+    expect(await mails()).toEqual([]);
+    expect(await inbox(author.who)).toEqual([
+      `reply:${replier.id}x1`,
+      `mention:${replier.id}x1`,
+      `thread_reply:${replier.id}x1`,
+    ]);
+    await api.me.$patch({ json: { notify_email: true } }, author.who);
   });
 
   test("从群里收录来的帖子和回复不产生通知", async () => {

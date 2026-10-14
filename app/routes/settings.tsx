@@ -20,7 +20,8 @@ export function meta() {
 
 // The notification types, in the order the table lists them.
 const TYPES = [
-  { type: "reply", label: "回复我" },
+  { type: "reply", label: "回复我的楼层" },
+  { type: "thread_reply", label: "回复我的帖子（没指定回复哪一层）" },
   { type: "mention", label: "@我" },
   { type: "like", label: "点赞" },
   { type: "boost", label: "短评" },
@@ -69,6 +70,7 @@ export async function action({ request, context }: Route.ActionArgs) {
       custom_bio: field("custom_bio") || null,
       allow_proxy: on("allow_proxy"),
       hide_from_guests: on("hide_from_guests"),
+      notify_email: on("notify_email"),
       notify_prefs: Object.fromEntries(
         TYPES.map(({ type }) => [type, { site: on(`${type}.site`), email: on(`${type}.email`) }]),
       ),
@@ -138,11 +140,14 @@ export default function Settings({ loaderData, actionData }: Route.ComponentProp
             />
           </Section>
 
-          <Section
-            {...SECTIONS.notify}
-            description="站内通知在顶栏的铃铛里；邮件发到你的 QQ 邮箱，有通知就发"
-          >
-            <table className="w-full text-sm">
+          <Section {...SECTIONS.notify} description="站内通知在顶栏的铃铛里，邮件发到你的 QQ 邮箱">
+            <Check
+              name="notify_email"
+              label="接收邮件提醒"
+              hint="关掉后哪类通知都不发邮件，下面各类的设置会保留"
+              checked={settings.notify_email}
+            />
+            <table className="mt-3 w-full text-sm">
               <thead className="text-meta text-muted-foreground">
                 <tr>
                   <th className="pb-2 text-left font-normal">类型</th>

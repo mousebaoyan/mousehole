@@ -9,14 +9,14 @@ import { excerpt } from "../../platform/markdown.ts";
 import { levelName, SITE_NAME } from "../../platform/site.ts";
 import { anonymousBrief, userBriefs, writer } from "../users/service.ts";
 
-// What people are told of; see design §8.6. reply: someone replied to my floor, or to my thread
-// without naming a floor; mention: @ me;
-// like and boost: on my floor; watching: a new floor in a thread I watch; following: a new thread
-// by someone I follow; solved: my answer was accepted; moderation: something of mine was
-// approved, rejected, hidden or shown again; level: I went up a level; lottery: one I entered or
-// started was drawn or called off.
+// What people are told of; see design §8.6. reply: someone replied to my floor; thread_reply: to
+// my thread without naming a floor; mention: @ me; like and boost: on my floor; watching: a new
+// floor in a thread I watch; following: a new thread by someone I follow; solved: my answer was
+// accepted; moderation: something of mine was approved, rejected, hidden or shown again; level: I
+// went up a level; lottery: one I entered or started was drawn or called off.
 export const NOTIFICATION_TYPES = [
   "reply",
+  "thread_reply",
   "mention",
   "like",
   "boost",
@@ -31,7 +31,8 @@ export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
 
 // While unread, these become one per floor (likes, boosts) or per thread (new floors), counting
 // up, with the latest person in front: "A 等 3 人".
-const MERGED = new Set<NotificationType>(["like", "boost", "watching"]);
+const MERGED = new Set<NotificationType>(["like", "boost", "thread_reply", "watching"]);
+const PER_THREAD = new Set<NotificationType>(["thread_reply", "watching"]);
 
 // About something done to a floor; levels and lotteries are told by their own.
 type Notice = {
@@ -54,6 +55,18 @@ const EMAIL_BY_DEFAULT = new Set<NotificationType>([
   "lottery",
 ]);
 
+// Whether someone gets a type on the site and by email: what they set, else the default; no
+// email at all with emails turned off.
+function switches(type: NotificationType) {
+  const prefs = sql`users.notify_prefs -> ${type}`;
+  return [
+    sql<boolean>`coalesce((${prefs} ->> 'site')::boolean, true)`.as("site"),
+    sql<boolean>`users.notify_email AND coalesce((${prefs} ->> 'email')::boolean, ${EMAIL_BY_DEFAULT.has(type)})`.as(
+      "email",
+    ),
+  ];
+}
+
 // Someone's switches for every type, what they set over the defaults.
 export function notifyPrefs(saved: Record<string, { site?: boolean; email?: boolean }>) {
   return Object.fromEntries(
@@ -68,6 +81,7 @@ export function notifyPrefs(saved: Record<string, { site?: boolean; email?: bool
 // differently, having nobody behind them.
 const SAID: Record<Notice["type"], string> = {
   reply: "回复了你",
+  thread_reply: "回复了你的帖子",
   mention: "提到了你",
   like: "赞了你",
   boost: "给你留了短评",
@@ -102,7 +116,6 @@ const MAIL_FOOTER = `\n\n——\n不想收到这类邮件，可以在${SITE_NAME
 async function notify(trx: Transaction<DB>, userIds: number[], notice: Notice) {
   const ids = [...new Set(userIds)].filter((id) => id !== notice.actorId);
   if (ids.length === 0) return;
-  const prefs = sql`users.notify_prefs -> ${notice.type}`;
   const recipients = await trx
     .selectFrom("users")
     .leftJoin("thread_users", (join) =>
@@ -110,21 +123,14 @@ async function notify(trx: Transaction<DB>, userIds: number[], notice: Notice) {
         .onRef("thread_users.user_id", "=", "users.id")
         .on("thread_users.thread_id", "=", notice.threadId),
     )
-    .select([
-      "users.id",
-      "users.qq",
-      sql<boolean>`coalesce((${prefs} ->> 'site')::boolean, true)`.as("site"),
-      sql<boolean>`coalesce((${prefs} ->> 'email')::boolean, ${EMAIL_BY_DEFAULT.has(notice.type)})`.as(
-        "email",
-      ),
-    ])
+    .select(["users.id", "users.qq", ...switches(notice.type)])
     .where("users.id", "in", ids)
     .where("users.member_status", "=", "member")
     .where(sql<boolean>`thread_users.notify_level IS DISTINCT FROM 'muted'`)
     .execute();
   const onSite = recipients.filter((r) => r.site);
   if (onSite.length > 0) {
-    const key = notice.type === "watching" ? notice.threadId : notice.postId;
+    const key = PER_THREAD.has(notice.type) ? notice.threadId : notice.postId;
     await trx
       .insertInto("notifications")
       .values(
@@ -189,14 +195,9 @@ async function remindByEmail(trx: Transaction<DB>, people: { qq: number }[], not
 // Going up a level, automatically or from an admin (design §6.6); going down is not told.
 export async function notifyLevel(trx: Transaction<DB>, userId: number, level: number) {
   const type = "level";
-  const prefs = sql`notify_prefs -> ${type}`;
   const person = await trx
     .selectFrom("users")
-    .select([
-      "qq",
-      sql<boolean>`coalesce((${prefs} ->> 'site')::boolean, true)`.as("site"),
-      sql<boolean>`coalesce((${prefs} ->> 'email')::boolean, true)`.as("email"),
-    ])
+    .select(["qq", ...switches(type)])
     .where("id", "=", userId)
     .executeTakeFirstOrThrow();
   if (person.site) {
@@ -228,15 +229,9 @@ export async function notifyLottery(
 ) {
   if (told.length === 0) return;
   const type = "lottery";
-  const prefs = sql`notify_prefs -> ${type}`;
   const people = await trx
     .selectFrom("users")
-    .select([
-      "id",
-      "qq",
-      sql<boolean>`coalesce((${prefs} ->> 'site')::boolean, true)`.as("site"),
-      sql<boolean>`coalesce((${prefs} ->> 'email')::boolean, true)`.as("email"),
-    ])
+    .select(["id", "qq", ...switches(type)])
     .where(
       "id",
       "in",
@@ -278,9 +273,9 @@ export async function notifyLottery(
   await queueMail(trx, mails);
 }
 
-// A new floor: the author of the floor it replies to, or the thread's when it names none, then
-// those @-ed in it, then those watching the thread. Each person hears of it once, by the first of
-// these that applies.
+// A new floor: the author of the floor it replies to, then those @-ed in it, then the thread's
+// author when it names no floor, then those watching the thread. Each person hears of it once, by
+// the first of these that applies.
 export async function notifyPost(
   trx: Transaction<DB>,
   post: {
@@ -290,7 +285,9 @@ export async function notifyPost(
     authorAlias: number | null;
     mentions: number[];
   },
-  replyTo: number,
+  // Whose floor it replies to, or null for the thread.
+  repliedTo: number | null,
+  threadAuthorId: number,
 ) {
   const notice = {
     actorId: post.authorId,
@@ -298,21 +295,24 @@ export async function notifyPost(
     threadId: post.threadId,
     postId: post.id,
   };
-  await notify(trx, [replyTo], { ...notice, type: "reply" });
-  const told = new Set([replyTo]);
-  const mentioned = post.mentions.filter((id) => !told.has(id));
-  await notify(trx, mentioned, { ...notice, type: "mention" });
-  for (const id of mentioned) told.add(id);
+  const told = new Set<number>();
+  async function tell(ids: number[], type: Notice["type"]) {
+    const fresh = ids.filter((id) => !told.has(id));
+    await notify(trx, fresh, { ...notice, type });
+    for (const id of fresh) told.add(id);
+  }
+  if (repliedTo !== null) await tell([repliedTo], "reply");
+  await tell(post.mentions, "mention");
+  if (repliedTo === null) await tell([threadAuthorId], "thread_reply");
   const watchers = await trx
     .selectFrom("thread_users")
     .select("user_id")
     .where("thread_id", "=", post.threadId)
     .where("notify_level", "=", "watching")
     .execute();
-  await notify(
-    trx,
-    watchers.map((w) => w.user_id).filter((id) => !told.has(id)),
-    { ...notice, type: "watching" },
+  await tell(
+    watchers.map((w) => w.user_id),
+    "watching",
   );
 }
 
