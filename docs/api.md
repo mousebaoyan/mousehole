@@ -531,7 +531,17 @@ sequenceDiagram
 
 ### 6.8 首次部署
 
-1. 部署后在容器里运行 `docker exec mousehole node scripts/bootstrap.ts --qq 你的QQ号`（本地开发用 `pnpm bootstrap --qq 你的QQ号`），得到一次性登录链接，10 分钟内有效。这个 QQ 号的账号设为管理员，并锁定角色。
+服务器上（`deploy/` 里的文件是现成的配置）：
+
+1. 在 1Panel 的 PostgreSQL 里新建 `mousehole` 库和同名账号，账号只有这个库的权限。
+2. 在服务器上新建一个目录，放进 `deploy/compose.yml` 和 `.env`：`DATABASE_URL` 用 PostgreSQL 的容器名连接，`PUBLIC_URL=https://bbs.mousebaoyan.cn`，`APP_SECRET` 用 `openssl rand -base64 32` 生成。再建 `data/` 目录，属主改成 1000（镜像里的 `node` 用户）。
+3. 在 `main` 上打 `v0.1.0` 这样的标签，GitHub Actions 构建镜像并推到 GHCR。GHCR 的包是私有的话，服务器要先 `docker login ghcr.io`，或者把包设为公开。然后 `docker compose pull && docker compose up -d`，启动时自动迁移。
+4. 在 1Panel 里新建网站，反向代理到 `127.0.0.1:3080`，申请证书，把 `deploy/openresty.conf` 的内容放进站点配置；Cloudflare 上加 A 记录，仅 DNS。
+5. 把 `deploy/gatus-endpoints.json` 的两条加进 Gatus 的 `endpoints`；在 1Panel 的计划任务里每天备份 `mousehole` 库。
+
+然后登录后台：
+
+1. 在服务器上运行 `docker exec mousehole node scripts/bootstrap.ts --qq 你的QQ号`（本地开发用 `pnpm bootstrap --qq 你的QQ号`），得到一次性登录链接，10 分钟内有效。这个 QQ 号的账号设为管理员，并锁定角色。
 2. 打开链接登录后台：关联 QQ 群、设主群，创建 bot token（按插件需要选择范围），配置 SMTP 并发一封测试邮件。
 3. 把 token 配到插件里。插件推送第一次全量后，群成员就都能登录了。
 
