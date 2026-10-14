@@ -15,6 +15,7 @@ export async function databaseBytes() {
 export async function updateSettings(
   actor: Actor,
   change: {
+    site?: Partial<Settings["site"]>;
     login?: Partial<Settings["login"]>;
     smtp?: Partial<Settings["smtp"]>;
     bot?: Partial<Settings["bot"]>;
@@ -23,6 +24,7 @@ export async function updateSettings(
   const current = await getSettings();
   await db.transaction().execute(async (trx) => {
     await saveSettings(trx, {
+      site: change.site && { ...current.site, ...change.site },
       login: change.login && { ...current.login, ...change.login },
       smtp: change.smtp && { ...current.smtp, ...change.smtp },
       bot: change.bot && { ...current.bot, ...change.bot },

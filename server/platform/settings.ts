@@ -26,12 +26,22 @@ const SmtpSchema = z.object({
   from: z.string().default(""),
 });
 
+const SiteSchema = z.object({
+  // One line across the top of every forum page; empty shows none.
+  banner: z.string().default(""),
+  // QQ numbers show to members and bots; this shows them to guests as well.
+  qq_public: z.boolean().default(false),
+  // For boards created without saying.
+  review_mode: z.enum(["after", "before"]).default("after"),
+});
+
 const BotSchema = z.object({
   // Bot requests acting as a member must say who asked for them.
   require_operator: z.boolean().default(false),
 });
 
 export type Settings = {
+  site: z.infer<typeof SiteSchema>;
   login: z.infer<typeof LoginSchema>;
   smtp: z.infer<typeof SmtpSchema>;
   bot: z.infer<typeof BotSchema>;
@@ -59,6 +69,7 @@ async function load(): Promise<Settings> {
   const stored = new Map(rows.map((r) => [r.key, r.value]));
   const smtp = SmtpSchema.parse(stored.get("smtp") ?? {});
   return {
+    site: SiteSchema.parse(stored.get("site") ?? {}),
     login: LoginSchema.parse(stored.get("login") ?? {}),
     smtp: { ...smtp, password: smtp.password && decrypt(smtp.password) },
     bot: BotSchema.parse(stored.get("bot") ?? {}),
@@ -76,6 +87,7 @@ export function getSettings() {
 // Replaces the given sections. Callers merge partial edits with getSettings() first.
 export async function saveSettings(trx: Transaction<DB>, change: Partial<Settings>) {
   const rows = [];
+  if (change.site) rows.push({ key: "site", value: JSON.stringify(change.site) });
   if (change.login) rows.push({ key: "login", value: JSON.stringify(change.login) });
   if (change.bot) rows.push({ key: "bot", value: JSON.stringify(change.bot) });
   if (change.smtp) {

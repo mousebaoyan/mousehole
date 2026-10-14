@@ -33,9 +33,15 @@ const REVIEW = [
 ] as const;
 
 export async function loader({ request, context }: Route.LoaderArgs) {
-  const res = await context.get(apiContext).boards.$get();
-  // The board being edited, if any: ?edit=slug.
-  return { boards: (await res.json()).items, edit: new URL(request.url).searchParams.get("edit") };
+  const api = context.get(apiContext);
+  const [boards, settings] = await Promise.all([api.boards.$get(), api.admin.settings.$get()]);
+  if (!settings.ok) throw new Error("Admin settings failed");
+  return {
+    boards: (await boards.json()).items,
+    // The board being edited, if any: ?edit=slug.
+    edit: new URL(request.url).searchParams.get("edit"),
+    review: (await settings.json()).site.review_mode,
+  };
 }
 
 export async function action({ request, context }: Route.ActionArgs) {
@@ -68,7 +74,10 @@ export async function action({ request, context }: Route.ActionArgs) {
   return { ok: false, message: (await res.json()).error.message, created: false };
 }
 
-export default function Boards({ loaderData: { boards, edit }, actionData }: Route.ComponentProps) {
+export default function Boards({
+  loaderData: { boards, edit, review },
+  actionData,
+}: Route.ComponentProps) {
   const busy = useNavigation().state !== "idle";
   const createForm = useRef<HTMLFormElement>(null);
   useEffect(() => {
@@ -191,7 +200,7 @@ export default function Boards({ loaderData: { boards, edit }, actionData }: Rou
             />
           </Field>
           <div className="mt-4">
-            <BoardFields />
+            <BoardFields review={review} />
           </div>
           <Button type="submit" name="intent" value="create" className="mt-5" disabled={busy}>
             创建
@@ -204,7 +213,8 @@ export default function Boards({ loaderData: { boards, edit }, actionData }: Rou
 
 type Board = Route.ComponentProps["loaderData"]["boards"][number];
 
-function BoardFields({ board }: { board?: Board }) {
+// `review` is the site's default for a new board.
+function BoardFields({ board, review }: { board?: Board; review?: string }) {
   return (
     <div className="grid gap-4 sm:grid-cols-2">
       <Field label="名称">
@@ -223,7 +233,7 @@ function BoardFields({ board }: { board?: Board }) {
         <Options name="default_kind" options={KIND} value={board?.default_kind} />
       </Field>
       <Field label="审核方式" hint="先审后发：版主以外的人发的内容，通过审核才公开">
-        <Options name="review_mode" options={REVIEW} value={board?.review_mode} />
+        <Options name="review_mode" options={REVIEW} value={board?.review_mode ?? review} />
       </Field>
       <Field label="颜色" hint="列表和导航里的圆点">
         <input
