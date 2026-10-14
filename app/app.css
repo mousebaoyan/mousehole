@@ -125,6 +125,57 @@
   }
 }
 
+/* Buttons, here rather than spelled out in utilities on each: a thread page has up to a hundred,
+   and their classes were a quarter of its HTML. Utilities a caller adds still win, being in a
+   later layer. */
+@layer components {
+  .btn {
+    @apply inline-flex shrink-0 items-center justify-center rounded-lg border border-transparent bg-clip-padding text-sm font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4;
+  }
+  .btn-primary {
+    @apply bg-primary text-primary-foreground hover:bg-[color-mix(in_oklab,var(--primary),black_7%)];
+  }
+  .btn-outline {
+    @apply border-border bg-background hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:border-input dark:bg-input/30 dark:hover:bg-input/50;
+  }
+  .btn-secondary {
+    @apply bg-secondary text-secondary-foreground hover:bg-[color-mix(in_oklch,var(--secondary),var(--foreground)_5%)] aria-expanded:bg-secondary aria-expanded:text-secondary-foreground;
+  }
+  .btn-ghost {
+    @apply hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:hover:bg-muted/50;
+  }
+  .btn-destructive {
+    @apply bg-destructive/10 text-destructive hover:bg-destructive/20 focus-visible:border-destructive/40 focus-visible:ring-destructive/20 dark:bg-destructive/20 dark:hover:bg-destructive/30 dark:focus-visible:ring-destructive/40;
+  }
+  .btn-link {
+    @apply text-primary underline-offset-4 hover:underline;
+  }
+  .btn-md {
+    @apply h-8 gap-1.5 px-2.5;
+  }
+  .btn-xs {
+    @apply h-6 gap-1 rounded-[min(var(--radius-md),10px)] px-2 text-xs [&_svg:not([class*='size-'])]:size-3;
+  }
+  .btn-sm {
+    @apply h-7 gap-1 rounded-[min(var(--radius-md),12px)] px-2.5 text-[0.8rem] [&_svg:not([class*='size-'])]:size-3.5;
+  }
+  .btn-lg {
+    @apply h-9 gap-1.5 px-2.5;
+  }
+  .btn-icon {
+    @apply size-8;
+  }
+  .btn-icon-xs {
+    @apply size-6 rounded-[min(var(--radius-md),10px)] [&_svg:not([class*='size-'])]:size-3;
+  }
+  .btn-icon-sm {
+    @apply size-7 rounded-[min(var(--radius-md),12px)];
+  }
+  .btn-icon-lg {
+    @apply size-9;
+  }
+}
+
 /* Post bodies, rendered when they were written. */
 
 .prose a.mention {

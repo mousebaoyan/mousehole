@@ -21,7 +21,7 @@ import { flushViews, recordView } from "./modules/threads/service.ts";
 import { clearUnusedUploads } from "./modules/uploads/service.ts";
 import { clearOldDays, refreshAvatars } from "./modules/users/service.ts";
 import { compressResponses } from "./platform/compress.ts";
-import { clientIp } from "./platform/http.ts";
+import { clientIp, type AppEnv } from "./platform/http.ts";
 import { guestPages } from "./platform/page-cache.ts";
 import { atPublicOrigin } from "./platform/public-origin.ts";
 import { securityHeaders } from "./platform/security-headers.ts";
@@ -73,7 +73,8 @@ process.once("SIGTERM", () => {
   void flushViews().finally(() => process.exit(0));
 });
 
-export default await createHonoServer<{ Variables: SecureHeadersVariables }>({
+// The app's middleware runs for pages too, so they know their visitor.
+export default await createHonoServer<{ Variables: SecureHeadersVariables & AppEnv["Variables"] }>({
   defaultLogger: false,
   listeningListener: ({ port }) => log("info", "Listening", { port }),
   // Before the static files, so they get the headers too; the guest page cache keeps pages
@@ -96,7 +97,10 @@ export default await createHonoServer<{ Variables: SecureHeadersVariables }>({
   },
   getLoadContext(c) {
     const context = new RouterContextProvider();
-    context.set(apiContext, createApi(c.req.raw));
+    context.set(
+      apiContext,
+      createApi(c.req.raw, { viewer: c.var.viewer, sessionId: c.var.sessionId }),
+    );
     context.set(nonceContext, c.get("secureHeadersNonce"));
     return context;
   },

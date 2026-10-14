@@ -34,8 +34,15 @@ const FIRST_QQ = 910000000;
 const MEMBERS = Array.from({ length: 27 }, (_, i) => FIRST_QQ + 3 + i);
 
 const Id = z.object({ id: z.number() });
+// Anonymous writers come without an ID.
 const Floors = z.object({
-  items: z.array(z.object({ id: z.number(), deleted: z.boolean(), author: Id })),
+  items: z.array(
+    z.object({
+      id: z.number(),
+      deleted: z.boolean(),
+      author: z.object({ id: z.number().optional() }),
+    }),
+  ),
 });
 
 type Member = { session: string; id: number };
