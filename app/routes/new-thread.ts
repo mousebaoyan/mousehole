@@ -14,11 +14,24 @@ export async function action({ request, context }: Route.ActionArgs) {
     const value = form.get(name);
     return typeof value === "string" ? value : "";
   };
+  const kind = text("kind");
+  const number = (name: string) => (text(name) ? Number(text(name)) : null);
   const res = await context.get(apiContext).threads.$post({
     json: {
       board: text("board"),
       title: text("title"),
-      kind: text("kind") === "question" ? "question" : "discussion",
+      kind: kind === "question" || kind === "poll" ? kind : "discussion",
+      poll:
+        kind === "poll"
+          ? {
+              options: form.getAll("options").filter((o) => typeof o === "string"),
+              multiple: text("multiple") === "true",
+              max_choices: number("max_choices"),
+              anonymous: text("poll_anonymous") === "true",
+              results: text("results") === "always" ? "always" : "voted",
+              days: number("days"),
+            }
+          : undefined,
       tags: form.getAll("tags").filter((t) => typeof t === "string"),
       content: { markdown: text("markdown") },
       anonymous: text("anonymous") === "true",

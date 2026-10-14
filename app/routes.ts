@@ -25,6 +25,7 @@ export default [
   route("t/:id/p/:post/reactions", "routes/thread-reactions.ts"),
   route("t/:id/p/:post/boosts", "routes/thread-boosts.ts"),
   route("t/:id/reply", "routes/thread-reply.ts"),
+  route("t/:id/poll/:option", "routes/thread-voters.ts"),
   route("u/:id/card", "routes/user-card.ts"),
   route("preview", "routes/preview.ts"),
   route("mention", "routes/mention.ts"),

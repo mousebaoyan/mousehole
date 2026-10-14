@@ -1,6 +1,7 @@
 import { z } from "@hono/zod-openapi";
 import { unix } from "../../platform/http.ts";
 import { UserBriefSchema, WriterSchema } from "../users/schemas.ts";
+import type { Poll } from "./polls.ts";
 import type { threadsByIds } from "./service.ts";
 
 // A thread as lists show it; also used by search results.
@@ -8,7 +9,7 @@ export const ThreadSchema = z
   .object({
     id: z.number(),
     board: z.object({ slug: z.string(), name: z.string(), color: z.string() }),
-    kind: z.string().openapi({ description: "discussion：讨论；question：问答" }),
+    kind: z.string().openapi({ description: "discussion：讨论；question：问答；poll：投票" }),
     title: z.string(),
     author: WriterSchema,
     posters: z
@@ -56,4 +57,33 @@ export function threadJson(t: ThreadItem, signedIn: boolean) {
     created_at: unix(t.created_at),
     ...(signedIn && { last_read_floor: t.last_read_floor ?? 0 }),
   };
+}
+
+export const PollSchema = z
+  .object({
+    multiple: z.boolean().openapi({ description: "多选" }),
+    max_choices: z.number().nullable().openapi({ description: "多选时最多选几项；null 不限" }),
+    anonymous: z.boolean().openapi({ description: "匿名投票：只有票数，看不到谁投了什么" }),
+    results: z.string().openapi({
+      description: "voted 投过票或结束后才看得到结果，always 随时公开",
+    }),
+    closes_at: z.number().nullable().openapi({ description: "截止时间；null 不限" }),
+    closed: z.boolean(),
+    voter_count: z.number().openapi({ description: "一共多少人投了票" }),
+    options: z.array(
+      z.object({
+        id: z.number(),
+        label: z.string(),
+        votes: z.number().nullable().openapi({ description: "票数；还看不到结果时为 null" }),
+      }),
+    ),
+    my_votes: z
+      .array(z.number())
+      .nullable()
+      .openapi({ description: "自己投的选项；访客为 null，没投为空数组" }),
+  })
+  .openapi("Poll");
+
+export function pollJson(p: Poll) {
+  return { ...p, closes_at: p.closes_at && unix(p.closes_at) };
 }

@@ -11,12 +11,24 @@ const KeyParam = z.object({
     .transform((k) => (k === "new" ? null : Number(k))),
 });
 
+const DraftPollSchema = z
+  .object({
+    options: z.array(z.string().max(50)).max(20),
+    multiple: z.boolean(),
+    max_choices: z.number().int().nullable(),
+    anonymous: z.boolean(),
+    results: z.enum(["voted", "always"]),
+    days: z.number().int().min(1).max(30).nullable(),
+  })
+  .openapi("DraftPoll", { description: "写了一半的投票，选项可以是空的；字段同发帖的 poll" });
+
 const DraftSchema = z
   .object({
     thread_id: z.number().nullable().openapi({ description: "回复哪个帖子；null 是发帖" }),
     title: z.string(),
     board: z.string().nullable(),
     kind: z.string().nullable(),
+    poll: DraftPollSchema.nullable(),
     tags: z.array(z.string()),
     author_anonymous: z.boolean(),
     anonymous_replies: z.boolean(),
@@ -97,7 +109,8 @@ export const draftsRoutes = createRouter()
                 body: z.string().max(MAX_BODY),
                 title: z.string().max(80).optional(),
                 board: z.string().nullable().optional(),
-                kind: z.enum(["discussion", "question"]).nullable().optional(),
+                kind: z.enum(["discussion", "question", "poll"]).nullable().optional(),
+                poll: DraftPollSchema.nullable().optional(),
                 tags: z.array(z.string().max(20)).max(5).optional(),
                 author_anonymous: z.boolean().optional(),
                 anonymous_replies: z.boolean().optional(),

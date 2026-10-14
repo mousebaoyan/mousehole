@@ -31,6 +31,7 @@ import {
   threadDeleted,
   threadSolved,
 } from "./events.ts";
+import { createPoll, getPoll, type PollSpec } from "./polls.ts";
 
 export const PAGE_SIZE = 30;
 // Longest Markdown a post may have.
@@ -401,7 +402,7 @@ export async function getThread(id: number, reader: Reader) {
     throw threadNotFound();
   }
   const [thread] = await withUsers([row]);
-  return thread;
+  return { ...thread, poll: thread.kind === "poll" ? await getPoll(id, reader.id) : null };
 }
 
 // A thread guests could read but for its author's switch: they are asked to log in rather than
@@ -642,6 +643,7 @@ export async function createThread(
     title: string;
     content: Content;
     kind?: string;
+    poll?: PollSpec;
     tags: string[];
     source?: Source;
     anonymous?: boolean;
@@ -691,6 +693,7 @@ export async function createThread(
       .executeTakeFirstOrThrow();
     // Number 1, the thread being new.
     if (anonymous) await aliasIn(trx, thread.id, viewer.id);
+    if (input.poll) await createPoll(trx, thread.id, input.poll);
     await linkUploads(trx, opening.id, images);
     if (input.source) await linkSource(trx, input.source, thread.id, opening.id);
     // Posted from the composer; what a bot posts for them leaves their draft alone.
