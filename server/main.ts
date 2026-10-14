@@ -13,6 +13,7 @@ import { indexMissingPosts } from "./modules/search/service.ts";
 import { flushViews } from "./modules/threads/service.ts";
 import { clearUnusedUploads } from "./modules/uploads/service.ts";
 import { refreshAvatars } from "./modules/users/service.ts";
+import { compressResponses } from "./platform/compress.ts";
 import { listen } from "./platform/db.ts";
 import { log } from "./platform/log.ts";
 import { clearIdempotencyKeys } from "./platform/idempotency.ts";
@@ -38,7 +39,13 @@ process.once("SIGTERM", () => {
 
 export default await createHonoServer({
   defaultLogger: false,
+  // Built files have Brotli and gzip copies beside them; see scripts/compress-assets.ts.
+  serveStaticOptions: {
+    clientAssets: { precompressed: true },
+    publicAssets: { precompressed: true },
+  },
   configure(server) {
+    server.use(compressResponses);
     server.route("/", app);
   },
   getLoadContext(c) {
