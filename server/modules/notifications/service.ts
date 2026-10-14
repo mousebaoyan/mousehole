@@ -112,7 +112,6 @@ async function notify(trx: Transaction<DB>, userIds: number[], notice: Notice) {
     ])
     .where("users.id", "in", ids)
     .where("users.member_status", "=", "member")
-    .where("users.deleted_at", "is", null)
     .where(sql<boolean>`thread_users.notify_level IS DISTINCT FROM 'muted'`)
     .execute();
   const onSite = recipients.filter((r) => r.site);
@@ -256,7 +255,6 @@ export async function notifyLottery(
       told.map((t) => t.userId),
     )
     .where("member_status", "=", "member")
-    .where("deleted_at", "is", null)
     .execute();
   const person = new Map(people.map((p) => [p.id, p]));
   const onSite = told.filter((t) => person.get(t.userId)?.site);

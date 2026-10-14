@@ -143,7 +143,6 @@ export async function findMember(ref: UserRef) {
       "restricted_until",
     ])
     .where((eb) => ("id" in ref ? eb("id", "=", ref.id) : eb("qq", "=", ref.qq)))
-    .where("deleted_at", "is", null)
     .executeTakeFirst();
 }
 
@@ -256,7 +255,6 @@ export async function findUserId(ref: UserRef) {
     .selectFrom("users")
     .select("id")
     .where((eb) => ("id" in ref ? eb("id", "=", ref.id) : eb("qq", "=", ref.qq)))
-    .where("deleted_at", "is", null)
     .executeTakeFirst();
   if (!row) throw userNotFound();
   return row.id;
@@ -303,9 +301,6 @@ export async function getUser(ref: UserRef, viewerId: number | null) {
         WHERE endorsements.user_id = users.id AND endorser_id = ${viewerId})`.as("endorsed"),
     ])
     .where((eb) => ("id" in ref ? eb("users.id", "=", ref.id) : eb("users.qq", "=", ref.qq)))
-    // Only deleted accounts have no QQ number.
-    .where("users.deleted_at", "is", null)
-    .$narrowType<{ qq: number }>()
     .executeTakeFirst();
   if (!row) throw userNotFound();
   const { avatar_version, ...user } = row;
@@ -469,7 +464,6 @@ export async function listMembers(filter: {
       "thread_count",
       "post_count",
     ])
-    .where("deleted_at", "is", null)
     .orderBy("id", "desc")
     .limit(MEMBERS_PAGE);
   const { q } = filter;
@@ -563,7 +557,7 @@ export async function getProfile(userId: number) {
   return { ...profile, avatar_url: avatarUrl(userId, avatar_version) };
 }
 
-// Member counts for the admin overview; bots and deleted accounts aside.
+// Member counts for the admin overview; bots aside.
 export async function memberStats() {
   return db
     .selectFrom("users")
@@ -573,7 +567,6 @@ export async function memberStats() {
       eb.fn.countAll<number>().filterWhere("member_status", "=", "frozen").as("frozen"),
     ])
     .where("role", "<>", "bot")
-    .where("deleted_at", "is", null)
     .executeTakeFirstOrThrow();
 }
 
@@ -653,7 +646,6 @@ export async function searchUsers(text: string) {
     .where("display_name", "ilike", `%${pattern}%`)
     .where("role", "<>", "bot")
     .where("member_status", "=", "member")
-    .where("deleted_at", "is", null)
     .orderBy(sql`display_name ILIKE ${`${pattern}%`}`, "desc")
     .orderBy(sql`last_seen_at DESC NULLS LAST`)
     .orderBy("id")
@@ -672,9 +664,8 @@ export async function membersByQq(qqs: number[]) {
           .selectFrom("users")
           .select(["id", "qq", "display_name"])
           .where("qq", "in", qqs)
-          .where("deleted_at", "is", null)
           .execute();
-  return new Map(rows.flatMap((r) => (r.qq === null ? [] : [[r.qq, r] as const])));
+  return new Map(rows.map((r) => [r.qq, r]));
 }
 
 export async function countLikes(trx: Transaction<DB>, userId: number, likes: number) {
@@ -765,10 +756,7 @@ export async function refreshAvatars() {
   const users = await db
     .selectFrom("users")
     .select(["id", "qq"])
-    .where("qq", "is not", null)
     .where("avatar_custom", "=", false)
-    .where("deleted_at", "is", null)
-    .$narrowType<{ qq: number }>()
     .execute();
   const failed: { id: number; error: unknown }[] = [];
   for (const { id, qq } of users) {

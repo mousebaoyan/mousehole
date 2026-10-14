@@ -136,9 +136,7 @@ function PersonCard({
           {profile ? (
             <CardBody profile={profile} />
           ) : (
-            <p className="py-6 text-center text-meta text-muted-foreground">
-              {profile === null ? "这个账号已注销" : "加载中…"}
-            </p>
+            <p className="py-6 text-center text-meta text-muted-foreground">加载中…</p>
           )}
         </div>
       )}

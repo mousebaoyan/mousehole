@@ -393,7 +393,6 @@ export interface Users {
   custom_bio: string | null;
   custom_name: string | null;
   days_visited: Generated<number>;
-  deleted_at: Timestamp | null;
   display_name: string;
   hide_from_guests: Generated<boolean>;
   id: Generated<number>;
@@ -406,7 +405,7 @@ export interface Users {
   notify_prefs: Generated<Json>;
   post_count: Generated<number>;
   posts_read: Generated<number>;
-  qq: number | null;
+  qq: number;
   qq_bio: Generated<string>;
   qq_nickname: Generated<string>;
   read_seconds: Generated<number>;

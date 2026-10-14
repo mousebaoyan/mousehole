@@ -43,7 +43,7 @@ const MeSchema = z
     avatar_url: z.string().nullable(),
     role: z.string(),
     level: z.number(),
-    qq: z.number().nullable(),
+    qq: z.number(),
     member_status: z.string(),
     activated: z.boolean(),
   })
@@ -97,7 +97,7 @@ const ExportSchema = z.object({
   exported_at: z.number(),
   user: z.object({
     id: z.number(),
-    qq: z.number().nullable(),
+    qq: z.number(),
     display_name: z.string(),
     bio: z.string(),
   }),
@@ -524,7 +524,7 @@ export const usersRoutes = createRouter()
                     id: z.number(),
                     display_name: z.string(),
                     avatar_url: z.string().nullable(),
-                    qq: z.number().nullable(),
+                    qq: z.number(),
                     role: z.string(),
                     role_locked: z.boolean(),
                     level: z.number(),
