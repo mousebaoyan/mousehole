@@ -340,6 +340,15 @@ export async function listUserPosts(members: boolean, authorId: number, cursor?:
   };
 }
 
+// For the sitemap: what guests may read, most recently active first.
+export async function publicThreads(limit: number) {
+  return visibleThreads(false)
+    .select(["threads.id", "threads.last_post_at"])
+    .orderBy("threads.last_post_at", "desc")
+    .limit(limit)
+    .execute();
+}
+
 // These threads as lists show them, for search results; ones the viewer can't see are left out.
 export async function threadsByIds(members: boolean, userId: number | null, ids: number[]) {
   if (ids.length === 0) return new Map<number, Awaited<ReturnType<typeof withUsers>>[number]>();
@@ -359,6 +368,9 @@ export async function getThread(id: number, reader: Reader) {
         FROM unnest(mine.read_floors) r)`.as("read_floors"),
       sql<number | null>`(SELECT floor FROM posts WHERE posts.id = threads.solved_post_id)`.as(
         "solved_floor",
+      ),
+      sql<string>`(SELECT html FROM posts WHERE posts.thread_id = threads.id AND posts.floor = 1)`.as(
+        "opening_html",
       ),
     ])
     .where("threads.id", "=", id)

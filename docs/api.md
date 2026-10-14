@@ -35,7 +35,7 @@
 // 主题和回复里的用户只带这几项；title 是主群里的专属头衔，没有为空字符串
 { "id": 7, "display_name": "鼠鼠", "role": "user", "level": 5, "title": "26届" }
 
-// 主题。匿名主题的 author 为 null；floor_count 是最大的楼层号；主题详情里的 solved_floor 是采纳的回答在第几楼；pinned：0 不置顶，1 版块内置顶，2 全站置顶；
+// 主题。匿名主题的 author 为 null；floor_count 是最大的楼层号；主题详情里的 solved_floor 是采纳的回答在第几楼，excerpt 是主楼正文的前 100 个字；pinned：0 不置顶，1 版块内置顶，2 全站置顶；
 // posters 是作者以外、最近 20 层里最近回复的最多 4 个人；url 只在主题详情里有；
 // last_read_floor 是自己读过的最高一楼，没打开过为 0，只在登录时返回；主题详情里还有 read_floors，是读过的楼层区间，例如 [[1, 20], [480, 495]]，
 // 以及 bookmarked（是否收藏）和 notify_level（关注级别，见 /threads/{id}/subscription），也只在登录时返回；

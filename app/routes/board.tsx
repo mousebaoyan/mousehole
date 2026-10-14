@@ -1,11 +1,13 @@
 import { data, redirect } from "react-router";
 import { apiContext } from "../api.server.ts";
 import { readCounts, readFilter, ThreadFeed } from "~/components/thread-feed";
+import { shareMeta } from "~/share-meta";
 import { unixNow } from "~/time";
 import type { Route } from "./+types/board.ts";
 
 export function meta({ loaderData }: Route.MetaArgs) {
-  return [{ title: `${loaderData.board.name} · 鼠洞` }];
+  const { name, description } = loaderData.board;
+  return shareMeta(name, description || `鼠洞的${name}版块`);
 }
 
 export async function loader({ request, params, context }: Route.LoaderArgs) {
