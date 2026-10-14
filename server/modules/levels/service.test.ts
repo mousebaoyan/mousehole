@@ -11,8 +11,9 @@ const api = testClient(app).api.v1;
 type Who = { headers: Record<string, string> };
 type Person = { id: number; who: Who };
 
-async function person(role?: "admin") {
-  const { id } = await createUser(role);
+// From L0, unless the level doesn't matter.
+async function person(role: "user" | "admin" = "user", level = 0) {
+  const { id } = await createUser(role, level);
   return { id, who: as(await login(id)) };
 }
 
@@ -21,7 +22,7 @@ let other: Person;
 
 beforeAll(async () => {
   admin = await person("admin");
-  other = await person();
+  other = await person("user", 1);
   await api.boards.$post({ json: { slug: "lv", name: "等级" } }, admin.who);
 });
 

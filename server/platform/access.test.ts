@@ -2,9 +2,27 @@ import { describe, expect, test } from "vitest";
 import { checkPermission, type Bot, type Scope, type Viewer } from "./access.ts";
 import { AppError } from "./errors.ts";
 
-const member: Viewer = { id: 1, role: "user", member_status: "member", restriction: null };
-const moderator: Viewer = { id: 2, role: "moderator", member_status: "member", restriction: null };
-const botAccount: Viewer = { id: 9, role: "bot", member_status: "member", restriction: null };
+const member: Viewer = {
+  id: 1,
+  role: "user",
+  level: 0,
+  member_status: "member",
+  restriction: null,
+};
+const moderator: Viewer = {
+  id: 2,
+  role: "moderator",
+  level: 0,
+  member_status: "member",
+  restriction: null,
+};
+const botAccount: Viewer = {
+  id: 9,
+  role: "bot",
+  level: 0,
+  member_status: "member",
+  restriction: null,
+};
 
 function bot(change: Partial<Bot> = {}): Bot {
   return {

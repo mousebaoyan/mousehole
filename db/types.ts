@@ -262,6 +262,7 @@ export interface Reports {
   created_at: Generated<Timestamp>;
   handled_at: Timestamp | null;
   handler_id: number | null;
+  held: Generated<boolean>;
   id: Generated<number>;
   post_id: number;
   reason: string;

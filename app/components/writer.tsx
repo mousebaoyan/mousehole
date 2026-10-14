@@ -13,6 +13,15 @@ export function isMine(
   return "anonymous" in writer ? writer.number === myAlias : writer.id === me?.id;
 }
 
+// What the reader's level lets them do to someone else's content, as the server decides it
+// (design §6.6): their level, from L3 up, over people below it who aren't moderators or admins,
+// else 0. Nothing anonymous.
+export function levelPower(writer: Writer, me: { id: number; level: number } | null) {
+  if (!me || me.level < 3 || "anonymous" in writer || writer.id === me.id) return 0;
+  const staff = writer.role === "moderator" || writer.role === "admin";
+  return writer.level < me.level && !staff ? me.level : 0;
+}
+
 export function sameWriter(a: Writer, b: Writer) {
   if ("anonymous" in a) return "anonymous" in b && a.number === b.number;
   return !("anonymous" in b) && a.id === b.id;

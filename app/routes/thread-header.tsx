@@ -28,18 +28,21 @@ import type { ThreadDetail } from "~/api-types";
 import { ReviewItems } from "./review-items.tsx";
 
 // The title and what is known about the thread. Its author can retitle and retag it; moderators
-// also pin, feature, lock, move and review it.
+// also pin, feature, lock, move and review it. `power` is what the reader's level gives them over
+// this thread: L3 moves it, L5 also locks it (design §6.6).
 export function ThreadHeader({
   thread,
   current,
   editable,
   staff,
+  power,
   reveal,
 }: {
   thread: ThreadDetail;
   current: number;
   editable: boolean;
   staff: boolean;
+  power: number;
   // For admins in a thread with anonymous people: whether they are shown as who they are, and
   // the switch.
   reveal: { shown: boolean; toggle: () => void } | null;
@@ -140,7 +143,7 @@ export function ThreadHeader({
         <span className="inline-flex items-center gap-1" title="回复">
           <MessageSquare className="size-3.5" /> {thread.reply_count}
         </span>
-        {staff && (
+        {(staff || power >= 3) && (
           <div className="ml-auto">
             <Dropdown
               label="管理帖子"
@@ -156,7 +159,7 @@ export function ThreadHeader({
                   close();
                   change(fields);
                 };
-                return (
+                return staff ? (
                   <>
                     {thread.pinned === 0 ? (
                       <>
@@ -222,6 +225,28 @@ export function ThreadHeader({
                       </button>
                     )}
                   </>
+                ) : (
+                  <>
+                    {power >= 5 && (
+                      <button
+                        type="button"
+                        className={menuItem}
+                        onClick={() => act({ locked: String(!thread.locked) })}
+                      >
+                        {thread.locked ? <LockOpen /> : <Lock />} {thread.locked ? "解锁" : "锁定"}
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      className={menuItem}
+                      onClick={() => {
+                        close();
+                        move.current?.showModal();
+                      }}
+                    >
+                      <ArrowRightLeft /> 移动到…
+                    </button>
+                  </>
                 );
               }}
             </Dropdown>
@@ -246,8 +271,13 @@ export function ThreadHeader({
           {save.data.message}
         </p>
       )}
-      {staff && (
-        <MoveDialog ref={move} current={thread.board.slug} onMove={(board) => change({ board })} />
+      {(staff || power >= 3) && (
+        <MoveDialog
+          ref={move}
+          current={thread.board.slug}
+          staff={staff}
+          onMove={(board) => change({ board })}
+        />
       )}
     </header>
   );
@@ -296,16 +326,19 @@ function ThreadForm({
   );
 }
 
+// To any board for moderators; to those they may post in for others.
 function MoveDialog({
   ref,
   current,
+  staff,
   onMove,
 }: {
   ref: Ref<HTMLDialogElement>;
   current: string;
+  staff: boolean;
   onMove: (board: string) => void;
 }) {
-  const boards = useBoards();
+  const boards = useBoards().filter((b) => staff || b.post_role === "user");
   const [board, setBoard] = useState(current);
   return (
     <Dialog ref={ref} className="w-[min(22rem,calc(100%-2rem))]">

@@ -9,11 +9,12 @@ export function nextQq() {
   return ++lastQq;
 }
 
-export async function createUser(role: "user" | "moderator" | "admin" = "user") {
+// L1 unless said otherwise: L0's daily limits only matter to tests about levels.
+export async function createUser(role: "user" | "moderator" | "admin" = "user", level = 1) {
   const qq = nextQq();
   const { id } = await db
     .insertInto("users")
-    .values({ qq, display_name: "鼠鼠", role })
+    .values({ qq, display_name: "鼠鼠", role, level })
     .returning("id")
     .executeTakeFirstOrThrow();
   return { id, qq };

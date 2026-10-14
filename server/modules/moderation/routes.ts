@@ -33,6 +33,9 @@ const ReportSchema = z
     id: z.number(),
     reason: z.string(),
     status: z.string().openapi({ description: "open 待处理，resolved 已处理，dismissed 已驳回" }),
+    held: z.boolean().openapi({
+      description: "L4 举报等级比自己低的人，这一层先隐藏了；驳回时恢复",
+    }),
     reporter: UserBriefSchema,
     post: z.object({
       id: z.number(),

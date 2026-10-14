@@ -129,6 +129,7 @@ export async function resolveSession(token: string) {
       "sessions.last_seen_at",
       "users.id as user_id",
       "users.role",
+      "users.level",
       "users.member_status",
       "users.restriction",
       "users.restricted_until",
@@ -150,6 +151,7 @@ export async function resolveSession(token: string) {
   const viewer: Viewer = {
     id: row.user_id,
     role: row.role,
+    level: row.level,
     member_status: row.member_status,
     restriction: restrictionOf(row.restriction, row.restricted_until),
   };
@@ -212,6 +214,7 @@ export async function resolveBot(
       "api_tokens.last_used_at",
       "users.id as user_id",
       "users.role",
+      "users.level",
       "users.member_status",
       "users.restriction",
       "users.restricted_until",
@@ -246,12 +249,14 @@ export async function resolveBot(
     ? {
         id: member.id,
         role: member.role,
+        level: member.level,
         member_status: member.member_status,
         restriction: restrictionOf(member.restriction, member.restricted_until),
       }
     : {
         id: row.user_id,
         role: row.role,
+        level: row.level,
         member_status: row.member_status,
         restriction: restrictionOf(row.restriction, row.restricted_until),
       };

@@ -675,22 +675,28 @@ function ThreadFields({
         />
         <fieldset className="flex rounded-full bg-secondary p-0.5 text-sm">
           <legend className="sr-only">类型</legend>
-          {KINDS.map((k) => (
-            <label
-              key={k.kind}
-              className="cursor-pointer rounded-full px-3.5 py-1 text-muted-foreground has-checked:bg-card has-checked:font-medium has-checked:text-foreground has-checked:shadow-sm"
-            >
-              <input
-                type="radio"
-                name="kind"
-                value={k.kind}
-                checked={content.kind === k.kind}
-                onChange={() => onChange({ ...content, kind: k.kind })}
-                className="sr-only"
-              />
-              {k.label}
-            </label>
-          ))}
+          {KINDS.map((k) => {
+            // Polls come with L2 (design §6.6).
+            const held = k.kind === "poll" && !staff && (me?.level ?? 0) < 2;
+            return (
+              <label
+                key={k.kind}
+                title={held ? "L2 起才能发投票帖" : undefined}
+                className="cursor-pointer rounded-full px-3.5 py-1 text-muted-foreground has-checked:bg-card has-checked:font-medium has-checked:text-foreground has-checked:shadow-sm has-disabled:cursor-not-allowed has-disabled:opacity-50"
+              >
+                <input
+                  type="radio"
+                  name="kind"
+                  value={k.kind}
+                  checked={content.kind === k.kind}
+                  disabled={held}
+                  onChange={() => onChange({ ...content, kind: k.kind })}
+                  className="sr-only"
+                />
+                {k.label}
+              </label>
+            );
+          })}
         </fieldset>
         <TagPicker chosen={content.tags} onChange={(tags) => onChange({ ...content, tags })} />
       </div>

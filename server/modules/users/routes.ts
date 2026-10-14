@@ -42,6 +42,7 @@ const MeSchema = z
     display_name: z.string(),
     avatar_url: z.string().nullable(),
     role: z.string(),
+    level: z.number(),
     qq: z.number().nullable(),
     member_status: z.string(),
     activated: z.boolean(),

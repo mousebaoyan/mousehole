@@ -13,6 +13,8 @@ export function restrictionOf(type: string | null, until: Date | null): Restrict
 export type Viewer = {
   id: number;
   role: string;
+  // The forum level, L0–L5 (design §6.6).
+  level: number;
   member_status: string;
   restriction: Restriction;
 };

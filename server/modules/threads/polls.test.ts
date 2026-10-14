@@ -18,7 +18,7 @@ beforeAll(async () => {
     people[role] = as(await login((await createUser(role)).id));
   }
   for (const name of ["author", "first", "second"] as const) {
-    const { id } = await createUser();
+    const { id } = await createUser("user", name === "author" ? 2 : 1);
     if (name === "first") ids.first = id;
     people[name] = as(await login(id));
   }

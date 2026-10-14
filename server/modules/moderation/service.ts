@@ -8,7 +8,7 @@ import { excerpt } from "../../platform/markdown.ts";
 import { recordAudit } from "../audit/service.ts";
 import { endAllSessions } from "../auth/service.ts";
 import { recordEvent } from "../events/service.ts";
-import { getPost } from "../threads/service.ts";
+import { getPost, holdReported, releaseReported, reportHolds } from "../threads/service.ts";
 import {
   anonymousBrief,
   findMember,
@@ -142,22 +142,30 @@ async function fileReport(
   reason: string,
 ) {
   if (post.deleted_at !== null) throw new AppError(404, "post_not_found", "回复不存在");
+  const held = boost === null && (await reportHolds(viewer, post));
   await db.transaction().execute(async (trx) => {
     const created = await trx
       .insertInto("reports")
-      .values({ post_id: post.id, boost_id: boost?.id ?? null, reporter_id: viewer.id, reason })
+      .values({
+        post_id: post.id,
+        boost_id: boost?.id ?? null,
+        reporter_id: viewer.id,
+        reason,
+        held,
+      })
       .onConflict((oc) => oc.doNothing())
       .returning("id")
       .executeTakeFirst();
     if (!created) throw alreadyReported();
+    if (held) await holdReported(trx, post.id, viewer.id);
     await recordAudit(trx, actor, {
       action: "report.create",
       target_type: boost ? "boost" : "post",
       target_id: boost?.id ?? post.id,
-      data: { reason },
+      data: { reason, held },
     });
     await recordEvent(trx, "report.created", {
-      report: { id: created.id, reason },
+      report: { id: created.id, reason, held },
       post: { id: post.id, floor: post.floor, thread_id: post.thread_id },
       boost: boost && {
         id: boost.id,
@@ -196,6 +204,7 @@ export async function listReports(status: ReportStatus, cursor: number | undefin
       "reports.id",
       "reports.reason",
       "reports.status",
+      "reports.held",
       "reports.reporter_id",
       "reports.handler_id",
       "reports.handled_at",
@@ -229,6 +238,7 @@ export async function listReports(status: ReportStatus, cursor: number | undefin
       id: r.id,
       reason: r.reason,
       status: r.status,
+      held: r.held,
       reporter: user(r.reporter_id),
       post: {
         id: r.post_id,
@@ -270,9 +280,10 @@ export async function handleReport(actor: Actor, id: number, status: "resolved" 
       .updateTable("reports")
       .set({ status, handler_id: actor.userId, handled_at: sql<Date>`now()` })
       .where("id", "=", id)
-      .returning("id")
+      .returning(["post_id", "held"])
       .executeTakeFirst();
     if (!handled) throw new AppError(404, "report_not_found", "举报不存在");
+    if (status === "dismissed" && handled.held) await releaseReported(trx, handled.post_id);
     await recordAudit(trx, actor, {
       action: status === "resolved" ? "report.resolve" : "report.dismiss",
       target_type: "report",

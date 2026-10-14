@@ -35,8 +35,8 @@ import { ReviewItems, type Review } from "./review-items.tsx";
 
 // `parent` is the floor this one replies to when it is on the page; otherwise it is fetched when
 // the reader opens it. The floors that reply to this one are fetched the same way.
-// `manage` holds what the reader may do to this floor besides replying: change it (edit or
-// delete), read its edit history, delete the whole thread from its opening post, remove other
+// `manage` holds what the reader may do to this floor besides replying: edit it, delete it,
+// read its edit history, delete the whole thread from its opening post, remove other
 // people's boosts, accept it as the answer, review it. `unread` is left out for guests, whose
 // reading isn't tracked; `onReply` for a thread that isn't public yet.
 export function PostCard({
@@ -65,7 +65,8 @@ export function PostCard({
   now: number;
   parent: PostItem | undefined;
   manage: {
-    change: boolean;
+    edit: boolean;
+    remove: boolean;
     history: boolean;
     deleteThread: boolean;
     moderate: boolean;
@@ -284,7 +285,7 @@ export function PostCard({
             >
               {(close) => (
                 <>
-                  {manage.change && (
+                  {manage.edit && (
                     <button
                       type="button"
                       className={menuItem}
@@ -312,7 +313,7 @@ export function PostCard({
                   {manage.review && (
                     <ReviewItems status={post.status} close={close} onReview={onReview} />
                   )}
-                  {(post.floor === 1 ? manage.deleteThread : manage.change) && (
+                  {(post.floor === 1 ? manage.deleteThread : manage.remove) && (
                     <button
                       type="button"
                       className={cn(menuItem, "text-destructive [&_svg]:text-destructive")}
