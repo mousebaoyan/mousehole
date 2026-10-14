@@ -103,7 +103,10 @@ function Mailboxes({ accounts, busy }: { accounts: Mailbox[]; busy: boolean }) {
   };
   return (
     <Form method="post">
-      <Section title="发信邮箱" description="按顺序用，一个发不出去就自动换下一个，出错的歇半小时">
+      <Section
+        title="发信邮箱"
+        description="按顺序用，一个发不出去就自动换下一个。出错的先歇 10 分钟，接连出错歇得越来越久"
+      >
         <input type="hidden" name="count" value={rows.length} />
         {rows.length === 0 && <p className="text-sm text-muted-foreground">还没有发信邮箱</p>}
         <ol className="flex flex-col gap-3">
