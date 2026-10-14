@@ -20,7 +20,8 @@
     "test": "vitest run",
     "bootstrap": "node --env-file-if-exists=.env scripts/bootstrap.ts",
     "mock-bot": "node --env-file-if-exists=.env scripts/mock-bot.ts",
-    "load-test": "node --env-file-if-exists=.env scripts/load-test.ts"
+    "load-test": "node --env-file-if-exists=.env scripts/load-test.ts",
+    "e2e": "pnpm build && playwright test"
   },
   "dependencies": {
     "@base-ui/react": "^1.9.0",
@@ -48,6 +49,7 @@
   },
   "devDependencies": {
     "@babel/core": "^8.0.7",
+    "@playwright/test": "^1.64.0",
     "@react-router/dev": "^8.4.0",
     "@rolldown/plugin-babel": "^0.2.4",
     "@tailwindcss/typography": "^0.5.20",

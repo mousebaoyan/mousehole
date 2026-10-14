@@ -101,7 +101,7 @@ test/                   Vitest 的全局准备：测试用的数据库
 
 什么值得测见 [AGENTS.md · 测试](../AGENTS.md#测试)，这里只讲写法。
 
-- Vitest 写服务和接口测试；Playwright 只跑少数关键流程（登录、发帖、回复、后台设置）；`pnpm load-test`（`scripts/load-test.ts`）用于[总体设计 §11.4](design.md#114-验收) 的性能验收，不放进 CI。新加常用的页面或接口时，把它加进 `server/indexes.test.ts`，CI 会检查它的查询走索引。
+- Vitest 写服务和接口测试；Playwright 只跑少数关键流程（登录、发帖、回复、后台设置），在 `e2e/`：对着构建好的论坛跑，端口 3300、数据库 `mousehole_e2e` 都是它自己的，每次重建，不碰本地数据；`pnpm e2e` 先构建再跑，第一次要 `pnpm exec playwright install chromium`，CI 在构建之后跑；`pnpm load-test`（`scripts/load-test.ts`）用于[总体设计 §11.4](design.md#114-验收) 的性能验收，不放进 CI。新加常用的页面或接口时，把它加进 `server/indexes.test.ts`，CI 会检查它的查询走索引。
 - 涉及数据库的测试连真实的 PostgreSQL 18，不 mock 数据库。`test/` 在全局准备时迁移一个模板库，每个测试文件开始前从模板复制一个自己的库，所以测试文件之间可以并行。同一个文件里的测试共用一个库：每个测试自己准备数据，不依赖其他测试的执行顺序。
 - 接口测试用 `hono/testing` 的 `testClient(app)` 发请求，走完整的中间件（认证、代操作、幂等），类型和页面用的客户端一致。带 Cookie 的写请求要像浏览器一样带上 `Origin`，否则会被 CSRF 检查拦下。bot 的完整流程用 `scripts/mock-bot` 跑：开着 `pnpm dev`，先 `pnpm mock-bot setup --owner <你的QQ号>`（建 token、关联演示群、推送假成员，token 存在不进仓库的 `.mock-bot.json`），`pnpm mock-bot seed` 建演示用的版块和标签，再 `pnpm mock-bot demo` 在新的群里逐项检查成员同步和登录流程。新的 bot 接口做好后，在 `demo` 里加上对应的步骤。
 - 过期、冷却这类逻辑，直接构造已经过期的数据来测，不 `sleep` 等待。

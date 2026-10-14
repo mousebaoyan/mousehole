@@ -40,6 +40,8 @@ jobs:
       - run: pnpm db:migrate
       - run: pnpm db:codegen --verify
       - run: pnpm build
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm exec playwright test
 
   # main must stay deployable: the image has to build, though only version tags push it.
   image:
