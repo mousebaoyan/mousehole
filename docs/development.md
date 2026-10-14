@@ -92,7 +92,7 @@ test/                   Vitest 的全局准备：测试用的数据库
 - 字号和尺寸用 rem，不写 px：桌面端（`lg` 以上）的根字号放大到 106.25%，整个界面一起变大。常用的小字号是主题变量 `text-2xs`（11px）、`text-meta`（13px，元信息）、`text-body`（15px，正文和标题）。
 - 文案直接写在组件里，不引入 i18n 框架。用正式、简洁的书面语，只写用户用得上的信息；能用图标表达的不写字，图标按钮带 `aria-label`。时间统一按北京时间（`Asia/Shanghai`）显示，这样服务端和浏览器渲染出来的结果一致。
 - 先保证手机上好用：大部分人是在 QQ 里点链接打开的，要能在 QQ 内置浏览器里正常使用。
-- 表情选择器用 frimousse，打开时才加载。表情数据（emojibase-data 的中文版，约 100KB gzip）在安装依赖时由 `scripts/copy-emoji-data.ts` 复制到 `public/emojibase/{版本}/`，由我们自己提供，不走默认的 jsDelivr（国内不稳定）；路径带版本号，部署时在反向代理上给 `/emojibase/` 配一年的缓存。
+- 表情选择器用 frimousse，打开时才加载。表情数据（emojibase-data 的中文版，约 100KB gzip）在安装依赖时由 `scripts/copy-emoji-data.ts` 复制到 `public/emojibase/{版本}/`，由我们自己提供，不走默认的 jsDelivr（国内不稳定）；路径带版本号，所以服务器给 `/emojibase/` 发一年的缓存（`server/main.ts`）。
 - 带宽很紧（[总体设计 §11.2](design.md#112-带宽)）：不用网络字体；不往浏览器里打包大依赖，Markdown 渲染和代码高亮只在服务端做；图片用显示档、懒加载并写明宽高；管理后台的代码只在后台的路由里引用。加前端依赖前，先看它让打包结果大了多少。
 - 能点的元素用 `button`、`a`、`form`，不给 `div` 绑点击事件。
 - Markdown 只在服务端渲染；插入页面的 HTML 只能是服务端过滤过的 `html` 字段。
