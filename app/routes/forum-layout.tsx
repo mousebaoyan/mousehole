@@ -23,12 +23,15 @@ export async function loader({ context }: Route.LoaderArgs) {
   };
 }
 
-// The reader, boards and tags don't change with the page or its filters, only after a submission.
+// The reader, boards and tags don't change with the page or its filters, only after a submission
+// or when a page asks to load again (useRevalidator), which keeps the address.
 export function shouldRevalidate({
   formMethod,
+  currentUrl,
+  nextUrl,
   defaultShouldRevalidate,
 }: ShouldRevalidateFunctionArgs) {
-  return formMethod !== undefined && defaultShouldRevalidate;
+  return defaultShouldRevalidate && (formMethod !== undefined || currentUrl.href === nextUrl.href);
 }
 
 export default function ForumLayout({ loaderData: { me, unread, banner } }: Route.ComponentProps) {
