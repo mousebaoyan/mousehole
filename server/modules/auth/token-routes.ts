@@ -15,7 +15,7 @@ const BotTokenSchema = z
     id: z.number(),
     name: z.string(),
     scopes: z.array(z.string()),
-    bot: z.object({ id: z.number(), qq: z.number().nullable(), display_name: z.string() }),
+    bot: z.object({ id: z.number(), qq: z.number(), display_name: z.string() }),
     created_at: z.number(),
     last_used_at: z.number().nullable(),
     revoked_at: z.number().nullable(),
