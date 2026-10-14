@@ -165,6 +165,7 @@ token 由管理员在后台创建，只显示一次。每个 token 绑定一个 
 | GET | `/me` | 当前用户；bot 代表某人时返回这个人 | 已登录 / `read` |
 | GET | `/me/settings` | 自己的设置：`custom_name`（自己起的名字，`null` 是跟着 QQ）、`bio`、`allow_proxy`、`notify_prefs`（每类通知的 `{ site, qq }` 开关，含默认值） | 已登录 / `read` |
 | PATCH | `/me` | 修改设置，只改带了的字段，返回改好的设置：`custom_name`（最多 24 个字，`null` 改回跟着 QQ，显示名随即重算）、`bio`（最多 60 个字）、`allow_proxy`、`notify_prefs`（带了的类型整体替换） | 成员 / `act` |
+| GET | `/me/export` | 导出自己的全部内容，作为附件 `mousehole-{id}.json` 下载：`user`（`id`、`qq`、`display_name`、`bio`）、`posts`（发过的主楼和回复，Markdown 原文，含待审核和已隐藏的，不含删掉的；`floor` 为 1 的就是自己发的主题）、`boosts`、`bookmarks`；每小时最多 3 次 | 已登录，只能在网页上 |
 | GET | `/me/sessions` | 已登录的设备：`user_agent`、`device`（例如"Chrome · macOS"）、`ip`、时间、是否当前设备 | 已登录 |
 | DELETE | `/me/sessions/{id}` | 让某个设备下线 | 已登录 |
 | GET | `/me/export` | 导出自己的全部内容 | 已登录，冻结了也可以 |

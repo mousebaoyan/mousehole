@@ -1415,6 +1415,41 @@ export async function countBoosts(trx: Transaction<DB>, postId: number, boosts: 
 export const NOTIFY_LEVELS = ["watching", "normal", "muted"] as const;
 export type NotifyLevel = (typeof NOTIFY_LEVELS)[number];
 
+// Everything someone wrote that is still there, whatever its review status, and what they
+// bookmarked; for the export of their own data. See design §13.
+export async function exportOwnPosts(userId: number) {
+  const posts = await db
+    .selectFrom("posts")
+    .innerJoin("threads", "threads.id", "posts.thread_id")
+    .innerJoin("boards", "boards.id", "threads.board_id")
+    .select([
+      "posts.id",
+      "posts.thread_id",
+      "threads.title",
+      "boards.slug as board",
+      "posts.floor",
+      "posts.body",
+      "posts.status",
+      "posts.created_at",
+      "posts.edited_at",
+    ])
+    .where("posts.author_id", "=", userId)
+    .where("posts.deleted_at", "is", null)
+    .where("threads.deleted_at", "is", null)
+    .orderBy("posts.id")
+    .execute();
+  const bookmarks = await db
+    .selectFrom("thread_users")
+    .innerJoin("threads", "threads.id", "thread_users.thread_id")
+    .select(["threads.id as thread_id", "threads.title", "thread_users.bookmarked_at"])
+    .where("thread_users.user_id", "=", userId)
+    .where("thread_users.bookmarked_at", "is not", null)
+    .where("threads.deleted_at", "is", null)
+    .orderBy("thread_users.bookmarked_at")
+    .execute();
+  return { posts, bookmarks };
+}
+
 // Bookmarking again keeps the first time, which the bookmark list is ordered by.
 export async function setBookmark(
   viewer: Viewer,

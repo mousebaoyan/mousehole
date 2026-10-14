@@ -175,6 +175,17 @@ async function withBoostUsers(
   return rows.map(({ user_id, ...r }) => ({ ...r, user: user(user_id) }));
 }
 
+// Someone's own boosts, for the export of their data.
+export async function exportOwnBoosts(userId: number) {
+  return db
+    .selectFrom("boosts")
+    .innerJoin("posts", "posts.id", "boosts.post_id")
+    .select(["posts.thread_id", "posts.floor", "boosts.body", "boosts.created_at"])
+    .where("boosts.user_id", "=", userId)
+    .orderBy("boosts.id")
+    .execute();
+}
+
 export async function listBoosts(members: boolean, postId: number) {
   await getPost(postId, { members, id: null, staff: false });
   const rows = await selectBoosts()

@@ -1,8 +1,8 @@
-import { LogOut, Monitor } from "lucide-react";
+import { Download, LogOut, Monitor } from "lucide-react";
 import { Form, redirect, useFetcher, useNavigation } from "react-router";
 import { apiContext } from "../api.server.ts";
 import { Check, Field, readForm, Result, Section, Time } from "~/components/form-parts";
-import { Button } from "~/components/ui/button";
+import { Button, buttonVariants } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Textarea } from "~/components/ui/textarea";
 import type { Route } from "./+types/settings.ts";
@@ -134,6 +134,15 @@ export default function Settings({ loaderData, actionData }: Route.ComponentProp
             <Device key={s.id} session={s} />
           ))}
         </ul>
+      </Section>
+
+      <Section
+        title="导出"
+        description="下载自己发过的主题和回复（Markdown 原文）、短评和收藏，JSON 格式；每小时最多 3 次"
+      >
+        <a href="/api/v1/me/export" download className={buttonVariants({ variant: "outline" })}>
+          <Download /> 下载我的内容
+        </a>
       </Section>
     </div>
   );
