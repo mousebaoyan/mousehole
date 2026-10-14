@@ -412,7 +412,7 @@ bot 把 QQ 群的信息推送给论坛。两种方式都支持，推荐一起用
 - **验证码**：邮件验证码 10 分钟内有效，输错 5 次作废。
 - **对外暴露**：只有 OpenResty 对外，论坛容器的端口只监听本机，数据库不对外。服务器防火墙只放行 80、443 和 SSH。
 - **客户端 IP**：只认 OpenResty 设置的 `X-Real-IP`，不信任请求自带的 `X-Forwarded-For`。限流和登录记录都依赖它。
-- **限流**：分两层。OpenResty 按 IP 限制连接数和请求速率，先挡掉刷接口和采集；应用里再细分：申请口令和邮件验证码按 IP 和 QQ 号，发帖和回复按用户，bot 按 token。
+- **限流**：分两层。OpenResty 按 IP 限制连接数和请求速率，先挡掉刷接口和采集；应用里再细分：申请口令和邮件验证码按 IP 和 QQ 号；发帖和回复按用户（每人每小时 20 个主题、每 10 分钟 60 条回复），bot 按 token（每个 token 代所有人合计每分钟 120 次），挡住刷屏和失控的插件。
 - **请求大小**：JSON 请求体默认不超过 1MB，成员全量同步不超过 4MB，图片不超过 20MB；gzip 请求体按解压后的大小计算，防止压缩炸弹。慢速连接由 OpenResty 和 Node 的超时一起断开。
 - **响应头**（`platform/security-headers.ts`）：HSTS；CSP 只允许本站脚本，内联脚本带 nonce，样式允许内联（组件会设 `style` 属性），图片只能来自本站；`X-Content-Type-Options: nosniff`；`Referrer-Policy: strict-origin-when-cross-origin`；`frame-ancestors 'none'` 防止页面被嵌入别的网站做点击劫持。本地开发走 HTTP，不发 CSP 和 HSTS，免得挡住 Vite 热更新的内联脚本。
 - **容器**：用非 root 用户运行，根文件系统只读，只有图片目录和临时目录可写；开启 `no-new-privileges`，去掉不需要的 capabilities。

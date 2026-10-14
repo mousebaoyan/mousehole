@@ -24,10 +24,14 @@ async function newBoard(change: { visibility?: "members"; post_role?: "moderator
   return slug;
 }
 
-async function newThread(board: string, extra: { kind?: "question"; tags?: string[] } = {}) {
+async function newThread(
+  board: string,
+  extra: { kind?: "question"; tags?: string[] } = {},
+  who = member,
+) {
   const res = await api.threads.$post(
     { json: { board, title: "主题标题", content: { markdown: "正文" }, ...extra } },
-    member,
+    who,
   );
   if (!res.ok) throw new Error(`status ${res.status}: ${await res.text()}`);
   return (await res.json()).id;
@@ -162,6 +166,20 @@ describe("发主题和回复", () => {
       .execute();
     expect(audit).toEqual([{ action: "thread.create" }]);
   });
+
+  test("一个人 10 分钟里最多回复 60 次，再回复返回 429 和 Retry-After", async () => {
+    const thread = await newThread(await newBoard());
+    const replier = as(await login((await createUser()).id));
+    const send = () =>
+      api.threads[":id"].posts.$post(
+        { param: { id: String(thread) }, json: { content: { markdown: "刷屏" } } },
+        replier,
+      );
+    for (let i = 0; i < 60; i++) expect((await send()).status).toBe(201);
+    const limited = await send();
+    expect(limited.status).toBe(429);
+    expect(Number(limited.headers.get("retry-after"))).toBeGreaterThan(0);
+  });
 });
 
 describe("读主题", () => {
@@ -195,8 +213,13 @@ describe("读主题", () => {
 
   test("最新列表：翻页不重复不遗漏，置顶的只在第一页最前面", async () => {
     const board = await newBoard();
+    // More than one person may post in an hour.
+    const authors = [
+      as(await login((await createUser()).id)),
+      as(await login((await createUser()).id)),
+    ];
     const ids = [];
-    for (let i = 0; i < 33; i++) ids.push(await newThread(board));
+    for (let i = 0; i < 33; i++) ids.push(await newThread(board, {}, authors[i % 2]));
     const pinned = ids[5];
     await db.updateTable("threads").set({ pinned: 1 }).where("id", "=", pinned).execute();
 
