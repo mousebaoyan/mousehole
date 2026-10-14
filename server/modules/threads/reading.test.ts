@@ -23,7 +23,7 @@ beforeAll(async () => {
 
 async function newThread(replies: number, board = "reading") {
   const res = await api.threads.$post(
-    { json: { board, title: "读一读这个主题", content: { markdown: "主楼" } } },
+    { json: { board, title: "读一读这个帖子", content: { markdown: "主楼" } } },
     author,
   );
   if (!res.ok) throw new Error(`status ${res.status}`);

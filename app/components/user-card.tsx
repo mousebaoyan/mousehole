@@ -139,7 +139,7 @@ type Profile = NonNullable<ReturnType<typeof useFetcher<typeof loader>>["data"]>
 function CardBody({ profile }: { profile: Profile }) {
   const relations = useRelations(profile);
   const numbers = [
-    { label: "主题", value: profile.stats.threads },
+    { label: "帖子", value: profile.stats.threads },
     { label: "回复", value: profile.stats.posts },
     { label: "获赞", value: profile.stats.likes },
     { label: "认可", value: relations.endorsements },

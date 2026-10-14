@@ -27,7 +27,7 @@ import { ReviewItems } from "./review-items.tsx";
 
 // The title and what is known about the thread. Its author can retitle and retag it; moderators
 // also pin, feature, lock, move and review it.
-export function TopicHeader({
+export function ThreadHeader({
   thread,
   current,
   editable,
@@ -125,7 +125,7 @@ export function TopicHeader({
         {staff && (
           <div className="ml-auto">
             <Dropdown
-              label="管理主题"
+              label="管理帖子"
               triggerClassName={buttonVariants({ variant: "ghost", size: "sm" })}
               trigger={
                 <>

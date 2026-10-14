@@ -102,7 +102,7 @@ export default function Members({ loaderData, actionData }: Route.ComponentProps
                 <span className="block truncate font-medium">{m.display_name}</span>
                 <span className="text-meta text-muted-foreground">
                   {m.qq ?? "—"} · 最近 <Time value={m.last_seen_at} never="没来过" /> ·{" "}
-                  {m.thread_count} 主题 {m.post_count} 回复
+                  {m.thread_count} 帖子 {m.post_count} 回复
                 </span>
               </span>
             </Link>

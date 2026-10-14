@@ -258,7 +258,7 @@ function json<T extends z.ZodType>(schema: T) {
 }
 
 const threadResponse = {
-  description: "主题",
+  description: "帖子",
   content: { "application/json": { schema: ThreadDetailSchema } },
 };
 
@@ -275,7 +275,7 @@ export const threadsRoutes = createRouter()
     createRoute({
       method: "get",
       path: "/threads",
-      summary: "主题列表",
+      summary: "帖子列表",
       request: {
         query: z.object({
           board: z.string().optional(),
@@ -289,7 +289,7 @@ export const threadsRoutes = createRouter()
       },
       responses: {
         200: {
-          description: "每页最多 30 个；最新列表的第一页先列置顶的主题",
+          description: "每页最多 30 个；最新列表的第一页先列置顶的帖子",
           content: {
             "application/json": {
               schema: z.object({
@@ -315,14 +315,14 @@ export const threadsRoutes = createRouter()
     createRoute({
       method: "get",
       path: "/users/{user}/threads",
-      summary: "某人发过的主题，最新的在前，每页 30 个",
+      summary: "某人发过的帖子，最新的在前，每页 30 个",
       request: {
         params: z.object({ user: UserRefSchema }),
         query: z.object({ cursor: z.string().optional() }),
       },
       responses: {
         200: {
-          description: "主题",
+          description: "帖子",
           content: {
             "application/json": {
               schema: z.object({
@@ -405,7 +405,7 @@ export const threadsRoutes = createRouter()
     createRoute({
       method: "get",
       path: "/threads/counts",
-      summary: "当前范围里新和未读的主题各有几个，列表的标签页用",
+      summary: "当前范围里新和未读的帖子各有几个，列表的标签页用",
       request: { query: z.object({ board: z.string().optional(), tag: z.string().optional() }) },
       responses: {
         200: {
@@ -428,9 +428,9 @@ export const threadsRoutes = createRouter()
     createRoute({
       method: "get",
       path: "/threads/{id}",
-      summary: "主题详情；楼层用 /threads/{id}/posts 取",
+      summary: "帖子详情；楼层用 /threads/{id}/posts 取",
       request: { params: IdParam },
-      responses: { 200: threadResponse, 404: errorResponse("主题不存在") },
+      responses: { 200: threadResponse, 404: errorResponse("帖子不存在") },
     }),
     async (c) => {
       const { id } = c.req.valid("param");
@@ -449,14 +449,14 @@ export const threadsRoutes = createRouter()
       method: "get",
       path: "/threads/{id}/stream",
       summary:
-        "SSE：这个主题的新楼层、编辑和删除，事件名同事件流（post.created 等），data 是楼层号",
+        "SSE：这个帖子的新楼层、编辑和删除，事件名同事件流（post.created 等），data 是楼层号",
       request: { params: IdParam },
       responses: {
         200: {
           description: "text/event-stream；每 20 秒一条心跳注释",
           content: { "text/event-stream": { schema: z.string() } },
         },
-        404: errorResponse("主题不存在"),
+        404: errorResponse("帖子不存在"),
       },
     }),
     async (c) => {
@@ -498,7 +498,7 @@ export const threadsRoutes = createRouter()
           description: "不足 20 层说明这个方向到头了",
           content: { "application/json": { schema: z.object({ items: z.array(PostSchema) }) } },
         },
-        404: errorResponse("主题不存在"),
+        404: errorResponse("帖子不存在"),
       },
     }),
     async (c) => {
@@ -557,7 +557,7 @@ export const threadsRoutes = createRouter()
     createRoute({
       method: "post",
       path: "/threads",
-      summary: "发主题；kind 不带时用版块的默认类型",
+      summary: "发帖；kind 不带时用版块的默认类型",
       request: {
         body: json(
           z.object({
@@ -573,7 +573,7 @@ export const threadsRoutes = createRouter()
       responses: {
         201: threadResponse,
         400: errorResponse("标签不存在等"),
-        403: errorResponse("不是成员，或者这个版块只有版主能发主题"),
+        403: errorResponse("不是成员，或者这个版块只有版主能发帖"),
         404: errorResponse("版块不存在"),
         409: errorResponse("这条 QQ 消息已经转到论坛了，附上已有的 thread_id 和 post_id"),
       },
@@ -591,7 +591,7 @@ export const threadsRoutes = createRouter()
     createRoute({
       method: "post",
       path: "/threads/{id}/posts",
-      summary: "回复；reply_to_id 是回复同一主题里的哪一条",
+      summary: "回复；reply_to_id 是回复同一帖子里的哪一条",
       request: {
         params: IdParam,
         body: json(
@@ -604,9 +604,9 @@ export const threadsRoutes = createRouter()
       },
       responses: {
         201: postResponse,
-        400: errorResponse("回复的那一层不在这个主题里"),
-        403: errorResponse("不是成员，或者主题已锁定"),
-        404: errorResponse("主题不存在"),
+        400: errorResponse("回复的那一层不在这个帖子里"),
+        403: errorResponse("不是成员，或者帖子已锁定"),
+        404: errorResponse("帖子不存在"),
         409: errorResponse("这条 QQ 消息已经转到论坛了，附上已有的 thread_id 和 post_id"),
       },
     }),
@@ -628,7 +628,7 @@ export const threadsRoutes = createRouter()
     createRoute({
       method: "patch",
       path: "/threads/{id}",
-      summary: "修改主题：作者可以改标题和标签；版主还可以移动版块、置顶、加精、锁定",
+      summary: "修改帖子：作者可以改标题和标签；版主还可以移动版块、置顶、加精、锁定",
       request: {
         params: IdParam,
         body: json(
@@ -646,8 +646,8 @@ export const threadsRoutes = createRouter()
       },
       responses: {
         200: threadResponse,
-        403: errorResponse("不是作者或版主，或者主题已锁定"),
-        404: errorResponse("主题不存在"),
+        403: errorResponse("不是作者或版主，或者帖子已锁定"),
+        404: errorResponse("帖子不存在"),
       },
     }),
     async (c) => {
@@ -670,12 +670,12 @@ export const threadsRoutes = createRouter()
     createRoute({
       method: "delete",
       path: "/threads/{id}",
-      summary: "删除主题；有人回复后作者不能删，只有版主能删",
+      summary: "删除帖子；有人回复后作者不能删，只有版主能删",
       request: { params: IdParam },
       responses: {
         204: { description: "已删除" },
         403: errorResponse("不是作者或版主，或者已经有人回复"),
-        404: errorResponse("主题不存在"),
+        404: errorResponse("帖子不存在"),
       },
     }),
     async (c) => {
@@ -691,7 +691,7 @@ export const threadsRoutes = createRouter()
       method: "patch",
       path: "/posts/{id}",
       summary:
-        "修改回复或主楼的正文，旧的正文进编辑记录；版主还可以审核通过、隐藏或恢复（主楼随主题）",
+        "修改回复或主楼的正文，旧的正文进编辑记录；版主还可以审核通过、隐藏或恢复（主楼随帖子）",
       request: {
         params: IdParam,
         body: json(
@@ -707,7 +707,7 @@ export const threadsRoutes = createRouter()
       responses: {
         200: postResponse,
         400: errorResponse("改的是主楼的状态"),
-        403: errorResponse("不是作者或版主，或者主题已锁定"),
+        403: errorResponse("不是作者或版主，或者帖子已锁定"),
         404: errorResponse("回复不存在"),
       },
     }),
@@ -743,7 +743,7 @@ export const threadsRoutes = createRouter()
       responses: {
         204: { description: "已删除" },
         400: errorResponse("这是主楼"),
-        403: errorResponse("不是作者或版主，或者主题已锁定"),
+        403: errorResponse("不是作者或版主，或者帖子已锁定"),
         404: errorResponse("回复不存在"),
       },
     }),
@@ -789,7 +789,7 @@ export const threadsRoutes = createRouter()
       method: "post",
       path: "/threads/{id}/read",
       summary: "记录阅读：读过的楼层区间并入已读，seconds 计入阅读时间，单次最多算 120 秒",
-      description: "网页批量上报，见 docs/design.md §8.9。超出主题楼层数的部分不算",
+      description: "网页批量上报，见 docs/design.md §8.9。超出帖子楼层数的部分不算",
       request: {
         params: IdParam,
         body: json(
@@ -809,7 +809,7 @@ export const threadsRoutes = createRouter()
       responses: {
         204: { description: "已记录" },
         401: errorResponse("没有登录"),
-        404: errorResponse("主题不存在"),
+        404: errorResponse("帖子不存在"),
       },
     }),
     async (c) => {
@@ -824,7 +824,7 @@ export const threadsRoutes = createRouter()
     createRoute({
       method: "get",
       path: "/admin/content",
-      summary: "待审核或已隐藏的内容，最新的在前，每页 30 条；主题以主楼出现",
+      summary: "待审核或已隐藏的内容，最新的在前，每页 30 条；帖子以主楼出现",
       request: {
         query: z.object({
           status: z.enum(["pending", "hidden"]).default("pending"),
@@ -878,13 +878,13 @@ export const threadsRoutes = createRouter()
     createRoute({
       method: "put",
       path: "/threads/{id}/solution",
-      summary: "采纳答案：问答主题里没删的一层回复；再采纳别的就换掉",
+      summary: "采纳答案：问答帖子里没删的一层回复；再采纳别的就换掉",
       request: { params: IdParam, body: json(z.object({ post_id: z.number().int() })) },
       responses: {
         200: threadResponse,
-        400: errorResponse("不是问答主题，或者这一层不能采纳"),
-        403: errorResponse("不是主题作者或版主，或者主题已锁定"),
-        404: errorResponse("主题不存在"),
+        400: errorResponse("不是问答帖子，或者这一层不能采纳"),
+        403: errorResponse("不是楼主或版主，或者帖子已锁定"),
+        404: errorResponse("帖子不存在"),
       },
     }),
     async (c) => {
@@ -908,9 +908,9 @@ export const threadsRoutes = createRouter()
       request: { params: IdParam },
       responses: {
         200: threadResponse,
-        400: errorResponse("不是问答主题"),
-        403: errorResponse("不是主题作者或版主，或者主题已锁定"),
-        404: errorResponse("主题不存在"),
+        400: errorResponse("不是问答帖子"),
+        403: errorResponse("不是楼主或版主，或者帖子已锁定"),
+        404: errorResponse("帖子不存在"),
       },
     }),
     async (c) => {
@@ -930,9 +930,9 @@ export const threadsRoutes = createRouter()
     createRoute({
       method: "put",
       path: "/threads/{id}/bookmark",
-      summary: "收藏主题；已经收藏的不变",
+      summary: "收藏帖子；已经收藏的不变",
       request: { params: IdParam },
-      responses: { 204: { description: "已收藏" }, 404: errorResponse("主题不存在") },
+      responses: { 204: { description: "已收藏" }, 404: errorResponse("帖子不存在") },
     }),
     async (c) => {
       const viewer = authorize(c, "act");
@@ -946,7 +946,7 @@ export const threadsRoutes = createRouter()
       path: "/threads/{id}/bookmark",
       summary: "取消收藏",
       request: { params: IdParam },
-      responses: { 204: { description: "已取消" }, 404: errorResponse("主题不存在") },
+      responses: { 204: { description: "已取消" }, 404: errorResponse("帖子不存在") },
     }),
     async (c) => {
       const viewer = authorize(c, "act");
@@ -960,7 +960,7 @@ export const threadsRoutes = createRouter()
       path: "/threads/{id}/subscription",
       summary: "关注级别：watching 每个新楼层都通知，normal 回复我、@我时通知，muted 都不通知",
       request: { params: IdParam, body: json(z.object({ level: z.enum(NOTIFY_LEVELS) })) },
-      responses: { 204: { description: "已设置" }, 404: errorResponse("主题不存在") },
+      responses: { 204: { description: "已设置" }, 404: errorResponse("帖子不存在") },
     }),
     async (c) => {
       const viewer = authorize(c, "act");

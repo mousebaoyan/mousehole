@@ -142,7 +142,7 @@ export async function deleteBoard(actor: Actor, slug: string) {
         // Threads keep their board even when deleted, so the foreign key refuses any board
         // that ever had one.
         if (error instanceof DatabaseError && error.code === "23503") {
-          throw new AppError(409, "board_not_empty", "版块里有过主题，不能删除");
+          throw new AppError(409, "board_not_empty", "版块里有过帖子，不能删除");
         }
         throw error;
       });

@@ -177,7 +177,7 @@ function EditTag({ tag, tags, busy }: { tag: Tag; tags: Tag[]; busy: boolean }) 
           formNoValidate
           disabled={busy}
           onClick={(e) => {
-            if (!confirm(`删除标签「${tag.name}」？主题上的这个标签会一并去掉。`)) {
+            if (!confirm(`删除标签「${tag.name}」？帖子上的这个标签会一并去掉。`)) {
               e.preventDefault();
             }
           }}
@@ -185,7 +185,7 @@ function EditTag({ tag, tags, busy }: { tag: Tag; tags: Tag[]; busy: boolean }) 
           删除
         </Button>
         <p className="w-full text-meta text-muted-foreground">
-          合并后，「{tag.name}」的主题都改用选中的标签，「{tag.name}」删除
+          合并后，「{tag.name}」的帖子都改用选中的标签，「{tag.name}」删除
         </p>
       </Form>
     </div>

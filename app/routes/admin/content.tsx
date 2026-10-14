@@ -79,7 +79,7 @@ export default function Content({ loaderData, actionData }: Route.ComponentProps
           <li key={c.id} className="rounded-2xl border bg-card p-4">
             <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-meta text-muted-foreground">
               <span className="rounded bg-secondary px-1.5 py-px font-medium text-foreground">
-                {c.floor === 1 ? "主题" : "回复"}
+                {c.floor === 1 ? "帖子" : "回复"}
               </span>
               {c.board.name} · <Time value={c.created_at} />
             </div>

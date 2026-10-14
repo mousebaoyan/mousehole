@@ -4,7 +4,7 @@ import { createMiddleware } from "hono/factory";
 import { acceptedEncoding } from "./compress.ts";
 
 // Pages as guests see them, kept briefly so a link shared in the group is rendered once rather
-// than for each reader (design §11.3): a topic for 10 seconds, a list for 30, page data for
+// than for each reader (design §11.3): a thread for 10 seconds, a list for 30, page data for
 // navigating between them likewise. A stale page is still served while it renders afresh in the
 // background. Pages are kept compressed, as sent, with the headers that went with them: the
 // CSP's nonce among them matches the scripts in the page.

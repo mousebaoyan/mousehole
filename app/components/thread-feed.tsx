@@ -157,7 +157,7 @@ export function ThreadFeed({
           </Link>
         </div>
         <nav
-          aria-label="主题列表"
+          aria-label="帖子列表"
           className="-mx-1 flex overflow-x-auto px-1 [scrollbar-width:none] max-sm:w-full"
         >
           {VIEWS.filter((v) => !v.own || counts).map((v) => {
@@ -182,7 +182,7 @@ export function ThreadFeed({
         </nav>
       </div>
       {threads.length === 0 ? (
-        <p className="py-16 text-center text-sm text-muted-foreground">还没有主题</p>
+        <p className="py-16 text-center text-sm text-muted-foreground">还没有帖子</p>
       ) : (
         <ThreadList threads={threads} now={now} showBoard={board === null}>
           {next_cursor !== null && <More cursor={next_cursor} showBoard={board === null} />}

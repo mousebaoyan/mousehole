@@ -217,7 +217,7 @@ async function seed() {
 
   const existing = await call(`/threads?board=${DEMO_THREADS[0].board}`);
   if (Fields.array().parse(field(existing.data, "items")).length > 0) {
-    console.log("已经有主题了，不再发演示主题");
+    console.log("已经有帖子了，不再发演示帖子");
     return;
   }
   for (const thread of DEMO_THREADS) {
@@ -244,7 +244,7 @@ async function seed() {
       ids.set(Number(field(res.data, "floor")), field(res.data, "id"));
     }
   }
-  console.log(`发了 ${DEMO_THREADS.length} 个演示主题`);
+  console.log(`发了 ${DEMO_THREADS.length} 个演示帖子`);
 }
 
 function pushInfo(group: number) {
@@ -418,9 +418,9 @@ async function demo() {
   const retried = await call("/threads", post);
   const threadId = Number(field(thread.data, "id"));
   check(
-    "代成员发主题，同一个幂等键重试不会重复发",
+    "代成员发帖，同一个幂等键重试不会重复发",
     thread.status === 201 && field(retried.data, "id") === threadId,
-    `主题 ${threadId}`,
+    `帖子 ${threadId}`,
   );
   const floors = await call(`/threads/${threadId}/posts`);
   const opening = Fields.array().parse(field(floors.data, "items")).at(0);
@@ -465,17 +465,17 @@ async function demo() {
     },
   });
   check(
-    "群消息转成主题；同一条消息再转返回已有的主题",
+    "群消息转成帖子；同一条消息再转返回已有的帖子",
     fromGroup.status === 201 &&
       twice.status === 409 &&
       field(twice.data, "thread_id") === fromGroupId,
-    `主题 ${fromGroupId}，再转 HTTP ${twice.status}`,
+    `帖子 ${fromGroupId}，再转 HTTP ${twice.status}`,
   );
   const noticeAt = `/bot/messages/group/${group}/${run * 10 + 2}`;
   const notice = await call(noticeAt, { method: "PUT", body: { thread_id: fromGroupId } });
   const lookedUp = await call(noticeAt);
   check(
-    "记下帖子通知，再按消息查得到主题",
+    "记下转存回执，再按消息查得到帖子",
     notice.status === 204 && field(lookedUp.data, "thread_id") === fromGroupId,
     lookedUp.data,
   );
@@ -523,7 +523,7 @@ async function demo() {
   const pending = await call("/threads", {
     method: "POST",
     headers: asMember,
-    body: { board: slug, title: "先审后发的主题", content: { markdown: "等 bot 审核" } },
+    body: { board: slug, title: "先审后发的帖子", content: { markdown: "等 bot 审核" } },
   });
   await call(`/boards/${slug}`, { method: "PATCH", body: { review_mode: "after" } });
   const pendingId = Number(field(pending.data, "id"));
@@ -550,12 +550,12 @@ async function demo() {
     reviewed.some((e) => e.type === type && data(e.data));
   const ofPending = (d: unknown) => field(field(d, "thread"), "id") === pendingId;
   check(
-    "先审后发：主题等待审核，bot 收到 content.pending 后通过，这时才有 thread.created",
+    "先审后发：帖子等待审核，bot 收到 content.pending 后通过，这时才有 thread.created",
     field(pending.data, "status") === "pending" &&
       field(approved.data, "status") === "visible" &&
       told("content.pending", ofPending) &&
       told("thread.created", ofPending),
-    `主题 ${pendingId}`,
+    `帖子 ${pendingId}`,
   );
   check(
     "bot 隐藏一层回复，事件流收到带理由的 post.deleted",
@@ -565,9 +565,9 @@ async function demo() {
   );
 
   const hidden = await call(`/threads/${threadId}`, { token: null });
-  check("访客打不开仅成员版块里的主题", hidden.status === 404, `HTTP ${hidden.status}`);
+  check("访客打不开仅成员版块里的帖子", hidden.status === 404, `HTTP ${hidden.status}`);
   const removed = await call(`/boards/${slug}`, { method: "DELETE" });
-  check("有过主题的版块不能删", removed.status === 409, removed.data);
+  check("有过帖子的版块不能删", removed.status === 409, removed.data);
 
   const failed = results.filter(([, ok]) => !ok).length;
   console.log(`\n${results.length - failed}/${results.length} 项通过${failed ? "，有失败项" : ""}`);
@@ -584,7 +584,7 @@ function isCounts(data: unknown, expected: Record<string, unknown>) {
 
 const USAGE = `用法：pnpm mock-bot <命令>
   setup [--owner QQ号]   创建 token，关联演示群并推送 ${MEMBERS} 个假成员（--owner 让你当群主）
-  seed                   建演示用的版块、标签和主题，已有的跳过
+  seed                   建演示用的版块、标签和帖子，已有的跳过
   sync [--gzip]          再推一次演示群的完整名单
   join QQ号 / leave QQ号  增量：进群、退群
   link QQ号              给这位成员签发登录链接

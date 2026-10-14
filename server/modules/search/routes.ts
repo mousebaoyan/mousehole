@@ -13,7 +13,7 @@ export const searchRoutes = createRouter()
     createRoute({
       method: "get",
       path: "/search",
-      summary: "搜索主题和回复：每个主题一条，带最相关的那一层和命中的片段；每页 20 个",
+      summary: "搜索帖子和回复：每个帖子一条，带最相关的那一层和命中的片段；每页 20 个",
       request: {
         query: z.object({
           q: z.string().trim().min(1).max(100),
@@ -78,7 +78,7 @@ export const searchRoutes = createRouter()
     createRoute({
       method: "get",
       path: "/search/similar",
-      summary: "相似问题：用提问原文找最像的 5 个主题，score 在 0 到 1 之间",
+      summary: "相似问题：用提问原文找最像的 5 个帖子，score 在 0 到 1 之间",
       request: { query: z.object({ text: z.string().trim().min(1).max(2000) }) },
       responses: {
         200: {

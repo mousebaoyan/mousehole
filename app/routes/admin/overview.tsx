@@ -30,7 +30,7 @@ export default function Overview({ loaderData }: Route.ComponentProps) {
   const stats = [
     { label: "成员", value: members.total, note: `已激活 ${members.activated.toLocaleString()}` },
     { label: "已冻结", value: members.frozen },
-    { label: "今天的主题", value: content.threads_today },
+    { label: "今天的帖子", value: content.threads_today },
     { label: "今天的回复", value: content.posts_today },
     { label: "待审核", value: content.pending, to: "/admin/content" },
     { label: "待处理的举报", value: content.reports, to: "/admin/reports" },

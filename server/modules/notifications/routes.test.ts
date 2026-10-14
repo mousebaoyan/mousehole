@@ -26,7 +26,7 @@ beforeAll(async () => {
 
 async function thread(who: Who) {
   const res = await api.threads.$post(
-    { json: { board: "n", title: "等通知的主题", content: { markdown: "主楼" } } },
+    { json: { board: "n", title: "等通知的帖子", content: { markdown: "主楼" } } },
     who,
   );
   if (!res.ok) throw new Error(`status ${res.status}`);
@@ -60,7 +60,7 @@ async function clear(...people: Person[]) {
 }
 
 describe("通知", () => {
-  test("回复、@、关注的主题有新楼层：每人只收到一条，自己做的不通知；新楼层按主题合并", async () => {
+  test("回复、@、关注的帖子有新楼层：每人只收到一条，自己做的不通知；新楼层按帖子合并", async () => {
     const watcher = await person();
     const t = await thread(author.who);
     await api.threads[":id"].subscription.$put(
@@ -90,7 +90,7 @@ describe("通知", () => {
     await clear(author);
   });
 
-  test("静音的主题、冻结的人、关掉的类型都不通知；关注的人发新主题会通知", async () => {
+  test("静音的帖子、冻结的人、关掉的类型都不通知；关注的人发新帖会通知", async () => {
     const t = await thread(author.who);
     await api.threads[":id"].subscription.$put(
       { param: { id: String(t.id) }, json: { level: "muted" } },

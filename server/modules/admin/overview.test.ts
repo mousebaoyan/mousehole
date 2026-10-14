@@ -33,7 +33,7 @@ async function overview() {
 
 async function thread(board: string) {
   const res = await api.threads.$post(
-    { json: { board, title: "今天发的主题", content: { markdown: "正文" } } },
+    { json: { board, title: "今天发的帖子", content: { markdown: "正文" } } },
     member,
   );
   if (!res.ok) throw new Error(`status ${res.status}`);
@@ -41,7 +41,7 @@ async function thread(board: string) {
 }
 
 describe("概览", () => {
-  test("今天公开的主题和回复、待审核的内容、待处理的举报都算进去", async () => {
+  test("今天公开的帖子和回复、待审核的内容、待处理的举报都算进去", async () => {
     const before = (await overview()).content;
     const id = await thread("open");
     const reply = await api.threads[":id"].posts.$post(

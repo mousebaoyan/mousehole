@@ -12,7 +12,7 @@ import { useHydrated } from "~/hydrated";
 import type { Route } from "./+types/new-thread.ts";
 
 export function meta() {
-  return [{ title: "发主题 · 鼠洞" }];
+  return [{ title: "发帖 · 鼠洞" }];
 }
 
 const KINDS = [
@@ -135,7 +135,7 @@ function ThreadForm({ restore }: { restore: boolean }) {
         send();
       }}
     >
-      <h1 className="text-xl font-semibold">发主题</h1>
+      <h1 className="text-xl font-semibold">发帖</h1>
       <Input
         value={draft.title}
         onChange={(e) => change({ title: e.target.value })}

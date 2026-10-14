@@ -75,9 +75,9 @@ export const adminRoutes = createRouter()
                   frozen: z.number(),
                 }),
                 content: z.object({
-                  threads_today: z.number().openapi({ description: "今天（北京时间）公开的主题" }),
+                  threads_today: z.number().openapi({ description: "今天（北京时间）公开的帖子" }),
                   posts_today: z.number().openapi({ description: "今天公开的回复" }),
-                  pending: z.number().openapi({ description: "待审核的主题和回复" }),
+                  pending: z.number().openapi({ description: "待审核的帖子和回复" }),
                   reports: z.number().openapi({ description: "待处理的举报" }),
                 }),
                 events: z.object({

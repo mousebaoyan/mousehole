@@ -310,7 +310,7 @@ export function PostCard({
                         onDelete();
                       }}
                     >
-                      <Trash2 /> {post.floor === 1 ? "删除主题" : "删除"}
+                      <Trash2 /> {post.floor === 1 ? "删除帖子" : "删除"}
                     </button>
                   )}
                   <button

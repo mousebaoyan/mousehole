@@ -66,13 +66,13 @@ async function fill(author: { id: number }, reader: number) {
   await sql`
     INSERT INTO threads (board_id, author_id, title, last_poster_id, floor_count, reply_count,
       created_at, last_post_at)
-    SELECT boards.id, ${author.id}, '填充主题 ' || i, ${author.id}, 10, 9,
+    SELECT boards.id, ${author.id}, '填充帖子 ' || i, ${author.id}, 10, 9,
       now() - i * interval '3 hours', now() - i * interval '3 hours'
     FROM boards, generate_series(1, 3000) i WHERE boards.slug = 'hot'`.execute(db);
   await sql`
     INSERT INTO posts (thread_id, floor, author_id, body, html, created_at)
     SELECT threads.id, f, ${author.id}, '填充', '<p>填充</p>', threads.created_at
-    FROM threads, generate_series(1, 10) f WHERE threads.title LIKE '填充主题%'`.execute(db);
+    FROM threads, generate_series(1, 10) f WHERE threads.title LIKE '填充帖子%'`.execute(db);
   await sql`
     INSERT INTO post_search (post_id, document)
     SELECT id, to_tsvector('simple', '填充 内容 ' || id) FROM posts WHERE body = '填充'`.execute(
@@ -81,7 +81,7 @@ async function fill(author: { id: number }, reader: number) {
   await sql`
     INSERT INTO thread_tags (thread_id, tag_id, last_post_at)
     SELECT threads.id, tags.id, threads.last_post_at FROM threads, tags
-    WHERE threads.title LIKE '填充主题%' AND threads.id % 3 = 0`.execute(db);
+    WHERE threads.title LIKE '填充帖子%' AND threads.id % 3 = 0`.execute(db);
   await sql`
     INSERT INTO users (qq, display_name)
     SELECT 20000000 + i, '填充成员' || i FROM generate_series(1, 2000) i`.execute(db);
@@ -91,7 +91,7 @@ async function fill(author: { id: number }, reader: number) {
     SELECT users.id, threads.id, int4multirange(int4range(1, 6)), threads.last_post_at,
       CASE WHEN threads.id % 20 = 0 THEN threads.last_post_at END
     FROM users, threads
-    WHERE threads.title LIKE '填充主题%'
+    WHERE threads.title LIKE '填充帖子%'
       AND (users.id = ${reader} AND threads.id % 5 = 0
         OR users.display_name LIKE '填充成员%' AND (threads.id + users.id) % 150 = 0)`.execute(db);
   await sql`
@@ -112,7 +112,7 @@ afterAll(() => {
 });
 
 describe("热点查询走索引", () => {
-  test("列表、主题、楼层、通知、搜索和个人主页", async () => {
+  test("列表、帖子、楼层、通知、搜索和个人主页", async () => {
     // Passes each query on, keeping its text and parameters.
     const query = vi.spyOn(Client.prototype, "query");
     const id = { id: String(thread) };

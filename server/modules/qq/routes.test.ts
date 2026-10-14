@@ -64,7 +64,7 @@ describe("群消息转到论坛", () => {
     );
   });
 
-  test("同一条消息不能转两次，返回已有的主题", async () => {
+  test("同一条消息不能转两次，返回已有的帖子", async () => {
     const from = source();
     const first = await postThread([{ type: "text", data: { text: "第一次" } }], from);
     if (!first.ok) throw new Error(`status ${first.status}`);
@@ -74,7 +74,7 @@ describe("群消息转到论坛", () => {
     expect(await again.json()).toMatchObject({ error: { code: "source_exists" }, thread_id: id });
   });
 
-  test("群友引用 bot 的帖子通知回复：找得到主题；引用转过来的消息就是回复那一层", async () => {
+  test("群友引用 bot 的转存回执回复：找得到帖子；引用转过来的消息就是回复那一层", async () => {
     const asked = source();
     const res = await postThread([{ type: "text", data: { text: "提问" } }], asked);
     if (!res.ok) throw new Error(`status ${res.status}`);

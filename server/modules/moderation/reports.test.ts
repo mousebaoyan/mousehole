@@ -20,7 +20,7 @@ beforeAll(async () => {
   reporter = as(await login((await createUser()).id));
   await api.boards.$post({ json: { slug: "r", name: "举报" } }, admin);
   const res = await api.threads.$post(
-    { json: { board: "r", title: "有问题的主题", content: { markdown: "广告：代写简历" } } },
+    { json: { board: "r", title: "有问题的帖子", content: { markdown: "广告：代写简历" } } },
     author,
   );
   if (!res.ok) throw new Error(`status ${res.status}`);

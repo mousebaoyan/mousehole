@@ -117,7 +117,7 @@ export default function Boards({
                       formNoValidate
                       disabled={busy}
                       onClick={(e) => {
-                        if (!confirm(`删除版块「${b.name}」？有过主题的版块不能删除。`)) {
+                        if (!confirm(`删除版块「${b.name}」？有过帖子的版块不能删除。`)) {
                           e.preventDefault();
                         }
                       }}
@@ -137,12 +137,12 @@ export default function Boards({
                   <div className="flex flex-wrap items-center gap-2 font-medium">
                     {b.name}
                     {b.visibility === "members" && <Badge>仅成员</Badge>}
-                    {b.post_role === "moderator" && <Badge>版主发主题</Badge>}
+                    {b.post_role === "moderator" && <Badge>版主发帖</Badge>}
                     {b.default_kind === "question" && <Badge>问答</Badge>}
                     {b.review_mode === "before" && <Badge>先审后发</Badge>}
                   </div>
                   <div className="truncate text-xs text-muted-foreground">
-                    /b/{b.slug} · {b.thread_count} 个主题
+                    /b/{b.slug} · {b.thread_count} 个帖子
                     {b.description && ` · ${b.description}`}
                   </div>
                 </div>
@@ -226,10 +226,10 @@ function BoardFields({ board, review }: { board?: Board; review?: string }) {
       <Field label="可见范围">
         <Options name="visibility" options={VISIBILITY} value={board?.visibility} />
       </Field>
-      <Field label="谁能发主题" hint="回复不受限制">
+      <Field label="谁能发帖" hint="回复不受限制">
         <Options name="post_role" options={POST_ROLE} value={board?.post_role} />
       </Field>
-      <Field label="默认类型" hint="问答主题可以采纳答案">
+      <Field label="默认类型" hint="问答帖子可以采纳答案">
         <Options name="default_kind" options={KIND} value={board?.default_kind} />
       </Field>
       <Field label="审核方式" hint="先审后发：版主以外的人发的内容，通过审核才公开">
