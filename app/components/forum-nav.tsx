@@ -1,6 +1,7 @@
-import { Bookmark, ExternalLink, History, Home, MessagesSquare } from "lucide-react";
+import { Bookmark, ExternalLink, FilePen, History, Home, MessagesSquare } from "lucide-react";
 import { Link, NavLink } from "react-router";
 import { cn } from "cn";
+import { useDrafts } from "~/components/composer";
 import { useBoards, useMe, useTags } from "~/forum";
 
 const item = ({ isActive }: { isActive: boolean }) =>
@@ -18,6 +19,7 @@ const mine = [
 
 export function ForumNav() {
   const me = useMe();
+  const drafts = useDrafts();
   const boards = useBoards();
   // Schools and majors are many; they stay in the list's tag filter.
   const topics = useTags().filter((t) => t.kind === "topic");
@@ -33,6 +35,14 @@ export function ForumNav() {
               <m.icon className="size-4" /> {m.label}
             </NavLink>
           ))}
+        {drafts.size > 0 && (
+          <NavLink to="/drafts" className={item}>
+            <FilePen className="size-4" /> 草稿
+            <span className="ml-auto text-xs text-muted-foreground tabular-nums">
+              {drafts.size}
+            </span>
+          </NavLink>
+        )}
       </div>
       <div className="flex flex-col gap-0.5">
         <h2 className="px-2.5 pb-1 text-xs font-medium text-muted-foreground">版块</h2>

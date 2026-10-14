@@ -89,6 +89,7 @@ Disallow: /login
 Disallow: /logout
 Disallow: /my/
 Disallow: /new
+Disallow: /drafts
 Disallow: /notifications
 Disallow: /search
 Disallow: /settings

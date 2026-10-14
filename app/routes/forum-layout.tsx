@@ -7,12 +7,13 @@ import type { Route } from "./+types/forum-layout.ts";
 
 export async function loader({ context }: Route.LoaderArgs) {
   const api = context.get(apiContext);
-  const [me, boards, tags, unread, site] = await Promise.all([
+  const [me, boards, tags, unread, site, drafts] = await Promise.all([
     api.me.$get(),
     api.boards.$get(),
     api.tags.$get(),
     api.notifications["unread-count"].$get(),
     api.site.$get(),
+    api.me.drafts.$get(),
   ]);
   return {
     banner: (await site.json()).banner,
@@ -20,6 +21,8 @@ export async function loader({ context }: Route.LoaderArgs) {
     unread: unread.ok ? (await unread.json()).count : 0,
     boards: (await boards.json()).items,
     tags: (await tags.json()).items,
+    // Which drafts there are, for the composer and the sidebar.
+    drafts: drafts.ok ? (await drafts.json()).items.map((d) => ({ thread: d.thread })) : [],
   };
 }
 
@@ -34,9 +37,11 @@ export function shouldRevalidate({
   return defaultShouldRevalidate && (formMethod !== undefined || currentUrl.href === nextUrl.href);
 }
 
-export default function ForumLayout({ loaderData: { me, unread, banner } }: Route.ComponentProps) {
+export default function ForumLayout({
+  loaderData: { me, unread, banner, drafts },
+}: Route.ComponentProps) {
   return (
-    <ComposerProvider>
+    <ComposerProvider drafts={drafts}>
       <SiteHeader me={me} unread={unread} />
       {banner && (
         <p className="bg-brand/10 px-4 py-2 text-center text-meta text-brand-strong">{banner}</p>

@@ -1,11 +1,10 @@
-import { PenSquare } from "lucide-react";
 import { useRef } from "react";
 import { Link, useFetcher, useLocation } from "react-router";
 import { cn } from "cn";
 import type { Api, ThreadItem } from "~/api-types";
+import { NewThreadButton } from "~/components/composer";
 import { Dot, FilterMenu } from "~/components/filter-menu";
 import { ThreadList, ThreadRows } from "~/components/thread-list";
-import { buttonVariants } from "~/components/ui/button";
 import { useBoards, useTags, type Board } from "~/forum";
 import { useNearView } from "~/near-view";
 
@@ -125,12 +124,7 @@ export function ThreadFeed({
             ]}
           />
           {/* Wider screens have this in the header. */}
-          <Link
-            to={slug === null ? "/new" : `/new?board=${slug}`}
-            className={buttonVariants({ size: "sm", className: "ml-auto h-8 sm:hidden" })}
-          >
-            <PenSquare /> 发帖
-          </Link>
+          <NewThreadButton board={slug} size="sm" className="ml-auto h-8 sm:hidden" />
         </div>
         <nav
           aria-label="帖子列表"

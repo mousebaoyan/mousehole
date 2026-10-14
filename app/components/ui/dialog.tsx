@@ -26,12 +26,16 @@ export function Dialog({ className, ...props }: ComponentProps<"dialog">) {
 // Questions asked in place of window.confirm and window.prompt. They are kept outside React so
 // a handler can await one, even from a menu that closes as it asks; <DialogHost /> in the root
 // shows them.
+type Choice = { value: string; label: string; variant: "default" | "destructive" | "ghost" };
+
 type Question = {
   text: string;
-  action: string;
+  // In the order shown; the last is the one that goes ahead.
+  choices: Choice[];
   // Present when the answer is text: what the box says while empty.
   placeholder?: string;
-  answer: (reply: string | null) => void;
+  // The value of the button chosen, null for one with an empty value or Esc; and the text.
+  answer: (value: string | null, text: string) => void;
 };
 
 let asking: Question | null = null;
@@ -43,25 +47,42 @@ function set(next: Question | null) {
 }
 
 function ask(question: Omit<Question, "answer">) {
-  return new Promise<string | null>((resolve) =>
+  return new Promise<{ value: string | null; text: string }>((resolve) =>
     set({
       ...question,
-      answer: (reply) => {
+      answer: (value, text) => {
         set(null);
-        resolve(reply);
+        resolve({ value, text });
       },
     }),
   );
 }
 
+const CANCEL: Choice = { value: "", label: "取消", variant: "ghost" };
+
 // For what can't be undone; `action` is the button that goes ahead, such as 删除.
 export async function confirmDialog(text: string, action: string) {
-  return (await ask({ text, action })) !== null;
+  const { value } = await ask({
+    text,
+    choices: [CANCEL, { value: "ok", label: action, variant: "destructive" }],
+  });
+  return value !== null;
 }
 
 // Null when cancelled; the text may be empty.
-export function promptDialog(text: string, placeholder: string, action: string) {
-  return ask({ text, action, placeholder });
+export async function promptDialog(text: string, placeholder: string, action: string) {
+  const answer = await ask({
+    text,
+    placeholder,
+    choices: [CANCEL, { value: "ok", label: action, variant: "default" }],
+  });
+  return answer.value === null ? null : answer.text;
+}
+
+// One of several ways on: the value of the button chosen, or null for one with an empty value
+// and for Esc.
+export async function chooseDialog(text: string, choices: Choice[]) {
+  return (await ask({ text, choices })).value;
 }
 
 function subscribe(listener: () => void) {
@@ -82,18 +103,17 @@ function Asking({ question }: { question: Question }) {
   const ref = useRef<HTMLDialogElement>(null);
   const reply = useRef<HTMLTextAreaElement>(null);
   useEffect(() => ref.current?.showModal(), []);
-  const text = question.placeholder !== undefined;
   return (
     <Dialog
       ref={ref}
-      // returnValue is the button that closed it; Esc leaves it empty.
+      // returnValue is the value of the button that closed it; Esc leaves it empty.
       onClose={(e) =>
-        question.answer(e.currentTarget.returnValue === "ok" ? (reply.current?.value ?? "") : null)
+        question.answer(e.currentTarget.returnValue || null, reply.current?.value ?? "")
       }
     >
       <form method="dialog">
         <p className="text-sm">{question.text}</p>
-        {text && (
+        {question.placeholder !== undefined && (
           <Textarea
             ref={reply}
             aria-label={question.text}
@@ -103,12 +123,11 @@ function Asking({ question }: { question: Question }) {
           />
         )}
         <div className="mt-4 flex justify-end gap-2">
-          <Button value="" variant="ghost">
-            取消
-          </Button>
-          <Button value="ok" variant={text ? "default" : "destructive"}>
-            {question.action}
-          </Button>
+          {question.choices.map((c) => (
+            <Button key={c.label} value={c.value} variant={c.variant}>
+              {c.label}
+            </Button>
+          ))}
         </div>
       </form>
     </Dialog>

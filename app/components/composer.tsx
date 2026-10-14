@@ -1,104 +1,320 @@
-import { ChevronDown, ChevronUp, Maximize2, Minimize2, Pencil, Reply, X } from "lucide-react";
+import {
+  ChevronDown,
+  ChevronUp,
+  Maximize2,
+  Minimize2,
+  PenSquare,
+  Pencil,
+  Reply,
+  Send,
+  X,
+} from "lucide-react";
 import {
   createContext,
   use,
   useEffect,
   useRef,
   useState,
+  type ComponentProps,
   type ReactNode,
   type RefObject,
 } from "react";
-import { Link, useFetcher, useNavigate } from "react-router";
+import { Link, useFetcher, useLocation, useNavigate } from "react-router";
 import { cn } from "cn";
+import { browserApi } from "~/browser-api";
 import { MarkdownEditor } from "~/components/markdown-editor";
+import { TagPicker } from "~/components/tag-picker";
 import { Button } from "~/components/ui/button";
-import { useMe } from "~/forum";
-import { confirmDialog } from "~/components/ui/dialog";
+import { chooseDialog, confirmDialog } from "~/components/ui/dialog";
+import { Input } from "~/components/ui/input";
+import { Select } from "~/components/ui/select";
+import { useBoards, useMe } from "~/forum";
+import { useHydrated } from "~/hydrated";
 
-type ComposerTarget = {
-  thread: { id: number; title: string };
-  replyTo: { id: number; floor: number; name: string } | null;
-  // Changing a floor instead of replying: its number and its Markdown as it is.
-  edit?: { postId: number; floor: number; markdown: string };
-};
+type ThreadRef = { id: number; title: string };
+type ReplyRef = { id: number; floor: number; name: string };
+type Kind = "discussion" | "question";
 
-type Draft = ComposerTarget & { text: string; collapsed: boolean };
+// A new thread, a reply to one, or a change to a floor already posted.
+export type ComposerTarget =
+  | { mode: "thread"; board: string | null }
+  | { mode: "reply"; thread: ThreadRef; replyTo: ReplyRef | null }
+  | { mode: "edit"; thread: ThreadRef; post: { id: number; floor: number; markdown: string } };
 
-const ComposerContext = createContext<(target: ComposerTarget) => void>(() => {});
+// What is in the editor; the title, board, kind and tags only matter for a new thread.
+type Content = { text: string; title: string; board: string; kind: Kind; tags: string[] };
+
+type Writing = { target: ComposerTarget; content: Content; collapsed: boolean };
+
+// The drafts on the server as the forum layout lists them.
+type DraftList = { thread: ThreadRef | null }[];
+
+type SaveState = "saving" | "saved" | "failed" | null;
+
+const EMPTY: Content = { text: "", title: "", board: "", kind: "discussion", tags: [] };
+
+// `new`, or the thread a reply is for. Edits keep no draft: the floor itself still has the text.
+function draftKey(target: ComposerTarget) {
+  if (target.mode === "edit") return null;
+  return target.mode === "thread" ? "new" : String(target.thread.id);
+}
+
+function isEmpty(content: Content) {
+  return !content.text.trim() && !content.title.trim();
+}
+
+function draftBody({ target, content }: Writing) {
+  if (target.mode === "thread") {
+    const { text, title, board, kind, tags } = content;
+    return { body: text, title, board: board || null, kind, tags };
+  }
+  return {
+    body: content.text,
+    reply_to_id: target.mode === "reply" ? (target.replyTo?.id ?? null) : null,
+  };
+}
+
+const SAVE_AFTER_MS = 2000;
+
+const ComposerContext = createContext<{
+  open: (target: ComposerTarget, collapsed?: boolean) => void;
+  drafts: Map<string, ThreadRef | null>;
+}>({ open: () => {}, drafts: new Map() });
 
 export function useComposer() {
-  return use(ComposerContext);
+  return use(ComposerContext).open;
 }
 
-// What is being written for each thread stays in the browser until it is posted or discarded,
-// so a closed tab or another thread's reply loses nothing.
-function draftKey(threadId: number) {
-  return `reply-draft:${threadId}`;
+// The reader's drafts by key, with the thread each reply is for.
+export function useDrafts() {
+  return use(ComposerContext).drafts;
 }
 
-// Lives in the forum layout, so a reply being written stays docked while the reader moves
-// to other pages, and is gone only when posted or closed.
-export function ComposerProvider({ children }: { children: ReactNode }) {
-  const [draft, setDraft] = useState<Draft | null>(null);
+// "发帖", or "继续草稿" while a new thread is among the drafts. The board is where the reader is.
+export function NewThreadButton({
+  board,
+  ...props
+}: { board: string | null } & Omit<ComponentProps<typeof Button>, "onClick" | "children">) {
+  const { open, drafts } = use(ComposerContext);
+  return (
+    <Button {...props} onClick={() => open({ mode: "thread", board })}>
+      <PenSquare /> {drafts.has("new") ? "继续草稿" : "发帖"}
+    </Button>
+  );
+}
+
+function keyed(list: DraftList) {
+  return new Map(list.map((d) => [d.thread === null ? "new" : String(d.thread.id), d.thread]));
+}
+
+// Lives in the forum layout, so what is being written stays docked while the reader moves to
+// other pages, and is gone only when posted or closed. Drafts go to the server two seconds after
+// typing stops, and what is left unsaved goes out as the page closes (design §8.2).
+export function ComposerProvider({
+  drafts: listed,
+  children,
+}: {
+  drafts: DraftList;
+  children: ReactNode;
+}) {
+  const [writing, setWriting] = useState<Writing | null>(null);
+  const [saveState, setSaveState] = useState<SaveState>(null);
+  // The layout lists the drafts again after each submission; saves in between add and remove.
+  const [drafts, setDrafts] = useState(() => ({ listed, keys: keyed(listed) }));
+  if (drafts.listed !== listed) setDrafts({ listed, keys: keyed(listed) });
   const textarea = useRef<HTMLTextAreaElement>(null);
+  // What is waiting to be saved, and what each draft was when last saved.
+  const pending = useRef<{ key: string; writing: Writing } | null>(null);
+  const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const saved = useRef(new Map<string, string>());
+  // The key of a draft being fetched into the composer.
+  const [restoring, setRestoring] = useState<string | null>(null);
   const me = useMe();
   const navigate = useNavigate();
+  const { pathname } = useLocation();
+
+  function setKey(key: string, thread: ThreadRef | null, present: boolean) {
+    setDrafts((d) => {
+      const keys = new Map(d.keys);
+      if (present) keys.set(key, thread);
+      else keys.delete(key);
+      return { ...d, keys };
+    });
+  }
+
+  // Sends what is waiting, unless it is what was saved last; an emptied draft is deleted.
+  // `keepalive` lets the request go out while the page is closing.
+  function flush(keepalive = false) {
+    clearTimeout(timer.current);
+    const next = pending.current;
+    pending.current = null;
+    if (!next) return;
+    const { key, writing: w } = next;
+    const json = JSON.stringify(draftBody(w));
+    if (saved.current.get(key) === json) return;
+    const thread = w.target.mode === "reply" ? w.target.thread : null;
+    const param = { key };
+    const options = { init: { keepalive } };
+    if (isEmpty(w.content)) {
+      saved.current.delete(key);
+      setKey(key, thread, false);
+      void browserApi.me.drafts[":key"].$delete({ param }, options);
+      return;
+    }
+    setSaveState("saving");
+    void (async () => {
+      const res = await browserApi.me.drafts[":key"].$put({ param, json: draftBody(w) }, options);
+      if (res.ok) {
+        saved.current.set(key, json);
+        setKey(key, thread, true);
+      }
+      setSaveState(res.ok ? "saved" : "failed");
+    })();
+  }
+
+  function change(next: Writing) {
+    setWriting(next);
+    const key = draftKey(next.target);
+    if (key === null) return;
+    pending.current = { key, writing: next };
+    clearTimeout(timer.current);
+    timer.current = setTimeout(flush, SAVE_AFTER_MS);
+  }
+
+  useEffect(() => {
+    const leaving = () => flush(true);
+    addEventListener("pagehide", leaving);
+    return () => removeEventListener("pagehide", leaving);
+  });
 
   function focus() {
     requestAnimationFrame(() => textarea.current?.focus());
   }
 
-  function open(target: ComposerTarget) {
+  function open(target: ComposerTarget, collapsed = false) {
     if (!me) {
       void navigate("/login");
       return;
     }
-    const sameThread = draft?.thread.id === target.thread.id && !draft.edit;
-    const text =
-      target.edit?.markdown ??
-      (sameThread ? draft.text : (localStorage.getItem(draftKey(target.thread.id)) ?? ""));
-    setDraft({ ...target, text, collapsed: false });
-    focus();
+    const key = draftKey(target);
+    if (writing && key !== null && draftKey(writing.target) === key) {
+      // The same draft: replying to another floor of the thread changes whom it answers.
+      change({ ...writing, target, collapsed });
+      if (!collapsed) focus();
+      return;
+    }
+    flush();
+    const content =
+      target.mode === "edit"
+        ? { ...EMPTY, text: target.post.markdown }
+        : { ...EMPTY, board: target.mode === "thread" ? (target.board ?? "") : "" };
+    show({ target, content, collapsed });
+    if (!collapsed) focus();
   }
 
-  // Edits aren't kept as drafts: the post itself still has the text.
-  function setText(text: string) {
-    if (!draft) return;
-    setDraft({ ...draft, text });
-    if (draft.edit) return;
-    if (text.trim()) localStorage.setItem(draftKey(draft.thread.id), text);
-    else localStorage.removeItem(draftKey(draft.thread.id));
+  function show(opened: Writing) {
+    setSaveState(null);
+    setWriting(opened);
+    const key = draftKey(opened.target);
+    if (key !== null && drafts.keys.has(key)) setRestoring(key);
   }
 
-  async function discard() {
-    if (!draft) return;
-    const changed = draft.edit ? draft.text !== draft.edit.markdown : draft.text.trim() !== "";
-    const question = draft.edit ? "放弃这次修改？" : "放弃这条回复？";
-    if (changed && !(await confirmDialog(question, "放弃"))) return;
-    if (!draft.edit) localStorage.removeItem(draftKey(draft.thread.id));
-    setDraft(null);
+  // Fills the composer just opened with its saved draft, unless typing has begun meanwhile.
+  useEffect(() => {
+    if (restoring === null) return;
+    const key = restoring;
+    void (async () => {
+      const res = await browserApi.me.drafts[":key"].$get({ param: { key } });
+      setRestoring(null);
+      if (!res.ok) return;
+      const draft = await res.json();
+      const content: Content = {
+        text: draft.body,
+        title: draft.title,
+        board: draft.board ?? "",
+        kind: draft.kind === "question" ? "question" : "discussion",
+        tags: draft.tags,
+      };
+      // As the server has it, so opening it again sends nothing.
+      const stored: ComposerTarget =
+        key === "new"
+          ? { mode: "thread", board: null }
+          : { mode: "reply", thread: { id: Number(key), title: "" }, replyTo: draft.reply_to };
+      saved.current.set(
+        key,
+        JSON.stringify(draftBody({ target: stored, content, collapsed: false })),
+      );
+      setWriting((w) => {
+        if (!w || draftKey(w.target) !== key || !isEmpty(w.content)) return w;
+        const target =
+          w.target.mode === "reply" && w.target.replyTo === null
+            ? { ...w.target, replyTo: draft.reply_to }
+            : w.target;
+        return { ...w, target, content: { ...content, board: content.board || w.content.board } };
+      });
+    })();
+  }, [restoring, saved]);
+
+  // Arriving at a thread with a reply among the drafts, the composer waits at the bottom, folded;
+  // in the browser only, so the page still hydrates as the server rendered it.
+  const threadId = /^\/t\/(\d+)/.exec(pathname)?.[1];
+  const [arrivedAt, setArrivedAt] = useState<string>();
+  const hydrated = useHydrated();
+  if (hydrated && threadId !== arrivedAt) {
+    setArrivedAt(threadId);
+    const thread = threadId === undefined ? undefined : drafts.keys.get(threadId);
+    if (writing === null && thread) {
+      show({ target: { mode: "reply", thread, replyTo: null }, content: EMPTY, collapsed: true });
+    }
   }
 
-  function posted(floor: number) {
-    if (!draft) return;
-    if (!draft.edit) localStorage.removeItem(draftKey(draft.thread.id));
-    setDraft(null);
-    void navigate(`/t/${draft.thread.id}?floor=${floor}`);
+  async function close() {
+    if (!writing) return;
+    const { target, content } = writing;
+    if (target.mode === "edit") {
+      const changed = content.text !== target.post.markdown;
+      if (changed && !(await confirmDialog("放弃这次修改？", "放弃"))) return;
+    } else if (!isEmpty(content)) {
+      const choice = await chooseDialog("还没发出去，怎么处理？", [
+        { value: "", label: "继续写", variant: "ghost" },
+        { value: "discard", label: "放弃", variant: "destructive" },
+        { value: "save", label: "保存草稿", variant: "default" },
+      ]);
+      if (choice === null) return;
+      if (choice === "discard") change({ ...writing, content: EMPTY });
+    }
+    flush();
+    setWriting(null);
+  }
+
+  // The server ends the draft along with posting it.
+  function posted(to: string) {
+    if (!writing) return;
+    clearTimeout(timer.current);
+    pending.current = null;
+    const key = draftKey(writing.target);
+    if (key !== null) {
+      saved.current.delete(key);
+      setKey(key, null, false);
+    }
+    setWriting(null);
+    void navigate(to);
   }
 
   return (
-    <ComposerContext value={open}>
+    <ComposerContext value={{ open, drafts: drafts.keys }}>
       {children}
-      {draft && (
+      {writing && (
         <Composer
-          draft={draft}
+          writing={writing}
+          saveState={draftKey(writing.target) === null ? null : saveState}
           textarea={textarea}
-          onText={setText}
+          onChange={(content) => change({ ...writing, content })}
           onCollapse={(collapsed) => {
-            setDraft({ ...draft, collapsed });
+            setWriting({ ...writing, collapsed });
             if (!collapsed) focus();
           }}
-          onDiscard={discard}
+          onClose={close}
           onPosted={posted}
         />
       )}
@@ -114,49 +330,77 @@ function clampHeight(height: number) {
   return Math.round(Math.min(Math.max(height, MIN_HEIGHT), innerHeight * 0.85));
 }
 
+const SAVE_TEXT = { saving: "正在保存草稿…", saved: "草稿已保存", failed: "草稿没存上" };
+
+const SEND = {
+  thread: { label: "发布", Icon: Send, field: "正文" },
+  reply: { label: "回复", Icon: Reply, field: "回复内容" },
+  edit: { label: "保存", Icon: Pencil, field: "修改内容" },
+};
+
+// What the page actions answer: the new thread's ID, or the floor posted or changed.
+type Sent = { ok: true; id?: number; floor?: number } | { ok: false; message: string };
+
 // Docked at the bottom like Discourse's: the page stays readable above it, a spacer of the
 // same height keeps the end of the page reachable, and the dragged height is remembered.
 // Only mounted after a click, so reading localStorage while rendering is safe.
 function Composer({
-  draft,
+  writing,
+  saveState,
   textarea,
-  onText,
+  onChange,
   onCollapse,
-  onDiscard,
+  onClose,
   onPosted,
 }: {
-  draft: Draft;
+  writing: Writing;
+  saveState: SaveState;
   textarea: RefObject<HTMLTextAreaElement | null>;
-  onText: (text: string) => void;
+  onChange: (content: Content) => void;
   onCollapse: (collapsed: boolean) => void;
-  onDiscard: () => void;
-  onPosted: (floor: number) => void;
+  onClose: () => void;
+  onPosted: (to: string) => void;
 }) {
   const [height, setHeight] = useState(() =>
     clampHeight(Number(localStorage.getItem(HEIGHT_KEY)) || 360),
   );
   const [full, setFull] = useState(false);
   const drag = useRef<{ y: number; height: number } | null>(null);
-  const reply = useFetcher<{ ok: true; floor: number } | { ok: false; message: string }>();
-  const { thread, replyTo, edit, text, collapsed } = draft;
-  const busy = reply.state !== "idle";
+  const sending = useFetcher<Sent>();
+  const { target, content, collapsed } = writing;
+  const busy = sending.state !== "idle";
+  const ready = content.text.trim() !== "" && (target.mode !== "thread" || content.board !== "");
+  const { label, Icon, field } = SEND[target.mode];
 
   useEffect(() => {
-    if (reply.state === "idle" && reply.data?.ok) onPosted(reply.data.floor);
-  }, [reply.state, reply.data, onPosted]);
+    if (sending.state !== "idle" || !sending.data?.ok) return;
+    const { id, floor } = sending.data;
+    onPosted(target.mode === "thread" ? `/t/${id}` : `/t/${target.thread.id}?floor=${floor}`);
+  }, [sending.state, sending.data, target, onPosted]);
 
   function send() {
-    if (!text.trim() || busy) return;
-    void reply.submit(
-      edit
-        ? { intent: "edit-post", post_id: edit.postId, floor: edit.floor, markdown: text }
-        : { markdown: text, ...(replyTo && { reply_to_id: replyTo.id }) },
-      {
-        method: "post",
-        action: edit ? `/t/${thread.id}` : `/t/${thread.id}/reply`,
-        defaultShouldRevalidate: false,
-      },
-    );
+    if (!ready || busy) return;
+    const options = { method: "post", defaultShouldRevalidate: false } as const;
+    if (target.mode === "thread") {
+      const form = new FormData();
+      form.set("title", content.title);
+      form.set("board", content.board);
+      form.set("kind", content.kind);
+      form.set("markdown", content.text);
+      for (const tag of content.tags) form.append("tags", tag);
+      void sending.submit(form, { ...options, action: "/new" });
+    } else if (target.mode === "edit") {
+      const { id, floor } = target.post;
+      void sending.submit(
+        { intent: "edit-post", post_id: id, floor, markdown: content.text },
+        { ...options, action: `/t/${target.thread.id}` },
+      );
+    } else {
+      void sending.submit(
+        { markdown: content.text, ...(target.replyTo && { reply_to_id: target.replyTo.id }) },
+        { ...options, action: `/t/${target.thread.id}/reply` },
+      );
+    }
   }
 
   function resize(next: number) {
@@ -171,7 +415,7 @@ function Composer({
     <>
       <div aria-hidden="true" style={{ height: shown }} />
       <section
-        aria-label="回复"
+        aria-label={target.mode === "thread" ? "发帖" : target.mode === "edit" ? "编辑" : "回复"}
         className="fixed inset-x-0 bottom-0 z-40 mx-auto flex max-w-5xl flex-col rounded-t-2xl border border-b-0 bg-card shadow-[0_-12px_40px_-16px_rgb(0_0_0/0.25)] animate-in slide-in-from-bottom-8"
         style={{ height: full && !collapsed ? "100svh" : shown }}
       >
@@ -206,31 +450,7 @@ function Composer({
             collapsed ? "h-12" : "pb-2",
           )}
         >
-          {edit ? (
-            <Pencil className="size-4 shrink-0 text-muted-foreground" />
-          ) : (
-            <Reply className="size-4 shrink-0 text-muted-foreground" />
-          )}
-          <span className="shrink-0">
-            {edit ? (
-              <>
-                编辑 <span className="text-muted-foreground tabular-nums">#{edit.floor}</span>
-              </>
-            ) : replyTo ? (
-              <>
-                回复 <span className="font-medium">{replyTo.name}</span>
-                <span className="ml-1 text-muted-foreground tabular-nums">#{replyTo.floor}</span>
-              </>
-            ) : (
-              "回复帖子"
-            )}
-          </span>
-          <Link
-            to={`/t/${thread.id}`}
-            className="min-w-0 truncate text-muted-foreground hover:text-foreground"
-          >
-            {thread.title}
-          </Link>
+          <Heading target={target} title={content.title} />
           <div className="ml-auto flex shrink-0 items-center text-muted-foreground">
             {!collapsed && (
               <Button
@@ -252,13 +472,7 @@ function Composer({
             >
               {collapsed ? <ChevronUp /> : <ChevronDown />}
             </Button>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              aria-label="关闭"
-              title="关闭"
-              onClick={onDiscard}
-            >
+            <Button variant="ghost" size="icon-sm" aria-label="关闭" title="关闭" onClick={onClose}>
               <X />
             </Button>
           </div>
@@ -266,28 +480,140 @@ function Composer({
 
         {!collapsed && (
           <>
+            {target.mode === "thread" && <ThreadFields content={content} onChange={onChange} />}
             <MarkdownEditor
-              value={text}
-              onChange={onText}
+              value={content.text}
+              onChange={(text) => onChange({ ...content, text })}
               onSubmit={send}
-              label={edit ? "修改内容" : "回复内容"}
+              label={field}
               textarea={textarea}
               className="flex-1 border-t"
             />
             <footer className="flex items-center gap-3 border-t px-4 py-2.5">
-              <Button onClick={send} disabled={busy || !text.trim()}>
-                {edit ? <Pencil /> : <Reply />}
-                {busy ? "发送中…" : edit ? "保存" : "回复"}
+              <Button onClick={send} disabled={busy || !ready}>
+                <Icon /> {busy ? "发送中…" : label}
               </Button>
-              {reply.data && !reply.data.ok && (
+              {sending.data && !sending.data.ok ? (
                 <p role="alert" className="min-w-0 truncate text-meta text-destructive">
-                  {reply.data.message}
+                  {sending.data.message}
                 </p>
+              ) : (
+                saveState && (
+                  <p className="text-meta text-muted-foreground">{SAVE_TEXT[saveState]}</p>
+                )
               )}
             </footer>
           </>
         )}
       </section>
     </>
+  );
+}
+
+function Heading({ target, title }: { target: ComposerTarget; title: string }) {
+  if (target.mode === "thread") {
+    return (
+      <>
+        <PenSquare className="size-4 shrink-0 text-muted-foreground" />
+        <span className="shrink-0">发帖</span>
+        <span className="min-w-0 truncate text-muted-foreground">{title}</span>
+      </>
+    );
+  }
+  return (
+    <>
+      {target.mode === "edit" ? (
+        <Pencil className="size-4 shrink-0 text-muted-foreground" />
+      ) : (
+        <Reply className="size-4 shrink-0 text-muted-foreground" />
+      )}
+      <span className="shrink-0">
+        {target.mode === "edit" ? (
+          <>
+            编辑 <span className="text-muted-foreground tabular-nums">#{target.post.floor}</span>
+          </>
+        ) : target.replyTo ? (
+          <>
+            回复 <span className="font-medium">{target.replyTo.name}</span>
+            <span className="ml-1 text-muted-foreground tabular-nums">#{target.replyTo.floor}</span>
+          </>
+        ) : (
+          "回复帖子"
+        )}
+      </span>
+      <Link
+        to={`/t/${target.thread.id}`}
+        className="min-w-0 truncate text-muted-foreground hover:text-foreground"
+      >
+        {target.thread.title}
+      </Link>
+    </>
+  );
+}
+
+const KINDS = [
+  { kind: "discussion", label: "讨论" },
+  { kind: "question", label: "问答" },
+] as const;
+
+// A new thread's title, board, kind and tags above its body. Picking a board takes its kind.
+function ThreadFields({
+  content,
+  onChange,
+}: {
+  content: Content;
+  onChange: (content: Content) => void;
+}) {
+  const me = useMe();
+  const staff = me?.role === "moderator" || me?.role === "admin";
+  const boards = useBoards().filter((b) => b.post_role === "user" || staff);
+  return (
+    <div className="flex flex-col gap-2 border-t px-4 py-2.5">
+      <Input
+        value={content.title}
+        onChange={(e) => onChange({ ...content, title: e.target.value })}
+        aria-label="标题"
+        placeholder="标题：把问题写清楚，比如「rank 30% 能冲华五的夏令营吗」"
+        maxLength={80}
+        className="h-9 text-base md:text-base"
+      />
+      <div className="flex flex-wrap items-center gap-2">
+        <Select
+          value={content.board}
+          onValueChange={(slug) => {
+            const board = boards.find((b) => b.slug === slug);
+            onChange({
+              ...content,
+              board: slug,
+              kind: board?.default_kind === "question" ? "question" : "discussion",
+            });
+          }}
+          options={boards.map((b) => ({ value: b.slug, label: b.name }))}
+          placeholder="选择版块"
+          aria-label="版块"
+          className="w-40"
+        />
+        <fieldset className="flex rounded-full bg-secondary p-0.5 text-sm">
+          <legend className="sr-only">类型</legend>
+          {KINDS.map((k) => (
+            <label
+              key={k.kind}
+              className="cursor-pointer rounded-full px-3.5 py-1 text-muted-foreground has-checked:bg-card has-checked:font-medium has-checked:text-foreground has-checked:shadow-sm"
+            >
+              <input
+                type="radio"
+                name="kind"
+                value={k.kind}
+                checked={content.kind === k.kind}
+                onChange={() => onChange({ ...content, kind: k.kind })}
+                className="sr-only"
+              />
+              {k.label}
+            </label>
+          ))}
+        </fieldset>
+        <TagPicker chosen={content.tags} onChange={(tags) => onChange({ ...content, tags })} />
+      </div>
+    </div>
   );
 }

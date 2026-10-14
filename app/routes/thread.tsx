@@ -357,9 +357,9 @@ function ThreadPage({
               onJump={jump}
               onEdit={(markdown) =>
                 openComposer({
+                  mode: "edit",
                   thread: target,
-                  replyTo: null,
-                  edit: { postId: post.id, floor: post.floor, markdown },
+                  post: { id: post.id, floor: post.floor, markdown },
                 })
               }
               onAccept={() =>
@@ -390,6 +390,7 @@ function ThreadPage({
                 published
                   ? () =>
                       openComposer({
+                        mode: "reply",
                         thread: target,
                         replyTo: { id: post.id, floor: post.floor, name: post.author.display_name },
                       })
@@ -412,7 +413,10 @@ function ThreadPage({
         {/* Lined up with the avatars above. */}
         <div className="mt-4 flex flex-wrap items-center gap-2 border-t px-3 pt-5 sm:px-4">
           {published && (
-            <Button size="lg" onClick={() => openComposer({ thread: target, replyTo: null })}>
+            <Button
+              size="lg"
+              onClick={() => openComposer({ mode: "reply", thread: target, replyTo: null })}
+            >
               <Reply /> 回复
             </Button>
           )}
