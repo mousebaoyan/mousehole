@@ -7,6 +7,7 @@ import {
   Reply,
   Rocket,
   ShieldCheck,
+  TrendingUp,
   UserPlus,
 } from "lucide-react";
 import { useRef } from "react";
@@ -23,10 +24,11 @@ import { cn } from "cn";
 import { apiContext } from "../api.server.ts";
 import { Button } from "~/components/ui/button";
 import { UserAvatar } from "~/components/user-avatar";
+import { useMe } from "~/forum";
 import { useNearView } from "~/near-view";
 import { ago, unixNow } from "~/time";
 import type { Route } from "./+types/notifications.ts";
-import { SITE_NAME } from "../../server/platform/site.ts";
+import { levelName, SITE_NAME } from "../../server/platform/site.ts";
 
 export function meta() {
   return [{ title: `通知 · ${SITE_NAME}` }];
@@ -56,7 +58,7 @@ export async function action({ request, context }: Route.ActionArgs) {
   await read.$post({ json: { ids: [Number(form.get("id"))] } });
   const to = form.get("to");
   return redirect(
-    typeof to === "string" && /^\/t\/\d+\?floor=\d+$/.test(to) ? to : "/notifications",
+    typeof to === "string" && /^\/(t\/\d+\?floor=\d+|u\/\d+)$/.test(to) ? to : "/notifications",
   );
 }
 
@@ -71,6 +73,7 @@ const ICONS: Record<string, typeof Reply> = {
   following: UserPlus,
   solved: CircleCheck,
   moderation: ShieldCheck,
+  level: TrendingUp,
 };
 
 // What a moderator did; see design §8.4.
@@ -99,7 +102,9 @@ function headline(n: Item) {
     case "solved":
       return `${who} 采纳了你的回答`;
     case "moderation":
-      return `${who} ${MODERATED[n.data.action] ?? "处理了你的"}${n.post.floor === 1 ? "帖子" : "回复"}${n.data.reason ? `：${n.data.reason}` : ""}`;
+      return `${who} ${MODERATED[n.data.action] ?? "处理了你的"}${n.post?.floor === 1 ? "帖子" : "回复"}${n.data.reason ? `：${n.data.reason}` : ""}`;
+    case "level":
+      return `你升到了 ${levelName(Number(n.data.level))}`;
     default:
       return `${who} 发了新帖`;
   }
@@ -157,8 +162,10 @@ function Rows({ items, now }: { items: Item[]; now: number }) {
 // Opening an unread one marks it read on the way.
 function Row({ item: n, now }: { item: Item; now: number }) {
   const submit = useSubmit();
+  const me = useMe();
   const Icon = ICONS[n.type] ?? Reply;
-  const to = `/t/${n.thread.id}?floor=${n.post.floor}`;
+  // A level goes to one's profile, where the next one's progress is.
+  const to = n.thread && n.post ? `/t/${n.thread.id}?floor=${n.post.floor}` : `/u/${me?.id}`;
   return (
     <li
       className={cn(
@@ -168,7 +175,7 @@ function Row({ item: n, now }: { item: Item; now: number }) {
     >
       <span className="relative shrink-0 self-start">
         {n.actor ? (
-          <UserAvatar user={n.actor} thread={n.thread.id} className="size-9" />
+          <UserAvatar user={n.actor} thread={n.thread?.id} className="size-9" />
         ) : (
           <span className="block size-9 rounded-full bg-muted" />
         )}
@@ -189,7 +196,7 @@ function Row({ item: n, now }: { item: Item; now: number }) {
           {!n.read && <span className="sr-only">未读：</span>}
           {headline(n)}
         </Link>
-        <p className="mt-0.5 truncate text-meta font-medium">{n.thread.title}</p>
+        {n.thread && <p className="mt-0.5 truncate text-meta font-medium">{n.thread.title}</p>}
         {n.excerpt && (
           <p className="mt-0.5 truncate text-meta text-muted-foreground">{n.excerpt}</p>
         )}

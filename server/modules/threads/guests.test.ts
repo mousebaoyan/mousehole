@@ -124,6 +124,7 @@ describe("我的内容不给访客看", () => {
       display_name: "鼠鼠",
       avatar_url: null,
       role: "user",
+      level: 0,
       title: "",
       members_only: true,
     });

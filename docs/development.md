@@ -22,7 +22,7 @@ server/
       service.ts        业务逻辑；模块对外只暴露这里导出的函数
       service.test.ts
     auth/  users/  boards/  threads/  posts/  uploads/
-    search/  notifications/  events/  moderation/  admin/
+    search/  notifications/  events/  moderation/  admin/  levels/
   platform/             和业务无关的基础设施：数据库连接、错误类型、日志、设置、邮件、图片处理
 db/migrations/          SQL 迁移
 db/types.ts             kysely-codegen 从数据库生成的类型

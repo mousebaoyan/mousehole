@@ -5,13 +5,14 @@ import { db } from "../../platform/db.ts";
 import { env } from "../../platform/env.ts";
 import { AppError } from "../../platform/errors.ts";
 import { excerpt } from "../../platform/markdown.ts";
+import { levelName, SITE_NAME } from "../../platform/site.ts";
 import { recordEvent } from "../events/service.ts";
 import { anonymousBrief, userBriefs, writer } from "../users/service.ts";
 
 // What people are told of; see design §8.6. reply: someone replied to my floor; mention: @ me;
 // like and boost: on my floor; watching: a new floor in a thread I watch; following: a new thread
 // by someone I follow; solved: my answer was accepted; moderation: something of mine was
-// approved, rejected, hidden or shown again.
+// approved, rejected, hidden or shown again; level: I went up a level.
 export const NOTIFICATION_TYPES = [
   "reply",
   "mention",
@@ -21,6 +22,7 @@ export const NOTIFICATION_TYPES = [
   "following",
   "solved",
   "moderation",
+  "level",
 ] as const;
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
 
@@ -28,8 +30,9 @@ export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
 // up, with the latest person in front: "A 等 3 人".
 const MERGED = new Set<NotificationType>(["like", "boost", "watching"]);
 
+// About something done to a floor; levels are told by notifyLevel.
 type Notice = {
-  type: NotificationType;
+  type: Exclude<NotificationType, "level">;
   actorId: number;
   // Their number in the thread when they did it anonymously (design §8.12).
   actorAlias: number | null;
@@ -39,7 +42,13 @@ type Notice = {
 };
 
 // Unless turned off, every type shows on the site; QQ reminders only come for these.
-const QQ_BY_DEFAULT = new Set<NotificationType>(["reply", "mention", "solved", "moderation"]);
+const QQ_BY_DEFAULT = new Set<NotificationType>([
+  "reply",
+  "mention",
+  "solved",
+  "moderation",
+  "level",
+]);
 
 // Someone's switches for every type, what they set over the defaults.
 export function notifyPrefs(saved: Record<string, { site?: boolean; qq?: boolean }>) {
@@ -51,8 +60,9 @@ export function notifyPrefs(saved: Record<string, { site?: boolean; qq?: boolean
   );
 }
 
-// What happened, as the QQ reminder says it after the person's name.
-const SAID: Record<NotificationType, string> = {
+// What happened, as the QQ reminder says it after the person's name; a new level is said
+// differently, having nobody behind it.
+const SAID: Record<Exclude<NotificationType, "level">, string> = {
   reply: "回复了你",
   mention: "提到了你",
   like: "赞了你",
@@ -179,6 +189,40 @@ async function remindOnQq(
       post: { id: notice.postId, floor: about.floor },
       url,
       qq_text: text,
+    });
+  }
+}
+
+// Going up a level, automatically or from an admin (design §6.6); going down is not told.
+export async function notifyLevel(trx: Transaction<DB>, userId: number, level: number) {
+  const type = "level";
+  const prefs = sql`notify_prefs -> ${type}`;
+  const person = await trx
+    .selectFrom("users")
+    .select([
+      "id",
+      "display_name",
+      "qq",
+      sql<boolean>`coalesce((${prefs} ->> 'site')::boolean, true)`.as("site"),
+      sql<boolean>`coalesce((${prefs} ->> 'qq')::boolean, true)`.as("to_qq"),
+    ])
+    .where("id", "=", userId)
+    .executeTakeFirstOrThrow();
+  if (person.site) {
+    await trx
+      .insertInto("notifications")
+      .values({ user_id: userId, type, data: { level: String(level) } })
+      .execute();
+    await tellUnread(trx, [userId]);
+  }
+  if (person.to_qq) {
+    const url = `${env.PUBLIC_URL}/u/${userId}`;
+    await recordEvent(trx, "notification.created", {
+      user: { id: person.id, display_name: person.display_name, qq: person.qq },
+      type,
+      level,
+      url,
+      qq_text: `你在${SITE_NAME}升到了 ${levelName(level)}\n${url}`,
     });
   }
 }
@@ -323,8 +367,8 @@ function badCursor(): never {
 export async function listNotifications(userId: number, unreadOnly: boolean, cursor?: string) {
   let query = db
     .selectFrom("notifications")
-    .innerJoin("threads", "threads.id", "notifications.thread_id")
-    .innerJoin("posts", "posts.id", "notifications.post_id")
+    .leftJoin("threads", "threads.id", "notifications.thread_id")
+    .leftJoin("posts", "posts.id", "notifications.post_id")
     .select([
       "notifications.id",
       "notifications.type",
@@ -371,11 +415,14 @@ export async function listNotifications(userId: number, unreadOnly: boolean, cur
       type: r.type,
       actor: r.actor_id === null ? null : writer(user, r.actor_id, r.actor_alias),
       count: r.count,
-      thread: { id: r.thread_id, title: r.title },
-      post: { id: r.post_id, floor: r.floor },
+      // Only about a level has neither.
+      thread: r.thread_id === null || r.title === null ? null : { id: r.thread_id, title: r.title },
+      post: r.post_id === null || r.floor === null ? null : { id: r.post_id, floor: r.floor },
       // Content waiting for review or hidden shows to its author only.
       excerpt:
-        r.deleted_at === null && (r.status === "visible" || r.author_id === userId)
+        r.html !== null &&
+        r.deleted_at === null &&
+        (r.status === "visible" || r.author_id === userId)
           ? excerpt(r.html, EXCERPT)
           : "",
       data: r.data,

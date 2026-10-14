@@ -121,19 +121,27 @@ describe("阅读记录", () => {
     expect((await stats()).posts_read - before.posts_read).toBe(3);
   });
 
-  test("北京时间的新一天第一次上报，访问天数加一", async () => {
+  test("北京时间的新一天第一次上报，访问天数加一，阅读记在这一天", async () => {
     const thread = await newThread(0);
     const { days_visited } = await stats();
     await report(thread, [[1, 1]], 5);
     expect((await stats()).days_visited).toBe(days_visited);
 
+    // Today's activity becomes yesterday's.
     await db
-      .updateTable("users")
-      .set({ last_seen_at: sql<Date>`now() - interval '1 day'` })
-      .where("id", "=", reader.id)
+      .updateTable("user_days")
+      .set({ day: sql<Date>`day - 1` })
+      .where("user_id", "=", reader.id)
       .execute();
-    await report(thread, [], 5);
+    await report(thread, [], 7);
     expect((await stats()).days_visited).toBe(days_visited + 1);
+    const today = await db
+      .selectFrom("user_days")
+      .select("read_seconds")
+      .where("user_id", "=", reader.id)
+      .where("day", "=", sql<Date>`(now() AT TIME ZONE 'Asia/Shanghai')::date`)
+      .executeTakeFirstOrThrow();
+    expect(today.read_seconds).toBe(7);
   });
 
   test("访客没有阅读记录，也不能上报", async () => {

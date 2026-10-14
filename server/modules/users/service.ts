@@ -1,5 +1,5 @@
 import { mkdir, readFile, rename, stat, utimes, writeFile } from "node:fs/promises";
-import { sql, type Transaction } from "kysely";
+import { sql, type ExpressionBuilder, type Transaction } from "kysely";
 import type { DB } from "../../../db/types.ts";
 import type { Actor, UserRef, Viewer } from "../../platform/access.ts";
 import { readCapped } from "../../platform/body.ts";
@@ -139,19 +139,53 @@ export async function findMember(ref: UserRef) {
     .executeTakeFirst();
 }
 
-// Seen now; the first visit on a new day in Beijing time adds a day visited.
-const SEEN = {
-  last_seen_at: sql<Date>`now()`,
-  days_visited: sql<number>`days_visited + (last_seen_at IS NULL
-    OR (last_seen_at AT TIME ZONE 'Asia/Shanghai')::date
-      < (now() AT TIME ZONE 'Asia/Shanghai')::date)::integer`,
-};
+// A day someone was active, in Beijing time: they visited, read, or had content synced from the
+// groups. Returns 1 for the first of a day, which counts as a day visited, else 0. What they
+// read adds to the day's reading, which L4 looks at (design §6.6).
+async function recordDay(
+  trx: Transaction<DB>,
+  userId: number,
+  read: { posts: number; seconds: number } = { posts: 0, seconds: 0 },
+) {
+  const day = sql<Date>`(now() AT TIME ZONE 'Asia/Shanghai')::date`;
+  const first = await trx
+    .insertInto("user_days")
+    .values({ user_id: userId, day, posts_read: read.posts, read_seconds: read.seconds })
+    .onConflict((oc) => oc.doNothing())
+    .returning("user_id")
+    .executeTakeFirst();
+  if (first) return 1;
+  if (read.posts > 0 || read.seconds > 0) {
+    await trx
+      .updateTable("user_days")
+      .set((eb) => ({
+        posts_read: eb("posts_read", "+", read.posts),
+        read_seconds: eb("read_seconds", "+", read.seconds),
+      }))
+      .where("user_id", "=", userId)
+      .where("day", "=", day)
+      .execute();
+  }
+  return 0;
+}
+
+// Seen on the site now.
+function seen(days: number) {
+  return (eb: ExpressionBuilder<DB, "users">) => ({
+    last_seen_at: sql<Date>`now()`,
+    days_visited: eb("days_visited", "+", days),
+  });
+}
 
 // The first login activates the account, which the bot plugin hears of.
 export async function recordLogin(trx: Transaction<DB>, userId: number) {
+  const days = await recordDay(trx, userId);
   const user = await trx
     .updateTable("users")
-    .set((eb) => ({ activated_at: eb.fn.coalesce("activated_at", eb.val(new Date())), ...SEEN }))
+    .set((eb) => ({
+      activated_at: eb.fn.coalesce("activated_at", eb.val(new Date())),
+      ...seen(days)(eb),
+    }))
     .where("id", "=", userId)
     .returning(["id", "display_name", "qq", sql<Date | null>`old.activated_at`.as("was")])
     .executeTakeFirstOrThrow();
@@ -163,22 +197,44 @@ export async function recordLogin(trx: Transaction<DB>, userId: number) {
 }
 
 export async function recordSeen(userId: number) {
-  await db.updateTable("users").set(SEEN).where("id", "=", userId).execute();
+  await db.transaction().execute(async (trx) => {
+    const days = await recordDay(trx, userId);
+    await trx.updateTable("users").set(seen(days)).where("id", "=", userId).execute();
+  });
 }
 
 // Reading reports count as being seen too.
 export async function countReading(
   trx: Transaction<DB>,
   userId: number,
-  { posts, seconds }: { posts: number; seconds: number },
+  read: { posts: number; seconds: number },
 ) {
+  const days = await recordDay(trx, userId, read);
   await trx
     .updateTable("users")
     .set((eb) => ({
-      posts_read: eb("posts_read", "+", posts),
-      read_seconds: eb("read_seconds", "+", seconds),
-      ...SEEN,
+      posts_read: eb("posts_read", "+", read.posts),
+      read_seconds: eb("read_seconds", "+", read.seconds),
+      ...seen(days)(eb),
     }))
+    .where("id", "=", userId)
+    .execute();
+}
+
+// Levels look back 30 days; a few more are kept so a day is never cut short.
+export async function clearOldDays() {
+  await db
+    .deleteFrom("user_days")
+    .where("day", "<", sql<Date>`(now() AT TIME ZONE 'Asia/Shanghai')::date - 35`)
+    .execute();
+}
+
+// Posting is being active that day, also when the post comes from the groups or a bot.
+export async function countPosting(trx: Transaction<DB>, userId: number) {
+  if ((await recordDay(trx, userId)) === 0) return;
+  await trx
+    .updateTable("users")
+    .set((eb) => ({ days_visited: eb("days_visited", "+", 1) }))
     .where("id", "=", userId)
     .execute();
 }
@@ -207,6 +263,7 @@ export async function getUser(ref: UserRef, viewerId: number | null) {
       "users.display_name",
       "users.avatar_version",
       "users.role",
+      "users.level",
       eb.fn.coalesce("group_members.title", eb.val("")).as("title"),
       "group_members.card",
       "group_members.joined_at",
@@ -331,9 +388,34 @@ export async function saveRestriction(
 ) {
   await trx
     .updateTable("users")
-    .set({ restriction: restriction?.type ?? null, restricted_until: restriction?.until ?? null })
+    .set({
+      restriction: restriction?.type ?? null,
+      restricted_until: restriction?.until ?? null,
+      // When it runs out, or now: one with no end is in force until lifted, and lifting it is now.
+      restricted_through: restriction?.until ?? sql<Date>`now()`,
+    })
     .where("id", "=", userId)
     .execute();
+}
+
+// Written by levels. A new level starts its time at it; `locked` set by an admin keeps automatic
+// changes away. Returns the level before.
+export async function saveLevel(
+  trx: Transaction<DB>,
+  userId: number,
+  change: { level: number; locked?: boolean },
+) {
+  const { from } = await trx
+    .updateTable("users")
+    .set({
+      level: change.level,
+      level_since: sql<Date | null>`CASE WHEN level = ${change.level} THEN level_since ELSE now() END`,
+      ...(change.locked !== undefined && { level_locked: change.locked }),
+    })
+    .where("id", "=", userId)
+    .returning(sql<number>`old.level`.as("from"))
+    .executeTakeFirstOrThrow();
+  return from;
 }
 
 // Written by members: a role set by hand is locked, so syncing leaves it; none unlocks it, and
@@ -356,6 +438,7 @@ export async function listMembers(filter: {
   q?: string;
   status?: "member" | "frozen";
   role?: string;
+  level?: number;
   restricted?: boolean;
   cursor?: number;
 }) {
@@ -368,6 +451,8 @@ export async function listMembers(filter: {
       "qq",
       "role",
       "role_locked",
+      "level",
+      "level_locked",
       "member_status",
       "activated_at",
       "restriction",
@@ -390,6 +475,7 @@ export async function listMembers(filter: {
   }
   if (filter.status !== undefined) query = query.where("member_status", "=", filter.status);
   if (filter.role !== undefined) query = query.where("role", "=", filter.role);
+  if (filter.level !== undefined) query = query.where("level", "=", filter.level);
   if (filter.restricted) {
     query = query
       .where("restriction", "is not", null)
@@ -522,6 +608,7 @@ export async function userBriefs(ids: number[]) {
       "users.display_name",
       "users.avatar_version",
       "users.role",
+      "users.level",
       eb.fn.coalesce("group_members.title", eb.val("")).as("title"),
     ])
     .where("users.id", "=", sql<number>`any(${[...new Set(ids)]}::integer[])`)

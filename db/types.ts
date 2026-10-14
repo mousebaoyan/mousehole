@@ -348,6 +348,13 @@ export interface Uploads {
   width: number;
 }
 
+export interface UserDays {
+  day: Timestamp;
+  posts_read: Generated<number>;
+  read_seconds: Generated<number>;
+  user_id: number;
+}
+
 export interface UserFollows {
   created_at: Generated<Timestamp>;
   followee_id: number;
@@ -368,6 +375,9 @@ export interface Users {
   hide_from_guests: Generated<boolean>;
   id: Generated<number>;
   last_seen_at: Timestamp | null;
+  level: Generated<number>;
+  level_locked: Generated<boolean>;
+  level_since: Timestamp | null;
   like_received: Generated<number>;
   member_status: Generated<string>;
   notify_prefs: Generated<Json>;
@@ -377,6 +387,7 @@ export interface Users {
   qq_bio: Generated<string>;
   qq_nickname: Generated<string>;
   read_seconds: Generated<number>;
+  restricted_through: Timestamp | null;
   restricted_until: Timestamp | null;
   restriction: string | null;
   role: Generated<string>;
@@ -416,6 +427,7 @@ export interface DB {
   thread_users: ThreadUsers;
   threads: Threads;
   uploads: Uploads;
+  user_days: UserDays;
   user_follows: UserFollows;
   users: Users;
 }

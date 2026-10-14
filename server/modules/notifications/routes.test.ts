@@ -144,7 +144,7 @@ describe("通知", () => {
     const list = await api.notifications.$get({ query: {} }, author.who);
     if (!list.ok) throw new Error(`status ${list.status}`);
     const items = (await list.json()).items;
-    const reply1 = items.find((n) => n.post.id === first);
+    const reply1 = items.find((n) => n.post?.id === first);
     if (!reply1) throw new Error("reply notification missing");
     expect(reply1).toMatchObject({ type: "reply", thread: { id: t.id }, excerpt: "第一条" });
     await api.notifications.read.$post({ json: { ids: [reply1.id] } }, author.who);

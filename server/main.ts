@@ -14,10 +14,11 @@ import {
   NOTIFICATIONS_CHANNEL,
   unreadChanged,
 } from "./modules/notifications/service.ts";
+import { promoteActive, recheckL4 } from "./modules/levels/service.ts";
 import { indexMissingPosts } from "./modules/search/service.ts";
 import { flushViews, recordView } from "./modules/threads/service.ts";
 import { clearUnusedUploads } from "./modules/uploads/service.ts";
-import { refreshAvatars } from "./modules/users/service.ts";
+import { clearOldDays, refreshAvatars } from "./modules/users/service.ts";
 import { compressResponses } from "./platform/compress.ts";
 import { clientIp } from "./platform/http.ts";
 import { guestPages } from "./platform/page-cache.ts";
@@ -33,6 +34,7 @@ listen({ [EVENTS_CHANNEL]: eventsArrived, [NOTIFICATIONS_CHANNEL]: unreadChanged
 indexMissingPosts().catch((error: unknown) => log("error", "Indexing posts failed", { error }));
 every(60_000, "Writing view counts", flushViews);
 every(3600_000, "Refreshing avatars", refreshAvatars);
+every(3600_000, "Raising levels", promoteActive);
 const DAY_MS = 24 * 3600_000;
 every(DAY_MS, "Clearing unused uploads", clearUnusedUploads);
 every(DAY_MS, "Clearing expired logins", clearExpiredLogins);
@@ -40,6 +42,8 @@ every(DAY_MS, "Clearing old idempotency keys", clearIdempotencyKeys);
 every(DAY_MS, "Clearing old notifications", clearOldNotifications);
 every(DAY_MS, "Clearing old events", clearOldEvents);
 every(DAY_MS, "Clearing old drafts", clearOldDrafts);
+every(DAY_MS, "Rechecking L4", recheckL4);
+every(DAY_MS, "Clearing old active days", clearOldDays);
 
 // A thread served from the guest page cache skips the loader that counts its view.
 function countCachedView(c: Context) {

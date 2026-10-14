@@ -5,6 +5,8 @@ import { Badge, readForm, Time } from "~/components/form-parts";
 import { Select } from "~/components/ui/select";
 import { UserAvatar } from "~/components/user-avatar";
 import { restrictionText } from "~/restriction";
+import { LevelBadge } from "~/components/user-badges";
+import { LEVEL_NAMES, levelName } from "../../../server/platform/site.ts";
 
 import type { Route } from "./+types/members.ts";
 import type { loader as adminLoader } from "./layout.tsx";
@@ -20,6 +22,8 @@ const STATUSES = [
   { value: "restricted", label: "被禁言或封禁" },
 ] as const;
 
+const LEVELS = LEVEL_NAMES.map((_, level) => ({ value: String(level), label: levelName(level) }));
+
 const ROLES = [
   { value: "user", label: "成员" },
   { value: "moderator", label: "版主" },
@@ -30,32 +34,45 @@ export async function loader({ request, context }: Route.LoaderArgs) {
   const search = new URL(request.url).searchParams;
   const q = search.get("q")?.trim() ?? "";
   const status = search.get("status") ?? "";
+  const level = search.get("level") ?? "";
   const res = await context.get(apiContext).admin.members.$get({
     query: {
       q: q || undefined,
       status: status === "member" || status === "frozen" ? status : undefined,
+      level: LEVELS.some((l) => l.value === level) ? level : undefined,
       restricted: status === "restricted" ? "true" : undefined,
       cursor: search.get("cursor") ?? undefined,
     },
   });
   if (!res.ok) throw new Error("Members failed");
   const page = await res.json();
-  return { q, status, items: page.items, next_cursor: page.next_cursor };
+  return { q, status, level, items: page.items, next_cursor: page.next_cursor };
 }
 
-// Admins set roles here; mutes and bans are on each person's page.
+// Admins set roles and levels here; mutes and bans are on each person's page. Either is fixed
+// by choosing it, or left to the groups and to activity.
 export async function action({ request, context }: Route.ActionArgs) {
   const field = await readForm(request);
-  const role = ROLES.find((r) => r.value === field("role"))?.value ?? null;
-  const res = await context
-    .get(apiContext)
-    .users[":user"].$patch({ param: { user: field("id") }, json: { role } });
+  const users = context.get(apiContext).users[":user"];
+  const param = { user: field("id") };
+  const res =
+    field("intent") === "level"
+      ? await users.level.$put({
+          param,
+          json: field("level")
+            ? { level: Number(field("level")), locked: true }
+            : { level: Number(field("current")), locked: false },
+        })
+      : await users.$patch({
+          param,
+          json: { role: ROLES.find((r) => r.value === field("role"))?.value ?? null },
+        });
   if (res.ok) return null;
   return { message: (await res.json()).error.message };
 }
 
 export default function Members({ loaderData, actionData }: Route.ComponentProps) {
-  const { q, status, items, next_cursor } = loaderData;
+  const { q, status, level, items, next_cursor } = loaderData;
   // From the admin layout: whether this is an admin, who may set roles.
   const admin = useRouteLoaderData<typeof adminLoader>("routes/admin/layout")?.admin === true;
   return (
@@ -80,6 +97,14 @@ export default function Members({ loaderData, actionData }: Route.ComponentProps
           aria-label="状态"
           submitOnChange
           className="w-36 [&>button]:h-9"
+        />
+        <Select
+          name="level"
+          defaultValue={level}
+          options={[{ value: "", label: "全部等级" }, ...LEVELS]}
+          aria-label="等级"
+          submitOnChange
+          className="w-32 [&>button]:h-9"
         />
       </Form>
       {actionData && (
@@ -107,6 +132,27 @@ export default function Members({ loaderData, actionData }: Route.ComponentProps
             </span>
             {admin && m.role !== "bot" ? (
               <Form method="post" className="flex items-center gap-1">
+                <input type="hidden" name="intent" value="level" />
+                <input type="hidden" name="id" value={m.id} />
+                <input type="hidden" name="current" value={m.level} />
+                {m.level_locked && (
+                  <Lock aria-label="等级已锁定" className="size-3.5 text-muted-foreground" />
+                )}
+                <Select
+                  name="level"
+                  defaultValue={m.level_locked ? String(m.level) : ""}
+                  options={[{ value: "", label: `自动（${levelName(m.level)}）` }, ...LEVELS]}
+                  aria-label={`${m.display_name} 的等级`}
+                  submitOnChange
+                  className="w-40"
+                />
+              </Form>
+            ) : (
+              <LevelBadge level={m.level} />
+            )}
+            {admin && m.role !== "bot" ? (
+              <Form method="post" className="flex items-center gap-1">
+                <input type="hidden" name="intent" value="role" />
                 <input type="hidden" name="id" value={m.id} />
                 {m.role_locked && (
                   <Lock aria-label="角色已锁定" className="size-3.5 text-muted-foreground" />
@@ -136,7 +182,7 @@ export default function Members({ loaderData, actionData }: Route.ComponentProps
       </ul>
       {next_cursor !== null && (
         <Link
-          to={`?${new URLSearchParams({ q, status, cursor: next_cursor })}`}
+          to={`?${new URLSearchParams({ q, status, level, cursor: next_cursor })}`}
           className="mt-4 block text-center text-meta text-muted-foreground hover:text-foreground"
         >
           更早的
