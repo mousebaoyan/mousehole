@@ -26,7 +26,7 @@ async function lockGroup(trx: Transaction<DB>, groupId: number) {
   return group;
 }
 
-// Re-derives standing, role, level and display name for these accounts from all their groups.
+// Re-derives standing, role and display name for these accounts from all their groups.
 async function refreshAccounts(
   trx: Transaction<DB>,
   actor: Actor | null,
@@ -44,7 +44,6 @@ async function refreshAccounts(
       "custom_name",
       "qq_nickname",
       "display_name",
-      "level",
       "member_status",
     ])
     .where("id", "in", userIds)
@@ -52,7 +51,15 @@ async function refreshAccounts(
   const memberships = await trx
     .selectFrom("group_members as m")
     .innerJoin("qq_groups as g", "g.id", "m.group_id")
-    .select(["m.user_id", "m.card", "m.role", "m.level", "m.left_at", "g.enabled", "g.is_primary"])
+    .select([
+      "m.user_id",
+      "m.card",
+      "m.role",
+      "m.joined_at",
+      "m.left_at",
+      "g.enabled",
+      "g.is_primary",
+    ])
     .where("m.user_id", "in", userIds)
     .execute();
 
@@ -108,7 +115,6 @@ async function saveRows(trx: Transaction<DB>, rows: Insertable<GroupMembers>[]) 
           card: eb.ref("excluded.card"),
           role: eb.ref("excluded.role"),
           title: eb.ref("excluded.title"),
-          level: eb.ref("excluded.level"),
           joined_at: eb.ref("excluded.joined_at"),
           last_sent_at: eb.ref("excluded.last_sent_at"),
           left_at: eb.ref("excluded.left_at"),
@@ -301,7 +307,7 @@ export async function linkGroup(actor: Actor, groupId: number) {
 }
 
 // Enabling or disabling a group changes who is a member; moving the primary group changes
-// display names and levels. Either way its members are re-derived.
+// display names. Either way its members are re-derived.
 export async function updateGroup(
   actor: Actor,
   groupId: number,

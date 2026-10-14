@@ -365,9 +365,6 @@ export function MarkdownEditor({
                 >
                   <UserAvatar user={user} className="size-6 text-2xs" />
                   <span className="truncate">{user.display_name}</span>
-                  {user.level !== null && (
-                    <span className="ml-auto text-xs text-muted-foreground">LV{user.level}</span>
-                  )}
                 </button>
               </li>
             ))}

@@ -127,12 +127,7 @@ export function ReactionSummary({
                   className="flex items-center gap-3 px-3 py-2 hover:bg-accent"
                 >
                   <UserAvatar user={r.user} className="size-8" />
-                  <div className="min-w-0 flex-1">
-                    <div className="truncate font-medium">{r.user.display_name}</div>
-                    {r.user.level !== null && (
-                      <div className="truncate text-xs text-muted-foreground">LV{r.user.level}</div>
-                    )}
-                  </div>
+                  <div className="min-w-0 flex-1 truncate font-medium">{r.user.display_name}</div>
                   <span className="text-lg">{emojiOf(r.emoji)}</span>
                 </Link>
               </li>

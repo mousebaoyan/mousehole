@@ -90,7 +90,6 @@ export type Standing = {
   id: number;
   member_status: string;
   role: string;
-  level: number | null;
   display_name: string;
 };
 
@@ -105,17 +104,13 @@ export async function applyStanding(trx: Transaction<DB>, actor: Actor | null, r
     old_role: string;
     new_role: string;
   }>`
-    UPDATE users SET member_status = v.member_status, role = v.role, level = v.level,
-      display_name = v.display_name
+    UPDATE users SET member_status = v.member_status, role = v.role, display_name = v.display_name
     FROM (VALUES ${sql.join(
-      rows.map(
-        (r) =>
-          sql`(${r.id}::integer, ${r.member_status}, ${r.role}, ${r.level}::smallint, ${r.display_name})`,
-      ),
-    )}) AS v (id, member_status, role, level, display_name)
+      rows.map((r) => sql`(${r.id}::integer, ${r.member_status}, ${r.role}, ${r.display_name})`),
+    )}) AS v (id, member_status, role, display_name)
     WHERE users.id = v.id
-      AND (users.member_status, users.role, users.level, users.display_name)
-        IS DISTINCT FROM (v.member_status, v.role, v.level, v.display_name)
+      AND (users.member_status, users.role, users.display_name)
+        IS DISTINCT FROM (v.member_status, v.role, v.display_name)
     RETURNING users.id, old.member_status AS old_status, new.member_status AS new_status,
       old.role AS old_role, new.role AS new_role`.execute(trx);
 
@@ -212,7 +207,6 @@ export async function getUser(ref: UserRef, viewerId: number | null) {
       "users.display_name",
       "users.avatar_version",
       "users.role",
-      "users.level",
       eb.fn.coalesce("group_members.title", eb.val("")).as("title"),
       "group_members.card",
       "group_members.joined_at",
@@ -483,7 +477,6 @@ export async function userBriefs(ids: number[]) {
       "users.display_name",
       "users.avatar_version",
       "users.role",
-      "users.level",
       eb.fn.coalesce("group_members.title", eb.val("")).as("title"),
     ])
     .where("users.id", "=", sql<number>`any(${[...new Set(ids)]}::integer[])`)

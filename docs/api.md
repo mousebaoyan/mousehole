@@ -20,7 +20,7 @@
 ```jsonc
 // 用户。qq、member_status、activated 只返回给成员、bot 和管理员，站点设置 qq_public 打开时 qq 也返回给访客；avatar_url 是论坛缓存的 QQ 头像，还没拉到时为 null
 { "id": 7, "display_name": "鼠鼠", "avatar_url": "/avatars/7.webp?v=3", "role": "user",
-  "qq": 123456789, "card": "26-某某大学-CV", "level": 5, "title": "26届",
+  "qq": 123456789, "card": "26-某某大学-CV", "title": "26届",
   "joined_at": 1740000000, "member_status": "member", "activated": true }
 
 // 版块。visibility：public 公开，members 仅成员；post_role：谁能发帖，user 成员、moderator 版主；
@@ -33,7 +33,7 @@
 { "id": 1, "name": "夏令营", "kind": "topic", "thread_count": 42 }
 
 // 帖子和楼层里的用户只带这几项；title 是主群里的专属头衔，没有为空字符串
-{ "id": 7, "display_name": "鼠鼠", "role": "user", "level": 5, "title": "26届" }
+{ "id": 7, "display_name": "鼠鼠", "role": "user", "title": "26届" }
 
 // 帖子。匿名帖子的 author 为 null；floor_count 是最大的楼层号；帖子详情里的 solved_floor 是采纳的回答在第几楼，excerpt 是主楼正文的前 100 个字；pinned：0 不置顶，1 版块内置顶，2 全站置顶；
 // posters 是楼主以外、最近 20 层里最近回复的最多 4 个人；url 只在帖子详情里有；
@@ -178,7 +178,7 @@ token 由管理员在后台创建，只显示一次。每个 token 绑定一个 
 | 方法 | 路径 | 说明 | 权限 |
 | --- | --- | --- | --- |
 | GET | `/users` | `q`：按名字找成员，最多 8 个，名字以它开头的在前，再按最近活跃；不含 bot 和冻结的账号。编辑器的 @ 补全用 | 已登录 / `read` |
-| GET | `/users/{user}` | 资料卡：显示名、头像、角色、群等级、专属头衔、简介，主群的群名片、入群时间和最近发言时间，以及统计（帖子数、回复数、获赞数、认可数、访问天数、阅读时间、读过的帖子和回复数）；QQ 号、是否冻结、是否激活只给成员和 bot。统计里还有关注数、粉丝数和认可数；登录时带 `followed`、`endorsed`，表示自己是否关注、认可了 TA | 访客 |
+| GET | `/users/{user}` | 资料卡：显示名、头像、角色、专属头衔、个性签名，主群的群名片、入群时间和最近发言时间，以及统计（帖子数、回复数、获赞数、认可数、访问天数、阅读时间、读过的帖子和回复数）；QQ 号、是否冻结、是否激活只给成员和 bot。统计里还有关注数、粉丝数和认可数；登录时带 `followed`、`endorsed`，表示自己是否关注、认可了 TA | 访客 |
 | GET | `/users/{user}/threads` | 发过的帖子，最新的在前，每页 30 个，不含匿名内容 | 访客 |
 | GET | `/users/{user}/posts` | 发过的回复（不含主楼），最新的在前，每页 30 个，`cursor` 是上一页最后一条的 ID；每条带所在的帖子和正文前 140 个字的纯文本，不含匿名内容 | 访客 |
 | PUT | `/users/{user}/follow` | 关注：TA 发新帖时通知我；不能关注自己（`400`） | 成员 / `act` |
@@ -282,7 +282,7 @@ token 由管理员在后台创建，只显示一次。每个 token 绑定一个 
 | POST | `/admin/settings/test-email` | `{ qq }`：用当前 SMTP 设置发一封测试邮件 | 管理员 / `admin` |
 | GET | `/admin/groups` | 已关联的群和同步状态：最近一次增量、全量、群资料的时间，被拦下的全量 | 管理员 / `admin` |
 | POST | `/admin/groups` | 关联群：`{ group_id }`；第一个关联的群自动成为主群；已关联返回 `409 group_exists` | 管理员 / `admin` |
-| PATCH | `/admin/groups/{group_id}` | 启用、停用、设为主群：`{ enabled?, is_primary?: true }`；相关成员的成员资格、显示名和等级随即重算 | 管理员 / `admin` |
+| PATCH | `/admin/groups/{group_id}` | 启用、停用、设为主群：`{ enabled?, is_primary?: true }`；相关成员的成员资格和显示名随即重算 | 管理员 / `admin` |
 | GET | `/admin/members` | 成员列表，新建的在前，每页 50 个：`q`（名字，或者 5–12 位数字时也按 QQ 号）、`status`（`member`、`frozen`）、`role`、`restricted`（只看禁言或封禁中的）、`cursor` | 版主 / `moderate` |
 | GET | `/admin/content` | 待审核或已隐藏的内容，最新的在前，每页 30 条：`status`（`pending`，默认；`hidden`）、`cursor`（上一页最后一条的 ID）；帖子以主楼出现，每条带楼层号、帖子、版块、作者和摘要 | 版主 / `moderate` |
 | GET | `/admin/reports` | 举报列表，最新的在前，每页 30 条：`status`（默认 `open`）、`cursor`（上一页最后一条的 ID）；每条带举报人、理由、被举报的楼层（帖子、楼层号、作者、摘要、是否已删除）或短评、处理人 | 版主 / `moderate` |
@@ -349,7 +349,6 @@ Content-Type: application/json
 | `card` | 群名片 |
 | `role` | `owner`、`admin` 或 `member` |
 | `title` | 专属头衔 |
-| `level` | 群等级，按数字解析 |
 | `join_time` | 入群时间，Unix 秒 |
 | `last_sent_time` | 最后发言时间，Unix 秒；论坛按小时取整后存 |
 | `is_robot` | 是否机器人 |

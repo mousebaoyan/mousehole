@@ -30,15 +30,6 @@ const MemberRecordSchema = z.object({
   card: z.string().optional(),
   role: z.enum(["owner", "admin", "member"]).optional(),
   title: z.string().optional(),
-  // NapCat gives the group level as a string.
-  level: z
-    .union([z.number(), z.string()])
-    .optional()
-    .transform((v) => {
-      if (v === undefined) return undefined;
-      const digits = /\d+/.exec(String(v))?.[0];
-      return digits === undefined ? null : Number(digits);
-    }),
   join_time: z.number().int().nonnegative().optional(),
   last_sent_time: z.number().int().nonnegative().optional(),
   is_robot: z.boolean().optional(),

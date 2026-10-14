@@ -101,7 +101,6 @@ export interface GroupMembers {
   last_sent_at: Timestamp | null;
   left_at: Timestamp | null;
   left_reason: string | null;
-  level: number | null;
   observed_at: Timestamp;
   role: Generated<string>;
   title: Generated<string>;
@@ -317,7 +316,6 @@ export interface Users {
   display_name: string;
   id: Generated<number>;
   last_seen_at: Timestamp | null;
-  level: number | null;
   like_received: Generated<number>;
   member_status: Generated<string>;
   notify_prefs: Generated<Json>;
