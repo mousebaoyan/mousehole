@@ -388,8 +388,8 @@ bot 把 QQ 群的信息推送给论坛。两种方式都支持，推荐一起用
 
 ## 12. 部署与运维
 
-- **镜像**：基于 `node:26-slim`。GitHub Actions 运行测试并构建镜像，推到 `ghcr.io/mousebaoyan/mousehole`。服务器只拉镜像，不在服务器上编译。
-- **compose**：`mousehole` 服务加入 `1panel-network`，通过容器名连接 PostgreSQL；端口只监听 `127.0.0.1`；图片目录挂载为数据卷；配置健康检查（`/healthz`）和日志轮转。
+- **镜像**：基于 `node:26-slim` 多阶段构建（`Dockerfile`），以 `node` 用户（uid 1000）运行，V8 堆上限 192MB，自带 `/healthz` 健康检查。CI 在每个 PR 上确认镜像能构建；在 `main` 上打 `v1.2.3` 这样的版本标签时，GitHub Actions 构建镜像并推到 `ghcr.io/mousebaoyan/mousehole`（标签是版本号和 `latest`）。服务器只拉镜像，不在服务器上编译。
+- **compose**：见 `deploy/compose.yml`。`mousehole` 服务加入 `1panel-network`，通过容器名连接 PostgreSQL；端口只监听 `127.0.0.1:3080`（3000 已被占用）；`data/`（上传的图片和头像）挂载为数据卷；内存上限 384MB，日志轮转。更新就是 `docker compose pull && docker compose up -d`；停止时先写入内存里的浏览数。
 - **数据库**：在 1Panel 里新建 `mousehole` 库和同名账号，这个账号只有 `mousehole` 库的权限；连接串通过环境变量传入。
 - **迁移**：启动时自动执行，先取 advisory lock，防止重复执行。
 - **备份**：用 1Panel 的计划任务每天备份 `mousehole` 库；数据库和图片目录也都包含在服务器快照里。

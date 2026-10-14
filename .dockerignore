@@ -1,0 +1,11 @@
+.git
+.github
+.react-router
+build
+data
+docs
+node_modules
+test
+.env
+.mock-bot.json
+public/emojibase

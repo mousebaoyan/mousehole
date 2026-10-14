@@ -31,6 +31,11 @@ every(DAY_MS, "Clearing old idempotency keys", clearIdempotencyKeys);
 every(DAY_MS, "Clearing old notifications", clearOldNotifications);
 every(DAY_MS, "Clearing old events", clearOldEvents);
 
+// Docker stops the container with SIGTERM; the view counts not yet written go out first.
+process.once("SIGTERM", () => {
+  void flushViews().finally(() => process.exit(0));
+});
+
 export default await createHonoServer({
   defaultLogger: false,
   configure(server) {
