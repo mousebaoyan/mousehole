@@ -1393,18 +1393,19 @@ async function withdrawThread(
 ) {
   const thread = await trx
     .selectFrom("threads")
-    .select(["board_id", "author_id", "reply_count"])
+    .select(["board_id", "author_id", "author_anonymous", "reply_count"])
     .where("id", "=", threadId)
     .executeTakeFirstOrThrow();
   await countThread(trx, threadId, thread, -1);
   await threadDeleted(trx, threadId, byId, reason);
 }
 
-// A thread in or out of its board's, tags' and author's counts, with the replies in it.
+// A thread in or out of its board's, tags' and author's counts, with the replies in it. Anonymous
+// threads stay out of the author's, which would otherwise rise as one is posted and give them away.
 async function countThread(
   trx: Transaction<DB>,
   threadId: number,
-  thread: { board_id: number; author_id: number; reply_count: number },
+  thread: { board_id: number; author_id: number; author_anonymous: boolean; reply_count: number },
   delta: 1 | -1,
 ) {
   const tags = await trx
@@ -1418,7 +1419,9 @@ async function countThread(
     tags.map((t) => t.tag_id),
     delta,
   );
-  await countUserPosts(trx, thread.author_id, { threads: delta, posts: 0 });
+  if (!thread.author_anonymous) {
+    await countUserPosts(trx, thread.author_id, { threads: delta, posts: 0 });
+  }
 }
 
 // A reply going public: its thread's replies and, the first time, last activity; the board's
@@ -1441,6 +1444,7 @@ async function publishPost(
       "posts.thread_id",
       "posts.author_id",
       "posts.reply_to_id",
+      "posts.anonymous",
       "posts.via",
       "threads.board_id",
       "threads.author_id as thread_author_id",
@@ -1495,6 +1499,7 @@ async function withdrawPost(
       "posts.thread_id",
       "posts.author_id",
       "posts.reply_to_id",
+      "posts.anonymous",
       "threads.board_id",
       "threads.status as thread_status",
     ])
@@ -1505,13 +1510,15 @@ async function withdrawPost(
 }
 
 // A reply in or out of the counts: its thread's, its author's, the floor it answers, and its
-// board's while the thread is public; countThread moves the rest. Returns who wrote that floor.
+// board's while the thread is public; countThread moves the rest. Anonymous replies stay out of
+// the author's, as anonymous threads do. Returns who wrote that floor.
 async function countReply(
   trx: Transaction<DB>,
   post: {
     thread_id: number;
     author_id: number;
     reply_to_id: number | null;
+    anonymous: boolean;
     board_id: number;
     thread_status: string;
   },
@@ -1525,7 +1532,7 @@ async function countReply(
   if (post.thread_status === "visible") {
     await countBoard(trx, post.board_id, { threads: 0, posts: delta });
   }
-  await countUserPosts(trx, post.author_id, { threads: 0, posts: delta });
+  if (!post.anonymous) await countUserPosts(trx, post.author_id, { threads: 0, posts: delta });
   if (post.reply_to_id === null) return null;
   const target = await trx
     .updateTable("posts")
