@@ -1,4 +1,6 @@
+import { Rat } from "lucide-react";
 import { cn } from "cn";
+import type { Writer } from "~/api-types";
 
 const tints = [
   "bg-orange-100 text-orange-800 dark:bg-orange-400/20 dark:text-orange-200",
@@ -11,13 +13,31 @@ const tints = [
 
 // The copy of the QQ avatar. Until there is one, the first letter on a tint picked by user id;
 // letters rather than characters, as group cards often start with a year: "26-南京大学-CV".
+// Someone anonymous is a mouse on a colour from the thread and their number, so it stays the same
+// through the thread and differs in the next (design §8.12).
 export function UserAvatar({
   user,
+  thread = 0,
   className,
 }: {
-  user: { id: number; display_name: string; avatar_url: string | null };
+  user: Writer | { id: number; display_name: string; avatar_url: string | null };
+  thread?: number;
   className?: string;
 }) {
+  if ("anonymous" in user) {
+    return (
+      <span
+        aria-hidden="true"
+        className={cn(
+          "flex size-9 shrink-0 items-center justify-center rounded-full text-white",
+          className,
+        )}
+        style={{ backgroundColor: `oklch(0.68 0.11 ${(thread * 47 + user.number * 137) % 360})` }}
+      >
+        <Rat className="size-3/5" />
+      </span>
+    );
+  }
   if (user.avatar_url !== null) {
     return (
       <img

@@ -49,7 +49,10 @@ async function reply(who: Who, threadId: number, markdown: string, reply_to_id?:
 async function inbox(who: Who) {
   const res = await api.notifications.$get({ query: {} }, who);
   if (!res.ok) throw new Error(`status ${res.status}`);
-  return (await res.json()).items.map((n) => `${n.type}:${n.actor?.id}x${n.count}`);
+  return (await res.json()).items.map(
+    (n) =>
+      `${n.type}:${n.actor && "id" in n.actor ? n.actor.id : n.actor?.display_name}x${n.count}`,
+  );
 }
 
 async function clear(...people: Person[]) {

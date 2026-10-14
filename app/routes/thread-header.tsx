@@ -12,6 +12,7 @@ import {
   PinOff,
   Shield,
   Sparkles,
+  VenetianMask,
 } from "lucide-react";
 import { useEffect, useRef, useState, type Ref } from "react";
 import { Link, useFetcher, useNavigate } from "react-router";
@@ -33,11 +34,15 @@ export function ThreadHeader({
   current,
   editable,
   staff,
+  reveal,
 }: {
   thread: ThreadDetail;
   current: number;
   editable: boolean;
   staff: boolean;
+  // For admins in a thread with anonymous people: whether they are shown as who they are, and
+  // the switch.
+  reveal: { shown: boolean; toggle: () => void } | null;
 }) {
   const [editing, setEditing] = useState(false);
   const save = useFetcher<{ ok: true } | { ok: false; message: string }>();
@@ -75,6 +80,18 @@ export function ThreadHeader({
             {thread.tags.map((t) => (
               <span key={t}>#{t}</span>
             ))}
+            {(thread.author_anonymous || thread.anonymous_replies) && (
+              <span className="inline-flex items-center gap-1 rounded bg-secondary px-1.5 py-px">
+                <VenetianMask className="size-3.5" />
+                {thread.author_anonymous && thread.anonymous_replies
+                  ? "全部匿名"
+                  : thread.author_anonymous
+                    ? "楼主匿名"
+                    : thread.kind === "question"
+                      ? "回答匿名"
+                      : "回复匿名"}
+              </span>
+            )}
           </div>
           <h1 className="mt-2.5 text-xl leading-snug font-semibold tracking-tight sm:text-2xl">
             {thread.title}
@@ -192,6 +209,18 @@ export function ThreadHeader({
                       <ArrowRightLeft /> 移动到…
                     </button>
                     <ReviewItems status={thread.status} close={close} onReview={change} />
+                    {reveal && (
+                      <button
+                        type="button"
+                        className={menuItem}
+                        onClick={() => {
+                          close();
+                          reveal.toggle();
+                        }}
+                      >
+                        <VenetianMask /> {reveal.shown ? "隐藏真实身份" : "显示真实身份"}
+                      </button>
+                    )}
                   </>
                 );
               }}

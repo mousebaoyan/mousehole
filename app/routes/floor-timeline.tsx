@@ -43,7 +43,7 @@ export function FloorNav({ floors, onJump }: { floors: Floors; onJump?: () => vo
             className="flex items-center gap-2 rounded-md px-2 py-1 hover:bg-accent"
           >
             <span className="w-7 shrink-0 text-muted-foreground tabular-nums">#{p.floor}</span>
-            <UserAvatar user={p.author} className="size-5 text-2xs" />
+            <UserAvatar user={p.author} thread={p.thread_id} className="size-5 text-2xs" />
             <span className="truncate" title={p.author.display_name}>
               {p.author.display_name}
             </span>
@@ -172,7 +172,7 @@ function FloorTimeline({ floors, onJump }: { floors: Floors; onJump?: () => void
             {at && (
               <>
                 <div className="mt-1 flex items-center gap-1.5">
-                  <UserAvatar user={at.author} className="size-5 text-2xs" />
+                  <UserAvatar user={at.author} thread={at.thread_id} className="size-5 text-2xs" />
                   <span className="truncate text-foreground/80">{at.author.display_name}</span>
                 </div>
                 <div className="mt-0.5 text-xs text-muted-foreground">

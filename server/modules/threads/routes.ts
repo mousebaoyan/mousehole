@@ -23,7 +23,7 @@ import { onEvent } from "../events/service.ts";
 import { BoostSchema, boostJson } from "../reactions/schemas.ts";
 import { floorExtras } from "../reactions/service.ts";
 import { showImages } from "../uploads/service.ts";
-import { UserBriefSchema, UserRefSchema } from "../users/schemas.ts";
+import { UserBriefSchema, UserRefSchema, WriterSchema } from "../users/schemas.ts";
 import { threadJson, ThreadSchema } from "./schemas.ts";
 import { findUserId } from "../users/service.ts";
 import {
@@ -39,6 +39,7 @@ import {
   listPosts,
   listReplies,
   listRevisions,
+  revealAliases,
   listThreads,
   listModerated,
   listUserPosts,
@@ -63,6 +64,13 @@ const ThreadDetailSchema = ThreadSchema.extend({
   status: z.string().openapi({
     description: "visible 公开；pending 待审核、hidden 已隐藏，这两种只有作者和版主打得开",
   }),
+  author_anonymous: z.boolean().openapi({ description: "楼主匿名" }),
+  anonymous_replies: z.boolean().openapi({ description: "楼主以外的人回复时匿名" }),
+  my_alias: z
+    .number()
+    .nullable()
+    .optional()
+    .openapi({ description: "自己在这个帖子里匿名时的编号；只在登录时有" }),
   read_floors: z
     .array(z.tuple([z.number(), z.number()]))
     .optional()
@@ -79,11 +87,11 @@ const PostSchema = z
     id: z.number(),
     thread_id: z.number(),
     floor: z.number(),
-    author: UserBriefSchema,
+    author: WriterSchema,
     html: z.string().optional().openapi({ description: "渲染好的正文；带 ?body=markdown 时没有" }),
     body: z.string().optional().openapi({ description: "Markdown 原文；只在 ?body=markdown 时有" }),
     via: z.string().openapi({ description: "web、bot 或 qq" }),
-    reply_to: z.object({ id: z.number(), floor: z.number(), author: UserBriefSchema }).nullable(),
+    reply_to: z.object({ id: z.number(), floor: z.number(), author: WriterSchema }).nullable(),
     reply_count: z.number(),
     like_count: z.number(),
     reactions: z
@@ -156,7 +164,10 @@ function threadDetailJson(t: Thread, signedIn: boolean) {
     solved_floor: t.solved_floor,
     excerpt: excerpt(t.opening_html, SHARE_EXCERPT),
     status: t.status,
+    author_anonymous: t.author_anonymous,
+    anonymous_replies: t.anonymous_replies,
     ...(signedIn && {
+      my_alias: t.my_alias,
       read_floors: t.read_floors,
       bookmarked: t.bookmarked_at !== null,
       notify_level: t.notify_level ?? "normal",
@@ -253,7 +264,7 @@ const RevisionSchema = z
     rev: z.number().openapi({ description: "第几次修改，从 1 开始" }),
     title: z.string().nullable().openapi({ description: "改标题时的旧标题" }),
     body: z.string().openapi({ description: "这次修改之前的 Markdown" }),
-    editor: UserBriefSchema,
+    editor: WriterSchema,
     created_at: z.number(),
   })
   .openapi("Revision");
@@ -576,6 +587,11 @@ export const threadsRoutes = createRouter()
             kind: z.enum(["discussion", "question"]).optional(),
             tags: Tags.default([]),
             source: Source.optional(),
+            anonymous: z.boolean().optional().openapi({ description: "楼主匿名，发出后不能改" }),
+            anonymous_replies: z
+              .boolean()
+              .optional()
+              .openapi({ description: "楼主以外的人回复时匿名，发出后不能改" }),
           }),
         ),
       },
@@ -795,6 +811,35 @@ export const threadsRoutes = createRouter()
   )
   .openapi(
     createRoute({
+      method: "get",
+      path: "/threads/{id}/aliases",
+      summary:
+        "匿名的人各是谁：编号和真实的用户。只有管理员能在网页上看，每次看都记操作日志（design §8.12）",
+      request: { params: IdParam },
+      responses: {
+        200: {
+          description: "按编号排",
+          content: {
+            "application/json": {
+              schema: z.object({
+                items: z.array(z.object({ number: z.number(), user: UserBriefSchema })),
+              }),
+            },
+          },
+        },
+        403: errorResponse("不是管理员，或者不在网页上"),
+        404: errorResponse("帖子不存在"),
+      },
+    }),
+    async (c) => {
+      requireWeb(c);
+      const viewer = authorize(c, "admin");
+      const items = await revealAliases(actorOf(c, viewer), c.req.valid("param").id);
+      return c.json({ items }, 200);
+    },
+  )
+  .openapi(
+    createRoute({
       method: "post",
       path: "/threads/{id}/read",
       summary: "记录阅读：读过的楼层区间并入已读，seconds 计入阅读时间，单次最多算 120 秒",
@@ -853,7 +898,7 @@ export const threadsRoutes = createRouter()
                     thread_id: z.number(),
                     title: z.string(),
                     board: z.object({ slug: z.string(), name: z.string() }),
-                    author: UserBriefSchema,
+                    author: WriterSchema,
                     excerpt: z.string(),
                     created_at: z.number(),
                   }),

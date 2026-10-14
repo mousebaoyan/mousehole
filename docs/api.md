@@ -35,8 +35,13 @@
 // 帖子和楼层里的用户只带这几项；title 是主群里的专属头衔，没有为空字符串
 { "id": 7, "display_name": "鼠鼠", "role": "user", "title": "26届" }
 
-// 帖子。匿名帖子的 author 为 null；floor_count 是最大的楼层号；帖子详情里的 solved_floor 是采纳的回答在第几楼，excerpt 是主楼正文的前 100 个字；pinned：0 不置顶，1 版块内置顶，2 全站置顶；
-// posters 是楼主以外、最近 20 层里最近回复的最多 4 个人；url 只在帖子详情里有；
+// 匿名写的人（总体设计 §8.12）：帖子、楼层、短评、通知和事件里的 author、user、actor 都可能是这个样子，
+// number 是这个人在这个帖子里的编号，楼主匿名时是 1 号；没有 id、头像和 QQ 号
+{ "anonymous": true, "number": 3, "display_name": "匿名鼠 3" }
+
+// 帖子。楼主匿名时 author 是匿名的样子；帖子详情里有 author_anonymous、anonymous_replies（楼主以外的人回复时匿名），
+// 登录时还有 my_alias（自己在这个帖子里匿名时的编号，没有为 null）；floor_count 是最大的楼层号；帖子详情里的 solved_floor 是采纳的回答在第几楼，excerpt 是主楼正文的前 100 个字；pinned：0 不置顶，1 版块内置顶，2 全站置顶；
+// posters 是楼主以外、最近 20 层里最近回复的最多 4 个人，不含匿名回复的；url 只在帖子详情里有；
 // last_read_floor 是自己读过的最高一楼，没打开过为 0，只在登录时返回；帖子详情里还有 read_floors，是读过的楼层区间，例如 [[1, 20], [480, 495]]，
 // 以及 bookmarked（是否收藏）和 notify_level（关注级别，见 /threads/{id}/subscription），也只在登录时返回；
 // status：visible 公开，pending 待审核，hidden 已隐藏，后两种只有作者和版主能看到
@@ -218,7 +223,7 @@ token 由管理员在后台创建，只显示一次。每个 token 绑定一个 
 | --- | --- | --- | --- |
 | GET | `/threads` | 帖子列表，每页 30 个：`board`、`tag`、`author`、`kind`、`view`、`cursor`；版块或标签不存在返回 404。`view` 默认 `latest`（按最后回复），还可以是 `created`（按发布时间）、`hot`（热门）、`unsolved`（待解答）；以下几种要登录：`new`（最近 7 天发布、自己还没打开过）、`unread`（读过、之后有新楼层）、`read`（读过的，按最后阅读时间）、`posted`（自己发过或回复过的，删掉的回复不算，按最后回复）、`bookmarked`（收藏的，按收藏时间）。`latest` 的第一页先列置顶的帖子：首页是全站置顶，版块页还有版块内置顶；按标签筛选时不置顶 | 访客 |
 | GET | `/threads/counts` | 当前范围里新和未读的帖子各有几个：`board`、`tag`，返回 `{ new, unread }` | 成员 |
-| POST | `/threads` | 发帖：`board`、`title`（4–80 个字）、`content`、`kind`（不带时用版块的默认类型）、`tags`（最多 5 个，只能用已有的）、`source`；只有版主能发的版块返回 `403 forbidden`。先审后发的版块里，版主以外的人发的帖子 `status` 为 `pending`，通过后才公开 | 成员 / `act` |
+| POST | `/threads` | 发帖：`board`、`title`（4–80 个字）、`content`、`kind`（不带时用版块的默认类型）、`tags`（最多 5 个，只能用已有的）、`source`、`anonymous`（楼主匿名）、`anonymous_replies`（楼主以外的人回复时匿名），后两个发出后不能改；只有版主能发的版块返回 `403 forbidden`。先审后发的版块里，版主以外的人发的帖子 `status` 为 `pending`，通过后才公开 | 成员 / `act` |
 | GET | `/threads/{id}` | 帖子详情；楼层（包括主楼）用 `/threads/{id}/posts` 取。楼主设置了不给访客看时，访客得到 `401 login_required` | 访客 |
 | PATCH | `/threads/{id}` | 只改带了的字段：楼主可以改 `title`、`tags`；版主还可以改 `board`（移动版块）、`pinned`（0–2）、`featured`、`locked`、`status`（`visible` 或 `hidden`，见下面的「审核」）和 `reason`（隐藏的理由，最多 200 个字，会告诉作者）。改标题记在主楼的编辑记录里；锁定后只有版主能改 | 楼主、版主 / `act`、`moderate` |
 | DELETE | `/threads/{id}` | 删除帖子；有人回复后楼主不能删，只有版主能删 | 楼主、版主 / `act`、`moderate` |
@@ -228,6 +233,7 @@ token 由管理员在后台创建，只显示一次。每个 token 绑定一个 
 | PUT | `/threads/{id}/bookmark` | 收藏；已经收藏的不变，收藏列表里的位置也不变 | 成员 / `act` |
 | DELETE | `/threads/{id}/bookmark` | 取消收藏 | 成员 / `act` |
 | POST | `/threads/{id}/read` | 记录阅读：`{ floors: [[1, 20], [480, 495]], seconds: 95 }`，读过的楼层区间（含两端）并入已读，超出楼层数的部分不算；自己看不到的楼层（待审核、已隐藏），读过它后面的一楼或者读到能看到的最后一楼时一并算读过，但不计入阅读统计；`seconds` 计入阅读时间，单次最多算 120 秒。只有网页上报，见[总体设计 §8.9](design.md#89-阅读记录)，bot 调用返回 `403` | 登录用户 |
+| GET | `/threads/{id}/aliases` | 匿名的人各是谁：`{ items: [{ number, user }] }`，按编号排；每次查看记操作日志 `thread.reveal` | 管理员，只能在网页上 |
 | GET | `/threads/{id}/stream` | SSE：这个帖子的新回复、编辑和删除，事件名是 `post.created`、`post.updated`、`post.deleted`，`data` 是楼层号；每 20 秒一条心跳注释 | 访客 |
 
 主楼正文用 `PATCH /posts/{主楼 ID}` 修改。
@@ -415,7 +421,7 @@ data: {"post":{…},"thread":{…},"author":{…},"qq_text":"……","url":"http
 | `report.created` | 有新举报 | `report`（`id`、`reason`）、`post`（`id`、`floor`、`thread_id`）、`boost`（举报的是短评时：`id`、`body`、`author`，否则为 `null`）、`reporter`、`url` |
 
 - `qq_text` 是可以直接发到 QQ 的纯文本，例如"【保研问答】rank 30% 能冲夏令营吗\n鼠鼠：……\nhttps://bbs.mousebaoyan.cn/t/42"。
-- 事件里的用户对象是 `{ id, display_name, qq }`，插件可以直接私聊。匿名内容（二期）的事件不带作者。`source` 是内容来自的 QQ 消息，没有为 `null`。
+- 事件里的用户对象是 `{ id, display_name, qq }`，插件可以直接私聊。匿名写的人是 `{ anonymous: true, number, display_name }`，没有 `id` 和 `qq`；本人编辑、删除自己的匿名内容时，`editor`、`by` 也是这样。`source` 是内容来自的 QQ 消息，没有为 `null`。
 - `notification.created`：每类通知的 QQ 提醒由本人在设置里开关；没设置过时，回复我、@我、回答被采纳和审核通知默认开，其余默认关。`qq_text` 例如"鼠鼠 回复了你：……\nrank 30% 能冲夏令营吗\nhttps://bbs.mousebaoyan.cn/t/42?floor=3"。
 - 审核可以挂在事件上：先发后审的版块监听 `thread.created`、`post.created`，先审后发的版块监听 `content.pending`，判定后调用 `PATCH` 修改 `status`。恢复隐藏的内容不会再发 `thread.created`、`post.created`。
 

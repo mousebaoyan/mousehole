@@ -91,12 +91,20 @@ export default function Reports({ loaderData }: Route.ComponentProps) {
               </span>
               {r.boost ? (
                 <span className="mt-1.5 flex items-center gap-1.5 text-sm">
-                  <UserAvatar user={r.boost.user} className="size-5 text-2xs" />
+                  <UserAvatar
+                    user={r.boost.user}
+                    thread={r.post.thread.id}
+                    className="size-5 text-2xs"
+                  />
                   {r.boost.user.display_name} 的短评：{r.boost.body}
                 </span>
               ) : (
                 <span className="mt-1.5 flex gap-1.5 text-sm">
-                  <UserAvatar user={r.post.author} className="size-5 shrink-0 text-2xs" />
+                  <UserAvatar
+                    user={r.post.author}
+                    thread={r.post.thread.id}
+                    className="size-5 shrink-0 text-2xs"
+                  />
                   <span className="line-clamp-3">
                     {r.post.author.display_name}：{r.post.excerpt}
                   </span>

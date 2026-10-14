@@ -18,6 +18,8 @@ const DraftSchema = z
     board: z.string().nullable(),
     kind: z.string().nullable(),
     tags: z.array(z.string()),
+    author_anonymous: z.boolean(),
+    anonymous_replies: z.boolean(),
     body: z.string().openapi({ description: "Markdown" }),
     reply_to: z
       .object({ id: z.number(), floor: z.number(), name: z.string() })
@@ -97,6 +99,8 @@ export const draftsRoutes = createRouter()
                 board: z.string().nullable().optional(),
                 kind: z.enum(["discussion", "question"]).nullable().optional(),
                 tags: z.array(z.string().max(20)).max(5).optional(),
+                author_anonymous: z.boolean().optional(),
+                anonymous_replies: z.boolean().optional(),
                 reply_to_id: z.number().int().nullable().optional(),
               }),
             },

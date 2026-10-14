@@ -19,3 +19,15 @@ export const UserBriefSchema = z
     title: z.string().openapi({ description: "主群里的专属头衔，没有为空字符串" }),
   })
   .openapi("UserBrief");
+
+// Someone who wrote anonymously, as all but themselves and admins see them (design §8.12).
+export const AnonymousSchema = z
+  .object({
+    anonymous: z.literal(true),
+    number: z.number().openapi({ description: "这个人在这个帖子里的编号" }),
+    display_name: z.string().openapi({ description: "匿名鼠 3" }),
+  })
+  .openapi("Anonymous");
+
+// Who wrote something: the person, or their number in the thread.
+export const WriterSchema = z.union([UserBriefSchema, AnonymousSchema]);

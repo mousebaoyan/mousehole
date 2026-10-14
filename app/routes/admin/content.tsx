@@ -92,7 +92,11 @@ export default function Content({ loaderData, actionData }: Route.ComponentProps
                 {c.floor > 1 && ` · #${c.floor}`}
               </span>
               <span className="mt-1.5 flex gap-1.5 text-sm">
-                <UserAvatar user={c.author} className="size-5 shrink-0 text-2xs" />
+                <UserAvatar
+                  user={c.author}
+                  thread={c.thread_id}
+                  className="size-5 shrink-0 text-2xs"
+                />
                 <span className="line-clamp-3">
                   {c.author.display_name}：{c.excerpt}
                 </span>

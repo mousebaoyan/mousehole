@@ -10,4 +10,6 @@ export type PostItem = InferResponseType<
   Api["threads"][":id"]["posts"]["$get"],
   200
 >["items"][number];
-export type UserBrief = PostItem["author"];
+export type UserBrief = ThreadItem["posters"][number];
+// A person, or someone anonymous by their number in the thread (design §8.12).
+export type Writer = PostItem["author"];

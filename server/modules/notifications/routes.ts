@@ -1,7 +1,7 @@
 import { createRoute, z } from "@hono/zod-openapi";
 import { authorize, createRouter, errorResponse, requireWeb, unix } from "../../platform/http.ts";
 import { liveStream } from "../../platform/sse.ts";
-import { UserBriefSchema } from "../users/schemas.ts";
+import { WriterSchema } from "../users/schemas.ts";
 import { countUnread, listNotifications, markRead, onUnreadChange } from "./service.ts";
 
 const NotificationSchema = z
@@ -11,7 +11,7 @@ const NotificationSchema = z
       description:
         "reply 回复了我的楼层，mention @了我，like 赞了我的楼层，boost 给我的楼层留了短评，watching 关注的帖子有新楼层，following 关注的人发了新帖，solved 我的回答被采纳",
     }),
-    actor: UserBriefSchema.nullable().openapi({ description: "最近触发的人" }),
+    actor: WriterSchema.nullable().openapi({ description: "最近触发的人；匿名时是编号" }),
     count: z.number().openapi({ description: "合并了几次：点赞、短评按楼层，新楼层按帖子" }),
     thread: z.object({ id: z.number(), title: z.string() }),
     post: z

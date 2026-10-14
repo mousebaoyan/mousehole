@@ -6,7 +6,7 @@ import { env } from "../../platform/env.ts";
 import { AppError } from "../../platform/errors.ts";
 import { excerpt } from "../../platform/markdown.ts";
 import { recordEvent } from "../events/service.ts";
-import { userBriefs } from "../users/service.ts";
+import { anonymousBrief, userBriefs, writer } from "../users/service.ts";
 
 // What people are told of; see design §8.6. reply: someone replied to my floor; mention: @ me;
 // like and boost: on my floor; watching: a new floor in a thread I watch; following: a new thread
@@ -31,6 +31,8 @@ const MERGED = new Set<NotificationType>(["like", "boost", "watching"]);
 type Notice = {
   type: NotificationType;
   actorId: number;
+  // Their number in the thread when they did it anonymously (design §8.12).
+  actorAlias: number | null;
   threadId: number;
   postId: number;
   data?: Record<string, string>;
@@ -110,6 +112,7 @@ async function notify(trx: Transaction<DB>, userIds: number[], notice: Notice) {
           user_id: r.id,
           type: notice.type,
           actor_id: notice.actorId,
+          actor_alias: notice.actorAlias,
           thread_id: notice.threadId,
           post_id: notice.postId,
           group_key: MERGED.has(notice.type) ? `${notice.type}:${key}` : null,
@@ -124,6 +127,7 @@ async function notify(trx: Transaction<DB>, userIds: number[], notice: Notice) {
           .doUpdateSet({
             count: sql<number>`notifications.count + 1`,
             actor_id: sql<number>`excluded.actor_id`,
+            actor_alias: sql<number | null>`excluded.actor_alias`,
             data: sql`excluded.data`,
             created_at: sql<Date>`now()`,
           }),
@@ -161,12 +165,16 @@ async function remindOnQq(
   const said =
     notice.type === "moderation" ? MODERATED[notice.data?.action ?? ""] : SAID[notice.type];
   const reason = notice.data?.reason ? `（${notice.data.reason}）` : "";
-  const text = `${about.actor_name} ${said}${reason}：${excerpt(about.html, QQ_EXCERPT)}\n${about.title}\n${url}`;
+  const actor =
+    notice.actorAlias === null
+      ? { id: about.actor_id, display_name: about.actor_name, qq: about.actor_qq }
+      : anonymousBrief(notice.actorAlias);
+  const text = `${actor.display_name} ${said}${reason}：${excerpt(about.html, QQ_EXCERPT)}\n${about.title}\n${url}`;
   for (const person of people) {
     await recordEvent(trx, "notification.created", {
       user: { id: person.id, display_name: person.display_name, qq: person.qq },
       type: notice.type,
-      actor: { id: about.actor_id, display_name: about.actor_name, qq: about.actor_qq },
+      actor,
       thread: { id: notice.threadId, title: about.title },
       post: { id: notice.postId, floor: about.floor },
       url,
@@ -179,10 +187,21 @@ async function remindOnQq(
 // thread. Each person hears of it once, by the first of these that applies.
 export async function notifyPost(
   trx: Transaction<DB>,
-  post: { id: number; threadId: number; authorId: number; mentions: number[] },
+  post: {
+    id: number;
+    threadId: number;
+    authorId: number;
+    authorAlias: number | null;
+    mentions: number[];
+  },
   replyTo: number | null,
 ) {
-  const notice = { actorId: post.authorId, threadId: post.threadId, postId: post.id };
+  const notice = {
+    actorId: post.authorId,
+    actorAlias: post.authorAlias,
+    threadId: post.threadId,
+    postId: post.id,
+  };
   const told = new Set<number>();
   if (replyTo !== null) {
     await notify(trx, [replyTo], { ...notice, type: "reply" });
@@ -204,13 +223,26 @@ export async function notifyPost(
   );
 }
 
-// A new thread: those @-ed in its opening post, then the author's followers.
+// A new thread: those @-ed in its opening post, then the author's followers, unless the author
+// is anonymous.
 export async function notifyThread(
   trx: Transaction<DB>,
-  thread: { id: number; postId: number; authorId: number; mentions: number[] },
+  thread: {
+    id: number;
+    postId: number;
+    authorId: number;
+    authorAlias: number | null;
+    mentions: number[];
+  },
 ) {
-  const notice = { actorId: thread.authorId, threadId: thread.id, postId: thread.postId };
+  const notice = {
+    actorId: thread.authorId,
+    actorAlias: thread.authorAlias,
+    threadId: thread.id,
+    postId: thread.postId,
+  };
   await notify(trx, thread.mentions, { ...notice, type: "mention" });
+  if (thread.authorAlias !== null) return;
   const followers = await trx
     .selectFrom("user_follows")
     .select("follower_id")
@@ -225,17 +257,20 @@ export async function notifyThread(
 }
 
 // Something happened to a floor: liked, boosted, accepted as the answer. Its author hears of it;
-// likes and boosts merge with others on that floor.
+// likes and boosts merge with others on that floor. `actorAlias` is the actor's number when they
+// did it anonymously.
 export async function notifyOnPost(
   trx: Transaction<DB>,
   type: "like" | "boost" | "solved" | "moderation",
   post: { id: number; thread_id: number; author_id: number },
   actorId: number,
+  actorAlias: number | null,
   data: Record<string, string>,
 ) {
   await notify(trx, [post.author_id], {
     type,
     actorId,
+    actorAlias,
     threadId: post.thread_id,
     postId: post.id,
     data,
@@ -294,6 +329,7 @@ export async function listNotifications(userId: number, unreadOnly: boolean, cur
       "notifications.id",
       "notifications.type",
       "notifications.actor_id",
+      "notifications.actor_alias",
       "notifications.count",
       sql<Record<string, string>>`notifications.data`.as("data"),
       "notifications.read_at",
@@ -333,7 +369,7 @@ export async function listNotifications(userId: number, unreadOnly: boolean, cur
     items: rows.map((r) => ({
       id: r.id,
       type: r.type,
-      actor: r.actor_id === null ? null : user(r.actor_id),
+      actor: r.actor_id === null ? null : writer(user, r.actor_id, r.actor_alias),
       count: r.count,
       thread: { id: r.thread_id, title: r.title },
       post: { id: r.post_id, floor: r.floor },

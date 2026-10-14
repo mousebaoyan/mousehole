@@ -20,6 +20,7 @@ import {
   membersByQq,
   shownToGuests,
   userBriefs,
+  writer,
 } from "../users/service.ts";
 import {
   contentPending,
@@ -102,6 +103,8 @@ function selectThreads(from: ReturnType<typeof openableThreads>, userId: number 
       "threads.like_count",
       "threads.last_post_at",
       "threads.created_at",
+      "threads.author_anonymous",
+      "threads.anonymous_replies",
       "boards.slug as board_slug",
       "boards.name as board_name",
       "boards.color as board_color",
@@ -114,12 +117,13 @@ function selectThreads(from: ReturnType<typeof openableThreads>, userId: number 
         array_position(array['topic', 'school', 'major'], tags.kind), tags.name), '{}')
       FROM thread_tags JOIN tags ON tags.id = thread_tags.tag_id
       WHERE thread_tags.thread_id = threads.id)`.as("tags"),
-      // For lists: the latest people to reply besides the author, among the last 20 floors.
+      // For lists: the latest people to reply besides the author, among the last 20 floors; those
+      // who replied anonymously aren't shown.
       sql<number[]>`(
       SELECT coalesce(array_agg(author_id ORDER BY last_floor DESC), '{}') FROM (
         SELECT author_id, max(floor) AS last_floor FROM (
           SELECT author_id, floor FROM posts
-          WHERE posts.thread_id = threads.id AND posts.deleted_at IS NULL
+          WHERE posts.thread_id = threads.id AND posts.deleted_at IS NULL AND NOT posts.anonymous
           ORDER BY floor DESC LIMIT 20
         ) recent
         WHERE author_id <> threads.author_id
@@ -134,7 +138,8 @@ async function withUsers<Row extends ThreadRow>(rows: Row[]) {
   const user = await userBriefs(rows.flatMap((r) => [r.author_id, ...r.poster_ids]));
   return rows.map((row) => ({
     ...row,
-    author: user(row.author_id),
+    // An anonymous author is the thread's first number.
+    author: writer(user, row.author_id, row.author_anonymous ? 1 : null),
     posters: row.poster_ids.map(user),
   }));
 }
@@ -224,7 +229,11 @@ export async function listThreads(
     .select(sql<number>`(extract(epoch FROM ${sql.ref(time)}) * 1000000)::bigint`.as("micros"))
     .where(inScope(scope))
     .limit(PAGE_SIZE);
-  if (filter.author !== undefined) query = query.where("threads.author_id", "=", filter.author);
+  if (filter.author !== undefined) {
+    query = query
+      .where("threads.author_id", "=", filter.author)
+      .where("threads.author_anonymous", "=", false);
+  }
   // Pinned threads lead the first page of the latest list instead of taking their turn: site-wide
   // ones on the home page, the board's own ones as well on a board page. Tag lists don't pin.
   const pinFrom = view === "latest" && tagId === null ? (board ? 1 : 2) : null;
@@ -331,6 +340,7 @@ export async function listUserPosts(members: boolean, authorId: number, cursor?:
       "threads.title",
     ])
     .where("posts.author_id", "=", authorId)
+    .where("posts.anonymous", "=", false)
     .$if(!members, (qb) => qb.where(shownToGuests("posts.author_id")))
     .where("posts.floor", ">", 1)
     .where("posts.status", "=", "visible")
@@ -378,6 +388,9 @@ export async function getThread(id: number, reader: Reader) {
       sql<string>`(SELECT html FROM posts WHERE posts.thread_id = threads.id AND posts.floor = 1)`.as(
         "opening_html",
       ),
+      // Which number is the reader's, where they wrote anonymously.
+      sql<number | null>`(SELECT number FROM thread_aliases
+        WHERE thread_aliases.thread_id = threads.id AND user_id = ${reader.id})`.as("my_alias"),
     ])
     .where("threads.id", "=", id)
     .executeTakeFirst();
@@ -409,6 +422,18 @@ function selectPosts(reader: Reader) {
   return db
     .selectFrom("posts")
     .leftJoin("posts as target", "target.id", "posts.reply_to_id")
+    .leftJoin("thread_aliases as alias", (join) =>
+      join
+        .onRef("alias.thread_id", "=", "posts.thread_id")
+        .onRef("alias.user_id", "=", "posts.author_id")
+        .on("posts.anonymous", "=", true),
+    )
+    .leftJoin("thread_aliases as target_alias", (join) =>
+      join
+        .onRef("target_alias.thread_id", "=", "target.thread_id")
+        .onRef("target_alias.user_id", "=", "target.author_id")
+        .on("target.anonymous", "=", true),
+    )
     .select([
       "posts.id",
       "posts.thread_id",
@@ -427,6 +452,8 @@ function selectPosts(reader: Reader) {
       "target.id as target_id",
       "target.floor as target_floor",
       "target.author_id as target_author_id",
+      "alias.number as alias",
+      "target_alias.number as target_alias",
       "posts.status",
       // Floors guests get without their content (design §8.10).
       (reader.members
@@ -451,13 +478,17 @@ async function withPostUsers(rows: PostRow[]) {
       r.target_author_id === null ? [r.author_id] : [r.author_id, r.target_author_id],
     ),
   );
-  return rows.map(({ target_id, target_floor, target_author_id, ...post }) => ({
+  return rows.map(({ target_id, target_floor, target_author_id, target_alias, ...post }) => ({
     ...post,
-    author: user(post.author_id),
+    author: writer(user, post.author_id, post.alias),
     reply_to:
       target_id === null || target_floor === null || target_author_id === null
         ? null
-        : { id: target_id, floor: target_floor, author: user(target_author_id) },
+        : {
+            id: target_id,
+            floor: target_floor,
+            author: writer(user, target_author_id, target_alias),
+          },
   }));
 }
 
@@ -469,12 +500,49 @@ async function assertVisible(threadId: number, reader: Reader) {
       "threads.board_id",
       "threads.floor_count",
       "threads.status",
+      "threads.author_id",
+      "threads.author_anonymous",
+      "threads.anonymous_replies",
       "boards.review_mode",
     ])
     .where("threads.id", "=", threadId)
     .executeTakeFirst();
   if (!thread) throw threadNotFound();
   return thread;
+}
+
+// Whether someone writes anonymously in a thread: the author as the thread says for them, anyone
+// else as it says for replies (design §8.12).
+export function writesAnonymously(
+  thread: { author_id: number; author_anonymous: boolean; anonymous_replies: boolean },
+  userId: number,
+) {
+  return userId === thread.author_id ? thread.author_anonymous : thread.anonymous_replies;
+}
+
+// Someone's number in a thread: the one they have, or the next. The thread's row is locked so
+// that two people can't take the same number.
+export async function aliasIn(trx: Transaction<DB>, threadId: number, userId: number) {
+  await trx.selectFrom("threads").select("id").where("id", "=", threadId).forUpdate().execute();
+  await trx
+    .insertInto("thread_aliases")
+    .values((eb) => ({
+      thread_id: threadId,
+      user_id: userId,
+      number: eb
+        .selectFrom("thread_aliases")
+        .select(sql<number>`coalesce(max(number), 0) + 1`.as("next"))
+        .where("thread_id", "=", threadId),
+    }))
+    .onConflict((oc) => oc.columns(["thread_id", "user_id"]).doNothing())
+    .execute();
+  const { number } = await trx
+    .selectFrom("thread_aliases")
+    .select("number")
+    .where("thread_id", "=", threadId)
+    .where("user_id", "=", userId)
+    .executeTakeFirstOrThrow();
+  return number;
 }
 
 // Up to a batch of floors after or before one; fewer means that end of the thread was reached.
@@ -576,10 +644,13 @@ export async function createThread(
     kind?: string;
     tags: string[];
     source?: Source;
+    anonymous?: boolean;
+    anonymous_replies?: boolean;
   },
 ) {
   const reader: Reader = { members, id: viewer.id, staff: false };
   const board = await getBoard(input.board, members);
+  const anonymous = input.anonymous ?? false;
   if (board.post_role === "moderator" && !STAFF.includes(viewer.role)) {
     throw new AppError(403, "forbidden", "这个版块只有版主能发帖");
   }
@@ -599,6 +670,8 @@ export async function createThread(
         title: input.title,
         last_poster_id: viewer.id,
         status,
+        author_anonymous: anonymous,
+        anonymous_replies: input.anonymous_replies ?? false,
       })
       .returning(["id", "last_post_at"])
       .executeTakeFirstOrThrow();
@@ -612,9 +685,12 @@ export async function createThread(
         html,
         via: via(actor, input.source),
         status,
+        anonymous,
       })
       .returning("id")
       .executeTakeFirstOrThrow();
+    // Number 1, the thread being new.
+    if (anonymous) await aliasIn(trx, thread.id, viewer.id);
     await linkUploads(trx, opening.id, images);
     if (input.source) await linkSource(trx, input.source, thread.id, opening.id);
     // Posted from the composer; what a bot posts for them leaves their draft alone.
@@ -677,6 +753,7 @@ export async function createPost(
   );
   const replyTo = input.reply_to_id ?? replyToId ?? undefined;
   const { html, images, mentions } = await renderMarkdown(markdown, showImages);
+  const anonymous = writesAnonymously(thread, viewer.id);
 
   const status = statusFor(thread.review_mode, viewer);
   const id = await db.transaction().execute(async (trx) => {
@@ -711,9 +788,11 @@ export async function createPost(
         html,
         via: via(actor, input.source),
         status,
+        anonymous,
       })
       .returning("id")
       .executeTakeFirstOrThrow();
+    if (anonymous) await aliasIn(trx, threadId, viewer.id);
     await linkUploads(trx, post.id, images);
     if (input.source) await linkSource(trx, input.source, threadId, post.id);
     await addReadFloors(trx, viewer.id, threadId, [[numbered.floor_count, numbered.floor_count]]);
@@ -805,6 +884,32 @@ export async function editPost(
   return getPost(postId, reader);
 }
 
+// For admins: who each number in a thread is. Looking is logged.
+export async function revealAliases(actor: Actor, threadId: number) {
+  const thread = await db
+    .selectFrom("threads")
+    .select("id")
+    .where("id", "=", threadId)
+    .where("deleted_at", "is", null)
+    .executeTakeFirst();
+  if (!thread) throw threadNotFound();
+  const rows = await db
+    .selectFrom("thread_aliases")
+    .select(["number", "user_id"])
+    .where("thread_id", "=", threadId)
+    .orderBy("number")
+    .execute();
+  await db.transaction().execute(async (trx) => {
+    await recordAudit(trx, actor, {
+      action: "thread.reveal",
+      target_type: "thread",
+      target_id: threadId,
+    });
+  });
+  const user = await userBriefs(rows.map((r) => r.user_id));
+  return rows.map((r) => ({ number: r.number, user: user(r.user_id) }));
+}
+
 export async function listRevisions(
   viewer: Viewer,
   staff: boolean,
@@ -821,7 +926,11 @@ export async function listRevisions(
     .orderBy("rev", "desc")
     .execute();
   const user = await userBriefs(rows.map((r) => r.editor_id));
-  return rows.map(({ editor_id, ...rev }) => ({ ...rev, editor: user(editor_id) }));
+  // The anonymous author's own edits keep their number.
+  return rows.map(({ editor_id, ...rev }) => ({
+    ...rev,
+    editor: editor_id === post.author_id ? post.author : user(editor_id),
+  }));
 }
 
 export type ThreadChange = {
@@ -1031,7 +1140,13 @@ async function publishThread(
     .innerJoin("posts", (join) =>
       join.onRef("posts.thread_id", "=", "threads.id").on("posts.floor", "=", 1),
     )
-    .select(["threads.board_id", "threads.author_id", "threads.reply_count", "posts.id as opening"])
+    .select([
+      "threads.board_id",
+      "threads.author_id",
+      "threads.author_anonymous",
+      "threads.reply_count",
+      "posts.id as opening",
+    ])
     .where("threads.id", "=", threadId)
     .executeTakeFirstOrThrow();
   await countThread(trx, threadId, thread, 1);
@@ -1041,6 +1156,7 @@ async function publishThread(
       id: threadId,
       postId: thread.opening,
       authorId: thread.author_id,
+      authorAlias: thread.author_anonymous ? 1 : null,
       mentions: announce.mentions,
     });
   }
@@ -1092,12 +1208,19 @@ async function publishPost(
   const post = await trx
     .selectFrom("posts")
     .innerJoin("threads", "threads.id", "posts.thread_id")
+    .leftJoin("thread_aliases as alias", (join) =>
+      join
+        .onRef("alias.thread_id", "=", "posts.thread_id")
+        .onRef("alias.user_id", "=", "posts.author_id")
+        .on("posts.anonymous", "=", true),
+    )
     .select([
       "posts.thread_id",
       "posts.author_id",
       "posts.reply_to_id",
       "threads.board_id",
       "threads.status as thread_status",
+      "alias.number as alias",
     ])
     .where("posts.id", "=", postId)
     .executeTakeFirstOrThrow();
@@ -1123,6 +1246,7 @@ async function publishPost(
         id: postId,
         threadId: post.thread_id,
         authorId: post.author_id,
+        authorAlias: post.alias,
         mentions: announce.mentions,
       },
       replyTo,
@@ -1230,7 +1354,10 @@ export async function setThreadStatus(
       await withdrawThread(trx, threadId, viewer.id, reason);
     }
     const post = { id: opening.id, thread_id: threadId, author_id: thread.author_id };
-    await notifyOnPost(trx, "moderation", post, viewer.id, { action, reason: reason ?? "" });
+    await notifyOnPost(trx, "moderation", post, viewer.id, null, {
+      action,
+      reason: reason ?? "",
+    });
     await recordAudit(trx, actor, {
       action: `thread.${action}`,
       target_type: "thread",
@@ -1265,7 +1392,10 @@ export async function setPostStatus(
     } else if (action === "hide") {
       await withdrawPost(trx, postId, viewer.id, reason);
     }
-    await notifyOnPost(trx, "moderation", post, viewer.id, { action, reason: reason ?? "" });
+    await notifyOnPost(trx, "moderation", post, viewer.id, null, {
+      action,
+      reason: reason ?? "",
+    });
     await recordAudit(trx, actor, {
       action: `post.${action}`,
       target_type: "post",
@@ -1284,11 +1414,18 @@ export async function listModerated(status: "pending" | "hidden", cursor: number
     .selectFrom("posts")
     .innerJoin("threads", "threads.id", "posts.thread_id")
     .innerJoin("boards", "boards.id", "threads.board_id")
+    .leftJoin("thread_aliases as alias", (join) =>
+      join
+        .onRef("alias.thread_id", "=", "posts.thread_id")
+        .onRef("alias.user_id", "=", "posts.author_id")
+        .on("posts.anonymous", "=", true),
+    )
     .select([
       "posts.id",
       "posts.floor",
       "posts.html",
       "posts.author_id",
+      "alias.number as alias",
       "posts.created_at",
       "threads.id as thread_id",
       "threads.title",
@@ -1305,9 +1442,9 @@ export async function listModerated(status: "pending" | "hidden", cursor: number
   const user = await userBriefs(rows.map((r) => r.author_id));
   const last = rows.at(-1);
   return {
-    items: rows.map(({ html, author_id, ...r }) => ({
+    items: rows.map(({ html, author_id, alias, ...r }) => ({
       ...r,
-      author: user(author_id),
+      author: writer(user, author_id, alias),
       excerpt: excerpt(html, EXCERPT),
     })),
     next_cursor: rows.length === MODERATED_PAGE && last ? String(last.id) : null,
@@ -1386,6 +1523,8 @@ export async function setSolution(
         "solved",
         { id: answer.id, thread_id: threadId, author_id: answer.author_id },
         viewer.id,
+        // The author accepting, by their number when anonymous.
+        viewer.id === thread.author_id && thread.author_anonymous ? 1 : null,
         {},
       );
     }

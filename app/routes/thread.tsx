@@ -2,7 +2,7 @@ import { ArrowDown, Link2, Reply } from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { data, redirect, useFetcher, useNavigate } from "react-router";
 import { apiContext } from "../api.server.ts";
-import type { PostItem } from "~/api-types";
+import type { PostItem, UserBrief } from "~/api-types";
 import { useComposer } from "~/components/composer";
 import { ThreadList } from "~/components/thread-list";
 import { Button } from "~/components/ui/button";
@@ -19,6 +19,8 @@ import { useReading } from "./reading.ts";
 import { ThreadHeader } from "./thread-header.tsx";
 import { confirmDialog } from "~/components/ui/dialog";
 import { toast } from "~/components/ui/toast";
+import { browserApi } from "~/browser-api";
+import { isMine, RevealContext, sameWriter } from "~/components/writer";
 
 // Floors come 20 at a time; see design §9.
 const BATCH = 20;
@@ -212,6 +214,25 @@ function ThreadPage({
   const navigate = useNavigate();
   const me = useMe();
   const staff = me?.role === "moderator" || me?.role === "admin";
+  // How the reader writes here (design §8.12).
+  const myAlias = thread.my_alias ?? null;
+  const authored = isMine(thread.author, me, myAlias);
+  const self = {
+    alias: myAlias,
+    anonymous: authored ? thread.author_anonymous : thread.anonymous_replies,
+  };
+  // Who the anonymous people are, once an admin asks; logged on the server.
+  const [revealed, setRevealed] = useState<Map<number, UserBrief> | null>(null);
+  const anonymity = thread.author_anonymous || thread.anonymous_replies;
+  async function toggleReveal() {
+    if (revealed) {
+      setRevealed(null);
+      return;
+    }
+    const res = await browserApi.threads[":id"].aliases.$get({ param: { id: String(thread.id) } });
+    if (res.ok) setRevealed(new Map((await res.json()).items.map((a) => [a.number, a.user])));
+    else toast((await res.json()).error.message);
+  }
   // Deletions: the page then reopens at the floor, with the change in it.
   const changes = useFetcher<typeof action>();
   useEffect(() => {
@@ -308,152 +329,166 @@ function ThreadPage({
   };
 
   return (
-    <div className="flex gap-8">
-      <article className="min-w-0 flex-1">
-        <ThreadHeader
-          thread={thread}
-          current={current}
-          editable={staff || (me?.id === thread.author.id && !thread.locked)}
-          staff={staff}
-        />
+    <RevealContext value={revealed}>
+      <div className="flex gap-8">
+        <article className="min-w-0 flex-1">
+          <ThreadHeader
+            thread={thread}
+            current={current}
+            editable={staff || (authored && !thread.locked)}
+            staff={staff}
+            reveal={
+              me?.role === "admin" && anonymity
+                ? { shown: revealed !== null, toggle: () => void toggleReveal() }
+                : null
+            }
+          />
 
-        {/* No browser scroll anchoring: floors put above are compensated for by hand. */}
-        <ol className="flex flex-col [overflow-anchor:none]">
-          {first > 1 && (
-            <li ref={top} className="py-3 text-center text-meta">
-              <a
-                href={`?floor=${Math.max(1, first - BATCH)}`}
-                className="text-muted-foreground hover:text-foreground"
-              >
-                {earlier.state === "loading" ? "加载中…" : `前 ${Math.min(first - 1, BATCH)} 层`}
-              </a>
-            </li>
-          )}
-          {posts.map((post) => (
-            <PostCard
-              key={post.id}
-              post={post}
-              threadId={thread.id}
-              op={post.author.id === thread.author.id}
-              accepted={post.id === thread.solved_post_id}
-              unread={read === null ? undefined : !read.has(post.floor)}
-              now={now}
-              parent={posts.find((p) => p.id === post.reply_to?.id)}
-              manage={{
-                change: staff || (me?.id === post.author.id && !thread.locked),
-                history: staff || me?.id === post.author.id,
-                deleteThread:
-                  staff ||
-                  (me?.id === post.author.id && !thread.locked && thread.reply_count === 0),
-                moderate: staff,
-                accept:
-                  thread.kind === "question" &&
-                  post.floor > 1 &&
-                  published &&
-                  (staff || (me?.id === thread.author.id && !thread.locked)),
-                // The opening post is reviewed with its thread, above.
-                review: staff && published && post.floor > 1,
-              }}
-              onJump={jump}
-              onEdit={(markdown) =>
-                openComposer({
-                  mode: "edit",
-                  thread: target,
-                  post: { id: post.id, floor: post.floor, markdown },
-                })
-              }
-              onAccept={() =>
-                void changes.submit(
-                  post.id === thread.solved_post_id
-                    ? { intent: "unaccept", floor: post.floor }
-                    : { intent: "accept", post_id: post.id, floor: post.floor },
-                  { method: "post", defaultShouldRevalidate: false },
-                )
-              }
-              onDelete={async () => {
-                const question = post.floor === 1 ? "删除这个帖子？" : `删除 #${post.floor}？`;
-                if (!(await confirmDialog(question, "删除"))) return;
-                void changes.submit(
-                  post.floor === 1
-                    ? { intent: "delete-thread", board: thread.board.slug }
-                    : { intent: "delete-post", post_id: post.id, floor: post.floor },
-                  { method: "post", defaultShouldRevalidate: false },
-                );
-              }}
-              onReview={(review) =>
-                void changes.submit(
-                  { intent: "review-post", post_id: post.id, floor: post.floor, ...review },
-                  { method: "post", defaultShouldRevalidate: false },
-                )
-              }
-              onReply={
-                published
-                  ? () =>
-                      openComposer({
-                        mode: "reply",
-                        thread: target,
-                        replyTo: { id: post.id, floor: post.floor, name: post.author.display_name },
-                      })
-                  : undefined
-              }
-            />
-          ))}
-          {!atEnd && (
-            <li ref={bottom} className="py-3 text-center text-meta">
-              <a
-                href={`?floor=${last + 1}`}
-                className="text-muted-foreground hover:text-foreground"
-              >
-                {later.state === "loading" ? "加载中…" : "后 20 层"}
-              </a>
-            </li>
-          )}
-        </ol>
+          {/* No browser scroll anchoring: floors put above are compensated for by hand. */}
+          <ol className="flex flex-col [overflow-anchor:none]">
+            {first > 1 && (
+              <li ref={top} className="py-3 text-center text-meta">
+                <a
+                  href={`?floor=${Math.max(1, first - BATCH)}`}
+                  className="text-muted-foreground hover:text-foreground"
+                >
+                  {earlier.state === "loading" ? "加载中…" : `前 ${Math.min(first - 1, BATCH)} 层`}
+                </a>
+              </li>
+            )}
+            {posts.map((post) => (
+              <PostCard
+                key={post.id}
+                post={post}
+                threadId={thread.id}
+                op={sameWriter(post.author, thread.author)}
+                accepted={post.id === thread.solved_post_id}
+                unread={read === null ? undefined : !read.has(post.floor)}
+                now={now}
+                parent={posts.find((p) => p.id === post.reply_to?.id)}
+                self={self}
+                manage={{
+                  change: staff || (isMine(post.author, me, myAlias) && !thread.locked),
+                  history: staff || isMine(post.author, me, myAlias),
+                  deleteThread:
+                    staff ||
+                    (isMine(post.author, me, myAlias) &&
+                      !thread.locked &&
+                      thread.reply_count === 0),
+                  moderate: staff,
+                  accept:
+                    thread.kind === "question" &&
+                    post.floor > 1 &&
+                    published &&
+                    (staff || (authored && !thread.locked)),
+                  // The opening post is reviewed with its thread, above.
+                  review: staff && published && post.floor > 1,
+                }}
+                onJump={jump}
+                onEdit={(markdown) =>
+                  openComposer({
+                    mode: "edit",
+                    thread: target,
+                    post: { id: post.id, floor: post.floor, markdown },
+                  })
+                }
+                onAccept={() =>
+                  void changes.submit(
+                    post.id === thread.solved_post_id
+                      ? { intent: "unaccept", floor: post.floor }
+                      : { intent: "accept", post_id: post.id, floor: post.floor },
+                    { method: "post", defaultShouldRevalidate: false },
+                  )
+                }
+                onDelete={async () => {
+                  const question = post.floor === 1 ? "删除这个帖子？" : `删除 #${post.floor}？`;
+                  if (!(await confirmDialog(question, "删除"))) return;
+                  void changes.submit(
+                    post.floor === 1
+                      ? { intent: "delete-thread", board: thread.board.slug }
+                      : { intent: "delete-post", post_id: post.id, floor: post.floor },
+                    { method: "post", defaultShouldRevalidate: false },
+                  );
+                }}
+                onReview={(review) =>
+                  void changes.submit(
+                    { intent: "review-post", post_id: post.id, floor: post.floor, ...review },
+                    { method: "post", defaultShouldRevalidate: false },
+                  )
+                }
+                onReply={
+                  published
+                    ? () =>
+                        openComposer({
+                          mode: "reply",
+                          thread: target,
+                          replyTo: {
+                            id: post.id,
+                            floor: post.floor,
+                            name: post.author.display_name,
+                          },
+                        })
+                    : undefined
+                }
+              />
+            ))}
+            {!atEnd && (
+              <li ref={bottom} className="py-3 text-center text-meta">
+                <a
+                  href={`?floor=${last + 1}`}
+                  className="text-muted-foreground hover:text-foreground"
+                >
+                  {later.state === "loading" ? "加载中…" : "后 20 层"}
+                </a>
+              </li>
+            )}
+          </ol>
 
-        {/* Lined up with the avatars above. */}
-        <div className="mt-4 flex flex-wrap items-center gap-2 border-t px-3 pt-5 sm:px-4">
-          {published && (
-            <Button
-              size="lg"
-              onClick={() => openComposer({ mode: "reply", thread: target, replyTo: null })}
-            >
-              <Reply /> 回复
+          {/* Lined up with the avatars above. */}
+          <div className="mt-4 flex flex-wrap items-center gap-2 border-t px-3 pt-5 sm:px-4">
+            {published && (
+              <Button
+                size="lg"
+                onClick={() => openComposer({ mode: "reply", thread: target, replyTo: null })}
+              >
+                <Reply /> 回复
+              </Button>
+            )}
+            <BookmarkButton threadId={thread.id} initial={thread.bookmarked ?? false} />
+            <NotifyButton threadId={thread.id} initial={thread.notify_level} />
+            <Button size="icon-lg" variant="ghost" aria-label="复制链接" title="复制链接">
+              <Link2 />
             </Button>
+          </div>
+
+          {suggested.length > 0 && (
+            <section className="mt-12">
+              <h2 className="px-3 font-semibold sm:px-4">推荐帖子</h2>
+              <div className="mt-3">
+                <ThreadList threads={suggested} now={now} />
+              </div>
+            </section>
           )}
-          <BookmarkButton threadId={thread.id} initial={thread.bookmarked ?? false} />
-          <NotifyButton threadId={thread.id} initial={thread.notify_level} />
-          <Button size="icon-lg" variant="ghost" aria-label="复制链接" title="复制链接">
-            <Link2 />
-          </Button>
-        </div>
+        </article>
 
-        {suggested.length > 0 && (
-          <section className="mt-12">
-            <h2 className="px-3 font-semibold sm:px-4">推荐帖子</h2>
-            <div className="mt-3">
-              <ThreadList threads={suggested} now={now} />
-            </div>
-          </section>
+        <aside className="hidden w-56 shrink-0 xl:block">
+          <nav aria-label="楼层" className="sticky top-20 rounded-2xl border bg-card p-3 text-meta">
+            <FloorNav floors={floors} />
+          </nav>
+        </aside>
+        <FloorProgress floors={floors} />
+        {newest > thread.floor_count && (
+          // Opens the page again from the first new floor, with all that came since.
+          <button
+            type="button"
+            onClick={() => void navigate(`?floor=${thread.floor_count + 1}`)}
+            className="fixed bottom-6 left-1/2 z-20 inline-flex -translate-x-1/2 items-center gap-1.5 rounded-full bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow-lg animate-in fade-in slide-in-from-bottom-2"
+          >
+            <ArrowDown className="size-4" /> {newest - thread.floor_count} 条新回复
+          </button>
         )}
-      </article>
-
-      <aside className="hidden w-56 shrink-0 xl:block">
-        <nav aria-label="楼层" className="sticky top-20 rounded-2xl border bg-card p-3 text-meta">
-          <FloorNav floors={floors} />
-        </nav>
-      </aside>
-      <FloorProgress floors={floors} />
-      {newest > thread.floor_count && (
-        // Opens the page again from the first new floor, with all that came since.
-        <button
-          type="button"
-          onClick={() => void navigate(`?floor=${thread.floor_count + 1}`)}
-          className="fixed bottom-6 left-1/2 z-20 inline-flex -translate-x-1/2 items-center gap-1.5 rounded-full bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow-lg animate-in fade-in slide-in-from-bottom-2"
-        >
-          <ArrowDown className="size-4" /> {newest - thread.floor_count} 条新回复
-        </button>
-      )}
-    </div>
+      </div>
+    </RevealContext>
   );
 }
 

@@ -9,7 +9,13 @@ import { recordAudit } from "../audit/service.ts";
 import { endAllSessions } from "../auth/service.ts";
 import { recordEvent } from "../events/service.ts";
 import { getPost } from "../threads/service.ts";
-import { findMember, saveRestriction, userBriefs } from "../users/service.ts";
+import {
+  anonymousBrief,
+  findMember,
+  saveRestriction,
+  userBriefs,
+  writer,
+} from "../users/service.ts";
 
 // ---- Mutes and bans; see design §6.4. Moderators mute, admins also ban; only ordinary members
 // can be either, so staff are demoted first.
@@ -80,11 +86,25 @@ async function person(trx: Transaction<DB>, id: number) {
     .executeTakeFirstOrThrow();
 }
 
+// With the writer's number in the thread when it was left anonymously.
 async function boostOf(id: number) {
   const boost = await db
     .selectFrom("boosts")
-    .select(["id", "post_id", "user_id", "body"])
-    .where("id", "=", id)
+    .innerJoin("posts", "posts.id", "boosts.post_id")
+    .leftJoin("thread_aliases as alias", (join) =>
+      join
+        .onRef("alias.thread_id", "=", "posts.thread_id")
+        .onRef("alias.user_id", "=", "boosts.user_id")
+        .on("boosts.anonymous", "=", true),
+    )
+    .select([
+      "boosts.id",
+      "boosts.post_id",
+      "boosts.user_id",
+      "boosts.body",
+      "alias.number as alias",
+    ])
+    .where("boosts.id", "=", id)
     .executeTakeFirst();
   if (!boost) throw new AppError(404, "boost_not_found", "短评不存在");
   return boost;
@@ -139,7 +159,12 @@ async function fileReport(
     await recordEvent(trx, "report.created", {
       report: { id: created.id, reason },
       post: { id: post.id, floor: post.floor, thread_id: post.thread_id },
-      boost: boost && { id: boost.id, body: boost.body, author: await person(trx, boost.user_id) },
+      boost: boost && {
+        id: boost.id,
+        body: boost.body,
+        author:
+          boost.alias === null ? await person(trx, boost.user_id) : anonymousBrief(boost.alias),
+      },
       reporter: await person(trx, viewer.id),
       url: `${env.PUBLIC_URL}/t/${post.thread_id}?floor=${post.floor}`,
     });
@@ -155,6 +180,18 @@ export async function listReports(status: ReportStatus, cursor: number | undefin
     .innerJoin("posts", "posts.id", "reports.post_id")
     .innerJoin("threads", "threads.id", "posts.thread_id")
     .leftJoin("boosts", "boosts.id", "reports.boost_id")
+    .leftJoin("thread_aliases as alias", (join) =>
+      join
+        .onRef("alias.thread_id", "=", "posts.thread_id")
+        .onRef("alias.user_id", "=", "posts.author_id")
+        .on("posts.anonymous", "=", true),
+    )
+    .leftJoin("thread_aliases as boost_alias", (join) =>
+      join
+        .onRef("boost_alias.thread_id", "=", "posts.thread_id")
+        .onRef("boost_alias.user_id", "=", "boosts.user_id")
+        .on("boosts.anonymous", "=", true),
+    )
     .select([
       "reports.id",
       "reports.reason",
@@ -173,6 +210,8 @@ export async function listReports(status: ReportStatus, cursor: number | undefin
       "boosts.id as boost_id",
       "boosts.body as boost_body",
       "boosts.user_id as boost_user_id",
+      "alias.number as alias",
+      "boost_alias.number as boost_alias",
     ])
     .where("reports.status", "=", status)
     .orderBy("reports.id", "desc")
@@ -195,14 +234,18 @@ export async function listReports(status: ReportStatus, cursor: number | undefin
         id: r.post_id,
         floor: r.floor,
         thread: { id: r.thread_id, title: r.title },
-        author: user(r.author_id),
+        author: writer(user, r.author_id, r.alias),
         excerpt: excerpt(r.html, REPORT_EXCERPT),
         deleted: r.deleted_at !== null,
       },
       boost:
         r.boost_id === null || r.boost_body === null || r.boost_user_id === null
           ? null
-          : { id: r.boost_id, body: r.boost_body, user: user(r.boost_user_id) },
+          : {
+              id: r.boost_id,
+              body: r.boost_body,
+              user: writer(user, r.boost_user_id, r.boost_alias),
+            },
       handler: r.handler_id === null ? null : user(r.handler_id),
       handled_at: r.handled_at,
       created_at: r.created_at,
