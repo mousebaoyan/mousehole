@@ -1,4 +1,5 @@
 import { testClient } from "hono/testing";
+import sharp from "sharp";
 import { beforeAll, describe, expect, test } from "vitest";
 import { createUser, nextQq } from "../../../test/fixtures.ts";
 import { app } from "../../app.ts";
@@ -154,5 +155,25 @@ describe("群消息收录到论坛", () => {
     expect(taken.status).toBe(409);
     expect((await opening(threadId)).body).toBe("补充了背景的提问");
     expect(await lookUp(added)).toEqual({ thread_id: threadId, post_id: post.id });
+  });
+
+  test("消息段里给论坛上已有图片的地址，直接用，不再下载", async () => {
+    const png = await sharp({
+      create: { width: 40, height: 30, channels: 4, background: "#e07b53" },
+    })
+      .png()
+      .toBuffer();
+    const uploaded = await api.uploads.$post(
+      { form: { file: new File([new Uint8Array(png)], "图.png") } },
+      asMember,
+    );
+    if (!uploaded.ok) throw new Error(`status ${uploaded.status}: ${await uploaded.text()}`);
+    const { url } = await uploaded.json();
+    const res = await postThread([
+      { type: "text", data: { text: "截图里这个分数够吗" } },
+      { type: "image", data: { url } },
+    ]);
+    if (!res.ok) throw new Error(`status ${res.status}: ${await res.text()}`);
+    expect((await opening((await res.json()).id)).body).toBe(`截图里这个分数够吗![](${url})`);
   });
 });
