@@ -9,10 +9,11 @@ import { UserAvatar } from "~/components/user-avatar";
 import { UserBadges } from "~/components/user-badges";
 import { RelationButtons, useRelations } from "~/components/user-card";
 import { useMe } from "~/forum";
+import { restrictionText } from "~/restriction";
 import { useNearView } from "~/near-view";
 import { ago, unixNow } from "~/time";
 import type { Route } from "./+types/user.ts";
-import { ModerationButtons, restrictionText } from "./user-moderation.tsx";
+import { ModerationButtons } from "./user-moderation.tsx";
 
 export function meta({ loaderData }: Route.MetaArgs) {
   return [{ title: `${loaderData.user.display_name} · 鼠洞` }];

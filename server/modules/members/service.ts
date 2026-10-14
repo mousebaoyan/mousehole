@@ -1,10 +1,16 @@
 import type { Insertable, Transaction } from "kysely";
 import type { DB, GroupMembers } from "../../../db/types.ts";
-import type { Actor } from "../../platform/access.ts";
+import type { Actor, UserRef } from "../../platform/access.ts";
 import { db } from "../../platform/db.ts";
 import { AppError } from "../../platform/errors.ts";
 import { recordAudit } from "../audit/service.ts";
-import { applyStanding, ensureMembers, saveCustomName } from "../users/service.ts";
+import {
+  applyStanding,
+  ensureMembers,
+  findMember,
+  saveCustomName,
+  saveRole,
+} from "../users/service.ts";
 import { deriveAccount, mergeRecord, shouldHold, type MemberRecord } from "./rules.ts";
 
 const WRITE_BATCH = 1000;
@@ -56,6 +62,32 @@ async function refreshAccounts(
     ...deriveAccount(account, byUser.get(account.id) ?? [], robots.get(account.id)),
   }));
   await applyStanding(trx, actor, standings);
+}
+
+// Admins set a role by hand, which syncing then leaves alone; null hands it back to the groups.
+// Bot accounts keep theirs, and nobody changes their own.
+export async function setRole(
+  actor: Actor,
+  ref: UserRef,
+  role: "user" | "moderator" | "admin" | null,
+) {
+  const user = await findMember(ref);
+  if (!user) throw new AppError(404, "user_not_found", "用户不存在");
+  if (user.role === "bot") throw new AppError(403, "forbidden", "bot 账号的角色不能改");
+  if (user.id === actor.userId) throw new AppError(403, "forbidden", "不能改自己的角色");
+  await db.transaction().execute(async (trx) => {
+    const from = await saveRole(trx, user.id, role);
+    if (role === null) {
+      await refreshAccounts(trx, actor, [user.id]);
+    } else if (from !== role) {
+      await recordAudit(trx, actor, {
+        action: "member.role",
+        target_type: "user",
+        target_id: user.id,
+        data: { from, to: role },
+      });
+    }
+  });
 }
 
 // A name of one's own, or null to follow QQ again; the display name follows at once.

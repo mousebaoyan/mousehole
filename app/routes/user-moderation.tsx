@@ -5,6 +5,7 @@ import { Field } from "~/components/form-parts";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { NativeSelect } from "~/components/ui/native-select";
+import type { Restriction } from "~/restriction";
 
 const DAYS = [
   { days: 1, label: "1 天" },
@@ -13,24 +14,6 @@ const DAYS = [
   { days: 30, label: "30 天" },
   { days: 0, label: "永久" },
 ];
-
-const UNTIL = new Intl.DateTimeFormat("zh-CN", {
-  timeZone: "Asia/Shanghai",
-  month: "long",
-  day: "numeric",
-  hour: "2-digit",
-  minute: "2-digit",
-});
-
-type Restriction = { type: string; until: number | null };
-
-// "已禁言，到 10月15日 08:00 解除".
-export function restrictionText(r: Restriction) {
-  const what = r.type === "ban" ? "已封禁" : "已禁言";
-  return r.until === null
-    ? `${what}（永久）`
-    : `${what}，到 ${UNTIL.format(new Date(r.until * 1000))} 解除`;
-}
 
 // What staff can do about a member on their page: mute, ban (admins), or lift either. See
 // design §6.4. Only ordinary members can be restricted.

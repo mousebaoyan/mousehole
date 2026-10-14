@@ -182,7 +182,7 @@ token 由管理员在后台创建，只显示一次。每个 token 绑定一个 
 | DELETE | `/users/{user}/follow` | 取消关注 | 成员 / `act` |
 | PUT | `/users/{user}/endorsement` | 认可 TA 的帮助，每人对每人一次；不能认可自己（`400`） | 成员 / `act` |
 | DELETE | `/users/{user}/endorsement` | 撤回认可 | 成员 / `act` |
-| PATCH | `/users/{user}` | 设置角色、锁定角色 | 管理员 / `admin` |
+| PATCH | `/users/{user}` | 设置角色：`{ role }`，`user`、`moderator`、`admin` 会锁定，同步不再覆盖；`null` 解锁，按群里的角色重算。bot 账号和自己的不能改（`403`）；记操作日志 | 管理员 / `admin` |
 | PUT | `/users/{user}/restriction` | 禁言或封禁：`{ type, until, reason }`，`type` 为 `mute` 或 `ban`，`until` 是到期的 Unix 秒、`null` 为永久，已有的就换掉；只能对普通成员（版主和管理员返回 `403`）。封禁同时让他所有设备下线。理由记进操作日志 | 禁言：版主 / `moderate`；封禁：管理员 / `admin` |
 | DELETE | `/users/{user}/restriction` | 解除禁言或封禁，可附 `{ reason }`；没有被限制返回 `404 not_restricted` | 版主 / `moderate`，解除封禁要管理员 |
 
@@ -279,11 +279,11 @@ token 由管理员在后台创建，只显示一次。每个 token 绑定一个 
 | GET | `/admin/groups` | 已关联的群和同步状态：最近一次增量、全量、群资料的时间，被拦下的全量 | 管理员 / `admin` |
 | POST | `/admin/groups` | 关联群：`{ group_id }`；第一个关联的群自动成为主群；已关联返回 `409 group_exists` | 管理员 / `admin` |
 | PATCH | `/admin/groups/{group_id}` | 启用、停用、设为主群：`{ enabled?, is_primary?: true }`；相关成员的成员资格、显示名和等级随即重算 | 管理员 / `admin` |
-| GET | `/admin/members` | 成员列表：按 QQ 号、名字、成员资格、角色筛选 | 版主 / `moderate` |
+| GET | `/admin/members` | 成员列表，新建的在前，每页 50 个：`q`（名字，或者 5–12 位数字时也按 QQ 号）、`status`（`member`、`frozen`）、`role`、`restricted`（只看禁言或封禁中的）、`cursor` | 版主 / `moderate` |
 | GET | `/admin/pending` | 待审核的主题和回复 | 版主 / `moderate` |
 | GET | `/admin/reports` | 举报列表，最新的在前，每页 30 条：`status`（默认 `open`）、`cursor`（上一页最后一条的 ID）；每条带举报人、理由、被举报的楼层（主题、楼层号、作者、摘要、是否已删除）或短评、处理人 | 版主 / `moderate` |
 | PATCH | `/admin/reports/{id}` | 处理举报：`{ status }`，可选 `resolved`（已处理，内容另外删除或隐藏）、`dismissed`（驳回）；记操作日志 | 版主 / `moderate` |
-| GET | `/admin/audit-logs` | 操作日志，可以按操作人、对象、动作筛选 | 管理员 / `admin` |
+| GET | `/admin/audit-logs` | 操作日志，最新的在前，每页 50 条：`actor`（用户 ID 或 `qq:号码`）、`action`、`target_type`、`target_id`、`cursor`；每条带以谁的身份、经由哪个 token、谁让 bot 做的、`data` 和 IP | 管理员 / `admin` |
 | GET | `/admin/tokens` | bot token 列表，包括已吊销的；不含 token 本身 | 管理员，只能在网页上操作 |
 | POST | `/admin/tokens` | 创建：`{ name, bot_qq, scopes }`，返回 `{ id, token }`，token 只出现这一次 | 管理员，只能在网页上操作 |
 | DELETE | `/admin/tokens/{id}` | 吊销 | 管理员，只能在网页上操作 |

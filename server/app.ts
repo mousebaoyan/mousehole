@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { csrf } from "hono/csrf";
 import { sql } from "kysely";
 import { adminRoutes } from "./modules/admin/routes.ts";
+import { auditRoutes } from "./modules/audit/routes.ts";
 import { authenticate, authRoutes, bearerToken } from "./modules/auth/routes.ts";
 import { tokenRoutes } from "./modules/auth/token-routes.ts";
 import { boardsRoutes } from "./modules/boards/routes.ts";
@@ -35,7 +36,8 @@ const api = createRouter()
   .route("/", eventsRoutes)
   .route("/", searchRoutes)
   .route("/", moderationRoutes)
-  .route("/", adminRoutes);
+  .route("/", adminRoutes)
+  .route("/", auditRoutes);
 
 api.doc31("/openapi.json", { openapi: "3.1.0", info: { title: "鼠洞", version: "1" } });
 

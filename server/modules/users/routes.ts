@@ -12,6 +12,7 @@ import {
   getProfile,
   getSettings,
   getUser,
+  listMembers,
   searchUsers,
   setEndorsement,
   setFollow,
@@ -290,6 +291,74 @@ export const usersRoutes = createRouter()
     async (c) => {
       const { activated_at, ...profile } = await getProfile(authorize(c, "read").id);
       return c.json({ ...profile, activated: activated_at !== null }, 200);
+    },
+  )
+  .openapi(
+    createRoute({
+      method: "get",
+      path: "/admin/members",
+      summary: "成员列表，新建的在前，每页 50 个：按名字或 QQ 号找，按成员资格、角色、是否受限筛选",
+      request: {
+        query: z.object({
+          q: z.string().trim().min(1).max(30).optional(),
+          status: z.enum(["member", "frozen"]).optional(),
+          role: z.enum(["user", "moderator", "admin", "bot"]).optional(),
+          restricted: z
+            .enum(["true", "false"])
+            .optional()
+            .transform((v) => v === "true"),
+          cursor: z.coerce.number().int().optional(),
+        }),
+      },
+      responses: {
+        200: {
+          description: "成员",
+          content: {
+            "application/json": {
+              schema: z.object({
+                items: z.array(
+                  z.object({
+                    id: z.number(),
+                    display_name: z.string(),
+                    avatar_url: z.string().nullable(),
+                    qq: z.number().nullable(),
+                    role: z.string(),
+                    role_locked: z.boolean(),
+                    member_status: z.string(),
+                    activated: z.boolean(),
+                    restriction: z
+                      .object({ type: z.string(), until: z.number().nullable() })
+                      .nullable(),
+                    last_seen_at: z.number().nullable(),
+                    thread_count: z.number(),
+                    post_count: z.number(),
+                  }),
+                ),
+                next_cursor: z.string().nullable(),
+              }),
+            },
+          },
+        },
+        403: errorResponse("不是版主"),
+      },
+    }),
+    async (c) => {
+      authorize(c, "moderate");
+      const page = await listMembers(c.req.valid("query"));
+      return c.json(
+        {
+          items: page.items.map(
+            ({ activated_at, restriction, restricted_until, last_seen_at, ...m }) => ({
+              ...m,
+              activated: activated_at !== null,
+              restriction: restrictionJson(restrictionOf(restriction, restricted_until)),
+              last_seen_at: last_seen_at && unix(last_seen_at),
+            }),
+          ),
+          next_cursor: page.next_cursor,
+        },
+        200,
+      );
     },
   );
 

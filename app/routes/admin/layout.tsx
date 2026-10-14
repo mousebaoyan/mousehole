@@ -6,7 +6,9 @@ import {
   LayoutList,
   Mail,
   Settings,
+  ScrollText,
   Tags,
+  Users,
   UsersRound,
 } from "lucide-react";
 import { useEffect, useRef } from "react";
@@ -32,16 +34,18 @@ export async function loader({ context, request }: Route.LoaderArgs) {
   return { admin: false };
 }
 
-// Pages appear here as they are built; members, the audit log and more moderation come later.
+// Pages appear here as they are built; pending and hidden content come later.
 const pages = [
   { to: "/admin", label: "概览", icon: LayoutDashboard, end: true, admin: true },
   { to: "/admin/reports", label: "举报", icon: Flag, admin: false },
+  { to: "/admin/members", label: "成员", icon: Users, admin: false },
   { to: "/admin/groups", label: "QQ 群", icon: UsersRound, admin: true },
   { to: "/admin/boards", label: "版块", icon: LayoutList, admin: true },
   { to: "/admin/tags", label: "标签", icon: Tags, admin: true },
   { to: "/admin/site", label: "站点", icon: Settings, admin: true },
   { to: "/admin/email", label: "邮件", icon: Mail, admin: true },
   { to: "/admin/tokens", label: "bot", icon: Bot, admin: true },
+  { to: "/admin/logs", label: "操作日志", icon: ScrollText, admin: true },
 ];
 
 const link = ({ isActive }: { isActive: boolean }) =>

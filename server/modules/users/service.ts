@@ -308,6 +308,79 @@ export async function saveRestriction(
     .execute();
 }
 
+// Written by members: a role set by hand is locked, so syncing leaves it; none unlocks it, and
+// the groups decide again. Returns the role before.
+export async function saveRole(trx: Transaction<DB>, userId: number, role: string | null) {
+  const { from } = await trx
+    .updateTable("users")
+    .set(role === null ? { role_locked: false } : { role, role_locked: true })
+    .where("id", "=", userId)
+    .returning(sql<string>`old.role`.as("from"))
+    .executeTakeFirstOrThrow();
+  return from;
+}
+
+const MEMBERS_PAGE = 50;
+
+// For staff: newest accounts first, found by name or QQ number, and by standing, role or a
+// restriction in force; the cursor is the last one's ID.
+export async function listMembers(filter: {
+  q?: string;
+  status?: "member" | "frozen";
+  role?: string;
+  restricted?: boolean;
+  cursor?: number;
+}) {
+  let query = db
+    .selectFrom("users")
+    .select([
+      "id",
+      "display_name",
+      "avatar_version",
+      "qq",
+      "role",
+      "role_locked",
+      "member_status",
+      "activated_at",
+      "restriction",
+      "restricted_until",
+      "last_seen_at",
+      "thread_count",
+      "post_count",
+    ])
+    .where("deleted_at", "is", null)
+    .orderBy("id", "desc")
+    .limit(MEMBERS_PAGE);
+  const { q } = filter;
+  if (q !== undefined) {
+    const name = `%${q.replaceAll(/[\\%_]/g, "\\$&")}%`;
+    query = query.where((eb) =>
+      /^\d{5,12}$/.test(q)
+        ? eb.or([eb("display_name", "ilike", name), eb("qq", "=", Number(q))])
+        : eb("display_name", "ilike", name),
+    );
+  }
+  if (filter.status !== undefined) query = query.where("member_status", "=", filter.status);
+  if (filter.role !== undefined) query = query.where("role", "=", filter.role);
+  if (filter.restricted) {
+    query = query
+      .where("restriction", "is not", null)
+      .where((eb) =>
+        eb.or([eb("restricted_until", "is", null), eb("restricted_until", ">", sql<Date>`now()`)]),
+      );
+  }
+  if (filter.cursor !== undefined) query = query.where("id", "<", filter.cursor);
+  const rows = await query.execute();
+  const last = rows.at(-1);
+  return {
+    items: rows.map(({ avatar_version, ...r }) => ({
+      ...r,
+      avatar_url: avatarUrl(r.id, avatar_version),
+    })),
+    next_cursor: rows.length === MEMBERS_PAGE && last ? String(last.id) : null,
+  };
+}
+
 // ---- Following and 认可; see design §8.7. Doing either again changes nothing.
 
 async function otherUser(viewer: Viewer, ref: UserRef, self: string) {

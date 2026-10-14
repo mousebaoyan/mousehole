@@ -32,6 +32,8 @@ export default [
   route("admin", "routes/admin/layout.tsx", [
     index("routes/admin/overview.tsx"),
     route("reports", "routes/admin/reports.tsx"),
+    route("members", "routes/admin/members.tsx"),
+    route("logs", "routes/admin/logs.tsx"),
     route("groups", "routes/admin/groups.tsx"),
     route("boards", "routes/admin/boards.tsx"),
     route("tags", "routes/admin/tags.tsx"),
