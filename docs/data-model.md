@@ -65,6 +65,7 @@
 - 列表翻页的游标是最后一个帖子的 `last_post_at`（微秒，JavaScript 的 Date 只到毫秒）和 ID，"最新发布"是 ID，收藏列表是 `thread_users.bookmarked_at`（微秒）和 ID。
 - 热门：最近 7 天发布的帖子按 `(回复数 × 2 + 赞数 + 浏览数 / 20 + 1) / (发布至今的小时数 + 2)^1.5` 排序，取前 500 个，在内存里存 10 分钟；读列表时再按可见范围和筛选条件过滤。
 - 浏览数在内存里累计，每分钟批量写一次；同一个人（登录用户按 ID，访客按 IP）一分钟内只算一次，bot 的请求不算。
+- 匿名（[总体设计 §8.12](design.md#812-匿名)）：`threads.author_anonymous`、`threads.anonymous_replies` 是发帖时的两个开关，`posts.anonymous`、`boosts.anonymous` 在写入时按"楼主看前者、别人看后者"定下。`thread_aliases` 记每个人在一个帖子里的编号，第一次匿名写入时分配：锁住帖子那一行，取已有的最大编号加一，楼主匿名时是 1 号。读的时候 left join `thread_aliases`（只在 `anonymous` 为真时连上），有编号的显示成"匿名鼠 N"。通知的 `actor_alias` 是触发的人匿名时的编号。`author_id`、`user_id` 照常记真实的人。
 - 草稿（[总体设计 §8.2](design.md#82-正文)）存在 `drafts`，每人每个帖子一行，`thread_id` 为 `NULL` 的是发帖的那份，唯一约束用 `NULLS NOT DISTINCT`，所以发帖的也只有一份。整份覆盖保存；发帖、回复时在同一个事务里删掉对应的草稿（bot 代发的不删）。`updated_at` 超过 180 天的每天清理，走 `drafts_updated`。
 
 ## 互动与通知

@@ -2,11 +2,12 @@ import { Check, Flag, Rocket, Trash2, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useFetcher, useNavigate } from "react-router";
 import { cn } from "cn";
-import type { PostItem } from "~/api-types";
+import type { PostItem, Writer } from "~/api-types";
 import { Dropdown, menuItem, useDismiss } from "~/components/disclosure";
 import { EmojiButton } from "~/components/emoji-button";
 import { Button } from "~/components/ui/button";
 import { UserAvatar } from "~/components/user-avatar";
+import { isMine } from "~/components/writer";
 import { useMe } from "~/forum";
 import { useSavedValue } from "~/saved-value";
 import { confirmDialog } from "~/components/ui/dialog";
@@ -23,13 +24,16 @@ type Boost = PostItem["boosts"][number];
 // rocket, never by id.
 type Shown = {
   id: number | null;
-  user: { id: number; display_name: string; avatar_url: string | null };
+  user: Writer | { id: number; display_name: string; avatar_url: string | null };
   body: string;
 };
 
+// How the reader writes in a thread: their number there, and whether they write anonymously.
+export type Self = { alias: number | null; anonymous: boolean };
+
 // The floor's boosts as loaded, or all of them once asked for, with the reader's own as it
 // stands: in its place when changed, last when new.
-export function useBoosts(post: PostItem, threadId: number) {
+export function useBoosts(post: PostItem, threadId: number, self: Self) {
   const me = useMe();
   const all = useFetcher<{ items: Boost[] }>();
   const { value: mine, save } = useSavedValue(
@@ -41,14 +45,21 @@ export function useBoosts(post: PostItem, threadId: number) {
   const loaded: Shown[] = all.data?.items ?? post.boosts;
   let shown = loaded;
   if (me) {
-    const own = loaded.findIndex((b) => b.user.id === me.id);
+    const own = loaded.findIndex((b) => isMine(b.user, me, self.alias));
     if (own >= 0) {
       shown = loaded.flatMap((b, i) =>
         i !== own ? [b] : mine === null ? [] : [{ ...b, body: mine }],
       );
     } else if (mine !== null && (post.my_boost === null || all.data)) {
       // Otherwise it is among the ones not loaded yet.
-      shown = [...loaded, { id: null, user: me, body: mine }];
+      const user = self.anonymous
+        ? {
+            anonymous: true as const,
+            number: self.alias ?? 0,
+            display_name: self.alias === null ? "匿名" : `匿名鼠 ${self.alias}`,
+          }
+        : me;
+      shown = [...loaded, { id: null, user, body: mine }];
     }
   }
   const count = post.boost_count + (mine === null ? 0 : 1) - (post.my_boost === null ? 0 : 1);
@@ -89,7 +100,7 @@ export function BoostChip({
 
   const content = (
     <>
-      <UserAvatar user={boost.user} className="size-5 text-2xs" />
+      <UserAvatar user={boost.user} thread={threadId} className="size-5 text-2xs" />
       {boost.body}
     </>
   );

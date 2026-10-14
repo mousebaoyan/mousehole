@@ -22,12 +22,13 @@ import { PROSE } from "~/components/prose";
 import { UserAvatar } from "~/components/user-avatar";
 import { UserCard } from "~/components/user-card";
 import { UserBadges } from "~/components/user-badges";
+import { isMine, WriterName } from "~/components/writer";
 import { Button, buttonVariants } from "~/components/ui/button";
 import type { PostItem, UserBrief } from "~/api-types";
 import { useMe } from "~/forum";
 import { Dialog } from "~/components/ui/dialog";
 import { stamp } from "~/time";
-import { BoostButton, BoostChip, useBoosts } from "./boosts.tsx";
+import { BoostButton, BoostChip, useBoosts, type Self } from "./boosts.tsx";
 import { LikeButton, ReactionSummary, useReaction } from "./reactions.tsx";
 import { ReportDialog, type ReportTarget } from "./report-dialog.tsx";
 import { ReviewItems, type Review } from "./review-items.tsx";
@@ -47,6 +48,7 @@ export function PostCard({
   now,
   parent,
   manage,
+  self,
   onReply,
   onJump,
   onEdit,
@@ -69,6 +71,7 @@ export function PostCard({
     accept: boolean;
     review: boolean;
   };
+  self: Self;
   onReply: (() => void) | undefined;
   onJump: (floor: number) => void;
   onEdit: (markdown: string) => void;
@@ -96,7 +99,8 @@ export function PostCard({
   const me = useMe();
   const navigate = useNavigate();
   const reaction = useReaction(post, threadId);
-  const boosts = useBoosts(post, threadId);
+  const boosts = useBoosts(post, threadId, self);
+  const own = isMine(post.author, me, self.alias);
   const boostButton = <BoostButton mine={boosts.mine} onSave={boosts.save} />;
   const replyTo = post.reply_to;
   const target = parent ?? parentFetcher.data;
@@ -133,13 +137,13 @@ export function PostCard({
       )}
       <div className="flex items-center gap-3">
         <UserCard user={post.author} className="flex rounded-full">
-          <UserAvatar user={post.author} className="size-10 max-sm:size-9" />
+          <UserAvatar user={post.author} thread={threadId} className="size-10 max-sm:size-9" />
         </UserCard>
         <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-1.5 gap-y-1">
           <UserCard user={post.author} className="mr-0.5 text-body font-semibold hover:underline">
-            {post.author.display_name}
+            <WriterName writer={post.author} />
           </UserCard>
-          <UserBadges user={post.author} op={op} />
+          <UserBadges user={post.author} op={op} mine={own} />
           {/* The opening post's state is the thread's, shown above it. */}
           {post.floor > 1 && post.status !== "visible" && (
             <span className="rounded bg-warning/10 px-1.5 py-px text-2xs font-medium text-warning">
@@ -169,10 +173,10 @@ export function PostCard({
                 )}
               >
                 <Forward className="size-3.5" />
-                <UserAvatar user={replyTo.author} className="size-5 text-2xs" />
+                <UserAvatar user={replyTo.author} thread={threadId} className="size-5 text-2xs" />
                 {/* Phones have little room on this line for a long group card. */}
                 <span className="max-w-24 truncate sm:max-w-none">
-                  {replyTo.author.display_name}
+                  <WriterName writer={replyTo.author} />
                 </span>
               </button>
             )}
@@ -254,7 +258,7 @@ export function PostCard({
           )}
           {boosts.shown.length === 0 && <div className="text-muted-foreground">{boostButton}</div>}
           <div className="ml-auto flex items-center text-muted-foreground">
-            {me?.id !== post.author.id && (
+            {!own && (
               <LikeButton
                 mine={reaction.mine}
                 onChange={(emoji) => {
@@ -342,12 +346,14 @@ export function PostCard({
           <ul className="relative mt-2 flex flex-wrap items-center gap-1.5">
             {boosts.shown.map((b) => (
               <BoostChip
-                key={b.user.id}
+                key={"anonymous" in b.user ? `a${b.user.number}` : b.user.id}
                 boost={b}
                 threadId={threadId}
-                removable={manage.moderate && b.user.id !== me?.id}
+                removable={manage.moderate && !isMine(b.user, me, self.alias)}
                 onReport={
-                  me && b.user.id !== me.id && b.id !== null ? reportBoost(b.id, b.body) : undefined
+                  me && !isMine(b.user, me, self.alias) && b.id !== null
+                    ? reportBoost(b.id, b.body)
+                    : undefined
                 }
               />
             ))}
@@ -459,7 +465,11 @@ function PostPreview({
   const Arrow = jump === "up" ? ArrowUp : ArrowDown;
   return (
     <div className="relative flex gap-3 py-3">
-      <UserAvatar user={post.author} className="size-9 ring-4 ring-background" />
+      <UserAvatar
+        user={post.author}
+        thread={post.thread_id}
+        className="size-9 ring-4 ring-background"
+      />
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1">
           <span className="text-sm font-semibold">{post.author.display_name}</span>

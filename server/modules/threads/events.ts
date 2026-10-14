@@ -3,9 +3,11 @@ import type { DB } from "../../../db/types.ts";
 import { env } from "../../platform/env.ts";
 import { excerpt } from "../../platform/markdown.ts";
 import { recordEvent } from "../events/service.ts";
+import { anonymousBrief } from "../users/service.ts";
 
 // Events for the bot plugin about threads and floors, written in the transaction that makes the
-// change; see docs/api.md §5. People in them carry their QQ number, so the plugin can @ them.
+// change; see docs/api.md §5. People in them carry their QQ number, so the plugin can @ them;
+// someone writing anonymously is only their number in the thread (design §8.12).
 
 // Characters of a floor in the text the plugin can send to QQ as it is.
 const QQ_EXCERPT = 60;
@@ -24,10 +26,16 @@ async function person(trx: Transaction<DB>, id: number) {
 
 // A floor with its thread and board, its author, and the QQ message it came from, if any.
 async function floorOf(trx: Transaction<DB>, postId: number) {
-  const { author_id, chat_type, chat_id, message_id, ...row } = await trx
+  const { chat_type, chat_id, message_id, alias, ...row } = await trx
     .selectFrom("posts")
     .innerJoin("threads", "threads.id", "posts.thread_id")
     .innerJoin("boards", "boards.id", "threads.board_id")
+    .leftJoin("thread_aliases as alias", (join) =>
+      join
+        .onRef("alias.thread_id", "=", "posts.thread_id")
+        .onRef("alias.user_id", "=", "posts.author_id")
+        .on("posts.anonymous", "=", true),
+    )
     .leftJoin("qq_message_links as link", (join) =>
       join.onRef("link.post_id", "=", "posts.id").on("link.kind", "=", "source"),
     )
@@ -46,12 +54,13 @@ async function floorOf(trx: Transaction<DB>, postId: number) {
       "link.chat_type",
       "link.chat_id",
       "link.message_id",
+      "alias.number as alias",
     ])
     .where("posts.id", "=", postId)
     .executeTakeFirstOrThrow();
   return {
     ...row,
-    author: await person(trx, author_id),
+    author: alias === null ? await person(trx, row.author_id) : anonymousBrief(alias),
     source:
       chat_type === null || chat_id === null || message_id === null
         ? null
@@ -60,6 +69,11 @@ async function floorOf(trx: Transaction<DB>, postId: number) {
 }
 
 type Floor = Awaited<ReturnType<typeof floorOf>>;
+
+// Who edited or deleted a floor: its anonymous author stays anonymous.
+async function doer(trx: Transaction<DB>, f: Floor, userId: number) {
+  return userId === f.author_id ? f.author : person(trx, userId);
+}
 
 function qqText(f: Floor) {
   return `【${f.board_name}】${f.title}\n${f.author.display_name}：${excerpt(f.html, QQ_EXCERPT)}\n${link(f.thread_id, f.floor)}`;
@@ -115,7 +129,7 @@ export async function postUpdated(trx: Transaction<DB>, postId: number, editorId
   await recordEvent(trx, "post.updated", {
     post: { id: f.id, floor: f.floor, body: f.body },
     thread: { id: f.thread_id, title: f.title },
-    editor: await person(trx, editorId),
+    editor: await doer(trx, f, editorId),
   });
 }
 
@@ -131,7 +145,7 @@ export async function postDeleted(
     post_id: f.id,
     thread_id: f.thread_id,
     floor: f.floor,
-    by: await person(trx, byId),
+    by: await doer(trx, f, byId),
     reason,
   });
 }

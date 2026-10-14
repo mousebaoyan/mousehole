@@ -1,6 +1,6 @@
 import { z } from "@hono/zod-openapi";
 import { unix } from "../../platform/http.ts";
-import { UserBriefSchema } from "../users/schemas.ts";
+import { UserBriefSchema, WriterSchema } from "../users/schemas.ts";
 import type { threadsByIds } from "./service.ts";
 
 // A thread as lists show it; also used by search results.
@@ -10,8 +10,10 @@ export const ThreadSchema = z
     board: z.object({ slug: z.string(), name: z.string(), color: z.string() }),
     kind: z.string().openapi({ description: "discussion：讨论；question：问答" }),
     title: z.string(),
-    author: UserBriefSchema,
-    posters: z.array(UserBriefSchema).openapi({ description: "作者以外最近回复的最多 4 个人" }),
+    author: WriterSchema,
+    posters: z
+      .array(UserBriefSchema)
+      .openapi({ description: "作者以外最近回复的最多 4 个人，不含匿名回复的" }),
     tags: z.array(z.string()),
     pinned: z.number().openapi({ description: "0：不置顶；1：版块内置顶；2：全站置顶" }),
     featured: z.boolean(),

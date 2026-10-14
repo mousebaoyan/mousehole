@@ -143,11 +143,19 @@ function ThreadRow({
         </div>
       </div>
       <div className="relative flex gap-0.5 max-md:hidden">
-        {[thread.author, ...thread.posters].map((p) => (
-          <Link key={p.id} to={`/u/${p.id}`} title={p.display_name} className="rounded-full">
-            <UserAvatar user={p} className="size-7" />
-          </Link>
-        ))}
+        {"anonymous" in thread.author && (
+          <span title={thread.author.display_name} className="rounded-full">
+            <UserAvatar user={thread.author} thread={thread.id} className="size-7" />
+          </span>
+        )}
+        {[thread.author, ...thread.posters].map(
+          (p) =>
+            !("anonymous" in p) && (
+              <Link key={p.id} to={`/u/${p.id}`} title={p.display_name} className="rounded-full">
+                <UserAvatar user={p} className="size-7" />
+              </Link>
+            ),
+        )}
       </div>
       <div className="flex flex-col items-end gap-1 md:items-center">
         <span

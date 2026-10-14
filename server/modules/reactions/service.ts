@@ -4,8 +4,14 @@ import { db } from "../../platform/db.ts";
 import { AppError } from "../../platform/errors.ts";
 import { recordAudit } from "../audit/service.ts";
 import { notifyOnPost } from "../notifications/service.ts";
-import { countBoosts, countReaction, getPost } from "../threads/service.ts";
-import { shownToGuests, userBriefs } from "../users/service.ts";
+import {
+  aliasIn,
+  countBoosts,
+  countReaction,
+  getPost,
+  writesAnonymously,
+} from "../threads/service.ts";
+import { shownToGuests, userBriefs, writer } from "../users/service.ts";
 
 // The heart is the like; every reaction counts as one. See design §8.1.
 export const REACTIONS = [
@@ -61,7 +67,7 @@ export async function react(
     }
     await countReaction(trx, postId, { from: previous, to: emoji });
     if (previous === null && emoji !== null) {
-      await notifyOnPost(trx, "like", post, viewer.id, { emoji });
+      await notifyOnPost(trx, "like", post, viewer.id, null, { emoji });
     }
   });
 }
@@ -116,17 +122,25 @@ export async function setBoost(
 ) {
   const post = await getPost(postId, { members, id: viewer.id, staff: false });
   if (post.deleted_at !== null) throw new AppError(404, "post_not_found", "回复不存在");
+  // As the person writes in this thread: anonymous or not (design §8.12).
+  const thread = await db
+    .selectFrom("threads")
+    .select(["author_id", "author_anonymous", "anonymous_replies"])
+    .where("id", "=", post.thread_id)
+    .executeTakeFirstOrThrow();
+  const anonymous = writesAnonymously(thread, viewer.id);
   const row = await db.transaction().execute(async (trx) => {
     const { replaced, ...saved } = await trx
       .insertInto("boosts")
-      .values({ post_id: postId, user_id: viewer.id, body })
+      .values({ post_id: postId, user_id: viewer.id, body, anonymous })
       .onConflict((oc) => oc.columns(["post_id", "user_id"]).doUpdateSet({ body }))
       .returning(["id", "post_id", "user_id", "body", "created_at"])
       .returning(sql<number | null>`old.id`.as("replaced"))
       .executeTakeFirstOrThrow();
+    const alias = anonymous ? await aliasIn(trx, post.thread_id, viewer.id) : null;
     if (replaced === null) {
       await countBoosts(trx, postId, 1);
-      await notifyOnPost(trx, "boost", post, viewer.id, { body });
+      await notifyOnPost(trx, "boost", post, viewer.id, alias, { body });
     }
     await recordAudit(trx, actor, {
       action: "boost.set",
@@ -134,7 +148,7 @@ export async function setBoost(
       target_id: postId,
       data: { body },
     });
-    return saved;
+    return { ...saved, alias };
   });
   const [boost] = await withBoostUsers([row]);
   return boost;
@@ -182,18 +196,40 @@ export async function removeBoost(actor: Actor, id: number, reason: string | und
 }
 
 // Guests don't get the boosts of people who keep their content from them.
+// With the writer's number in the thread for anonymous ones.
 function selectBoosts(members: boolean) {
   return db
     .selectFrom("boosts")
-    .select(["id", "post_id", "user_id", "body", "created_at"])
+    .innerJoin("posts", "posts.id", "boosts.post_id")
+    .leftJoin("thread_aliases as alias", (join) =>
+      join
+        .onRef("alias.thread_id", "=", "posts.thread_id")
+        .onRef("alias.user_id", "=", "boosts.user_id")
+        .on("boosts.anonymous", "=", true),
+    )
+    .select([
+      "boosts.id",
+      "boosts.post_id",
+      "boosts.user_id",
+      "boosts.body",
+      "boosts.created_at",
+      "alias.number as alias",
+    ])
     .$if(!members, (qb) => qb.where(shownToGuests("boosts.user_id")));
 }
 
 async function withBoostUsers(
-  rows: { id: number; post_id: number; user_id: number; body: string; created_at: Date }[],
+  rows: {
+    id: number;
+    post_id: number;
+    user_id: number;
+    body: string;
+    created_at: Date;
+    alias: number | null;
+  }[],
 ) {
   const user = await userBriefs(rows.map((r) => r.user_id));
-  return rows.map(({ user_id, ...r }) => ({ ...r, user: user(user_id) }));
+  return rows.map(({ user_id, alias, ...r }) => ({ ...r, user: writer(user, user_id, alias) }));
 }
 
 // Someone's own boosts, for the export of their data.
@@ -210,9 +246,9 @@ export async function exportOwnBoosts(userId: number) {
 export async function listBoosts(members: boolean, postId: number) {
   await getPost(postId, { members, id: null, staff: false });
   const rows = await selectBoosts(members)
-    .where("post_id", "=", postId)
-    .orderBy("created_at")
-    .orderBy("id")
+    .where("boosts.post_id", "=", postId)
+    .orderBy("boosts.created_at")
+    .orderBy("boosts.id")
     .execute();
   return withBoostUsers(rows);
 }
@@ -233,12 +269,13 @@ export async function floorExtras(reader: Pick<Reader, "id" | "members">, postId
       .selectFrom(
         selectBoosts(reader.members)
           .select(
-            sql<string>`row_number() OVER (PARTITION BY post_id ORDER BY created_at, id)`.as("n"),
+            sql<string>`row_number() OVER (
+              PARTITION BY boosts.post_id ORDER BY boosts.created_at, boosts.id)`.as("n"),
           )
-          .where("post_id", "in", postIds)
+          .where("boosts.post_id", "in", postIds)
           .as("ranked"),
       )
-      .select(["id", "post_id", "user_id", "body", "created_at"])
+      .select(["id", "post_id", "user_id", "body", "created_at", "alias"])
       .where("n", "<=", String(BOOSTS_SHOWN))
       .orderBy("created_at")
       .orderBy("id")

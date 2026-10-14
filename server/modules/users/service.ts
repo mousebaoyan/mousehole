@@ -249,9 +249,9 @@ export async function getUser(ref: UserRef, viewerId: number | null) {
 
 // For what guests get: leaves out what people who keep their content from guests wrote, given the
 // column holding the writer's user ID (design §8.10).
-export function shownToGuests(writer: "threads.author_id" | "posts.author_id" | "boosts.user_id") {
+export function shownToGuests(column: "threads.author_id" | "posts.author_id" | "boosts.user_id") {
   return sql<boolean>`NOT EXISTS (SELECT 1 FROM users
-    WHERE users.id = ${sql.ref(writer)} AND users.hide_from_guests)`;
+    WHERE users.id = ${sql.ref(column)} AND users.hide_from_guests)`;
 }
 
 // ---- One's own settings: see design §6.1 and §9.
@@ -500,6 +500,17 @@ function withPrimaryGroup() {
         .onRef("group_members.user_id", "=", "users.id")
         .on("group_members.left_at", "is", null),
     );
+}
+
+export function anonymousBrief(number: number) {
+  return { anonymous: true as const, number, display_name: `匿名鼠 ${number}` };
+}
+
+type UserBrief = ReturnType<Awaited<ReturnType<typeof userBriefs>>>;
+
+// Who wrote something, as shown: their number in the thread when they wrote it anonymously.
+export function writer(user: (id: number) => UserBrief, id: number, alias: number | null) {
+  return alias === null ? user(id) : anonymousBrief(alias);
 }
 
 // How people appear next to their posts: the title is their custom one in the primary group.

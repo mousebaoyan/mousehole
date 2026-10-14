@@ -9,7 +9,7 @@ import {
   errorResponse,
   unix,
 } from "../../platform/http.ts";
-import { UserBriefSchema, UserRefSchema } from "../users/schemas.ts";
+import { UserBriefSchema, UserRefSchema, WriterSchema } from "../users/schemas.ts";
 import { handleReport, lift, listReports, reportBoost, reportPost, restrict } from "./service.ts";
 
 const UserParam = z.object({ user: UserRefSchema });
@@ -38,12 +38,12 @@ const ReportSchema = z
       id: z.number(),
       floor: z.number(),
       thread: z.object({ id: z.number(), title: z.string() }),
-      author: UserBriefSchema,
+      author: WriterSchema,
       excerpt: z.string(),
       deleted: z.boolean(),
     }),
     boost: z
-      .object({ id: z.number(), body: z.string(), user: UserBriefSchema })
+      .object({ id: z.number(), body: z.string(), user: WriterSchema })
       .nullable()
       .openapi({ description: "举报的是这一层下的短评时" }),
     handler: UserBriefSchema.nullable(),

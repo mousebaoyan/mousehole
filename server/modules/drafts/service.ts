@@ -12,6 +12,8 @@ export type DraftContent = {
   board?: string | null;
   kind?: "discussion" | "question" | null;
   tags?: string[];
+  author_anonymous?: boolean;
+  anonymous_replies?: boolean;
   reply_to_id?: number | null;
 };
 
@@ -60,6 +62,8 @@ export async function getDraft(userId: number, threadId: number | null) {
       "boards.slug as board",
       "drafts.kind",
       "drafts.tags",
+      "drafts.author_anonymous",
+      "drafts.anonymous_replies",
       "drafts.body",
       "drafts.updated_at",
       "target.id as target_id",
@@ -101,6 +105,8 @@ export async function saveDraft(userId: number, threadId: number | null, content
       : null,
     kind: content.kind ?? null,
     tags: content.tags ?? [],
+    author_anonymous: content.author_anonymous ?? false,
+    anonymous_replies: content.anonymous_replies ?? false,
     body: content.body,
     reply_to_id:
       threadId !== null && content.reply_to_id
@@ -118,6 +124,8 @@ export async function saveDraft(userId: number, threadId: number | null, content
         board_id: eb.ref("excluded.board_id"),
         kind: eb.ref("excluded.kind"),
         tags: eb.ref("excluded.tags"),
+        author_anonymous: eb.ref("excluded.author_anonymous"),
+        anonymous_replies: eb.ref("excluded.anonymous_replies"),
         body: eb.ref("excluded.body"),
         reply_to_id: eb.ref("excluded.reply_to_id"),
         updated_at: eb.ref("excluded.updated_at"),

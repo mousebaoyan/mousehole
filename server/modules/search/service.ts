@@ -132,7 +132,9 @@ export async function search(members: boolean, q: string, filter: SearchFilter, 
     matches = matches.where("threads.board_id", "=", filter.boardId);
   }
   if (filter.authorId !== undefined) {
-    matches = matches.where("threads.author_id", "=", filter.authorId);
+    matches = matches
+      .where("threads.author_id", "=", filter.authorId)
+      .where("threads.author_anonymous", "=", false);
   }
   if (filter.kind !== undefined) matches = matches.where("threads.kind", "=", filter.kind);
   if (filter.solved === true) matches = matches.where("threads.solved_post_id", "is not", null);

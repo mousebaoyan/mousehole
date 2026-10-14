@@ -7,6 +7,7 @@ import { Button, buttonVariants } from "~/components/ui/button";
 import { UserAvatar } from "~/components/user-avatar";
 import { UserBadges } from "~/components/user-badges";
 import { useMe } from "~/forum";
+import type { Writer } from "~/api-types";
 import type { loader } from "~/routes/user-card";
 import { useSavedValue } from "~/saved-value";
 
@@ -81,8 +82,20 @@ export function RelationButtons({
 }
 
 // Wraps a person's avatar or name so that it opens their profile card, fetched when it opens; see
-// design §9. `align` is the edge of the trigger the card lines up with.
-export function UserCard({
+// design §9. `align` is the edge of the trigger the card lines up with. Someone anonymous has no
+// card to open.
+export function UserCard(props: {
+  user: Writer | { id: number; display_name: string };
+  align?: "start" | "end";
+  className?: string;
+  children: ReactNode;
+}) {
+  const { user, className, children } = props;
+  if ("anonymous" in user) return <span className={className}>{children}</span>;
+  return <PersonCard {...props} user={user} />;
+}
+
+function PersonCard({
   user,
   align = "start",
   className,

@@ -168,7 +168,7 @@ function Row({ item: n, now }: { item: Item; now: number }) {
     >
       <span className="relative shrink-0 self-start">
         {n.actor ? (
-          <UserAvatar user={n.actor} className="size-9" />
+          <UserAvatar user={n.actor} thread={n.thread.id} className="size-9" />
         ) : (
           <span className="block size-9 rounded-full bg-muted" />
         )}

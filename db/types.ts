@@ -49,7 +49,6 @@ export interface AuditLogs {
 }
 
 export interface Boards {
-  allow_anonymous: Generated<boolean>;
   color: Generated<string>;
   created_at: Generated<Timestamp>;
   default_kind: Generated<string>;
@@ -66,6 +65,7 @@ export interface Boards {
 }
 
 export interface Boosts {
+  anonymous: Generated<boolean>;
   body: string;
   created_at: Generated<Timestamp>;
   id: Generated<number>;
@@ -74,6 +74,8 @@ export interface Boosts {
 }
 
 export interface Drafts {
+  anonymous_replies: Generated<boolean>;
+  author_anonymous: Generated<boolean>;
   board_id: number | null;
   body: Generated<string>;
   kind: string | null;
@@ -143,6 +145,7 @@ export interface LoginTickets {
 }
 
 export interface Notifications {
+  actor_alias: number | null;
   actor_id: number | null;
   count: Generated<number>;
   created_at: Generated<Timestamp>;
@@ -262,8 +265,15 @@ export interface Tags {
   thread_count: Generated<number>;
 }
 
+export interface ThreadAliases {
+  number: number;
+  thread_id: number;
+  user_id: number;
+}
+
 export interface Threads {
-  anonymous: Generated<boolean>;
+  anonymous_replies: Generated<boolean>;
+  author_anonymous: Generated<boolean>;
   author_id: number;
   board_id: number;
   created_at: Generated<Timestamp>;
@@ -371,6 +381,7 @@ export interface DB {
   sessions: Sessions;
   settings: Settings;
   tags: Tags;
+  thread_aliases: ThreadAliases;
   thread_tags: ThreadTags;
   thread_users: ThreadUsers;
   threads: Threads;

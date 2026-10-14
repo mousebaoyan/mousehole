@@ -21,6 +21,8 @@ export async function action({ request, context }: Route.ActionArgs) {
       kind: text("kind") === "question" ? "question" : "discussion",
       tags: form.getAll("tags").filter((t) => typeof t === "string"),
       content: { markdown: text("markdown") },
+      anonymous: text("anonymous") === "true",
+      anonymous_replies: text("anonymous_replies") === "true",
     },
   });
   if (res.ok) return { ok: true as const, id: (await res.json()).id };

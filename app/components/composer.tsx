@@ -13,6 +13,7 @@ import {
   createContext,
   use,
   useEffect,
+  useId,
   useRef,
   useState,
   type ComponentProps,
@@ -25,6 +26,7 @@ import { browserApi } from "~/browser-api";
 import { MarkdownEditor } from "~/components/markdown-editor";
 import { TagPicker } from "~/components/tag-picker";
 import { Button } from "~/components/ui/button";
+import { Checkbox } from "~/components/ui/checkbox";
 import { chooseDialog, confirmDialog } from "~/components/ui/dialog";
 import { Input } from "~/components/ui/input";
 import { Select } from "~/components/ui/select";
@@ -41,8 +43,17 @@ export type ComposerTarget =
   | { mode: "reply"; thread: ThreadRef; replyTo: ReplyRef | null }
   | { mode: "edit"; thread: ThreadRef; post: { id: number; floor: number; markdown: string } };
 
-// What is in the editor; the title, board, kind and tags only matter for a new thread.
-type Content = { text: string; title: string; board: string; kind: Kind; tags: string[] };
+// What is in the editor; the rest only matters for a new thread.
+type Content = {
+  text: string;
+  title: string;
+  board: string;
+  kind: Kind;
+  tags: string[];
+  // Design §8.12: the author, and everyone else replying.
+  anonymous: boolean;
+  anonymousReplies: boolean;
+};
 
 type Writing = { target: ComposerTarget; content: Content; collapsed: boolean };
 
@@ -51,7 +62,15 @@ type DraftList = { thread: ThreadRef | null }[];
 
 type SaveState = "saving" | "saved" | "failed" | null;
 
-const EMPTY: Content = { text: "", title: "", board: "", kind: "discussion", tags: [] };
+const EMPTY: Content = {
+  text: "",
+  title: "",
+  board: "",
+  kind: "discussion",
+  tags: [],
+  anonymous: false,
+  anonymousReplies: false,
+};
 
 // `new`, or the thread a reply is for. Edits keep no draft: the floor itself still has the text.
 function draftKey(target: ComposerTarget) {
@@ -65,8 +84,16 @@ function isEmpty(content: Content) {
 
 function draftBody({ target, content }: Writing) {
   if (target.mode === "thread") {
-    const { text, title, board, kind, tags } = content;
-    return { body: text, title, board: board || null, kind, tags };
+    const { text, title, board, kind, tags, anonymous, anonymousReplies } = content;
+    return {
+      body: text,
+      title,
+      board: board || null,
+      kind,
+      tags,
+      author_anonymous: anonymous,
+      anonymous_replies: anonymousReplies,
+    };
   }
   return {
     body: content.text,
@@ -234,6 +261,8 @@ export function ComposerProvider({
         board: draft.board ?? "",
         kind: draft.kind === "question" ? "question" : "discussion",
         tags: draft.tags,
+        anonymous: draft.author_anonymous,
+        anonymousReplies: draft.anonymous_replies,
       };
       // As the server has it, so opening it again sends nothing.
       const stored: ComposerTarget =
@@ -388,6 +417,8 @@ function Composer({
       form.set("kind", content.kind);
       form.set("markdown", content.text);
       for (const tag of content.tags) form.append("tags", tag);
+      form.set("anonymous", String(content.anonymous));
+      form.set("anonymous_replies", String(content.anonymousReplies));
       void sending.submit(form, { ...options, action: "/new" });
     } else if (target.mode === "edit") {
       const { id, floor } = target.post;
@@ -567,6 +598,7 @@ function ThreadFields({
   const me = useMe();
   const staff = me?.role === "moderator" || me?.role === "admin";
   const boards = useBoards().filter((b) => b.post_role === "user" || staff);
+  const id = useId();
   return (
     <div className="flex flex-col gap-2 border-t px-4 py-2.5">
       <Input
@@ -613,6 +645,32 @@ function ThreadFields({
           ))}
         </fieldset>
         <TagPicker chosen={content.tags} onChange={(tags) => onChange({ ...content, tags })} />
+      </div>
+      {/* Fixed once posted, so said up front (design §8.12). */}
+      <div className="flex flex-wrap items-center gap-x-5 gap-y-1 text-sm">
+        <span className="flex items-center gap-2">
+          <Checkbox
+            id={`${id}-author`}
+            checked={content.anonymous}
+            onChange={(e) => onChange({ ...content, anonymous: e.target.checked })}
+          />
+          <label htmlFor={`${id}-author`}>楼主匿名</label>
+        </span>
+        <span className="flex items-center gap-2">
+          <Checkbox
+            id={`${id}-replies`}
+            checked={content.anonymousReplies}
+            onChange={(e) => onChange({ ...content, anonymousReplies: e.target.checked })}
+          />
+          <label htmlFor={`${id}-replies`}>
+            {content.kind === "question" ? "回答匿名" : "回复匿名"}
+          </label>
+        </span>
+        {(content.anonymous || content.anonymousReplies) && (
+          <span className="text-meta text-muted-foreground">
+            发出后不能改；除了本人和管理员，没人知道匿名的是谁
+          </span>
+        )}
       </div>
     </div>
   );
