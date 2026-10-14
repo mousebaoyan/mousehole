@@ -256,6 +256,17 @@ const Source = z
 
 const Title = z.string().trim().min(4).max(80);
 
+const SOON_S = 600;
+const YEAR_S = 365 * 86_400;
+
+// When something set at posting ends: far enough off to mean it, and within a year to catch a
+// mistyped year.
+const Deadline = z
+  .number()
+  .int()
+  .refine((t) => t >= Date.now() / 1000 + SOON_S, "截止时间最早是 10 分钟以后")
+  .refine((t) => t <= Date.now() / 1000 + YEAR_S, "截止时间最晚是一年以内");
+
 const PollInput = z
   .object({
     options: z
@@ -275,14 +286,9 @@ const PollInput = z
     results: z.enum(["voted", "always"]).default("voted").openapi({
       description: "voted 投过票或结束后才看得到结果，always 随时公开",
     }),
-    days: z
-      .number()
-      .int()
-      .min(1)
-      .max(30)
-      .nullable()
+    closes_at: Deadline.nullable()
       .default(null)
-      .openapi({ description: "几天后截止；null 不限" }),
+      .openapi({ description: "截止时间，Unix 秒，10 分钟以后、一年以内；null 不限" }),
   })
   .refine((p) => p.max_choices === null || p.max_choices < p.options.length, {
     message: "最多选几项要少于选项数",
