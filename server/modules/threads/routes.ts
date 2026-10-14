@@ -1,7 +1,8 @@
 import { createRoute, z } from "@hono/zod-openapi";
 import type { Context } from "hono";
-import { GUEST, reachOf } from "../../platform/access.ts";
+import { GUEST, isMember, reachOf } from "../../platform/access.ts";
 import { env } from "../../platform/env.ts";
+import { AppError } from "../../platform/errors.ts";
 import {
   actorOf,
   authorize,
@@ -32,7 +33,7 @@ import {
   threadJson,
   ThreadSchema,
 } from "./schemas.ts";
-import { findUserId } from "../users/service.ts";
+import { assertRelationsShown, findUserId, relationsShown, userBriefs } from "../users/service.ts";
 import {
   countUnread,
   createPost,
@@ -49,6 +50,8 @@ import {
   revealAliases,
   listThreads,
   listModerated,
+  likeTallies,
+  listLikedPosts,
   listUserPosts,
   MAX_BODY,
   NOTIFY_LEVELS,
@@ -60,9 +63,41 @@ import {
   setPostStatus,
   setSolution,
   setThreadStatus,
+  topPosts,
   VIEWS,
   type ThreadView,
 } from "./service.ts";
+
+// A floor in lists of someone's posts: what it says, where and when.
+const UserPostSchema = z.object({
+  id: z.number(),
+  thread: z.object({ id: z.number(), title: z.string() }),
+  floor: z.number(),
+  excerpt: z.string().openapi({ description: "正文的纯文本，最多 140 个字" }),
+  like_count: z.number(),
+  created_at: z.number(),
+});
+
+function userPostJson(p: {
+  id: number;
+  thread_id: number;
+  title: string;
+  floor: number;
+  excerpt: string;
+  like_count: number;
+  created_at: Date;
+}) {
+  return {
+    id: p.id,
+    thread: { id: p.thread_id, title: p.title },
+    floor: p.floor,
+    excerpt: p.excerpt,
+    like_count: p.like_count,
+    created_at: unix(p.created_at),
+  };
+}
+
+const PersonCountSchema = z.object({ user: UserBriefSchema, count: z.number() });
 
 const ThreadDetailSchema = ThreadSchema.extend({
   url: z.string(),
@@ -449,7 +484,13 @@ export const threadsRoutes = createRouter()
       summary: "某人的回复（不含主楼），最新的在前，每页 30 个，正文只带前 140 个字",
       request: {
         params: z.object({ user: UserRefSchema }),
-        query: z.object({ cursor: z.coerce.number().int().optional() }),
+        query: z.object({
+          solved: z
+            .enum(["true", "false"])
+            .optional()
+            .openapi({ description: "true 只要被采纳的回答" }),
+          cursor: z.coerce.number().int().optional(),
+        }),
       },
       responses: {
         200: {
@@ -457,16 +498,7 @@ export const threadsRoutes = createRouter()
           content: {
             "application/json": {
               schema: z.object({
-                items: z.array(
-                  z.object({
-                    id: z.number(),
-                    thread: z.object({ id: z.number(), title: z.string() }),
-                    floor: z.number(),
-                    excerpt: z.string().openapi({ description: "正文的纯文本，最多 140 个字" }),
-                    like_count: z.number(),
-                    created_at: z.number(),
-                  }),
-                ),
+                items: z.array(UserPostSchema),
                 next_cursor: z.string().nullable(),
               }),
             },
@@ -477,22 +509,95 @@ export const threadsRoutes = createRouter()
     }),
     async (c) => {
       const author = await findUserId(c.req.valid("param").user);
+      const { solved, cursor } = c.req.valid("query");
       const reach = reachOf(c.var.viewer, c.var.bot);
-      const page = await listUserPosts(reach, author, c.req.valid("query").cursor);
+      const page = await listUserPosts(reach, author, { solved: solved === "true", cursor });
+      return c.json({ items: page.items.map(userPostJson), next_cursor: page.next_cursor }, 200);
+    },
+  )
+  .openapi(
+    createRoute({
+      method: "get",
+      path: "/users/{user}/likes",
+      summary: "某人留过表情回应的楼层，最新的在前，每页 30 个；只给成员看，本人关掉公开时只给本人",
+      request: {
+        params: z.object({ user: UserRefSchema }),
+        query: z.object({
+          cursor: z.coerce.number().int().optional().openapi({ description: "已经列出的条数" }),
+        }),
+      },
+      responses: {
+        200: {
+          description: "楼层，带 TA 选的表情和时间",
+          content: {
+            "application/json": {
+              schema: z.object({
+                items: z.array(UserPostSchema.extend({ emoji: z.string(), liked_at: z.number() })),
+                next_cursor: z.string().nullable(),
+              }),
+            },
+          },
+        },
+        403: errorResponse("不是成员，或者 TA 没有公开（relations_hidden）"),
+        404: errorResponse("用户不存在"),
+      },
+    }),
+    async (c) => {
+      const viewer = authorize(c, "read");
+      if (!isMember(viewer, c.var.bot)) throw new AppError(403, "forbidden", "成员才能看");
+      const userId = await findUserId(c.req.valid("param").user);
+      await assertRelationsShown(viewer.id, userId);
+      const reach = reachOf(viewer, c.var.bot);
+      const page = await listLikedPosts(reach, userId, c.req.valid("query").cursor ?? 0);
       return c.json(
         {
           items: page.items.map((p) => ({
-            id: p.id,
-            thread: { id: p.thread_id, title: p.title },
-            floor: p.floor,
-            excerpt: p.excerpt,
-            like_count: p.like_count,
-            created_at: unix(p.created_at),
+            ...userPostJson(p),
+            emoji: p.emoji,
+            liked_at: unix(p.liked_at),
           })),
-          next_cursor: page.next_cursor,
+          next_cursor: page.next === null ? null : String(page.next),
         },
         200,
       );
+    },
+  )
+  .openapi(
+    createRoute({
+      method: "get",
+      path: "/users/{user}/summary",
+      summary: "概要：获赞最多的 5 层；最常赞 TA 的人、TA 最常赞的人各 10 个，带次数",
+      request: { params: z.object({ user: UserRefSchema }) },
+      responses: {
+        200: {
+          description:
+            "两份名单只给成员看，TA 关掉公开时只给本人，其余时候为 null；匿名楼层不算，关掉公开的人不出现",
+          content: {
+            "application/json": {
+              schema: z.object({
+                top_posts: z.array(UserPostSchema),
+                likers: z.array(PersonCountSchema).nullable(),
+                liked: z.array(PersonCountSchema).nullable(),
+              }),
+            },
+          },
+        },
+        404: errorResponse("用户不存在"),
+      },
+    }),
+    async (c) => {
+      const { viewer, bot } = c.var;
+      const userId = await findUserId(c.req.valid("param").user);
+      const reach = reachOf(viewer, bot);
+      const top_posts = (await topPosts(reach, userId)).map(userPostJson);
+      if (!viewer || !isMember(viewer, bot) || !(await relationsShown(viewer.id, userId))) {
+        return c.json({ top_posts, likers: null, liked: null }, 200);
+      }
+      const { likers, liked } = await likeTallies(reach, userId);
+      const user = await userBriefs([...likers, ...liked].map((p) => p.id));
+      const people = (rows: { id: number; count: number }[]) =>
+        rows.map((r) => ({ user: user(r.id), count: r.count }));
+      return c.json({ top_posts, likers: people(likers), liked: people(liked) }, 200);
     },
   )
   // Before /threads/{id}, which would take "counts" for an ID.

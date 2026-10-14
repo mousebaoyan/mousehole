@@ -123,3 +123,125 @@ describe("关注和认可", () => {
     expect((await api.users[":user"].follow.$put({ param }, author.who)).status).toBe(400);
   });
 });
+
+async function person() {
+  const { id } = await createUser();
+  return { id, who: as(await login(id)) };
+}
+
+async function opening(threadId: number) {
+  const res = await api.threads[":id"].posts.$get({ param: { id: String(threadId) }, query: {} });
+  if (!res.ok) throw new Error(`status ${res.status}`);
+  return (await res.json()).items[0].id;
+}
+
+function like(postId: number, who: Who) {
+  return api.posts[":id"].reaction.$put(
+    { param: { id: String(postId) }, json: { emoji: "heart" } },
+    who,
+  );
+}
+
+async function summary(userId: number, who: Who) {
+  const res = await api.users[":user"].summary.$get({ param: { user: String(userId) } }, who);
+  if (!res.ok) throw new Error(`status ${res.status}`);
+  return res.json();
+}
+
+describe("赞过、概要和关系", () => {
+  test("赞过和概要不算匿名楼层；关掉公开后别人看不到，也不出现在别人的名单里", async () => {
+    const [writer, fan] = await Promise.all([person(), person()]);
+    const created = await api.threads.$post(
+      { json: { board: "open", title: "求赞的帖子", content: { markdown: "正文" } } },
+      writer.who,
+    );
+    if (!created.ok) throw new Error(`status ${created.status}`);
+    const liked = await opening((await created.json()).id);
+    const hidden = await api.threads.$post(
+      {
+        json: {
+          board: "open",
+          title: "匿名求赞的帖子",
+          content: { markdown: "匿名" },
+          anonymous: true,
+        },
+      },
+      writer.who,
+    );
+    if (!hidden.ok) throw new Error(`status ${hidden.status}`);
+    await like(liked, fan.who);
+    await like(await opening((await hidden.json()).id), fan.who);
+
+    const likes = async (who: Who) =>
+      api.users[":user"].likes.$get({ param: { user: String(fan.id) }, query: {} }, who);
+    const seen = await likes(reader);
+    if (!seen.ok) throw new Error(`status ${seen.status}`);
+    expect((await seen.json()).items.map((p) => [p.thread.title, p.emoji])).toEqual([
+      ["匿名求赞的帖子", "heart"],
+      ["求赞的帖子", "heart"],
+    ]);
+    expect((await likes(guest)).status).toBe(401);
+
+    expect(await summary(writer.id, reader)).toMatchObject({
+      top_posts: [{ id: liked, like_count: 1 }],
+      likers: [{ user: { id: fan.id }, count: 1 }],
+    });
+    expect(await summary(writer.id, guest)).toMatchObject({ likers: null, liked: null });
+
+    await api.me.$patch({ json: { relations_public: false } }, fan.who);
+    expect(await (await likes(reader)).json()).toMatchObject({
+      error: { code: "relations_hidden" },
+    });
+    expect((await likes(fan.who)).status).toBe(200);
+    expect(await summary(writer.id, reader)).toMatchObject({ likers: [] });
+    expect(await summary(fan.id, reader)).toMatchObject({ likers: null, liked: null });
+  });
+
+  test("关注、粉丝、认可的名单；被采纳的回答", async () => {
+    const [asker, helper] = await Promise.all([person(), person()]);
+    await api.users[":user"].follow.$put({ param: { user: String(asker.id) } }, helper.who);
+    await api.users[":user"].endorsement.$put({ param: { user: String(helper.id) } }, asker.who);
+    const people = async (user: number, list: "followers" | "endorsing" | "endorsers") => {
+      const res = await api.users[":user"].relations.$get(
+        { param: { user: String(user) }, query: { list } },
+        reader,
+      );
+      if (!res.ok) throw new Error(`status ${res.status}`);
+      return (await res.json()).items.map((p) => p.user.id);
+    };
+    expect(await people(asker.id, "followers")).toEqual([helper.id]);
+    expect(await people(asker.id, "endorsing")).toEqual([helper.id]);
+    expect(await people(helper.id, "endorsers")).toEqual([asker.id]);
+
+    const asked = await api.threads.$post(
+      {
+        json: {
+          board: "open",
+          title: "求助一个问题",
+          kind: "question",
+          content: { markdown: "怎么办" },
+        },
+      },
+      asker.who,
+    );
+    if (!asked.ok) throw new Error(`status ${asked.status}`);
+    const param = { id: String((await asked.json()).id) };
+    const answer = async (markdown: string) => {
+      const res = await api.threads[":id"].posts.$post(
+        { param, json: { content: { markdown } } },
+        helper.who,
+      );
+      if (!res.ok) throw new Error(`status ${res.status}`);
+      return (await res.json()).id;
+    };
+    const accepted = await answer("这样办");
+    await answer("补充一句");
+    await api.threads[":id"].solution.$put({ param, json: { post_id: accepted } }, asker.who);
+    const solved = await api.users[":user"].posts.$get(
+      { param: { user: String(helper.id) }, query: { solved: "true" } },
+      guest,
+    );
+    if (!solved.ok) throw new Error(`status ${solved.status}`);
+    expect((await solved.json()).items.map((p) => p.id)).toEqual([accepted]);
+  });
+});

@@ -12,49 +12,87 @@ import { useMe } from "~/forum";
 import { restrictionText } from "~/restriction";
 import { useNearView } from "~/near-view";
 import { ago, unixNow } from "~/time";
+import type { InferResponseType } from "hono/client";
+import type { Api } from "~/api-types";
 import type { Route } from "./+types/user.ts";
 import { ModerationButtons } from "./user-moderation.tsx";
+import { REACTIONS } from "./reactions.tsx";
 import { levelName, SITE_NAME, STAFF } from "../../server/platform/site.ts";
 
 export function meta({ loaderData }: Route.MetaArgs) {
   return [{ title: `${loaderData.user.display_name} · ${SITE_NAME}` }];
 }
 
+// What the page lists below the profile, ?tab=; likes and people only for members, and only
+// when the person shows them (design §9).
 const TABS = [
-  { tab: "threads", label: "帖子" },
-  { tab: "posts", label: "回复" },
+  { tab: "threads", label: "帖子", relations: false },
+  { tab: "posts", label: "回复", relations: false },
+  { tab: "solved", label: "被采纳", relations: false },
+  { tab: "likes", label: "赞过", relations: true },
+  { tab: "summary", label: "概要", relations: false },
+  { tab: "people", label: "关系", relations: true },
 ] as const;
+type Tab = (typeof TABS)[number]["tab"];
 
-// The profile, then the threads or the replies, ?tab=posts, a page at a time.
+const PEOPLE = [
+  { list: "following", label: "TA 关注的" },
+  { list: "followers", label: "粉丝" },
+  { list: "endorsing", label: "TA 认可的" },
+  { list: "endorsers", label: "认可 TA 的" },
+] as const;
+type PeopleList = (typeof PEOPLE)[number]["list"];
+
 export async function loader({ params, request, context }: Route.LoaderArgs) {
-  const api = context.get(apiContext);
+  const api = context.get(apiContext).users[":user"];
   const search = new URL(request.url).searchParams;
-  const tab = search.get("tab") === "posts" ? "posts" : "threads";
+  const tab: Tab = TABS.find((t) => t.tab === search.get("tab"))?.tab ?? "threads";
+  const list: PeopleList = PEOPLE.find((p) => p.list === search.get("list"))?.list ?? "following";
   const cursor = search.get("cursor") ?? undefined;
   const param = { user: params.id };
-  const [userRes, levelRes, threadsRes, postsRes] = await Promise.all([
-    api.users[":user"].$get({ param }),
-    // Only for themselves and admins.
-    api.users[":user"].level.$get({ param }),
-    tab === "threads" ? api.users[":user"].threads.$get({ param, query: { cursor } }) : null,
-    tab === "posts" ? api.users[":user"].posts.$get({ param, query: { cursor } }) : null,
-  ]);
+  const [userRes, levelRes, threadsRes, postsRes, likesRes, summaryRes, peopleRes] =
+    await Promise.all([
+      api.$get({ param }),
+      // Only for themselves and admins.
+      api.level.$get({ param }),
+      tab === "threads" ? api.threads.$get({ param, query: { cursor } }) : null,
+      tab === "posts" || tab === "solved"
+        ? api.posts.$get({
+            param,
+            query: { cursor, solved: tab === "solved" ? "true" : undefined },
+          })
+        : null,
+      tab === "likes" ? api.likes.$get({ param, query: { cursor } }) : null,
+      tab === "summary" ? api.summary.$get({ param }) : null,
+      tab === "people" ? api.relations.$get({ param, query: { list, cursor } }) : null,
+    ]);
   if (!userRes.ok) throw data("用户不存在", { status: 404 });
   const threads = threadsRes?.ok ? await threadsRes.json() : null;
   const posts = postsRes?.ok ? await postsRes.json() : null;
+  const likes = likesRes?.ok ? await likesRes.json() : null;
+  const people = peopleRes?.ok ? await peopleRes.json() : null;
   // Shaped like the thread lists' pages, which `More` loads the next of.
   return {
     user: await userRes.json(),
     progress: levelRes.ok ? await levelRes.json() : null,
     tab,
+    list,
     threads: threads?.items ?? null,
-    posts: posts?.items ?? null,
-    next_cursor: (threads ?? posts)?.next_cursor ?? null,
+    posts: posts?.items ?? likes?.items ?? null,
+    summary: summaryRes?.ok ? await summaryRes.json() : null,
+    people: people?.items ?? null,
+    next_cursor: (threads ?? posts ?? likes ?? people)?.next_cursor ?? null,
     now: unixNow(),
   };
 }
 
-type UserPost = NonNullable<Route.ComponentProps["loaderData"]["posts"]>[number];
+type LoaderData = Route.ComponentProps["loaderData"];
+// A floor of theirs, or one they liked, which says with what and when.
+type UserPost = InferResponseType<Api["users"][":user"]["posts"]["$get"], 200>["items"][number] & {
+  emoji?: string;
+  liked_at?: number;
+};
+type Person = NonNullable<LoaderData["people"]>[number];
 
 // Following and 认可, from this page or the profile card anywhere; see useRelations.
 export async function action({ params, request, context }: Route.ActionArgs) {
@@ -105,8 +143,6 @@ function age(unix: number, now: number) {
 
 const ROLES: Record<string, string> = { admin: "管理员", moderator: "版主" };
 
-type LoaderData = Route.ComponentProps["loaderData"];
-
 export default function User({ loaderData, actionData }: Route.ComponentProps) {
   const { user } = loaderData;
   if (!user.members_only) return <Profile {...loaderData} user={user} actionData={actionData} />;
@@ -132,8 +168,11 @@ function Profile({
   user,
   progress,
   tab,
+  list,
   threads,
   posts,
+  summary,
+  people,
   next_cursor,
   now,
   actionData,
@@ -143,6 +182,9 @@ function Profile({
 }) {
   const me = useMe();
   const staff = me !== null && STAFF.includes(me.role);
+  const self = me?.id === user.id;
+  // Members only, and only when they show them; theirs to themselves always.
+  const relationsShown = user.relations_public === true || self;
   const { stats } = user;
   const relations = useRelations(user);
   // What the group shows about them; the QQ number only to members.
@@ -201,6 +243,19 @@ function Profile({
             ))}
           </p>
           <RelationButtons relations={relations} className="mt-4 max-w-72" />
+          {self && (
+            <p className="mt-3 flex gap-4 text-meta">
+              {[
+                { to: "/my/bookmarks", label: "我的收藏" },
+                { to: "/my/read", label: "已读" },
+                { to: "/drafts", label: "草稿" },
+              ].map((l) => (
+                <Link key={l.to} to={l.to} className="text-primary hover:underline">
+                  {l.label}
+                </Link>
+              ))}
+            </p>
+          )}
           {user.restriction && (
             <p className="mt-3 text-meta text-destructive">{restrictionText(user.restriction)}</p>
           )}
@@ -237,14 +292,17 @@ function Profile({
       {progress && <LevelProgress progress={progress} />}
 
       <section>
-        <nav aria-label="发过的内容" className="mb-3 flex gap-1 px-1">
-          {TABS.map((t) => (
+        <nav
+          aria-label="TA 的内容和关系"
+          className="-mx-1 mb-3 flex gap-1 overflow-x-auto px-2 [scrollbar-width:none]"
+        >
+          {TABS.filter((t) => !t.relations || relationsShown).map((t) => (
             <Link
               key={t.tab}
-              to={t.tab === "threads" ? "." : "?tab=posts"}
+              to={t.tab === "threads" ? "." : `?tab=${t.tab}`}
               aria-current={t.tab === tab ? "page" : undefined}
               className={cn(
-                "rounded-full px-3.5 py-1.5 text-sm text-muted-foreground hover:text-foreground",
+                "shrink-0 rounded-full px-3.5 py-1.5 text-sm text-muted-foreground hover:text-foreground",
                 t.tab === tab && "bg-secondary font-medium text-foreground",
               )}
             >
@@ -253,7 +311,7 @@ function Profile({
           ))}
           <Link
             to={`/search?author=${user.id}`}
-            className="ml-auto inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground"
+            className="ml-auto inline-flex shrink-0 items-center gap-1 rounded-full px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground"
           >
             <Search className="size-4" /> 搜索 TA 的帖子
           </Link>
@@ -272,9 +330,34 @@ function Profile({
           ) : (
             <ul>
               <PostRows posts={posts} now={now} />
-              {next_cursor !== null && <MorePosts cursor={next_cursor} />}
+              {next_cursor !== null && <MoreRows cursor={next_cursor} />}
             </ul>
           ))}
+        {summary && <Summary summary={summary} now={now} />}
+        {people && (
+          <>
+            <nav aria-label="名单" className="mb-2 flex flex-wrap gap-1 px-1">
+              {PEOPLE.map((p) => (
+                <Link
+                  key={p.list}
+                  to={`?tab=people&list=${p.list}`}
+                  aria-current={p.list === list ? "page" : undefined}
+                  className="rounded-full border px-3 py-1 text-meta text-muted-foreground hover:text-foreground aria-[current]:border-foreground/30 aria-[current]:text-foreground"
+                >
+                  {p.label}
+                </Link>
+              ))}
+            </nav>
+            {people.length === 0 ? (
+              <Empty />
+            ) : (
+              <ul>
+                <PeopleRows people={people} now={now} />
+                {next_cursor !== null && <MoreRows cursor={next_cursor} />}
+              </ul>
+            )}
+          </>
+        )}
       </section>
     </div>
   );
@@ -284,6 +367,7 @@ function Empty() {
   return <p className="py-16 text-center text-sm text-muted-foreground">还没有内容</p>;
 }
 
+// Liked floors say with what, and when rather than when they were written.
 function PostRows({ posts, now }: { posts: UserPost[]; now: number }) {
   return posts.map((p) => (
     <li
@@ -298,8 +382,9 @@ function PostRows({ posts, now }: { posts: UserPost[]; now: number }) {
       </Link>
       <p className="mt-1 line-clamp-2 text-meta text-foreground/80">{p.excerpt}</p>
       <p className="mt-1.5 flex items-center gap-3 text-xs text-muted-foreground">
+        {p.emoji !== undefined && <span>{REACTIONS.find((r) => r.key === p.emoji)?.emoji}</span>}
         <span>#{p.floor}</span>
-        <span>{ago(p.created_at, now)}</span>
+        <span>{ago(p.liked_at ?? p.created_at, now)}</span>
         {p.like_count > 0 && (
           <span className="inline-flex items-center gap-1 tabular-nums">
             <Heart className="size-3" /> {p.like_count}
@@ -310,15 +395,17 @@ function PostRows({ posts, now }: { posts: UserPost[]; now: number }) {
   ));
 }
 
-// The next page of replies loads when its link comes near the screen, as lists of threads do.
-function MorePosts({ cursor }: { cursor: string }) {
+// The next page of a list loads when its link comes near the screen, as lists of threads do.
+function MoreRows({ cursor }: { cursor: string }) {
   const { load, state, data: page } = useFetcher<typeof loader>();
   const link = useRef<HTMLAnchorElement>(null);
-  const { pathname } = useLocation();
-  const href = `${pathname}?tab=posts&cursor=${cursor}`;
+  const { pathname, search } = useLocation();
+  const query = new URLSearchParams(search);
+  query.set("cursor", cursor);
+  const href = `${pathname}?${query}`;
   useNearView(link, state === "idle" && !page, () => void load(href));
 
-  if (!page?.posts) {
+  if (!page) {
     return (
       <li className="py-4 text-center text-meta">
         <a ref={link} href={href} className="text-muted-foreground hover:text-foreground">
@@ -329,9 +416,83 @@ function MorePosts({ cursor }: { cursor: string }) {
   }
   return (
     <>
-      <PostRows posts={page.posts} now={page.now} />
-      {page.next_cursor !== null && <MorePosts cursor={page.next_cursor} />}
+      {page.posts && <PostRows posts={page.posts} now={page.now} />}
+      {page.people && <PeopleRows people={page.people} now={page.now} />}
+      {page.next_cursor !== null && <MoreRows cursor={page.next_cursor} />}
     </>
+  );
+}
+
+function PeopleRows({ people, now }: { people: Person[]; now: number }) {
+  return people.map((p) => (
+    <li key={p.user.id}>
+      <Link
+        to={`/u/${p.user.id}`}
+        className="flex items-center gap-3 rounded-xl px-3 py-2.5 hover:bg-accent/60 sm:px-4"
+      >
+        <UserAvatar user={p.user} className="size-9" />
+        <span className="min-w-0 flex-1 truncate font-medium">{p.user.display_name}</span>
+        <span className="shrink-0 text-xs text-muted-foreground">{ago(p.created_at, now)}</span>
+      </Link>
+    </li>
+  ));
+}
+
+function Summary({ summary, now }: { summary: NonNullable<LoaderData["summary"]>; now: number }) {
+  const { top_posts, likers, liked } = summary;
+  return (
+    <div className="flex flex-col gap-6">
+      <div>
+        <h2 className="px-1 text-sm font-medium">获赞最多</h2>
+        {top_posts.length === 0 ? (
+          <Empty />
+        ) : (
+          <ul className="mt-1">
+            <PostRows posts={top_posts} now={now} />
+          </ul>
+        )}
+      </div>
+      {likers && liked && (
+        <div className="grid gap-6 sm:grid-cols-2">
+          <Tally title="最常赞 TA 的人" people={likers} />
+          <Tally title="TA 最常赞的人" people={liked} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Tally({
+  title,
+  people,
+}: {
+  title: string;
+  people: NonNullable<NonNullable<LoaderData["summary"]>["likers"]>;
+}) {
+  return (
+    <div>
+      <h2 className="px-1 text-sm font-medium">{title}</h2>
+      {people.length === 0 ? (
+        <p className="px-1 py-6 text-meta text-muted-foreground">还没有</p>
+      ) : (
+        <ul className="mt-1">
+          {people.map((p) => (
+            <li key={p.user.id}>
+              <Link
+                to={`/u/${p.user.id}`}
+                className="flex items-center gap-3 rounded-xl px-1 py-1.5 hover:bg-accent/60"
+              >
+                <UserAvatar user={p.user} className="size-7" />
+                <span className="min-w-0 flex-1 truncate text-sm">{p.user.display_name}</span>
+                <span className="inline-flex items-center gap-1 text-xs text-muted-foreground tabular-nums">
+                  <Heart className="size-3" /> {p.count}
+                </span>
+              </Link>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }
 

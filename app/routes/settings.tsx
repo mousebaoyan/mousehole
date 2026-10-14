@@ -70,6 +70,7 @@ export async function action({ request, context }: Route.ActionArgs) {
       custom_bio: field("custom_bio") || null,
       allow_proxy: on("allow_proxy"),
       hide_from_guests: on("hide_from_guests"),
+      relations_public: on("relations_public"),
       notify_email: on("notify_email"),
       notify_prefs: Object.fromEntries(
         TYPES.map(({ type }) => [type, { site: on(`${type}.site`), email: on(`${type}.email`) }]),
@@ -128,6 +129,12 @@ export default function Settings({ loaderData, actionData }: Route.ComponentProp
               label="我的内容不给访客看"
               hint="没登录的人和搜索引擎看不到我发的帖子、回复和短评，我的主页只显示名字和头像；以前发的也算。半分钟内生效"
               checked={settings.hide_from_guests}
+            />
+            <Check
+              name="relations_public"
+              label="公开我的赞和关系"
+              hint="其他成员能在我的主页看到我赞过的楼层、我关注和认可的人、我的粉丝，我也会出现在别人主页的这些名单里。关掉后数字照常显示"
+              checked={settings.relations_public}
             />
           </Section>
 

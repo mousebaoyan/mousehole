@@ -103,6 +103,16 @@ async function fill(author: { id: number }, reader: number) {
         OR users.display_name LIKE '填充成员%' AND (posts.thread_id + users.id) % 300 = 0)`.execute(
     db,
   );
+  // Likes on opening posts, the reader's among them.
+  await sql`
+    INSERT INTO reactions (post_id, user_id, emoji, created_at)
+    SELECT posts.id, users.id, 'heart', posts.created_at
+    FROM users, posts
+    WHERE posts.body = '填充' AND posts.floor = 1
+      AND (users.id = ${reader} AND posts.thread_id % 7 = 0
+        OR users.display_name LIKE '填充成员%' AND (posts.thread_id + users.id) % 200 = 0)`.execute(
+    db,
+  );
   // As autovacuum would: merges the full-text index's pending entries and updates statistics.
   await sql`VACUUM ANALYZE`.execute(db);
 }
@@ -112,7 +122,7 @@ afterAll(() => {
 });
 
 describe("热点查询走索引", () => {
-  test("列表、帖子、楼层、通知、搜索和个人主页", async () => {
+  test("列表、帖子、楼层、通知、搜索和个人主页，包括赞过、概要和关系", async () => {
     // Passes each query on, keeping its text and parameters.
     const query = vi.spyOn(Client.prototype, "query");
     const id = { id: String(thread) };
@@ -127,6 +137,14 @@ describe("热点查询走索引", () => {
     await api.notifications["unread-count"].$get({}, member);
     await api.search.$get({ query: { q: "华东师范" } });
     await api.users[":user"].$get({ param: { user: "1" } });
+    const profile = { user: String(memberId) };
+    await api.users[":user"].posts.$get({ param: profile, query: { solved: "true" } });
+    await api.users[":user"].likes.$get({ param: profile, query: {} }, member);
+    await api.users[":user"].summary.$get({ param: profile }, member);
+    await api.users[":user"].relations.$get(
+      { param: profile, query: { list: "endorsing" } },
+      member,
+    );
     const recorded = query.mock.calls.flatMap(([text, values]) =>
       typeof text === "string" && /^\s*select/i.test(text)
         ? [{ text, values: Array.isArray(values) ? values : [] }]
