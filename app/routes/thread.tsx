@@ -1,9 +1,10 @@
-import { ArrowDown, Link2, Reply } from "lucide-react";
+import { ArrowDown, Reply } from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { data, redirect, useFetcher, useNavigate } from "react-router";
 import { apiContext } from "../api.server.ts";
 import type { PostItem, UserBrief } from "~/api-types";
 import { useComposer } from "~/components/composer";
+import { CopyLinkButton } from "~/components/copy-link-button";
 import { ThreadList } from "~/components/thread-list";
 import { Button } from "~/components/ui/button";
 import { useMe } from "~/forum";
@@ -512,9 +513,7 @@ function ThreadPage({
             )}
             <BookmarkButton threadId={thread.id} initial={thread.bookmarked ?? false} />
             <NotifyButton threadId={thread.id} initial={thread.notify_level} />
-            <Button size="icon-lg" variant="ghost" aria-label="复制链接" title="复制链接">
-              <Link2 />
-            </Button>
+            <CopyLinkButton path={`/t/${thread.id}`} size="icon-lg" />
           </div>
 
           {suggested.length > 0 && (
