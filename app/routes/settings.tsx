@@ -60,7 +60,7 @@ export async function action({ request, context }: Route.ActionArgs) {
       allow_proxy: on("allow_proxy"),
       hide_from_guests: on("hide_from_guests"),
       notify_prefs: Object.fromEntries(
-        TYPES.map(({ type }) => [type, { site: on(`${type}.site`), qq: on(`${type}.qq`) }]),
+        TYPES.map(({ type }) => [type, { site: on(`${type}.site`), email: on(`${type}.email`) }]),
       ),
     },
   });
@@ -116,25 +116,28 @@ export default function Settings({ loaderData, actionData }: Route.ComponentProp
           />
         </Section>
 
-        <Section title="通知" description="站内通知在顶栏的铃铛里；QQ 提醒由群里的机器人发给你">
+        <Section
+          title="通知"
+          description="站内通知在顶栏的铃铛里；邮件发到你的 QQ 邮箱，有通知就发"
+        >
           <table className="w-full text-sm">
             <thead className="text-meta text-muted-foreground">
               <tr>
                 <th className="pb-2 text-left font-normal">类型</th>
                 <th className="w-16 pb-2 font-normal">站内</th>
-                <th className="w-16 pb-2 font-normal">QQ 提醒</th>
+                <th className="w-16 pb-2 font-normal">邮件</th>
               </tr>
             </thead>
             <tbody>
               {TYPES.map(({ type, label }) => (
                 <tr key={type} className="border-t">
                   <td className="py-2">{label}</td>
-                  {(["site", "qq"] as const).map((where) => (
+                  {(["site", "email"] as const).map((where) => (
                     <td key={where} className="text-center">
                       <Checkbox
                         name={`${type}.${where}`}
                         defaultChecked={settings.notify_prefs[type][where]}
-                        aria-label={`${label}：${where === "site" ? "站内" : "QQ 提醒"}`}
+                        aria-label={`${label}：${where === "site" ? "站内" : "邮件"}`}
                       />
                     </td>
                   ))}

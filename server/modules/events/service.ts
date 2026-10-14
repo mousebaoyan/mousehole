@@ -13,7 +13,6 @@ export const EVENT_TYPES = [
   "post.deleted",
   "thread.solved",
   "content.pending",
-  "notification.created",
   "member.activated",
   "report.created",
   "lottery.drawn",

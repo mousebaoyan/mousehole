@@ -19,15 +19,15 @@ async function settings() {
 }
 
 describe("设置", () => {
-  test("默认：跟着 QQ 的名字、允许代发；站内通知都开，QQ 提醒只开回复和 @", async () => {
+  test("默认：跟着 QQ 的名字、允许代发；站内通知都开，邮件只开回复、@ 这些跟自己直接相关的", async () => {
     expect(await settings()).toMatchObject({
       custom_name: null,
       allow_proxy: true,
       notify_prefs: {
-        reply: { site: true, qq: true },
-        mention: { site: true, qq: true },
-        like: { site: true, qq: false },
-        watching: { site: true, qq: false },
+        reply: { site: true, email: true },
+        mention: { site: true, email: true },
+        like: { site: true, email: false },
+        watching: { site: true, email: false },
       },
     });
   });
@@ -38,7 +38,7 @@ describe("设置", () => {
         json: {
           custom_name: " 夜猫子 ",
           custom_bio: "26 届，CV 方向",
-          notify_prefs: { like: { site: false, qq: true } },
+          notify_prefs: { like: { site: false, email: true } },
         },
       },
       me,
@@ -48,7 +48,7 @@ describe("设置", () => {
       custom_name: "夜猫子",
       custom_bio: "26 届，CV 方向",
       allow_proxy: true,
-      notify_prefs: { like: { site: false, qq: true }, reply: { site: true, qq: true } },
+      notify_prefs: { like: { site: false, email: true }, reply: { site: true, email: true } },
     });
     const profile = await api.me.$get({}, me);
     if (!profile.ok) throw new Error(`status ${profile.status}`);

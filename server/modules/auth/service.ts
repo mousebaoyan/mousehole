@@ -55,7 +55,7 @@ export async function issueLoginLink(userId: number, executor: Kysely<DB> = db) 
 // Email login also needs a mail server; without one it is off rather than failing on send.
 export async function loginMethods() {
   const { login, smtp } = await getSettings();
-  return { code: login.code, link: login.link, email: login.email && smtp.host !== "" };
+  return { code: login.code, link: login.link, email: login.email && smtp.accounts.length > 0 };
 }
 
 async function requireMethod(method: "code" | "link" | "email") {

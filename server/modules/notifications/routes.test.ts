@@ -1,8 +1,9 @@
 import { testClient } from "hono/testing";
-import { beforeAll, describe, expect, test } from "vitest";
-import { as, createUser, login } from "../../../test/fixtures.ts";
+import { beforeAll, beforeEach, describe, expect, test } from "vitest";
+import { as, createUser, login, nextQq } from "../../../test/fixtures.ts";
 import { app } from "../../app.ts";
 import { db } from "../../platform/db.ts";
+import { createBotToken } from "../auth/service.ts";
 
 const api = testClient(app).api.v1;
 
@@ -70,15 +71,25 @@ describe("通知", () => {
       { param: { id: String(t.id) }, json: { level: "watching" } },
       watcher.who,
     );
-    await reply(replier.who, t.id, `同问 [@某人](/u/${other.id})`, t.opening);
+    const asked = await reply(replier.who, t.id, `同问 [@某人](/u/${other.id})`, t.opening);
     expect(await inbox(author.who)).toEqual([`reply:${replier.id}x1`]);
     expect(await inbox(other.who)).toEqual([`mention:${replier.id}x1`]);
     expect(await inbox(watcher.who)).toEqual([`watching:${replier.id}x1`]);
     expect(await inbox(replier.who)).toEqual([]);
 
+    // Not naming a floor replies to the thread, so to its author.
     await reply(other.who, t.id, "我也来");
+    expect(await inbox(author.who)).toEqual([`reply:${other.id}x1`, `reply:${replier.id}x1`]);
     expect(await inbox(watcher.who)).toEqual([`watching:${other.id}x2`]);
-    expect(await inbox(author.who)).toEqual([`watching:${other.id}x1`, `reply:${replier.id}x1`]);
+
+    // A reply to someone else's floor is theirs; the author only sees the thread move on.
+    await reply(other.who, t.id, "你也是吗", asked);
+    expect(await inbox(replier.who)).toEqual([`reply:${other.id}x1`]);
+    expect(await inbox(author.who)).toEqual([
+      `watching:${other.id}x1`,
+      `reply:${other.id}x1`,
+      `reply:${replier.id}x1`,
+    ]);
     await clear(author, replier, other, watcher);
   });
 
@@ -133,7 +144,7 @@ describe("通知", () => {
   test("未读数、只看未读、标为已读", async () => {
     const t = await thread(author.who);
     const first = await reply(replier.who, t.id, "第一条", t.opening);
-    await reply(replier.who, t.id, `[@楼主](/u/${author.id})`);
+    await reply(replier.who, t.id, `[@楼主](/u/${author.id})`, first);
     const count = async () => {
       const res = await api.notifications["unread-count"].$get({}, author.who);
       if (!res.ok) throw new Error(`status ${res.status}`);
@@ -155,5 +166,79 @@ describe("通知", () => {
 
     await api.notifications.read.$post({ json: { all: true } }, author.who);
     expect(await count()).toBe(0);
+  });
+});
+
+// Each queued email as its address and subject, taken off the queue.
+async function mails() {
+  const rows = await db
+    .selectFrom("mail_queue")
+    .select(["address", "subject"])
+    .orderBy("id")
+    .execute();
+  await db.deleteFrom("mail_queue").execute();
+  return rows.map((r) => `${r.address} ${r.subject}`);
+}
+
+describe("邮件", () => {
+  beforeEach(async () => {
+    await clear(author, replier, other);
+    await mails();
+  });
+
+  test("开着邮件的通知发到 QQ 邮箱，没登录过论坛的成员也发；默认不发邮件的类型不发", async () => {
+    const t = await thread(author.who);
+    const newcomer = await createUser();
+    await reply(replier.who, t.id, `[@新人](/u/${newcomer.id}) 也来看看`);
+    const { qq } = await db
+      .selectFrom("users")
+      .select("qq")
+      .where("id", "=", author.id)
+      .executeTakeFirstOrThrow();
+    expect(await mails()).toEqual([
+      `${qq}@qq.com 鼠鼠 回复了你：等通知的帖子`,
+      `${newcomer.qq}@qq.com 鼠鼠 提到了你：等通知的帖子`,
+    ]);
+
+    await api.posts[":id"].reaction.$put(
+      { param: { id: String(t.opening) }, json: { emoji: "heart" } },
+      replier.who,
+    );
+    expect(await mails()).toEqual([]);
+    await clear(author, replier);
+  });
+
+  test("从群里收录来的帖子和回复不产生通知", async () => {
+    const t = await thread(author.who);
+    await clear(author, other);
+    const { token } = await createBotToken(
+      { userId: author.id, operatorId: null, tokenId: null, ip: null, userAgent: null },
+      { name: "插件", botQq: nextQq(), scopes: ["read", "act"] },
+    );
+    const asker = await createUser();
+    const bot = { headers: { authorization: `Bearer ${token}`, "x-act-as": `qq:${asker.qq}` } };
+    const source = { chat_type: "group" as const, chat_id: 123456 };
+    const res = await api.threads.$post(
+      {
+        json: {
+          board: "n",
+          title: "群里的提问",
+          content: { markdown: `[@某人](/u/${other.id}) 知道吗` },
+          source: { ...source, message_id: 1 },
+        },
+      },
+      bot,
+    );
+    expect(res.status).toBe(201);
+    await api.threads[":id"].posts.$post(
+      {
+        param: { id: String(t.id) },
+        json: { content: { markdown: "群里的回答" }, source: { ...source, message_id: 2 } },
+      },
+      bot,
+    );
+    expect(await inbox(other.who)).toEqual([]);
+    expect(await inbox(author.who)).toEqual([]);
+    expect(await mails()).toEqual([]);
   });
 });

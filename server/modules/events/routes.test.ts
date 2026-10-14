@@ -72,21 +72,15 @@ describe("事件流", () => {
       answerer,
     );
 
-    const { items, next_after } = await batch(start, 3);
-    expect(items.map((e) => e.type)).toEqual([
-      "thread.created",
-      "post.created",
-      "notification.created",
-    ]);
+    const { items, next_after } = await batch(start, 2);
+    expect(items.map((e) => e.type)).toEqual(["thread.created", "post.created"]);
     expect(items[0].data).toMatchObject({ author: { qq: askerQq }, source });
-    expect(items[0].data.qq_text).toMatch(/^【事件】群里转来的问题\n.+：rank 30% 能冲吗\nhttp/);
     expect(items[1].data).toMatchObject({
       post: { floor: 2, body: "能冲" },
       reply_to: { floor: 1, author: { qq: askerQq }, source },
       source: null,
     });
-    expect(items[2].data).toMatchObject({ user: { qq: askerQq }, type: "reply" });
-    expect(next_after).toBe(items[2].id);
+    expect(next_after).toBe(items[1].id);
 
     const onlyThreads = await batch(start, 1, "thread.created");
     expect(onlyThreads.items.map((e) => e.type)).toEqual(["thread.created"]);

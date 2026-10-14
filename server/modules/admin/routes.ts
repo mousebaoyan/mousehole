@@ -1,6 +1,6 @@
 import { createRoute, z } from "@hono/zod-openapi";
 import { actorOf, authorize, createRouter, errorResponse, unix } from "../../platform/http.ts";
-import { sendMail } from "../../platform/mail.ts";
+import { testMailboxes } from "../../platform/mail.ts";
 import { getSettings } from "../../platform/settings.ts";
 import { botListening } from "../events/service.ts";
 import { countOpenReports } from "../moderation/service.ts";
@@ -8,7 +8,6 @@ import { contentStats } from "../threads/service.ts";
 import { uploadBytes } from "../uploads/service.ts";
 import { memberStats } from "../users/service.ts";
 import { databaseBytes, updateSettings } from "./service.ts";
-import { SITE_NAME } from "../../platform/site.ts";
 
 const SiteSettings = z.object({
   banner: z.string().trim().max(200).openapi({ description: "公告横幅，空字符串不显示" }),
@@ -25,13 +24,15 @@ const LoginSettings = z.object({
   code_hint: z.string().max(100),
 });
 
-const SmtpSettings = z.object({
-  host: z.string().max(200),
+const SmtpAccount = z.object({
+  host: z.string().trim().min(1).max(200),
   port: z.number().int().min(1).max(65535),
   secure: z.boolean(),
-  user: z.string().max(200),
-  from: z.string().max(200),
+  user: z.string().trim().min(1).max(200),
 });
+
+// Up to this many mailboxes to send from.
+const MAX_MAILBOXES = 10;
 
 const BotSettings = z.object({ require_operator: z.boolean() });
 
@@ -39,7 +40,11 @@ const SettingsSchema = z
   .object({
     site: SiteSettings,
     login: LoginSettings,
-    smtp: SmtpSettings.extend({ password_set: z.boolean() }),
+    smtp: z.object({
+      accounts: z
+        .array(SmtpAccount.extend({ password_set: z.boolean() }))
+        .openapi({ description: "发信邮箱，按顺序用，一个发不出去就换下一个" }),
+    }),
     bot: BotSettings,
   })
   .openapi("Settings");
@@ -141,15 +146,19 @@ export const adminRoutes = createRouter()
     async (c) => {
       authorize(c, "admin");
       const { site, login, smtp, bot } = await getSettings();
-      const { password, ...rest } = smtp;
-      return c.json({ site, login, smtp: { ...rest, password_set: password !== "" }, bot }, 200);
+      const accounts = smtp.accounts.map(({ password, ...rest }) => ({
+        ...rest,
+        password_set: password !== "",
+      }));
+      return c.json({ site, login, smtp: { accounts }, bot }, 200);
     },
   )
   .openapi(
     createRoute({
       method: "patch",
       path: "/admin/settings",
-      summary: "修改站点设置，立即生效；只改带了的字段，SMTP 密码不带就不变、传空字符串清空",
+      summary:
+        "修改站点设置，立即生效；只改带了的字段。发信邮箱整组替换，某个邮箱不带密码就沿用这个账号原来的",
       request: {
         body: {
           required: true,
@@ -158,8 +167,12 @@ export const adminRoutes = createRouter()
               schema: z.object({
                 site: SiteSettings.partial().optional(),
                 login: LoginSettings.partial().optional(),
-                smtp: SmtpSettings.extend({ password: z.string().max(200) })
-                  .partial()
+                smtp: z
+                  .object({
+                    accounts: z
+                      .array(SmtpAccount.extend({ password: z.string().max(200).optional() }))
+                      .max(MAX_MAILBOXES),
+                  })
                   .optional(),
                 bot: BotSettings.partial().optional(),
               }),
@@ -179,7 +192,7 @@ export const adminRoutes = createRouter()
     createRoute({
       method: "post",
       path: "/admin/settings/test-email",
-      summary: "用当前 SMTP 设置给 QQ号@qq.com 发一封测试邮件",
+      summary: "每个发信邮箱各给 QQ号@qq.com 发一封测试邮件",
       request: {
         body: {
           required: true,
@@ -189,19 +202,28 @@ export const adminRoutes = createRouter()
         },
       },
       responses: {
-        204: { description: "已发送" },
+        200: {
+          description: "每个邮箱的结果，按设置里的顺序",
+          content: {
+            "application/json": {
+              schema: z.object({
+                results: z.array(
+                  z.object({
+                    user: z.string(),
+                    error: z.string().nullable().openapi({ description: "发送失败的原因" }),
+                  }),
+                ),
+              }),
+            },
+          },
+        },
         403: errorResponse("不是管理员"),
-        502: errorResponse("发送失败，SMTP 设置可能有误"),
         503: errorResponse("邮件服务还没有配置"),
       },
     }),
     async (c) => {
       authorize(c, "admin");
-      await sendMail(
-        `${c.req.valid("json").qq}@qq.com`,
-        `${SITE_NAME}测试邮件`,
-        "SMTP 设置可以正常发信。",
-      );
-      return c.body(null, 204);
+      const results = await testMailboxes(`${c.req.valid("json").qq}@qq.com`);
+      return c.json({ results }, 200);
     },
   );

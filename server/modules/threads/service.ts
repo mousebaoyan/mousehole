@@ -1259,12 +1259,15 @@ async function publishThread(
       "threads.author_anonymous",
       "threads.reply_count",
       "posts.id as opening",
+      "posts.via",
     ])
     .where("threads.id", "=", threadId)
     .executeTakeFirstOrThrow();
   await countThread(trx, threadId, thread, 1);
   if (announce) {
     await threadCreated(trx, thread.opening);
+    // Content brought over from the groups tells nobody (design §8.6).
+    if (thread.via === "qq") return;
     await notifyThread(trx, {
       id: threadId,
       postId: thread.opening,
@@ -1331,7 +1334,9 @@ async function publishPost(
       "posts.thread_id",
       "posts.author_id",
       "posts.reply_to_id",
+      "posts.via",
       "threads.board_id",
+      "threads.author_id as thread_author_id",
       "threads.status as thread_status",
       "alias.number as alias",
     ])
@@ -1353,6 +1358,8 @@ async function publishPost(
   }
   if (announce) {
     await postCreated(trx, postId);
+    // Content brought over from the groups tells nobody (design §8.6).
+    if (post.via === "qq") return;
     await notifyPost(
       trx,
       {
@@ -1362,7 +1369,7 @@ async function publishPost(
         authorAlias: post.alias,
         mentions: announce.mentions,
       },
-      replyTo,
+      replyTo ?? post.thread_author_id,
     );
   }
 }

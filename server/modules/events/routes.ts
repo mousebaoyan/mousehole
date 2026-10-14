@@ -20,7 +20,7 @@ const Types = z
   .optional()
   .transform((v) => (v === undefined ? null : v.split(",")))
   .pipe(z.array(z.enum(EVENT_TYPES)).nullable())
-  .openapi({ description: "只要这几类，逗号分隔，例如 thread.created,notification.created" });
+  .openapi({ description: "只要这几类，逗号分隔，例如 member.activated,lottery.drawn" });
 
 const expired = errorResponse(
   "游标早于最早的事件；latest_id 是当前最新的事件 ID，可以从那里重新开始",

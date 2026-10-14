@@ -15,7 +15,14 @@ let lastIp = 0;
 
 beforeAll(async () => {
   const admin = as(await login((await createUser("admin")).id));
-  await api.admin.settings.$patch({ json: { smtp: { host: "smtp.qq.com" } } }, admin);
+  await api.admin.settings.$patch(
+    {
+      json: {
+        smtp: { accounts: [{ host: "smtp.qq.com", port: 465, secure: true, user: "bot@qq.com" }] },
+      },
+    },
+    admin,
+  );
 });
 
 // Each request from its own address, so the per-IP limit stays out of the way.
@@ -115,16 +122,25 @@ describe("站点设置", () => {
     await api.admin.settings.$patch({ json: { login: { email: true } } }, admin);
   });
 
-  test("SMTP 密码加密存储，接口只说是否已设置，不传就不变", async () => {
+  test("发信邮箱的密码加密存储，接口只说是否已设置；保存时不带密码，沿用这个账号原来的", async () => {
     const admin = as(await login((await createUser("admin")).id));
     const password = "smtp-auth-code-123";
-    await api.admin.settings.$patch({ json: { smtp: { host: "smtp.qq.com", password } } }, admin);
-    await api.admin.settings.$patch({ json: { smtp: { user: "bot@qq.com" } } }, admin);
+    const mailbox = { host: "smtp.qq.com", port: 465, secure: true };
+    const save = (accounts: { user: string; password?: string }[]) =>
+      api.admin.settings.$patch(
+        { json: { smtp: { accounts: accounts.map((a) => ({ ...mailbox, ...a })) } } },
+        admin,
+      );
+    await save([{ user: "bot@qq.com", password }]);
+    await save([{ user: "spare@qq.com", password: "spare" }, { user: "bot@qq.com" }]);
 
     const res = await api.admin.settings.$get({}, admin);
     if (!res.ok) throw new Error(`status ${res.status}`);
     const { smtp } = await res.json();
-    expect(smtp).toMatchObject({ host: "smtp.qq.com", user: "bot@qq.com", password_set: true });
+    expect(smtp.accounts).toMatchObject([
+      { user: "spare@qq.com", password_set: true },
+      { user: "bot@qq.com", password_set: true },
+    ]);
     expect(JSON.stringify(smtp)).not.toContain(password);
 
     const row = await db
@@ -134,6 +150,6 @@ describe("站点设置", () => {
       .executeTakeFirstOrThrow();
     expect(JSON.stringify(row.value)).not.toContain(password);
     // Decrypted for sending.
-    expect((await getSettings()).smtp.password).toBe(password);
+    expect((await getSettings()).smtp.accounts.map((a) => a.password)).toEqual(["spare", password]);
   });
 });

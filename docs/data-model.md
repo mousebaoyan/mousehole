@@ -74,7 +74,7 @@
 
 ## 互动与通知
 
-表：`reactions`、`boosts`、`thread_users`、`user_follows`、`endorsements`、`notifications`。
+表：`reactions`、`boosts`、`thread_users`、`user_follows`、`endorsements`、`notifications`、`mail_queue`。
 
 - 表情回应每人每条一个，主键 `(post_id, user_id)`，换表情就是覆盖。每个表情都算一次赞：`posts.like_count` 是总数，`posts.reactions` 是各表情的数量，都和写入在同一个事务里更新。
 - 短评每人每层一条，`UNIQUE (post_id, user_id)`，修改就是覆盖，排序位置不变。字数（16 个字，emoji 算一个）由应用按字素计数，库里不设长度约束。
@@ -84,9 +84,10 @@
 - 收藏是 `thread_users.bookmarked_at`，重复收藏保留第一次的时间。帖子的查询都 left join 读者自己的那行（访客没有），详情里的收藏和关注级别、收藏列表都从这里来。
 - 关注用户（`user_follows`）和认可（`endorsements`）每对人一行，不能对自己。关注数、粉丝数、认可数不冗余存，资料卡里直接数，各是一段索引范围。
 - 通知的 `type`：`reply`、`mention`、`like`、`boost`、`watching`、`following`、`solved`，含义见[接口](api.md)的通知对象。都和触发它的写入在同一个事务里插入。
-- 一条新楼层只给每人一条通知，按先后取第一个适用的：被回复的那一层的作者（`reply`）、@到的人（`mention`）、关注这个帖子的人（`watching`）。新帖通知 @到的人和作者的粉丝（`following`）。
+- 一条新楼层只给每人一条通知，按先后取第一个适用的：被回复的那一层的作者，没指定楼层时是楼主（`reply`）；@到的人（`mention`）；关注这个帖子的人（`watching`）。新帖通知 @到的人和作者的粉丝（`following`）。从群里收录来的帖子和楼层（`via` 为 `qq`）不产生通知。
 - 合并通知：`like:{楼层 ID}`、`boost:{楼层 ID}`、`watching:{帖子 ID}` 是 `group_key`，未读期间再次触发只更新触发者、次数、`data` 和时间，不新增行；`post_id` 留着第一次的，点进去从最早没看的那层开始。
-- 不通知：自己做的事、冻结的账号、把这个帖子设为 `muted` 的人、在 `users.notify_prefs` 里关掉了这类站内通知的人。`notify_prefs` 形如 `{ "like": { "site": false, "qq": true } }`，站内通知没写的按开着算。
+- 不通知：自己做的事、冻结的账号、把这个帖子设为 `muted` 的人、在 `users.notify_prefs` 里关掉了这类站内通知的人。`notify_prefs` 形如 `{ "like": { "site": false, "email": true } }`，站内通知没写的按开着算，邮件没写的按这类通知的默认值。
+- 要发的邮件（`mail_queue`：收件地址、标题、正文）和通知在同一个事务里写入，并 `NOTIFY mousehole_mail`；事务提交后，进程按 `id` 顺序取出来发，发出去就删掉。发不出去的每分钟再试，放了一天的删掉不发。
 - 已读超过 180 天的通知每天清理。
 
 - 阅读记录（[总体设计 §8.9](design.md#89-阅读记录)）存在 `thread_users`：`read_floors` 是读过的楼层（`int4multirange`），上报时 `read_floors + 新区间` 并进去，相邻的区间自动合并；`last_read_at` 是最后一次上报的时间。列表里的 `last_read_floor` 取 `upper(read_floors) - 1`。
@@ -131,7 +132,7 @@
 - `reports.held`：L4 举报等级比自己低的人的回复时，这一层在同一个事务里改为 `hidden`（[总体设计 §6.6](design.md#66-等级)）；驳回这条举报时，这一层还是 `hidden` 就恢复。
 
 - 审计日志记什么见[总体设计 §13](design.md#13-安全与隐私)。每行有 `actor_id`（以谁的身份）、`operator_id`（谁让 bot 做的）、`token_id`、`ip`、`user_agent`（截到 500 字）、`action`、对象和 `data`；`data` 存看得出改了什么的字段，正文只存开头 100 个字。和改动在同一个事务里写入。按操作人查走 `audit_logs_actor`，按 IP 查走 `audit_logs_ip`。
-- 设置每个分组一行（`login`、`smtp` 等），字段的默认值写在代码里，加字段不用迁移。在进程内缓存，后台修改后立即刷新，不用重启。SMTP 密码用 `APP_SECRET` 做 AES-256-GCM 加密后存入（IV、认证标签和密文拼起来存 base64）。
+- 设置每个分组一行（`login`、`smtp` 等），字段的默认值写在代码里，加字段不用迁移。在进程内缓存，后台修改后立即刷新，不用重启。`smtp` 是发信邮箱的列表，每个邮箱的密码用 `APP_SECRET` 做 AES-256-GCM 加密后存入（IV、认证标签和密文拼起来存 base64）。
 
 ## 搜索
 

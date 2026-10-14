@@ -167,6 +167,14 @@ export interface LotteryEntries {
   user_id: number;
 }
 
+export interface MailQueue {
+  address: string;
+  body: string;
+  created_at: Generated<Timestamp>;
+  id: Generated<number>;
+  subject: string;
+}
+
 export interface Notifications {
   actor_alias: number | null;
   actor_id: number | null;
@@ -431,6 +439,7 @@ export interface DB {
   login_tickets: LoginTickets;
   lotteries: Lotteries;
   lottery_entries: LotteryEntries;
+  mail_queue: MailQueue;
   notifications: Notifications;
   poll_options: PollOptions;
   poll_votes: PollVotes;

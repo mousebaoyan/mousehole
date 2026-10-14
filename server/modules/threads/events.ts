@@ -1,16 +1,12 @@
 import type { Transaction } from "kysely";
 import type { DB } from "../../../db/types.ts";
 import { env } from "../../platform/env.ts";
-import { excerpt } from "../../platform/markdown.ts";
 import { recordEvent } from "../events/service.ts";
 import { anonymousBrief } from "../users/service.ts";
 
 // Events for the bot plugin about threads and floors, written in the transaction that makes the
 // change; see docs/api.md §5. People in them carry their QQ number, so the plugin can @ them;
 // someone writing anonymously is only their number in the thread (design §8.12).
-
-// Characters of a floor in the text the plugin can send to QQ as it is.
-const QQ_EXCERPT = 60;
 
 function link(threadId: number, floor: number) {
   return `${env.PUBLIC_URL}/t/${threadId}${floor > 1 ? `?floor=${floor}` : ""}`;
@@ -43,7 +39,6 @@ async function floorOf(trx: Transaction<DB>, postId: number) {
       "posts.id",
       "posts.floor",
       "posts.body",
-      "posts.html",
       "posts.author_id",
       "posts.reply_to_id",
       "threads.id as thread_id",
@@ -75,10 +70,6 @@ async function doer(trx: Transaction<DB>, f: Floor, userId: number) {
   return userId === f.author_id ? f.author : person(trx, userId);
 }
 
-function qqText(f: Floor) {
-  return `【${f.board_name}】${f.title}\n${f.author.display_name}：${excerpt(f.html, QQ_EXCERPT)}\n${link(f.thread_id, f.floor)}`;
-}
-
 export async function threadCreated(trx: Transaction<DB>, openingPostId: number) {
   const f = await floorOf(trx, openingPostId);
   await recordEvent(trx, "thread.created", {
@@ -87,12 +78,10 @@ export async function threadCreated(trx: Transaction<DB>, openingPostId: number)
     author: f.author,
     source: f.source,
     url: link(f.thread_id, 1),
-    qq_text: qqText(f),
   });
 }
 
-// With the floor it answers, so the plugin can quote that floor's QQ message when it passes the
-// reply back to the group.
+// With the floor it answers and the QQ message that floor came from, if any.
 export async function postCreated(trx: Transaction<DB>, postId: number) {
   const f = await floorOf(trx, postId);
   const target = f.reply_to_id === null ? null : await floorOf(trx, f.reply_to_id);
@@ -108,7 +97,6 @@ export async function postCreated(trx: Transaction<DB>, postId: number) {
     },
     source: f.source,
     url: link(f.thread_id, f.floor),
-    qq_text: qqText(f),
   });
 }
 
@@ -120,7 +108,6 @@ export async function threadSolved(trx: Transaction<DB>, answerId: number) {
     post: { id: f.id, floor: f.floor, body: f.body },
     answerer: f.author,
     url: link(f.thread_id, f.floor),
-    qq_text: `【${f.board_name}】${f.title}\n已采纳 ${f.author.display_name} 的回答：${excerpt(f.html, QQ_EXCERPT)}\n${link(f.thread_id, f.floor)}`,
   });
 }
 
@@ -196,16 +183,11 @@ export async function lotteryDrawn(
       winners: await Promise.all(p.winners.map((id) => person(trx, id))),
     });
   }
-  const url = link(lottery.thread.id, 1);
-  const lines = prizes.map(
-    (p) => `${p.name}：${p.winners.map((w) => w.display_name).join("、") || "无人中奖"}`,
-  );
   await recordEvent(trx, "lottery.drawn", {
     thread: lottery.thread,
     author: await person(trx, lottery.authorId),
     prizes,
     entry_count: lottery.entryCount,
-    url,
-    qq_text: `【抽奖】${lottery.thread.title}\n共 ${lottery.entryCount} 人参与，开奖结果：\n${lines.join("\n")}\n${url}`,
+    url: link(lottery.thread.id, 1),
   });
 }

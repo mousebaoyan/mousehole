@@ -1,7 +1,12 @@
 import { sql } from "kysely";
 import type { Actor } from "../../platform/access.ts";
 import { db } from "../../platform/db.ts";
-import { getSettings, saveSettings, type Settings } from "../../platform/settings.ts";
+import {
+  getSettings,
+  saveSettings,
+  type Settings,
+  type SmtpAccount,
+} from "../../platform/settings.ts";
 import { recordAudit } from "../audit/service.ts";
 
 export async function databaseBytes() {
@@ -11,22 +16,29 @@ export async function databaseBytes() {
   return bytes;
 }
 
-// Partial edits merged onto the current settings. A missing SMTP password keeps the stored one.
+// Partial edits merged onto the current settings. The mailboxes are replaced as a whole; one
+// sent without a password keeps the one stored for its address.
 export async function updateSettings(
   actor: Actor,
   change: {
     site?: Partial<Settings["site"]>;
     login?: Partial<Settings["login"]>;
-    smtp?: Partial<Settings["smtp"]>;
+    smtp?: { accounts: (Omit<SmtpAccount, "password"> & { password?: string })[] };
     bot?: Partial<Settings["bot"]>;
   },
 ) {
   const current = await getSettings();
+  const stored = new Map(current.smtp.accounts.map((a) => [a.user, a.password]));
   await db.transaction().execute(async (trx) => {
     await saveSettings(trx, {
       site: change.site && { ...current.site, ...change.site },
       login: change.login && { ...current.login, ...change.login },
-      smtp: change.smtp && { ...current.smtp, ...change.smtp },
+      smtp: change.smtp && {
+        accounts: change.smtp.accounts.map((a) => ({
+          ...a,
+          password: a.password ?? stored.get(a.user) ?? "",
+        })),
+      },
       bot: change.bot && { ...current.bot, ...change.bot },
     });
     // Which sections changed, never their values: the SMTP password must not reach the log.
