@@ -173,8 +173,10 @@ export default function Settings({ loaderData, actionData }: Route.ComponentProp
                           <Checkbox
                             name={`${type}.${where}`}
                             defaultChecked={settings.notify_prefs[type][where]}
-                            aria-label={`${label}：${where === "site" ? "站内" : "邮件"}`}
                           />
+                          <span className="sr-only">
+                            {label}：{where === "site" ? "站内" : "邮件"}
+                          </span>
                         </label>
                       </td>
                     ))}
