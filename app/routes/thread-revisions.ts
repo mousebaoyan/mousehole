@@ -1,6 +1,6 @@
 import { data } from "react-router";
 import { apiContext } from "../api.server.ts";
-import type { Route } from "./+types/topic-revisions.ts";
+import type { Route } from "./+types/thread-revisions.ts";
 
 // A floor's edit history, for its author and moderators.
 export async function loader({ params, context }: Route.LoaderArgs) {

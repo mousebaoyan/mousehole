@@ -39,7 +39,7 @@ async function newThread(slug: string) {
     .values((eb) => ({
       board_id: eb.selectFrom("boards").select("id").where("slug", "=", slug),
       author_id: author.id,
-      title: "主题",
+      title: "帖子",
     }))
     .returning("id")
     .executeTakeFirstOrThrow();
@@ -95,7 +95,7 @@ describe("版块", () => {
     expect((await slugs()).filter((s) => [a, b, c].includes(s))).toEqual([c, a, b]);
   });
 
-  test("有过主题的版块不能删，删掉主题也不行；空版块可以删", async () => {
+  test("有过帖子的版块不能删，删掉帖子也不行；空版块可以删", async () => {
     const used = await newBoard();
     const thread = await newThread(used);
     await db
@@ -133,7 +133,7 @@ describe("标签", () => {
     expect(res.status).toBe(409);
   });
 
-  test("合并：主题都改用目标标签，两个都有的只留一个，重新计数", async () => {
+  test("合并：帖子都改用目标标签，两个都有的只留一个，重新计数", async () => {
     const board = await newBoard();
     const [both, onlyFrom, hidden] = [
       await newThread(board),

@@ -98,7 +98,7 @@ describe("编辑", () => {
     expect(audit).toEqual([{ action: "post.edit" }]);
   });
 
-  test("改标题记在主楼的编辑记录里；改标签时两边的主题数跟着变", async () => {
+  test("改标题记在主楼的编辑记录里；改标签时两边的帖子数跟着变", async () => {
     const board = await newBoard();
     await api.tags.$post({ json: { name: "改前", kind: "topic" } }, admin);
     await api.tags.$post({ json: { name: "改后", kind: "topic" } }, admin);
@@ -164,7 +164,7 @@ describe("删除", () => {
     expect(opening.status).toBe(400);
   });
 
-  test("删主题：有人回复后作者不能删，版主能删；删掉后打不开，版块计数减一", async () => {
+  test("删帖子：有人回复后作者不能删，版主能删；删掉后打不开，版块计数减一", async () => {
     const board = await newBoard();
     const quiet = await newThread(board);
     const busy = await newThread(board);

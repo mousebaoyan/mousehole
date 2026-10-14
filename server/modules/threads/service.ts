@@ -50,7 +50,7 @@ export const VIEWS = [
 export type ThreadView = (typeof VIEWS)[number];
 
 function threadNotFound() {
-  return new AppError(404, "thread_not_found", "主题不存在");
+  return new AppError(404, "thread_not_found", "帖子不存在");
 }
 
 // What a viewer may open: published, not deleted, and in a board they can see.
@@ -560,7 +560,7 @@ export async function createThread(
   const reader: Reader = { members, id: viewer.id, staff: false };
   const board = await getBoard(input.board, members);
   if (board.post_role === "moderator" && !STAFF.includes(viewer.role)) {
-    throw new AppError(403, "forbidden", "这个版块只有版主能发主题");
+    throw new AppError(403, "forbidden", "这个版块只有版主能发帖");
   }
   const tagIds = await findTags(input.tags);
   if (input.source) await assertNotLinked(input.source);
@@ -638,7 +638,7 @@ export async function createPost(
   const thread = await assertVisible(threadId, reader);
   assertPublic(thread);
   if (thread.locked && !STAFF.includes(viewer.role)) {
-    throw new AppError(403, "thread_locked", "主题已锁定");
+    throw new AppError(403, "thread_locked", "帖子已锁定");
   }
   if (input.source) await assertNotLinked(input.source);
   const { markdown, replyToId } = await resolveContent(
@@ -661,7 +661,7 @@ export async function createPost(
         .where("deleted_at", "is", null)
         .executeTakeFirst();
       if (!target) {
-        throw new AppError(400, "invalid_request", "回复的那一层不在这个主题里，或者已删除");
+        throw new AppError(400, "invalid_request", "回复的那一层不在这个帖子里，或者已删除");
       }
     }
     // Locks the thread row, so concurrent replies take floor numbers one after another.
@@ -707,7 +707,7 @@ function forbidden(message: string) {
 function assertMayChange(staff: boolean, viewer: Viewer, authorId: number, locked: boolean) {
   if (staff) return;
   if (authorId !== viewer.id) throw forbidden("只能修改自己发的内容");
-  if (locked) throw new AppError(403, "thread_locked", "主题已锁定");
+  if (locked) throw new AppError(403, "thread_locked", "帖子已锁定");
 }
 
 // Moderators changing other people's content, and bots changing anyone's, go to the audit log.
@@ -814,7 +814,7 @@ export async function editThread(
   const thread = await getThread(threadId, reader);
   assertMayChange(staff, viewer, thread.author_id, thread.locked);
   if (!staff && (slug !== undefined || Object.keys(moderation).length > 0)) {
-    throw forbidden("只有版主能移动、置顶、加精和锁定主题");
+    throw forbidden("只有版主能移动、置顶、加精和锁定帖子");
   }
   const board = slug === undefined ? null : await getBoard(slug, members);
   const tagIds = tags === undefined ? null : await findTags(tags);
@@ -945,7 +945,7 @@ export async function deletePost(
   const post = await getPost(postId, reader);
   if (post.deleted_at !== null) throw new AppError(404, "post_not_found", "回复不存在");
   if (post.floor === 1) {
-    throw new AppError(400, "invalid_request", "主楼不能单独删除，可以删除整个主题");
+    throw new AppError(400, "invalid_request", "主楼不能单独删除，可以删除整个帖子");
   }
   const thread = await assertVisible(post.thread_id, reader);
   assertMayChange(staff, viewer, post.author_id, thread.locked);
@@ -1156,7 +1156,7 @@ async function mentionsOf(body: string) {
 
 // Replying, accepting an answer and reviewing a reply wait until the thread itself is public.
 function assertPublic(thread: { status: string }) {
-  if (thread.status !== "visible") throw forbidden("主题待审核或已隐藏，暂时不能这样做");
+  if (thread.status !== "visible") throw forbidden("帖子待审核或已隐藏，暂时不能这样做");
 }
 
 // What the audit log and the author's notice call a change of status.
@@ -1217,7 +1217,7 @@ export async function setPostStatus(
   const post = await getPost(postId, reader);
   if (post.deleted_at !== null) throw new AppError(404, "post_not_found", "回复不存在");
   if (post.floor === 1) {
-    throw new AppError(400, "invalid_request", "主楼随主题，请修改主题的状态");
+    throw new AppError(400, "invalid_request", "主楼随帖子，请修改帖子的状态");
   }
   assertPublic(await assertVisible(post.thread_id, reader));
   if (post.status === status) return;
@@ -1321,7 +1321,7 @@ export async function setSolution(
   assertMayChange(staff, viewer, thread.author_id, thread.locked);
   assertPublic(thread);
   if (thread.kind !== "question") {
-    throw new AppError(400, "invalid_request", "只有问答主题能采纳答案");
+    throw new AppError(400, "invalid_request", "只有问答帖子能采纳答案");
   }
   const answer =
     postId === null
@@ -1336,7 +1336,7 @@ export async function setSolution(
           .where("deleted_at", "is", null)
           .executeTakeFirst();
   if (answer === undefined) {
-    throw new AppError(400, "invalid_request", "只能采纳这个主题里公开的回复");
+    throw new AppError(400, "invalid_request", "只能采纳这个帖子里公开的回复");
   }
   await db.transaction().execute(async (trx) => {
     await trx

@@ -40,7 +40,7 @@ async function reply(threadId: number, markdown: string) {
 
 describe("资料卡和个人主页", () => {
   test("资料卡带统计；QQ 号只给成员看；也能按 QQ 号找", async () => {
-    await reply(await thread("open", "统计用的主题"), "统计用的回复");
+    await reply(await thread("open", "统计用的帖子"), "统计用的回复");
 
     const byGuest = await api.users[":user"].$get({ param: { user: String(author.id) } }, guest);
     const card = await byGuest.json();
@@ -53,8 +53,8 @@ describe("资料卡和个人主页", () => {
   });
 
   test("回复列表：最新的在前，正文是纯文本摘要；删掉的不列，访客看不到仅成员版块里的", async () => {
-    const open = await thread("open", "公开版块的主题");
-    const inner = await thread("inner", "仅成员版块的主题");
+    const open = await thread("open", "公开版块的帖子");
+    const inner = await thread("inner", "仅成员版块的帖子");
     await reply(open, "**第一条**回复");
     const removed = await reply(open, "删掉的回复");
     await api.posts[":id"].$delete({ param: { id: String(removed) } }, author.who);
@@ -69,10 +69,10 @@ describe("资料卡和个人主页", () => {
       return (await res.json()).items.map((p) => `${p.thread.title}：${p.excerpt}`);
     };
     expect((await list(reader)).slice(0, 2)).toEqual([
-      "仅成员版块的主题：成员才能看的回复",
-      "公开版块的主题：第一条回复",
+      "仅成员版块的帖子：成员才能看的回复",
+      "公开版块的帖子：第一条回复",
     ]);
-    expect((await list(guest))[0]).toBe("公开版块的主题：第一条回复");
+    expect((await list(guest))[0]).toBe("公开版块的帖子：第一条回复");
 
     const threads = await api.users[":user"].threads.$get(
       { param: { user: String(author.id) }, query: {} },
@@ -80,8 +80,8 @@ describe("资料卡和个人主页", () => {
     );
     if (!threads.ok) throw new Error(`status ${threads.status}`);
     expect((await threads.json()).items.map((t) => t.title).slice(0, 2)).toEqual([
-      "公开版块的主题",
-      "统计用的主题",
+      "公开版块的帖子",
+      "统计用的帖子",
     ]);
   });
 });

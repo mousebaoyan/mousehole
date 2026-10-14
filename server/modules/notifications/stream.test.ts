@@ -20,7 +20,7 @@ beforeAll(async () => {
   author = { id: user.id, who: as(await login(user.id)) };
   replier = as(await login((await createUser()).id));
   const res = await api.threads.$post(
-    { json: { board: "live", title: "实时更新的主题", content: { markdown: "主楼" } } },
+    { json: { board: "live", title: "实时更新的帖子", content: { markdown: "主楼" } } },
     author.who,
   );
   if (!res.ok) throw new Error(`status ${res.status}`);

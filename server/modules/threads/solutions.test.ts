@@ -56,7 +56,7 @@ async function solved(threadId: number) {
 }
 
 describe("采纳答案", () => {
-  test("提问的人采纳一层回答：主题标为已解决，回答的人收到通知，插件收到事件", async () => {
+  test("提问的人采纳一层回答：帖子标为已解决，回答的人收到通知，插件收到事件", async () => {
     const q = await question();
     const res = await accept(q.id, q.answer, asker);
     expect(res.status).toBe(200);
@@ -77,7 +77,7 @@ describe("采纳答案", () => {
     expect(await solved(q.id)).toBeNull();
   });
 
-  test("只有提问的人和版主能采纳；只能采纳问答主题里没删的回复", async () => {
+  test("只有提问的人和版主能采纳；只能采纳问答帖子里没删的回复", async () => {
     const q = await question();
     expect((await accept(q.id, q.answer, answerer.who)).status).toBe(403);
     expect((await accept(q.id, q.answer, moderator)).status).toBe(200);
@@ -87,7 +87,7 @@ describe("采纳答案", () => {
     expect((await accept(talk.id, talk.answer, asker)).status).toBe(400);
   });
 
-  test("采纳的回答被删掉，主题回到待解答", async () => {
+  test("采纳的回答被删掉，帖子回到待解答", async () => {
     const q = await question();
     await accept(q.id, q.answer, asker);
     await api.posts[":id"].$delete({ param: { id: String(q.answer) } }, answerer.who);

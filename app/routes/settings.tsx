@@ -17,8 +17,8 @@ const TYPES = [
   { type: "mention", label: "@我" },
   { type: "like", label: "点赞" },
   { type: "boost", label: "短评" },
-  { type: "watching", label: "关注的主题有新回复" },
-  { type: "following", label: "关注的人发新主题" },
+  { type: "watching", label: "关注的帖子有新回复" },
+  { type: "following", label: "关注的人发新帖" },
   { type: "solved", label: "回答被采纳" },
   { type: "moderation", label: "内容被审核或隐藏" },
 ] as const;
@@ -70,7 +70,7 @@ export default function Settings({ loaderData, actionData }: Route.ComponentProp
                 maxLength={24}
               />
             </Field>
-            <Field label="简介" hint="最多 60 个字，显示在资料卡和个人主页上">
+            <Field label="个性签名" hint="最多 60 个字，显示在资料卡和个人主页上">
               <Textarea
                 name="bio"
                 defaultValue={settings.bio}
@@ -138,7 +138,7 @@ export default function Settings({ loaderData, actionData }: Route.ComponentProp
 
       <Section
         title="导出"
-        description="下载自己发过的主题和回复（Markdown 原文）、短评和收藏，JSON 格式；每小时最多 3 次"
+        description="下载自己发过的帖子和回复（Markdown 原文）、短评和收藏，JSON 格式；每小时最多 3 次"
       >
         <a href="/api/v1/me/export" download className={buttonVariants({ variant: "outline" })}>
           <Download /> 下载我的内容

@@ -37,8 +37,8 @@ async function reply(threadId: number, markdown: string) {
 
 describe("导出自己的内容", () => {
   test("自己发的主楼和回复、短评、收藏都在，删掉的和别人的不在；作为附件下载", async () => {
-    const mine = await thread(me.who, "我的主题");
-    const theirs = await thread(other, "别人的主题");
+    const mine = await thread(me.who, "我的帖子");
+    const theirs = await thread(other, "别人的帖子");
     await reply(theirs, "**回复**原文");
     const gone = await reply(theirs, "删掉的回复");
     await api.posts[":id"].$delete({ param: { id: String(gone) } }, me.who);
@@ -59,11 +59,11 @@ describe("导出自己的内容", () => {
     const data = await res.json();
     expect(data.user).toMatchObject({ id: me.id, qq: me.qq });
     expect(data.posts.map((p) => [p.thread_id, p.floor, p.body])).toEqual([
-      [mine, 1, "我的主题的正文"],
+      [mine, 1, "我的帖子的正文"],
       [theirs, 2, "**回复**原文"],
     ]);
     expect(data.boosts).toMatchObject([{ thread_id: theirs, floor: 1, body: "学到了" }]);
-    expect(data.bookmarks).toMatchObject([{ thread_id: theirs, title: "别人的主题" }]);
+    expect(data.bookmarks).toMatchObject([{ thread_id: theirs, title: "别人的帖子" }]);
   });
 
   test("要登录，bot 不能代为导出", async () => {

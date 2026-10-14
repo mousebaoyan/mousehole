@@ -20,7 +20,7 @@ beforeAll(async () => {
     ["pending", "held"],
   ] as const) {
     const res = await api.threads.$post(
-      { json: { board, title: "收录测试的主题", content: { markdown: "正文" } } },
+      { json: { board, title: "收录测试的帖子", content: { markdown: "正文" } } },
       member,
     );
     if (!res.ok) throw new Error(`status ${res.status}`);
@@ -29,7 +29,7 @@ beforeAll(async () => {
 });
 
 describe("sitemap", () => {
-  test("只列访客能看的版块和主题：仅成员版块和待审核的主题不在里面", async () => {
+  test("只列访客能看的版块和帖子：仅成员版块和待审核的帖子不在里面", async () => {
     const xml = await (await app.request("/sitemap.xml")).text();
     expect(xml).toContain(`/t/${ids.open}<`);
     expect(xml).toContain("/b/open<");

@@ -10,13 +10,13 @@ import { useMe } from "~/forum";
 import { useNearView } from "~/near-view";
 import { shareMeta } from "~/share-meta";
 import { stamp, unixNow } from "~/time";
-import type { Route } from "./+types/topic.ts";
+import type { Route } from "./+types/thread.ts";
 import { FloorNav, FloorProgress, useCurrentFloor, type Floors } from "./floor-timeline.tsx";
 import { BookmarkButton, NOTIFY_LEVELS, NotifyButton } from "./follow-buttons.tsx";
 import { PostCard } from "./post-card.tsx";
 import { REACTIONS } from "./reactions.tsx";
 import { useReading } from "./reading.ts";
-import { TopicHeader } from "./topic-header.tsx";
+import { ThreadHeader } from "./thread-header.tsx";
 
 // Floors come 20 at a time; see design §9.
 const BATCH = 20;
@@ -44,7 +44,7 @@ export async function loader({ params, request, context }: Route.LoaderArgs) {
     api.threads[":id"].posts.$get({ param, query: { after: String(start - 1) } }),
     api.threads.$get({ query: {} }),
   ]);
-  if (!threadRes.ok || !afterRes.ok) throw data("主题不存在", { status: 404 });
+  if (!threadRes.ok || !afterRes.ok) throw data("帖子不存在", { status: 404 });
   const thread = await threadRes.json();
   const after = (await afterRes.json()).items;
   let posts = after;
@@ -179,12 +179,12 @@ export async function action({ params, request, context }: Route.ActionArgs) {
   return { ok: false as const, message: (await res.json()).error.message };
 }
 
-export default function Topic({ loaderData }: Route.ComponentProps) {
+export default function Thread({ loaderData }: Route.ComponentProps) {
   // Out here, so what was read carries over the page's fresh starts.
   const read = useReading(loaderData.thread.id, loaderData.thread.read_floors);
   // Each load starts afresh: a jump to a floor that isn't on the page, or a change to one.
   return (
-    <TopicPage
+    <ThreadPage
       key={`${loaderData.thread.id}:${loaderData.start}:${loaderData.now}`}
       {...loaderData}
       read={read}
@@ -193,7 +193,7 @@ export default function Topic({ loaderData }: Route.ComponentProps) {
 }
 
 // `read` is null for guests, whose reading isn't tracked.
-function TopicPage({
+function ThreadPage({
   thread,
   posts: initial,
   start,
@@ -304,7 +304,7 @@ function TopicPage({
   return (
     <div className="flex gap-8">
       <article className="min-w-0 flex-1">
-        <TopicHeader
+        <ThreadHeader
           thread={thread}
           current={current}
           editable={staff || (me?.id === thread.author.id && !thread.locked)}
@@ -365,7 +365,7 @@ function TopicPage({
                 )
               }
               onDelete={() => {
-                const question = post.floor === 1 ? "删除这个主题？" : `删除 #${post.floor}？`;
+                const question = post.floor === 1 ? "删除这个帖子？" : `删除 #${post.floor}？`;
                 if (!confirm(question)) return;
                 void changes.submit(
                   post.floor === 1
@@ -419,7 +419,7 @@ function TopicPage({
 
         {suggested.length > 0 && (
           <section className="mt-12">
-            <h2 className="px-3 font-semibold sm:px-4">推荐主题</h2>
+            <h2 className="px-3 font-semibold sm:px-4">推荐帖子</h2>
             <div className="mt-3">
               <ThreadList threads={suggested} now={now} />
             </div>

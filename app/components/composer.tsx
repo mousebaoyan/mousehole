@@ -220,7 +220,7 @@ function Composer({
                 <span className="ml-1 text-muted-foreground tabular-nums">#{replyTo.floor}</span>
               </>
             ) : (
-              "回复主题"
+              "回复帖子"
             )}
           </span>
           <Link

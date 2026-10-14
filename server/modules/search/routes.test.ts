@@ -79,7 +79,7 @@ describe("搜索", () => {
     expect(await titles("套磁")).toEqual(["导师选择和套磁"]);
   });
 
-  test("相似问题：用提问原文找到最像的主题", async () => {
+  test("相似问题：用提问原文找到最像的帖子", async () => {
     const id = await thread("南京大学软件学院预推免面试问什么", "面试流程");
     const res = await api.search.similar.$get({
       query: { text: "请问南大软院的预推免面试一般问些什么？" },

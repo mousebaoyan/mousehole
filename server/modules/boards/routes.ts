@@ -22,8 +22,8 @@ const BoardSchema = z
     description: z.string(),
     color: z.string(),
     visibility: z.string().openapi({ description: "public：公开；members：仅成员" }),
-    post_role: z.string().openapi({ description: "谁能发主题。user：成员；moderator：版主" }),
-    default_kind: z.string().openapi({ description: "发主题时默认的类型：discussion 或 question" }),
+    post_role: z.string().openapi({ description: "谁能发帖。user：成员；moderator：版主" }),
+    default_kind: z.string().openapi({ description: "发帖时默认的类型：discussion 或 question" }),
     review_mode: z.string().openapi({
       description: "after：先发后审；before：先审后发，版主以外的人发的内容通过审核才公开",
     }),
@@ -159,13 +159,13 @@ export const boardsRoutes = createRouter()
     createRoute({
       method: "delete",
       path: "/boards/{slug}",
-      summary: "删除版块；只能删从来没有过主题的版块",
+      summary: "删除版块；只能删从来没有过帖子的版块",
       request: { params: SlugParam },
       responses: {
         204: { description: "已删除" },
         403: errorResponse("不是管理员"),
         404: errorResponse("版块不存在"),
-        409: errorResponse("版块里有过主题"),
+        409: errorResponse("版块里有过帖子"),
       },
     }),
     async (c) => {
@@ -228,7 +228,7 @@ export const boardsRoutes = createRouter()
     createRoute({
       method: "post",
       path: "/tags/{id}/merge",
-      summary: "合并到另一个标签：主题都改用那个标签，这个标签删除",
+      summary: "合并到另一个标签：帖子都改用那个标签，这个标签删除",
       request: { params: IdParam, body: json(z.object({ into: z.number().int() })) },
       responses: {
         200: { ...tagResponse, description: "合并后的标签" },
@@ -246,7 +246,7 @@ export const boardsRoutes = createRouter()
     createRoute({
       method: "delete",
       path: "/tags/{id}",
-      summary: "删除标签，主题上的这个标签一并去掉",
+      summary: "删除标签，帖子上的这个标签一并去掉",
       request: { params: IdParam },
       responses: {
         204: { description: "已删除" },

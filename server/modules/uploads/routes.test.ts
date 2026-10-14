@@ -93,7 +93,7 @@ describe("上传图片", () => {
     const admin = as(await login((await createUser("admin")).id));
     await api.boards.$post({ json: { slug: "pics", name: "图片" } }, admin);
     const thread = await api.threads.$post(
-      { json: { board: "pics", title: "带图的主题", content: { markdown: `![图](${used.url})` } } },
+      { json: { board: "pics", title: "带图的帖子", content: { markdown: `![图](${used.url})` } } },
       member,
     );
     if (!thread.ok) throw new Error(`status ${thread.status}`);

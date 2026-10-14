@@ -94,7 +94,7 @@ const ExportSchema = z.object({
       thread_id: z.number(),
       title: z.string(),
       board: z.string(),
-      floor: z.number().openapi({ description: "1 是主楼，也就是自己发的主题" }),
+      floor: z.number().openapi({ description: "1 是主楼，也就是自己发的帖子" }),
       body: z.string().openapi({ description: "Markdown 原文" }),
       status: z.string(),
       created_at: z.number(),
@@ -222,7 +222,7 @@ export const usersRoutes = createRouter()
     createRoute({
       method: "put",
       path: "/users/{user}/follow",
-      summary: "关注某人：TA 发新主题时通知我",
+      summary: "关注某人：TA 发新帖时通知我",
       request: { params: UserParam },
       responses: changed,
     }),
@@ -274,7 +274,7 @@ export const usersRoutes = createRouter()
     createRoute({
       method: "get",
       path: "/me/settings",
-      summary: "自己的设置：名字、简介、是否允许代发、通知开关",
+      summary: "自己的设置：名字、个性签名、是否允许代发、通知开关",
       responses: {
         200: { description: "设置", content: { "application/json": { schema: SettingsSchema } } },
         401: errorResponse("没有登录"),

@@ -11,7 +11,7 @@ const MessageParams = z.object({
 
 const LinkSchema = z
   .object({
-    kind: z.string().openapi({ description: "source：内容来自这条消息；notice：bot 发的帖子通知" }),
+    kind: z.string().openapi({ description: "source：内容来自这条消息；notice：bot 发的转存回执" }),
     thread_id: z.number(),
     post_id: z.number().nullable(),
   })
@@ -22,7 +22,7 @@ export const qqRoutes = createRouter()
     createRoute({
       method: "get",
       path: "/bot/messages/{chat_type}/{chat_id}/{message_id}",
-      summary: "某条 QQ 消息对应的论坛主题或回复",
+      summary: "某条 QQ 消息对应的论坛帖子或回复",
       request: { params: MessageParams },
       responses: {
         200: { description: "对应的内容", content: { "application/json": { schema: LinkSchema } } },
@@ -41,7 +41,7 @@ export const qqRoutes = createRouter()
     createRoute({
       method: "put",
       path: "/bot/messages/{chat_type}/{chat_id}/{message_id}",
-      summary: "记录 bot 发出的帖子通知：群友引用这条通知回复时，就知道回复的是哪个主题",
+      summary: "记录 bot 发出的转存回执：群友引用这条通知回复时，就知道回复的是哪个帖子",
       request: {
         params: MessageParams,
         body: {

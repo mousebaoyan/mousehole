@@ -86,12 +86,12 @@ async function reader(index: number, members: Member[], threads: number[], until
     const roll = Math.random();
     if (roll < 0.5) {
       const guest = { headers: { "x-real-ip": ip } };
-      await timed("访客 主题页", `/t/${thread}`, guest, 200);
+      await timed("访客 帖子页", `/t/${thread}`, guest, 200);
       await timed("访客 首页", "/", guest, 200);
     } else {
       const me = members[index % members.length];
       const headers = { cookie: me.session, "x-real-ip": ip, origin: BASE };
-      await timed("成员 主题页", `/t/${thread}`, { headers }, 200);
+      await timed("成员 帖子页", `/t/${thread}`, { headers }, 200);
       const floors = Floors.parse(
         JSON.parse(
           await timed("成员 楼层接口", `/api/v1/threads/${thread}/posts`, { headers }, 200),
@@ -124,7 +124,7 @@ const list = z.object({ items: z.array(Id) });
 const threads = list
   .parse(await (await fetch(`${BASE}/api/v1/threads`)).json())
   .items.map((t) => t.id);
-console.log(`${USERS} 个读者，${SECONDS} 秒，${members.length} 个成员，${threads.length} 个主题`);
+console.log(`${USERS} 个读者，${SECONDS} 秒，${members.length} 个成员，${threads.length} 个帖子`);
 const until = Date.now() + SECONDS * 1000;
 await Promise.all(Array.from({ length: USERS }, (_, i) => reader(i, members, threads, until)));
 

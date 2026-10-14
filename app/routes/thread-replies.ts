@@ -1,6 +1,6 @@
 import { data } from "react-router";
 import { apiContext } from "../api.server.ts";
-import type { Route } from "./+types/topic-replies.ts";
+import type { Route } from "./+types/thread-replies.ts";
 
 // The floors that reply to one, shown under it: ?after=N for the next batch.
 export async function loader({ params, request, context }: Route.LoaderArgs) {

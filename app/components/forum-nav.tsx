@@ -25,7 +25,7 @@ export function ForumNav() {
     <nav className="flex flex-col gap-6 text-sm">
       <div className="flex flex-col gap-0.5">
         <NavLink to="/" end className={item}>
-          <Home className="size-4" /> 全部主题
+          <Home className="size-4" /> 全部帖子
         </NavLink>
         {me &&
           mine.map((m) => (

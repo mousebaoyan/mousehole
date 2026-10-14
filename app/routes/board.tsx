@@ -47,7 +47,7 @@ export default function Board({ loaderData }: Route.ComponentProps) {
           <h1 className="text-xl font-semibold">{board.name}</h1>
           <p className="mt-1 text-sm text-muted-foreground">
             {board.description && `${board.description} · `}
-            {board.thread_count.toLocaleString()} 个主题
+            {board.thread_count.toLocaleString()} 个帖子
           </p>
         </div>
       </header>

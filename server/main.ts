@@ -39,7 +39,7 @@ every(DAY_MS, "Clearing old idempotency keys", clearIdempotencyKeys);
 every(DAY_MS, "Clearing old notifications", clearOldNotifications);
 every(DAY_MS, "Clearing old events", clearOldEvents);
 
-// A topic served from the guest page cache skips the loader that counts its view.
+// A thread served from the guest page cache skips the loader that counts its view.
 function countCachedView(c: Context) {
   const thread = /^\/t\/(\d+)/.exec(c.req.path)?.[1];
   const ip = clientIp(c);

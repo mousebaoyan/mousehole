@@ -49,7 +49,7 @@ export default function Search({ loaderData }: Route.ComponentProps) {
           defaultValue={q}
           key={q}
           aria-label="搜索"
-          placeholder="搜索主题、回复、用户"
+          placeholder="搜索帖子、回复、用户"
           maxLength={100}
           className="w-full bg-transparent outline-none placeholder:text-muted-foreground"
         />

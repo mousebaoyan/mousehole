@@ -1,5 +1,5 @@
 import { apiContext } from "../api.server.ts";
-import type { Route } from "./+types/topic-reply.ts";
+import type { Route } from "./+types/thread-reply.ts";
 
 // The docked editor's reply: the new floor's number, or why it wasn't posted.
 export async function action({ params, request, context }: Route.ActionArgs) {

@@ -47,7 +47,7 @@ export function ThreadList({
         aria-hidden="true"
         className={cn(COLUMNS, "border-b pb-2 text-xs text-muted-foreground max-md:hidden")}
       >
-        <span>主题</span>
+        <span>帖子</span>
         <span />
         <span className="text-center">回复</span>
         <span className="text-center">浏览</span>
@@ -125,7 +125,7 @@ function ThreadRow({
           )}
           {fresh && (
             <span className="ml-2 inline-block size-2 rounded-full bg-primary align-middle">
-              <span className="sr-only">新主题</span>
+              <span className="sr-only">新帖子</span>
             </span>
           )}
           {unread > 0 && (

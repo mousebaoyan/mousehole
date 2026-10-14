@@ -22,7 +22,7 @@ beforeAll(async () => {
   other = as(await login((await createUser()).id));
   moderator = as(await login((await createUser("moderator")).id));
   const res = await api.threads.$post(
-    { json: { board: "r", title: "求点赞的主题", content: { markdown: "主楼" } } },
+    { json: { board: "r", title: "求点赞的帖子", content: { markdown: "主楼" } } },
     author.who,
   );
   if (!res.ok) throw new Error(`status ${res.status}`);

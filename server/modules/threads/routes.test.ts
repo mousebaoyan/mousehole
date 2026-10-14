@@ -26,7 +26,7 @@ async function newBoard(change: { visibility?: "members"; post_role?: "moderator
 
 async function newThread(board: string, extra: { kind?: "question"; tags?: string[] } = {}) {
   const res = await api.threads.$post(
-    { json: { board, title: "主题标题", content: { markdown: "正文" }, ...extra } },
+    { json: { board, title: "帖子标题", content: { markdown: "正文" }, ...extra } },
     member,
   );
   if (!res.ok) throw new Error(`status ${res.status}: ${await res.text()}`);
@@ -78,7 +78,7 @@ async function bookmarked() {
   return (await res.json()).items.map((t) => t.id);
 }
 
-describe("发主题和回复", () => {
+describe("发帖和回复", () => {
   test("并发回复按顺序拿到楼层号，计数都对", async () => {
     const board = await newBoard();
     const thread = await newThread(board);
@@ -97,7 +97,7 @@ describe("发主题和回复", () => {
     expect(counts).toEqual({ thread_count: 1, post_count: 10 });
   });
 
-  test("回复某一层：记下回复关系；别的主题里的楼层不行", async () => {
+  test("回复某一层：记下回复关系；别的帖子里的楼层不行", async () => {
     const board = await newBoard();
     const [thread, other] = [await newThread(board), await newThread(board)];
     const first = await replied(thread, "第二楼");
@@ -119,10 +119,10 @@ describe("发主题和回复", () => {
     expect((await replies.json()).items.map((p) => p.floor)).toEqual([3]);
   });
 
-  test("只有版主能在版主版块发主题；锁定的主题只有版主能回复", async () => {
+  test("只有版主能在版主版块发帖；锁定的帖子只有版主能回复", async () => {
     const board = await newBoard({ post_role: "moderator" });
     const refused = await api.threads.$post(
-      { json: { board, title: "主题标题", content: { markdown: "正文" } } },
+      { json: { board, title: "帖子标题", content: { markdown: "正文" } } },
       member,
     );
     expect(refused.status).toBe(403);
@@ -164,12 +164,12 @@ describe("发主题和回复", () => {
   });
 
   // Replies are limited the same way, at 60 in 10 minutes, which takes longer to reach.
-  test("一个人一小时最多发 20 个主题，再发返回 429 和 Retry-After", async () => {
+  test("一个人一小时最多发 20 个帖子，再发返回 429 和 Retry-After", async () => {
     const board = await newBoard();
     const poster = as(await login((await createUser()).id));
     const post = () =>
       api.threads.$post(
-        { json: { board, title: "刷屏的主题", content: { markdown: "刷屏" } } },
+        { json: { board, title: "刷屏的帖子", content: { markdown: "刷屏" } } },
         poster,
       );
     for (let i = 0; i < 20; i++) expect((await post()).status).toBe(201);
@@ -179,8 +179,8 @@ describe("发主题和回复", () => {
   });
 });
 
-describe("读主题", () => {
-  test("仅成员版块的主题，访客打不开", async () => {
+describe("读帖子", () => {
+  test("仅成员版块的帖子，访客打不开", async () => {
     const board = await newBoard({ visibility: "members" });
     const thread = await newThread(board);
     const param = { id: String(thread) };
@@ -238,7 +238,7 @@ describe("读主题", () => {
         range(1, 33).map((i) => ({
           board_id: boardId,
           author_id: author.id,
-          title: `主题 ${i}`,
+          title: `帖子 ${i}`,
           last_post_at: new Date(Date.now() - (34 - i) * 1000),
         })),
       )
@@ -288,7 +288,7 @@ describe("读主题", () => {
 });
 
 describe("收藏和关注", () => {
-  test("发主题的人自动关注；访客的主题详情里没有自己的状态", async () => {
+  test("发帖的人自动关注；访客的帖子详情里没有自己的状态", async () => {
     const thread = await newThread(await newBoard());
     expect(await detail(thread)).toMatchObject({ bookmarked: false, notify_level: "watching" });
     expect(await detail(thread, { headers: {} })).not.toHaveProperty("notify_level");
@@ -319,7 +319,7 @@ describe("我的帖子", () => {
     const board = await newBoard();
     const poster = as(await login((await createUser()).id));
     const created = await api.threads.$post(
-      { json: { board, title: "自己发的主题", content: { markdown: "正文" } } },
+      { json: { board, title: "自己发的帖子", content: { markdown: "正文" } } },
       poster,
     );
     if (!created.ok) throw new Error(`status ${created.status}`);

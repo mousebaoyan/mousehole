@@ -20,7 +20,7 @@ export function meta({ loaderData }: Route.MetaArgs) {
 }
 
 const TABS = [
-  { tab: "threads", label: "主题" },
+  { tab: "threads", label: "帖子" },
   { tab: "posts", label: "回复" },
 ] as const;
 
@@ -114,12 +114,12 @@ export default function User({ loaderData, actionData }: Route.ComponentProps) {
   if (user.joined_at !== null) facts.push(`群龄 ${age(user.joined_at, now)}`);
   if (user.last_sent_at !== null) facts.push(`${ago(user.last_sent_at, now)}在群里发言`);
   const numbers = [
-    { label: "主题", value: stats.threads },
+    { label: "帖子", value: stats.threads },
     { label: "回复", value: stats.posts },
     { label: "获赞", value: stats.likes },
     { label: "访问天数", value: stats.days_visited },
     { label: "阅读时间", value: duration(stats.read_seconds) },
-    { label: "读过的主题", value: stats.threads_read },
+    { label: "读过的帖子", value: stats.threads_read },
     { label: "读过的回复", value: stats.posts_read },
   ];
 

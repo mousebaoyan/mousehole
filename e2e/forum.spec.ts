@@ -15,7 +15,7 @@ async function signInAsAdmin(page: Page) {
   await page.waitForURL((url) => !url.pathname.startsWith("/login"));
 }
 
-test("管理员登录，建版块、设公告，发主题再回复", async ({ page }) => {
+test("管理员登录，建版块、设公告，发帖再回复", async ({ page }) => {
   await signInAsAdmin(page);
 
   await page.goto("/admin/boards");
@@ -32,11 +32,11 @@ test("管理员登录，建版块、设公告，发主题再回复", async ({ pa
 
   await page.goto("/new");
   await page.getByLabel("版块").selectOption("e2e");
-  await page.getByLabel("标题").fill("端到端测试发的主题");
+  await page.getByLabel("标题").fill("端到端测试发的帖子");
   await page.getByLabel("正文").fill("**正文**里有加粗");
   await page.getByRole("button", { name: "发布" }).click();
   await page.waitForURL(/\/t\/\d+$/);
-  await expect(page.getByRole("heading", { name: "端到端测试发的主题" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "端到端测试发的帖子" })).toBeVisible();
   await expect(page.locator("#floor-1 strong")).toHaveText("正文");
   await expect(page.getByText("端到端测试的公告")).toBeVisible();
 

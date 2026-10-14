@@ -112,7 +112,7 @@ async function floors(thread: number, who: Who) {
 }
 
 describe("先审后发", () => {
-  test("成员发的主题等待审核：只有作者和版主能看到，不计数，插件收到 content.pending", async () => {
+  test("成员发的帖子等待审核：只有作者和版主能看到，不计数，插件收到 content.pending", async () => {
     const board = await newBoard("before");
     const thread = await newThread(board);
     expect(thread.status).toBe("pending");
@@ -198,7 +198,7 @@ describe("隐藏和恢复", () => {
     expect(await events("post.created", { post: { id: post.id } })).toHaveLength(1);
   });
 
-  test("隐藏的主题里删掉回复、再删掉主题，计数不会重复扣", async () => {
+  test("隐藏的帖子里删掉回复、再删掉帖子，计数不会重复扣", async () => {
     const board = await newBoard("after");
     const thread = await newThread(board);
     const first = await reply(thread.id);
@@ -217,7 +217,7 @@ describe("隐藏和恢复", () => {
     expect(await counts(board, thread.id)).toEqual({ threads: 0, posts: 0, replies: 1 });
   });
 
-  test("主楼随主题改状态；主题隐藏时不能回复，也不能单独改回复的状态", async () => {
+  test("主楼随帖子改状态；帖子隐藏时不能回复，也不能单独改回复的状态", async () => {
     const board = await newBoard("after");
     const thread = await newThread(board);
     const post = await reply(thread.id);
@@ -244,9 +244,9 @@ describe("隐藏和恢复", () => {
 });
 
 describe("后台的内容页", () => {
-  test("版主按状态列出待审核和已隐藏的内容，主题以主楼出现", async () => {
+  test("版主按状态列出待审核和已隐藏的内容，帖子以主楼出现", async () => {
     const before = await newBoard("before");
-    const pending = await newThread(before, "等待审核的主题");
+    const pending = await newThread(before, "等待审核的帖子");
     const after = await newBoard("after");
     const shown = await newThread(after);
     const hidden = await reply(shown.id);
@@ -259,7 +259,7 @@ describe("后台的内容页", () => {
     };
     expect((await list("pending")).find((i) => i.thread_id === pending.id)).toMatchObject({
       floor: 1,
-      title: "等待审核的主题",
+      title: "等待审核的帖子",
       board: { slug: before },
     });
     expect((await list("hidden")).map((i) => i.id)).toContain(hidden.id);

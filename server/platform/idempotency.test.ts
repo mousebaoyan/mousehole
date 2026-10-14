@@ -16,7 +16,7 @@ const app = new Hono<AppEnv>()
   .post("/other", (c) => c.json({ run: ++runs }, 201))
   .post("/missing", () => {
     runs++;
-    throw new AppError(404, "not_found", "没有这个主题");
+    throw new AppError(404, "not_found", "没有这个帖子");
   })
   .post("/broken", () => {
     runs++;

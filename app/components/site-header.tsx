@@ -69,7 +69,7 @@ export function SiteHeader({ me, unread: loaded }: { me: Me | null; unread: numb
             type="search"
             name="q"
             aria-label="搜索"
-            placeholder="搜索主题、回复、用户"
+            placeholder="搜索帖子、回复、用户"
             className="peer w-full bg-transparent text-foreground outline-none placeholder:text-muted-foreground [&::-webkit-search-cancel-button]:hidden"
           />
           <kbd className="rounded border bg-background px-1.5 font-sans text-2xs peer-[:not(:placeholder-shown)]:hidden">

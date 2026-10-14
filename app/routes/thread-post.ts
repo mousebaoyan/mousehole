@@ -1,6 +1,6 @@
 import { data } from "react-router";
 import { apiContext } from "../api.server.ts";
-import type { Route } from "./+types/topic-post.ts";
+import type { Route } from "./+types/thread-post.ts";
 
 // A floor shown in another's preview when it isn't on the page, or its Markdown for editing
 // (?body=markdown).

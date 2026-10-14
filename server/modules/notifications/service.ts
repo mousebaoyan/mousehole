@@ -55,8 +55,8 @@ const SAID: Record<NotificationType, string> = {
   mention: "提到了你",
   like: "赞了你",
   boost: "给你留了短评",
-  watching: "回复了你关注的主题",
-  following: "发了新主题",
+  watching: "回复了你关注的帖子",
+  following: "发了新帖",
   solved: "采纳了你的回答",
   moderation: "处理了你的内容",
 };

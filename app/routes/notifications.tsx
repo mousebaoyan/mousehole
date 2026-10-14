@@ -94,13 +94,13 @@ function headline(n: Item) {
     case "boost":
       return `${many ? `${who} 等 ${n.count} 人` : who} 给你留了短评：${n.data.body}`;
     case "watching":
-      return many ? `关注的主题有 ${n.count} 层新回复` : `${who} 回复了你关注的主题`;
+      return many ? `关注的帖子有 ${n.count} 层新回复` : `${who} 回复了你关注的帖子`;
     case "solved":
       return `${who} 采纳了你的回答`;
     case "moderation":
-      return `${who} ${MODERATED[n.data.action] ?? "处理了你的"}${n.post.floor === 1 ? "主题" : "回复"}${n.data.reason ? `：${n.data.reason}` : ""}`;
+      return `${who} ${MODERATED[n.data.action] ?? "处理了你的"}${n.post.floor === 1 ? "帖子" : "回复"}${n.data.reason ? `：${n.data.reason}` : ""}`;
     default:
-      return `${who} 发了新主题`;
+      return `${who} 发了新帖`;
   }
 }
 
