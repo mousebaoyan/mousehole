@@ -1,4 +1,4 @@
-import { Heart, Snowflake } from "lucide-react";
+import { Heart, Search, Snowflake } from "lucide-react";
 import { useRef } from "react";
 import { data, Link, useFetcher, useLocation } from "react-router";
 import { cn } from "cn";
@@ -242,6 +242,12 @@ function Profile({
               {t.label}
             </Link>
           ))}
+          <Link
+            to={`/search?author=${user.id}`}
+            className="ml-auto inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground"
+          >
+            <Search className="size-4" /> 搜索 TA 的帖子
+          </Link>
         </nav>
         {threads &&
           (threads.length === 0 ? (

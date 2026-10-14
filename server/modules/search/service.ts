@@ -79,22 +79,47 @@ function visiblePosts(members: boolean) {
     );
 }
 
-type Scope = { boardId?: number; tagId?: number; authorId?: number };
+export const SORTS = ["relevance", "created", "last_post", "replies", "likes"] as const;
 
-// Threads with the best-matching post of each, by relevance with older ones gradually behind;
-// the cursor is how many were shown. A single Han character is too short to index, so it is
-// looked for in titles instead.
-export async function search(members: boolean, q: string, scope: Scope, offset: number) {
+const SORT_KEYS = {
+  created: "created_at",
+  last_post: "last_post_at",
+  replies: "reply_count",
+  likes: "like_count",
+} as const;
+
+const SINCE = { week: "7 days", month: "1 month", year: "1 year" } as const;
+
+export type SearchFilter = {
+  boardId?: number;
+  tagId?: number;
+  // The thread's author, 楼主.
+  authorId?: number;
+  kind?: "discussion" | "question";
+  // False is a question still waiting for its answer.
+  solved?: boolean;
+  since?: keyof typeof SINCE;
+  titleOnly?: boolean;
+  sort: (typeof SORTS)[number];
+};
+
+// Threads with the best-matching post of each; the cursor is how many were shown. By relevance,
+// older ones gradually behind, or by one of the threads' own orders. A single Han character is
+// too short to index, so it is looked for in titles instead.
+export async function search(members: boolean, q: string, filter: SearchFilter, offset: number) {
   const words = terms(q);
   if (words.length === 0) return { hits: [], next_cursor: null };
   const single = words.length === 1 && words[0].length === 1 && words[0][0].length === 1;
-  const query = sql`to_tsquery('simple', ${phraseQuery(q)})`;
+  const query = sql`to_tsquery('simple', ${phraseQuery(q, filter.titleOnly)})`;
   let matches = visiblePosts(members).select([
     "posts.thread_id",
     "posts.id as post_id",
     "posts.floor",
     "posts.html",
     "threads.created_at",
+    "threads.last_post_at",
+    "threads.reply_count",
+    "threads.like_count",
     single
       ? sql<number>`1`.as("rank")
       : sql<number>`ts_rank_cd(post_search.document, ${query})`.as("rank"),
@@ -102,10 +127,26 @@ export async function search(members: boolean, q: string, scope: Scope, offset: 
   matches = single
     ? matches.where("posts.floor", "=", 1).where("threads.title", "ilike", `%${q.trim()}%`)
     : matches.where(sql<boolean>`post_search.document @@ ${query}`);
-  if (scope.boardId !== undefined) matches = matches.where("threads.board_id", "=", scope.boardId);
-  if (scope.authorId !== undefined) matches = matches.where("posts.author_id", "=", scope.authorId);
-  if (scope.tagId !== undefined) {
-    const tagId = scope.tagId;
+  if (filter.titleOnly) matches = matches.where("posts.floor", "=", 1);
+  if (filter.boardId !== undefined) {
+    matches = matches.where("threads.board_id", "=", filter.boardId);
+  }
+  if (filter.authorId !== undefined) {
+    matches = matches.where("threads.author_id", "=", filter.authorId);
+  }
+  if (filter.kind !== undefined) matches = matches.where("threads.kind", "=", filter.kind);
+  if (filter.solved === true) matches = matches.where("threads.solved_post_id", "is not", null);
+  if (filter.solved === false) {
+    matches = matches
+      .where("threads.kind", "=", "question")
+      .where("threads.solved_post_id", "is", null);
+  }
+  if (filter.since !== undefined) {
+    const since = SINCE[filter.since];
+    matches = matches.where("threads.created_at", ">", sql<Date>`now() - ${since}::interval`);
+  }
+  if (filter.tagId !== undefined) {
+    const tagId = filter.tagId;
     matches = matches.where((eb) =>
       eb.exists(
         eb
@@ -124,7 +165,12 @@ export async function search(members: boolean, q: string, scope: Scope, offset: 
         .as("best"),
     )
     .selectAll()
-    .orderBy(sql`rank / (1 + extract(epoch FROM now() - created_at) / 86400 / 365)`, "desc")
+    .orderBy(
+      filter.sort === "relevance"
+        ? sql`rank / (1 + extract(epoch FROM now() - created_at) / 86400 / 365)`
+        : sql.ref(SORT_KEYS[filter.sort]),
+      "desc",
+    )
     .orderBy("thread_id", "desc")
     .offset(offset)
     .limit(PAGE)

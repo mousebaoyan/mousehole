@@ -1,9 +1,13 @@
-import { Search as SearchIcon } from "lucide-react";
+import { Search as SearchIcon, X } from "lucide-react";
 import { Fragment, useRef } from "react";
 import { data, Form, Link, useFetcher, useLocation } from "react-router";
 import { apiContext } from "../api.server.ts";
+import { cn } from "cn";
 import { BoardBadge } from "~/components/board-badge";
+import { Dot, FILTER, FilterMenu } from "~/components/filter-menu";
+import { tagChoices } from "~/components/thread-feed";
 import { UserAvatar } from "~/components/user-avatar";
+import { useBoards, useTags } from "~/forum";
 import { useNearView } from "~/near-view";
 import { ago, unixNow } from "~/time";
 import type { Route } from "./+types/search.ts";
@@ -11,26 +15,102 @@ import { SITE_NAME } from "../../server/platform/site.ts";
 
 export function meta({ loaderData }: Route.MetaArgs) {
   return [
-    { title: loaderData.q ? `${loaderData.q} · 搜索 · ${SITE_NAME}` : `搜索 · ${SITE_NAME}` },
+    {
+      title: loaderData.filters.q
+        ? `${loaderData.filters.q} · 搜索 · ${SITE_NAME}`
+        : `搜索 · ${SITE_NAME}`,
+    },
   ];
 }
 
-// Threads and replies for ?q=, a page at a time; on the first page, also members by name for
-// those signed in.
+const KINDS = [
+  { value: "", label: "全部类型" },
+  { value: "discussion", label: "讨论" },
+  { value: "question", label: "问答" },
+] as const;
+
+const SOLVED = [
+  { value: "", label: "全部状态" },
+  { value: "true", label: "已解决" },
+  { value: "false", label: "待解答" },
+] as const;
+
+const SINCE = [
+  { value: "", label: "不限时间" },
+  { value: "week", label: "一周内" },
+  { value: "month", label: "一个月内" },
+  { value: "year", label: "一年内" },
+] as const;
+
+const SORTS = [
+  { value: "", label: "相关度" },
+  { value: "created", label: "最新发布" },
+  { value: "last_post", label: "最新回复" },
+  { value: "replies", label: "回复最多" },
+  { value: "likes", label: "点赞最多" },
+] as const;
+
+function pick<T extends string>(options: readonly { value: T }[], value: string | null) {
+  return options.find((o) => o.value === value)?.value ?? options[0].value;
+}
+
+// The filters in the address (design §8.5); defaults are left out.
+function readSearch(url: string) {
+  const params = new URL(url).searchParams;
+  return {
+    q: params.get("q")?.trim().slice(0, 100) ?? "",
+    board: params.get("board") ?? "",
+    tag: params.get("tag") ?? "",
+    author: params.get("author") ?? "",
+    kind: pick(KINDS, params.get("kind")),
+    solved: pick(SOLVED, params.get("solved")),
+    since: pick(SINCE, params.get("since")),
+    title_only: params.get("title_only") === "true" ? ("true" as const) : ("" as const),
+    sort: pick(SORTS, params.get("sort")),
+  };
+}
+
+type Filters = ReturnType<typeof readSearch>;
+
+function searchUrl(filters: Filters, change: Partial<Filters>) {
+  const params = new URLSearchParams(
+    Object.entries({ ...filters, ...change }).filter(([, v]) => v !== ""),
+  );
+  return `/search?${params}`;
+}
+
+// Threads and replies for ?q= and the filters, a page at a time; on the first page, also members
+// by name for those signed in, and the 楼主 filtered on.
 export async function loader({ request, context }: Route.LoaderArgs) {
   const api = context.get(apiContext);
-  const search = new URL(request.url).searchParams;
-  const q = search.get("q")?.trim().slice(0, 100) ?? "";
-  const cursor = search.get("cursor") ?? undefined;
-  if (q === "") return { q, results: [], users: [], next_cursor: null, now: unixNow() };
-  const [res, people] = await Promise.all([
-    api.search.$get({ query: { q, cursor } }),
-    cursor === undefined ? api.users.$get({ query: { q: q.slice(0, 20) } }) : null,
+  const filters = readSearch(request.url);
+  const cursor = new URL(request.url).searchParams.get("cursor") ?? undefined;
+  const { q } = filters;
+  const [res, people, author] = await Promise.all([
+    q === ""
+      ? null
+      : api.search.$get({
+          query: {
+            q,
+            board: filters.board || undefined,
+            tag: filters.tag || undefined,
+            author: filters.author || undefined,
+            kind: filters.kind || undefined,
+            solved: filters.solved || undefined,
+            since: filters.since || undefined,
+            title_only: filters.title_only || undefined,
+            sort: filters.sort || undefined,
+            cursor,
+          },
+        }),
+    q === "" || cursor !== undefined ? null : api.users.$get({ query: { q: q.slice(0, 20) } }),
+    filters.author === "" ? null : api.users[":user"].$get({ param: { user: filters.author } }),
   ]);
-  if (!res.ok) throw data((await res.json()).error.message, { status: res.status });
-  const page = await res.json();
+  if (res && !res.ok) throw data((await res.json()).error.message, { status: res.status });
+  const page = res ? await res.json() : { items: [], next_cursor: null };
   return {
-    q,
+    filters,
+    authorName: author?.ok ? (await author.json()).display_name : null,
     results: page.items,
     users: people?.ok ? (await people.json()).items : [],
     next_cursor: page.next_cursor,
@@ -41,10 +121,11 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 type Result = Route.ComponentProps["loaderData"]["results"][number];
 
 export default function Search({ loaderData }: Route.ComponentProps) {
-  const { q, results, users, next_cursor, now } = loaderData;
+  const { filters, authorName, results, users, next_cursor, now } = loaderData;
+  const { q } = filters;
   return (
     <section>
-      <Form className="mb-5 flex h-11 items-center gap-2 rounded-full bg-secondary px-4 focus-within:ring-2 focus-within:ring-ring/40">
+      <Form className="mb-3 flex h-11 items-center gap-2 rounded-full bg-secondary px-4 focus-within:ring-2 focus-within:ring-ring/40">
         <SearchIcon className="size-4 shrink-0 text-muted-foreground" />
         <input
           type="search"
@@ -56,7 +137,14 @@ export default function Search({ loaderData }: Route.ComponentProps) {
           maxLength={100}
           className="w-full bg-transparent outline-none placeholder:text-muted-foreground"
         />
+        {/* Searching again keeps the filters. */}
+        {Object.entries(filters).map(
+          ([name, value]) =>
+            name !== "q" &&
+            value !== "" && <input key={name} type="hidden" name={name} value={value} />,
+        )}
       </Form>
+      <SearchFilters filters={filters} authorName={authorName} />
       {users.length > 0 && (
         <div className="mb-4 flex flex-wrap gap-2 px-1">
           {users.map((u) => (
@@ -79,6 +167,100 @@ export default function Search({ loaderData }: Route.ComponentProps) {
         {next_cursor !== null && <More cursor={next_cursor} />}
       </ul>
     </section>
+  );
+}
+
+// A filter menu over fixed options, each a link to the search with that option.
+function OptionMenu<T extends string>({
+  label,
+  options,
+  value,
+  to,
+}: {
+  label: string;
+  options: readonly { value: T; label: string }[];
+  value: T;
+  to: (value: T) => string;
+}) {
+  return (
+    <FilterMenu
+      label={label}
+      trigger={options.find((o) => o.value === value)?.label}
+      choices={options.map((o) => ({ to: to(o.value), label: o.label, chosen: o.value === value }))}
+    />
+  );
+}
+
+function SearchFilters({ filters, authorName }: { filters: Filters; authorName: string | null }) {
+  const boards = useBoards();
+  const tags = useTags();
+  const url = (change: Partial<Filters>) => searchUrl(filters, change);
+  const board = boards.find((b) => b.slug === filters.board);
+  return (
+    <div className="mb-4 flex flex-wrap gap-2 px-1">
+      <FilterMenu
+        label="按版块筛选"
+        trigger={
+          <>
+            {board && <Dot color={board.color} />}
+            {board ? board.name : "全部版块"}
+          </>
+        }
+        choices={[
+          { to: url({ board: "" }), label: "全部版块", chosen: !board },
+          ...boards.map((b) => ({
+            to: url({ board: b.slug }),
+            label: (
+              <>
+                <Dot color={b.color} />
+                {b.name}
+              </>
+            ),
+            chosen: b === board,
+          })),
+        ]}
+      />
+      <FilterMenu
+        label="按标签筛选"
+        trigger={filters.tag === "" ? "全部标签" : `#${filters.tag}`}
+        choices={[
+          { to: url({ tag: "" }), label: "全部标签", chosen: filters.tag === "" },
+          ...tagChoices(tags, filters.tag, (tag) => url({ tag })),
+        ]}
+      />
+      <OptionMenu
+        label="按类型筛选"
+        options={KINDS}
+        value={filters.kind}
+        to={(kind) => url({ kind })}
+      />
+      <OptionMenu
+        label="按是否解决筛选"
+        options={SOLVED}
+        value={filters.solved}
+        to={(solved) => url({ solved })}
+      />
+      <OptionMenu
+        label="按发布时间筛选"
+        options={SINCE}
+        value={filters.since}
+        to={(since) => url({ since })}
+      />
+      <OptionMenu label="排序" options={SORTS} value={filters.sort} to={(sort) => url({ sort })} />
+      <Link
+        to={url({ title_only: filters.title_only ? "" : "true" })}
+        aria-pressed={filters.title_only !== ""}
+        className={cn(FILTER, filters.title_only && "border-primary bg-primary/10 text-primary")}
+      >
+        只搜标题
+      </Link>
+      {filters.author !== "" && (
+        <Link to={url({ author: "" })} aria-label="不按楼主筛选" className={FILTER}>
+          楼主：{authorName ?? filters.author}
+          <X className="size-3.5 text-muted-foreground" />
+        </Link>
+      )}
+    </div>
   );
 }
 
@@ -143,7 +325,7 @@ function More({ cursor }: { cursor: string }) {
   }
   return (
     <>
-      <Results results={page.results} q={page.q} now={page.now} />
+      <Results results={page.results} q={page.filters.q} now={page.now} />
       {page.next_cursor !== null && <More cursor={page.next_cursor} />}
     </>
   );

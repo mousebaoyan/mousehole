@@ -1,9 +1,9 @@
-import { Check, ChevronDown, PenSquare } from "lucide-react";
-import { Fragment, useRef, type ReactNode } from "react";
+import { PenSquare } from "lucide-react";
+import { useRef } from "react";
 import { Link, useFetcher, useLocation } from "react-router";
 import { cn } from "cn";
 import type { Api, ThreadItem } from "~/api-types";
-import { Dropdown, menuItem } from "~/components/disclosure";
+import { Dot, FilterMenu } from "~/components/filter-menu";
 import { ThreadList, ThreadRows } from "~/components/thread-list";
 import { buttonVariants } from "~/components/ui/button";
 import { useBoards, useTags, type Board } from "~/forum";
@@ -47,8 +47,23 @@ const KINDS = [
   { kind: "major", label: "方向" },
 ];
 
-const FILTER =
-  "inline-flex h-8 items-center gap-1.5 rounded-full border bg-card px-3 text-sm hover:bg-accent";
+// The tags as filter choices, grouped by kind; the lists and search both offer them.
+export function tagChoices(
+  tags: { id: number; name: string; kind: string }[],
+  chosen: string | null,
+  to: (name: string) => string,
+) {
+  return KINDS.flatMap((k) =>
+    tags
+      .filter((t) => t.kind === k.kind)
+      .map((t) => ({
+        to: to(t.name),
+        label: `#${t.name}`,
+        chosen: t.name === chosen,
+        group: k.label,
+      })),
+  );
+}
 
 // Board in the path, the rest in the query; defaults are left out.
 function listUrl(board: string | null, tag: string | null, view: ThreadView) {
@@ -74,80 +89,41 @@ export function ThreadFeed({
 }: Page & { view: ThreadView; tag: string | null; board: Board | null; counts: Counts | null }) {
   const boards = useBoards();
   const tags = useTags();
-  const { key } = useLocation();
   const slug = board === null ? null : board.slug;
   return (
     <section>
       <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-2 px-1">
         <div className="flex gap-2 max-sm:w-full">
-          <Dropdown
-            key={`board-${key}`}
+          <FilterMenu
             label="按版块筛选"
-            align="start"
-            triggerClassName={FILTER}
             trigger={
               <>
                 {board && <Dot color={board.color} />}
                 {board ? board.name : "全部版块"}
-                <ChevronDown className="size-3.5 text-muted-foreground" />
               </>
             }
-          >
-            {() => (
-              <>
-                <Choice to={listUrl(null, tag, view)} chosen={board === null}>
-                  全部版块
-                </Choice>
-                {boards.map((b) => (
-                  <Choice key={b.slug} to={listUrl(b.slug, tag, view)} chosen={b.slug === slug}>
+            choices={[
+              { to: listUrl(null, tag, view), label: "全部版块", chosen: board === null },
+              ...boards.map((b) => ({
+                to: listUrl(b.slug, tag, view),
+                label: (
+                  <>
                     <Dot color={b.color} />
                     {b.name}
-                  </Choice>
-                ))}
-              </>
-            )}
-          </Dropdown>
-          <Dropdown
-            key={`tag-${key}`}
+                  </>
+                ),
+                chosen: b.slug === slug,
+              })),
+            ]}
+          />
+          <FilterMenu
             label="按标签筛选"
-            align="start"
-            triggerClassName={FILTER}
-            trigger={
-              <>
-                {tag === null ? "全部标签" : `#${tag}`}
-                <ChevronDown className="size-3.5 text-muted-foreground" />
-              </>
-            }
-          >
-            {() => (
-              <>
-                <Choice to={listUrl(slug, null, view)} chosen={tag === null}>
-                  全部标签
-                </Choice>
-                {KINDS.map((k) => {
-                  const group = tags.filter((t) => t.kind === k.kind);
-                  return (
-                    group.length > 0 && (
-                      <Fragment key={k.kind}>
-                        <div className="px-2.5 pt-2 pb-1 text-xs text-muted-foreground">
-                          {k.label}
-                        </div>
-                        {group.map((t) => (
-                          <Choice
-                            key={t.id}
-                            to={listUrl(slug, t.name, view)}
-                            chosen={t.name === tag}
-                          >
-                            #{t.name}
-                          </Choice>
-                        ))}
-                      </Fragment>
-                    )
-                  );
-                })}
-              </>
-            )}
-          </Dropdown>
+            trigger={tag === null ? "全部标签" : `#${tag}`}
+            choices={[
+              { to: listUrl(slug, null, view), label: "全部标签", chosen: tag === null },
+              ...tagChoices(tags, tag, (name) => listUrl(slug, name, view)),
+            ]}
+          />
           {/* Wider screens have this in the header. */}
           <Link
             to={slug === null ? "/new" : `/new?board=${slug}`}
@@ -219,18 +195,5 @@ export function More({ cursor, showBoard }: { cursor: string; showBoard: boolean
       <ThreadRows threads={data.threads} now={data.now} showBoard={showBoard} />
       {data.next_cursor !== null && <More cursor={data.next_cursor} showBoard={showBoard} />}
     </>
-  );
-}
-
-function Dot({ color }: { color: string }) {
-  return <span className="size-2 shrink-0 rounded-full" style={{ backgroundColor: color }} />;
-}
-
-function Choice({ to, chosen, children }: { to: string; chosen: boolean; children: ReactNode }) {
-  return (
-    <Link to={to} className={cn(menuItem, chosen && "font-medium")}>
-      {children}
-      {chosen && <Check className="ml-auto" />}
-    </Link>
   );
 }

@@ -21,6 +21,12 @@ async function thread(title: string, markdown: string, board = "s") {
   return (await res.json()).id;
 }
 
+async function whoAmI(who: { headers: Record<string, string> }) {
+  const res = await api.me.$get({}, who);
+  if (!res.ok) throw new Error(`status ${res.status}`);
+  return res.json();
+}
+
 async function reply(threadId: number, markdown: string) {
   const res = await api.threads[":id"].posts.$post(
     { param: { id: String(threadId) }, json: { content: { markdown } } },
@@ -77,6 +83,40 @@ describe("搜索", () => {
       member,
     );
     expect(await titles("套磁")).toEqual(["导师选择和套磁"]);
+  });
+
+  test("筛选：只搜标题、类型、还在等回答、楼主；排序：回复最多、最新发布", async () => {
+    const other = as(await login((await createUser()).id));
+    const discussion = await thread("考研还是保研", "纠结");
+    const question = await api.threads.$post(
+      {
+        json: {
+          board: "s",
+          title: "保研要准备什么",
+          kind: "question",
+          content: { markdown: "没头绪" },
+        },
+      },
+      other,
+    );
+    if (!question.ok) throw new Error(`status ${question.status}`);
+    const asked = (await question.json()).id;
+    const mentioned = await thread("一篇经验分享", "正文里提到保研");
+    await reply(mentioned, "第一条");
+    await reply(mentioned, "第二条");
+
+    const ids = async (query: Record<string, string>) => {
+      const res = await api.search.$get({ query: { q: "保研", ...query } }, member);
+      if (!res.ok) throw new Error(`status ${res.status}`);
+      return (await res.json()).items.map((r) => r.thread.id);
+    };
+    expect(await ids({ title_only: "true" })).not.toContain(mentioned);
+    expect(await ids({ kind: "question" })).toEqual([asked]);
+    expect(await ids({ solved: "false" })).toEqual([asked]);
+    expect(await ids({ solved: "true" })).toEqual([]);
+    expect(await ids({ author: `${(await whoAmI(other)).id}` })).toEqual([asked]);
+    expect((await ids({ sort: "replies" }))[0]).toBe(mentioned);
+    expect(await ids({ sort: "created" })).toEqual([mentioned, asked, discussion]);
   });
 
   test("相似问题：用提问原文找到最像的帖子", async () => {
