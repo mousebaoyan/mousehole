@@ -1,7 +1,15 @@
+import { sql } from "kysely";
 import type { Actor } from "../../platform/access.ts";
 import { db } from "../../platform/db.ts";
 import { getSettings, saveSettings, type Settings } from "../../platform/settings.ts";
 import { recordAudit } from "../audit/service.ts";
+
+export async function databaseBytes() {
+  const { bytes } = await db
+    .selectNoFrom(sql<number>`pg_database_size(current_database())`.as("bytes"))
+    .executeTakeFirstOrThrow();
+  return bytes;
+}
 
 // Partial edits merged onto the current settings. A missing SMTP password keeps the stored one.
 export async function updateSettings(

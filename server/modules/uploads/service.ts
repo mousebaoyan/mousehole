@@ -159,6 +159,15 @@ export async function linkUploads(trx: Transaction<DB>, postId: number, srcs: st
 }
 
 // Uploads no post has used within a day of being uploaded go, files and all.
+// Both sizes of every stored image, for the admin overview.
+export async function uploadBytes() {
+  const { bytes } = await db
+    .selectFrom("uploads")
+    .select(sql<number>`coalesce(sum(bytes), 0)::bigint`.as("bytes"))
+    .executeTakeFirstOrThrow();
+  return bytes;
+}
+
 export async function clearUnusedUploads() {
   const gone = await db
     .deleteFrom("uploads")

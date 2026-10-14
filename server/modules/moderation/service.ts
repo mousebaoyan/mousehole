@@ -198,6 +198,15 @@ export async function listReports(status: ReportStatus, cursor: number | undefin
 }
 
 // Dealt with (whatever was done about the content), or not a problem after all.
+export async function countOpenReports() {
+  const { count } = await db
+    .selectFrom("reports")
+    .select(sql<number>`count(*)::integer`.as("count"))
+    .where("status", "=", "open")
+    .executeTakeFirstOrThrow();
+  return count;
+}
+
 export async function handleReport(actor: Actor, id: number, status: "resolved" | "dismissed") {
   await db.transaction().execute(async (trx) => {
     const handled = await trx
