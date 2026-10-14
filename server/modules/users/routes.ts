@@ -205,6 +205,7 @@ export const usersRoutes = createRouter()
         display_name: u.display_name,
         avatar_url: u.avatar_url,
         role: u.role,
+        level: u.level,
       };
       if (u.hide_from_guests && !members) {
         return c.json({ ...brief, title: "", members_only: true as const }, 200);
@@ -496,12 +497,14 @@ export const usersRoutes = createRouter()
     createRoute({
       method: "get",
       path: "/admin/members",
-      summary: "成员列表，新建的在前，每页 50 个：按名字或 QQ 号找，按成员资格、角色、是否受限筛选",
+      summary:
+        "成员列表，新建的在前，每页 50 个：按名字或 QQ 号找，按成员资格、角色、等级、是否受限筛选",
       request: {
         query: z.object({
           q: z.string().trim().min(1).max(30).optional(),
           status: z.enum(["member", "frozen"]).optional(),
           role: z.enum(["user", "moderator", "admin", "bot"]).optional(),
+          level: z.coerce.number().int().min(0).max(5).optional(),
           restricted: z
             .enum(["true", "false"])
             .optional()
@@ -523,6 +526,8 @@ export const usersRoutes = createRouter()
                     qq: z.number().nullable(),
                     role: z.string(),
                     role_locked: z.boolean(),
+                    level: z.number(),
+                    level_locked: z.boolean(),
                     member_status: z.string(),
                     activated: z.boolean(),
                     restriction: z

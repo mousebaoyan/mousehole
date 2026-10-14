@@ -8,6 +8,7 @@ import { tokenRoutes } from "./modules/auth/token-routes.ts";
 import { boardsRoutes } from "./modules/boards/routes.ts";
 import { draftsRoutes } from "./modules/drafts/routes.ts";
 import { eventsRoutes } from "./modules/events/routes.ts";
+import { levelsRoutes } from "./modules/levels/routes.ts";
 import { membersRoutes } from "./modules/members/routes.ts";
 import { moderationRoutes } from "./modules/moderation/routes.ts";
 import { notificationsRoutes } from "./modules/notifications/routes.ts";
@@ -29,6 +30,7 @@ const api = createRouter()
   .route("/", authRoutes)
   .route("/", tokenRoutes)
   .route("/", usersRoutes)
+  .route("/", levelsRoutes)
   .route("/", membersRoutes)
   .route("/", boardsRoutes)
   .route("/", threadsRoutes)

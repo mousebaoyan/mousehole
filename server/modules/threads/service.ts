@@ -15,6 +15,7 @@ import { indexPost, unindexPost } from "../search/service.ts";
 import { fetchUpload, linkUploads, showImages } from "../uploads/service.ts";
 import {
   countLikes,
+  countPosting,
   countReading,
   countUserPosts,
   membersByQq,
@@ -698,6 +699,7 @@ export async function createThread(
     if (input.source) await linkSource(trx, input.source, thread.id, opening.id);
     // Posted from the composer; what a bot posts for them leaves their draft alone.
     if (actor.tokenId === null) await discardDraft(trx, viewer.id, null);
+    await countPosting(trx, viewer.id);
     if (tagIds.length > 0) {
       await trx
         .insertInto("thread_tags")
@@ -761,6 +763,7 @@ export async function createPost(
   const status = statusFor(thread.review_mode, viewer);
   const id = await db.transaction().execute(async (trx) => {
     if (actor.tokenId === null) await discardDraft(trx, viewer.id, threadId);
+    await countPosting(trx, viewer.id);
     if (replyTo !== undefined) {
       const target = await trx
         .selectFrom("posts")

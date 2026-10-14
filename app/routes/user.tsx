@@ -14,7 +14,7 @@ import { useNearView } from "~/near-view";
 import { ago, unixNow } from "~/time";
 import type { Route } from "./+types/user.ts";
 import { ModerationButtons } from "./user-moderation.tsx";
-import { SITE_NAME } from "../../server/platform/site.ts";
+import { levelName, SITE_NAME } from "../../server/platform/site.ts";
 
 export function meta({ loaderData }: Route.MetaArgs) {
   return [{ title: `${loaderData.user.display_name} · ${SITE_NAME}` }];
@@ -32,8 +32,10 @@ export async function loader({ params, request, context }: Route.LoaderArgs) {
   const tab = search.get("tab") === "posts" ? "posts" : "threads";
   const cursor = search.get("cursor") ?? undefined;
   const param = { user: params.id };
-  const [userRes, threadsRes, postsRes] = await Promise.all([
+  const [userRes, levelRes, threadsRes, postsRes] = await Promise.all([
     api.users[":user"].$get({ param }),
+    // Only for themselves and admins.
+    api.users[":user"].level.$get({ param }),
     tab === "threads" ? api.users[":user"].threads.$get({ param, query: { cursor } }) : null,
     tab === "posts" ? api.users[":user"].posts.$get({ param, query: { cursor } }) : null,
   ]);
@@ -43,6 +45,7 @@ export async function loader({ params, request, context }: Route.LoaderArgs) {
   // Shaped like the thread lists' pages, which `More` loads the next of.
   return {
     user: await userRes.json(),
+    progress: levelRes.ok ? await levelRes.json() : null,
     tab,
     threads: threads?.items ?? null,
     posts: posts?.items ?? null,
@@ -127,6 +130,7 @@ export default function User({ loaderData, actionData }: Route.ComponentProps) {
 
 function Profile({
   user,
+  progress,
   tab,
   threads,
   posts,
@@ -227,6 +231,8 @@ function Profile({
         ))}
       </dl>
 
+      {progress && <LevelProgress progress={progress} />}
+
       <section>
         <nav aria-label="发过的内容" className="mb-3 flex gap-1 px-1">
           {TABS.map((t) => (
@@ -323,5 +329,52 @@ function MorePosts({ cursor }: { cursor: string }) {
       <PostRows posts={page.posts} now={page.now} />
       {page.next_cursor !== null && <MorePosts cursor={page.next_cursor} />}
     </>
+  );
+}
+
+// The next level's requirements with how far along they are, or what keeps L4 (design §6.6).
+function LevelProgress({ progress }: { progress: NonNullable<LoaderData["progress"]> }) {
+  const { level, locked, next } = progress;
+  if (!next) {
+    return locked ? (
+      <p className="px-1 text-meta text-muted-foreground">
+        等级由管理员定为 {levelName(level)}，不再自动升降
+      </p>
+    ) : null;
+  }
+  const keep = next.level === level;
+  return (
+    <section aria-label="升级进度" className="rounded-2xl border bg-card px-4 py-3.5">
+      <h2 className="text-sm font-medium">
+        {keep ? `保持 ${levelName(level)}` : `升到 ${levelName(next.level)}`}
+        <span className="ml-2 text-meta font-normal text-muted-foreground">
+          {next.level === 4 ? "看最近 30 天" : "累计"}
+        </span>
+      </h2>
+      <ul className="mt-3 grid gap-x-6 gap-y-3 sm:grid-cols-2">
+        {next.items.map((item) => {
+          const shown = (n: number) => (item.key === "read_seconds" ? duration(n) : n);
+          const done = item.have >= item.need;
+          return (
+            <li key={item.key}>
+              <div className="flex justify-between gap-2 text-meta">
+                <span>{item.label}</span>
+                <span
+                  className={cn("tabular-nums", done ? "text-success" : "text-muted-foreground")}
+                >
+                  {shown(Math.min(item.have, item.need))} / {shown(item.need)}
+                </span>
+              </div>
+              <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-secondary">
+                <div
+                  className={cn("h-full rounded-full", done ? "bg-success" : "bg-primary")}
+                  style={{ width: `${Math.min(100, (item.have / item.need) * 100)}%` }}
+                />
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+    </section>
   );
 }

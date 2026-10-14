@@ -49,6 +49,7 @@ const ACTIONS: Record<string, string> = {
   "user.rename": "改名字",
   "user.avatar": "改头像",
   "user.qq_bio": "推送 QQ 签名",
+  "user.level": "设定等级",
   "member.role": "角色变更",
   "member.freeze": "冻结",
   "member.restore": "恢复",
