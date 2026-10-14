@@ -167,12 +167,17 @@ export default function Settings({ loaderData, actionData }: Route.ComponentProp
                   <tr key={type} className="border-t">
                     <td className="py-2">{label}</td>
                     {(["site", "email"] as const).map((where) => (
-                      <td key={where} className="text-center">
-                        <Checkbox
-                          name={`${type}.${where}`}
-                          defaultChecked={settings.notify_prefs[type][where]}
-                          aria-label={`${label}：${where === "site" ? "站内" : "邮件"}`}
-                        />
+                      <td key={where}>
+                        {/* The whole cell takes the tap, not just the 16px box. */}
+                        <label className="flex h-10 cursor-pointer items-center justify-center">
+                          <Checkbox
+                            name={`${type}.${where}`}
+                            defaultChecked={settings.notify_prefs[type][where]}
+                          />
+                          <span className="sr-only">
+                            {label}：{where === "site" ? "站内" : "邮件"}
+                          </span>
+                        </label>
                       </td>
                     ))}
                   </tr>
