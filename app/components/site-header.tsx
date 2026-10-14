@@ -94,7 +94,7 @@ export function SiteHeader({ me, unread: loaded }: { me: Me | null; unread: numb
           <ThemeToggle />
           {me ? (
             <>
-              {me.role === "admin" && (
+              {(me.role === "admin" || me.role === "moderator") && (
                 <Link
                   to="/admin"
                   aria-label="管理后台"
@@ -148,7 +148,7 @@ export function SiteHeader({ me, unread: loaded }: { me: Me | null; unread: numb
                     <Link to="/settings" className={menuItem}>
                       <Settings /> 设置
                     </Link>
-                    {me.role === "admin" && (
+                    {(me.role === "admin" || me.role === "moderator") && (
                       <Link to="/admin" className={menuItem}>
                         <Wrench /> 管理后台
                       </Link>

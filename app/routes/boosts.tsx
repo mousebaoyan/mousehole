@@ -1,4 +1,4 @@
-import { Check, Rocket, Trash2, X } from "lucide-react";
+import { Check, Flag, Rocket, Trash2, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useFetcher, useNavigate } from "react-router";
 import { cn } from "cn";
@@ -66,15 +66,18 @@ export function useBoosts(post: PostItem, threadId: number) {
 const chip =
   "inline-flex items-center gap-1.5 rounded-full bg-secondary py-0.5 pr-2.5 pl-0.5 text-meta";
 
-// One boost; moderators can remove other people's from its menu.
+// One boost. Other people's have a menu: members can report one, moderators remove it.
 export function BoostChip({
   boost,
   threadId,
   removable,
+  onReport,
 }: {
   boost: Shown;
   threadId: number;
   removable: boolean;
+  // Missing for one's own boosts and for guests.
+  onReport?: () => void;
 }) {
   const removing = useFetcher<{ ok: true } | { ok: false; message: string }>();
   useEffect(() => {
@@ -88,14 +91,14 @@ export function BoostChip({
       {boost.body}
     </>
   );
-  if (!removable || boost.id === null) {
+  const id = boost.id;
+  if (id === null || (!removable && !onReport)) {
     return (
       <li title={boost.user.display_name} className={chip}>
         {content}
       </li>
     );
   }
-  const id = boost.id;
   return (
     <li title={boost.user.display_name}>
       <Dropdown
@@ -105,20 +108,36 @@ export function BoostChip({
         trigger={content}
       >
         {(close) => (
-          <button
-            type="button"
-            className={cn(menuItem, "text-destructive [&_svg]:text-destructive")}
-            onClick={() => {
-              close();
-              if (!confirm("删除这条短评？")) return;
-              void removing.submit(
-                { intent: "remove-boost", boost_id: id },
-                { method: "post", action: `/t/${threadId}`, defaultShouldRevalidate: false },
-              );
-            }}
-          >
-            <Trash2 /> 删除短评
-          </button>
+          <>
+            {onReport && (
+              <button
+                type="button"
+                className={menuItem}
+                onClick={() => {
+                  close();
+                  onReport();
+                }}
+              >
+                <Flag /> 举报短评
+              </button>
+            )}
+            {removable && (
+              <button
+                type="button"
+                className={cn(menuItem, "text-destructive [&_svg]:text-destructive")}
+                onClick={() => {
+                  close();
+                  if (!confirm("删除这条短评？")) return;
+                  void removing.submit(
+                    { intent: "remove-boost", boost_id: id },
+                    { method: "post", action: `/t/${threadId}`, defaultShouldRevalidate: false },
+                  );
+                }}
+              >
+                <Trash2 /> 删除短评
+              </button>
+            )}
+          </>
         )}
       </Dropdown>
     </li>

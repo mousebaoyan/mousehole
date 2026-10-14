@@ -236,12 +236,12 @@ token 由管理员在后台创建，只显示一次。每个 token 绑定一个 
 | PUT | `/posts/{id}/reaction` | 表情回应：`{ emoji }`，取 `heart`（点赞）、`+1`、`laughing`、`open_mouth`、`clap`、`tada`、`hugs`、`thinking`、`sob`、`mouse` 之一；每人一个，已有就替换；不能回应自己的回复 | 成员 / `act` |
 | DELETE | `/posts/{id}/reaction` | 取消自己的回应 | 成员 / `act` |
 | GET | `/posts/{id}/reactions` | 谁回应了什么，最近的在前，每次 50 个：可按 `emoji` 筛选，`cursor` 翻页 | 访客 |
-| POST | `/posts/{id}/report` | 举报：`{ reason }` | 成员 / `act` |
+| POST | `/posts/{id}/report` | 举报：`{ reason }`（最多 200 个字）；每人对每层一次，再举报返回 `409 already_reported`；产生 `report.created` 事件 | 没被禁言的成员 / `act` |
 | PUT | `/posts/{id}/boost` | 留下或修改自己在这一层的短评：`{ body }`，不超过 16 个字（emoji 算一个），首尾空白去掉；返回这条短评 | 成员 / `act` |
 | DELETE | `/posts/{id}/boost` | 删除自己的短评 | 成员 / `act` |
 | GET | `/posts/{id}/boosts` | 这一层的全部短评，按时间排序；楼层列表里每层只带前 6 条 | 访客 |
 | DELETE | `/boosts/{id}` | 删除任意短评，可附 `{ reason }`，和短评原文一起记进操作日志 | 版主 / `moderate` |
-| POST | `/boosts/{id}/report` | 举报短评：`{ reason }` | 成员 / `act` |
+| POST | `/boosts/{id}/report` | 举报短评：`{ reason }`，规则同上；短评被删时举报一并删掉 | 没被禁言的成员 / `act` |
 
 ### 3.6 搜索
 
@@ -281,8 +281,8 @@ token 由管理员在后台创建，只显示一次。每个 token 绑定一个 
 | PATCH | `/admin/groups/{group_id}` | 启用、停用、设为主群：`{ enabled?, is_primary?: true }`；相关成员的成员资格、显示名和等级随即重算 | 管理员 / `admin` |
 | GET | `/admin/members` | 成员列表：按 QQ 号、名字、成员资格、角色筛选 | 版主 / `moderate` |
 | GET | `/admin/pending` | 待审核的主题和回复 | 版主 / `moderate` |
-| GET | `/admin/reports` | 举报列表：`status` | 版主 / `moderate` |
-| PATCH | `/admin/reports/{id}` | 处理举报：`{ status }`，可选 `resolved`、`dismissed` | 版主 / `moderate` |
+| GET | `/admin/reports` | 举报列表，最新的在前，每页 30 条：`status`（默认 `open`）、`cursor`（上一页最后一条的 ID）；每条带举报人、理由、被举报的楼层（主题、楼层号、作者、摘要、是否已删除）或短评、处理人 | 版主 / `moderate` |
+| PATCH | `/admin/reports/{id}` | 处理举报：`{ status }`，可选 `resolved`（已处理，内容另外删除或隐藏）、`dismissed`（驳回）；记操作日志 | 版主 / `moderate` |
 | GET | `/admin/audit-logs` | 操作日志，可以按操作人、对象、动作筛选 | 管理员 / `admin` |
 | GET | `/admin/tokens` | bot token 列表，包括已吊销的；不含 token 本身 | 管理员，只能在网页上操作 |
 | POST | `/admin/tokens` | 创建：`{ name, bot_qq, scopes }`，返回 `{ id, token }`，token 只出现这一次 | 管理员，只能在网页上操作 |
@@ -401,7 +401,7 @@ data: {"post":{…},"thread":{…},"author":{…},"qq_text":"……","url":"http
 | `content.pending` | 先审后发的版块有新内容等待审核 | `thread`、`post`、`author` |
 | `notification.created` | 给某位成员产生通知，且他开启了这类通知的 QQ 提醒 | `user`、`type`、`actor`、`thread`、`post`、`url`、`qq_text` |
 | `member.activated` | 成员第一次登录 | `user` |
-| `report.created` | 有新举报 | `report`、`post`、`boost`（举报的是短评时）、`reporter` |
+| `report.created` | 有新举报 | `report`（`id`、`reason`）、`post`（`id`、`floor`、`thread_id`）、`boost`（举报的是短评时：`id`、`body`、`author`，否则为 `null`）、`reporter`、`url` |
 
 - `qq_text` 是可以直接发到 QQ 的纯文本，例如"【保研问答】rank 30% 能冲夏令营吗\n鼠鼠：……\nhttps://bbs.mousebaoyan.cn/t/42"。
 - 事件里的用户对象是 `{ id, display_name, qq }`，插件可以直接 @ 或私聊。匿名内容（二期）的事件不带作者。`source` 是内容来自的 QQ 消息，没有为 `null`。
