@@ -190,7 +190,7 @@ token 由管理员在后台创建，只显示一次。每个 token 绑定一个 
 | POST | `/auth/email/verify` | `{ qq, code }`：校验验证码，建立会话，返回 204；不对、过期或输错 5 次作废都返回 `400 email_code_invalid`，`message` 说明是哪种 | 访客 |
 | POST | `/auth/logout` | 退出当前会话；没有登录时也返回成功 | 访客 |
 | GET | `/me` | 当前用户；bot 代表某人时返回这个人 | 已登录 / `read` |
-| GET | `/me/settings` | 自己的设置：`custom_name`（自己起的名字，`null` 是跟着 QQ）、`custom_bio`（自己写的个性签名，`null` 是跟着 QQ）、`qq_bio`（QQ 的个性签名）、`avatar_custom`（头像是不是自己上传的）、`allow_proxy`、`hide_from_guests`（我的内容不给访客看）、`notify_prefs`（每类通知的 `{ site, qq }` 开关，含默认值） | 已登录 / `read` |
+| GET | `/me/settings` | 自己的设置：`custom_name`（自己起的名字，`null` 是跟着 QQ）、`custom_bio`（自己写的个性签名，`null` 是跟着 QQ）、`qq_bio`（QQ 的个性签名）、`avatar_custom`（头像是不是自己上传的）、`allow_proxy`、`hide_from_guests`（我的内容不给访客看）、`notify_prefs`（每类通知的 `{ site, email }` 开关，含默认值） | 已登录 / `read` |
 | PATCH | `/me` | 修改设置，只改带了的字段，返回改好的设置：`custom_name`（最多 24 个字，`null` 改回跟着 QQ，显示名随即重算）、`custom_bio`（最多 60 个字，`null` 改回跟着 QQ）、`allow_proxy`、`hide_from_guests`、`notify_prefs`（带了的类型整体替换）。插件的"不给访客看"命令用 `X-Act-As` 代成员改 `hide_from_guests`，没登录过论坛的也可以 | 成员 / `act` |
 | PUT | `/me/avatar` | 上传头像：multipart 的 `file` 字段，最大 20MB，格式同图片上传，裁成 96px 的方图；之后不再跟着 QQ 刷新。返回 `{ avatar_url }` | 没被禁言的成员 / `act` |
 | DELETE | `/me/avatar` | 头像改回跟着 QQ，立刻拉一次 QQ 头像，返回 `{ avatar_url }`；拉取失败返回 `502 fetch_failed`，头像不变 | 成员 / `act` |
@@ -320,9 +320,9 @@ token 由管理员在后台创建，只显示一次。每个 token 绑定一个 
 | 方法 | 路径 | 说明 | 权限 |
 | --- | --- | --- | --- |
 | GET | `/admin/overview` | 概览：`members`（`total`、`activated`、`frozen`，不算 bot）、`content`（`threads_today`、`posts_today`：今天公开的帖子和回复，按北京时间；`pending`：待审核；`reports`：待处理的举报）、`events`（`streams`：现在连着的事件流；`polled_at`：最近一次按游标拉取的时间，进程重启后为 `null`）、`storage`（`database`、`uploads`：数据库和上传图片占用的字节数）；群的同步状态见 `/admin/groups` | 管理员 / `admin` |
-| GET | `/admin/settings` | 站点设置，按分组返回：`site`（`banner` 公告横幅，`qq_public` 访客能否看到 QQ 号，`review_mode` 新建版块不指定时的审核方式）、`login`（三种登录方式的开关和口令提示）、`smtp`（密码只返回 `password_set`）、`bot`（`require_operator`） | 管理员 / `admin` |
-| PATCH | `/admin/settings` | 修改站点设置，立即生效：只改带了的分组和字段；SMTP 密码不带就不变，传空字符串清空 | 管理员 / `admin` |
-| POST | `/admin/settings/test-email` | `{ qq }`：用当前 SMTP 设置发一封测试邮件 | 管理员 / `admin` |
+| GET | `/admin/settings` | 站点设置，按分组返回：`site`（`banner` 公告横幅，`qq_public` 访客能否看到 QQ 号，`review_mode` 新建版块不指定时的审核方式）、`login`（三种登录方式的开关和口令提示）、`smtp`（`accounts`：发信邮箱，按使用的顺序，每个是 `host`、`port`、`secure`、`user`，密码只返回 `password_set`）、`bot`（`require_operator`） | 管理员 / `admin` |
+| PATCH | `/admin/settings` | 修改站点设置，立即生效：只改带了的分组和字段。`smtp.accounts` 整组替换，最多 10 个；某个邮箱不带 `password` 就沿用这个账号原来的密码 | 管理员 / `admin` |
+| POST | `/admin/settings/test-email` | `{ qq }`：每个发信邮箱各发一封测试邮件，返回 `results`，每项是 `user` 和失败的原因 `error`（成功为 `null`）；发出去的邮箱不再歇着 | 管理员 / `admin` |
 | GET | `/admin/groups` | 已关联的群和同步状态：最近一次增量、全量、群资料的时间，被拦下的全量 | 管理员 / `admin` |
 | POST | `/admin/groups` | 关联群：`{ group_id }`；第一个关联的群自动成为主群；已关联返回 `409 group_exists` | 管理员 / `admin` |
 | PATCH | `/admin/groups/{group_id}` | 启用、停用、设为主群：`{ enabled?, is_primary?: true }`；相关成员的成员资格和显示名随即重算 | 管理员 / `admin` |
@@ -429,31 +429,28 @@ Last-Event-ID: 1023
 
 id: 1024
 event: post.created
-data: {"post":{…},"thread":{…},"author":{…},"qq_text":"……","url":"https://bbs.mousebaoyan.cn/t/42?floor=3"}
+data: {"post":{…},"thread":{…},"author":{…},"url":"https://bbs.mousebaoyan.cn/t/42?floor=3"}
 ```
 
 - 带 `Last-Event-ID`（或 `?after=`）时，先补发之后的事件，再实时推送；都不带时只推新事件。
 - 每 20 秒发一条心跳注释，防止代理断开连接。
 - 事件保留 7 天。游标早于最早的事件时返回 `410 cursor_expired`，带 `latest_id`（当前最新的事件 ID），插件可以从那里重新开始。
 - 至少投递一次：网络中断可能导致重复投递，插件按事件 ID 去重，处理完再保存游标。
-- 用 `?types=thread.created,notification.created` 只订阅部分类型。
+- 用 `?types=member.activated,lottery.drawn` 只订阅部分类型。
 
 | 类型 | 触发时机 | 主要字段 |
 | --- | --- | --- |
-| `thread.created` | 新帖公开（先审后发的版块在审核通过时） | `thread`（`id`、`title`、`kind`）、`board`（`slug`、`name`）、`author`、`source`、`url`、`qq_text` |
-| `post.created` | 新回复公开 | `post`（`id`、`floor`、`body`）、`thread`（`id`、`title`）、`author`、`reply_to`（被回复的那一层：`id`、`floor`、`author`、`source`，没有为 `null`）、`source`、`url`、`qq_text` |
+| `thread.created` | 新帖公开（先审后发的版块在审核通过时） | `thread`（`id`、`title`、`kind`）、`board`（`slug`、`name`）、`author`、`source`、`url` |
+| `post.created` | 新回复公开 | `post`（`id`、`floor`、`body`）、`thread`（`id`、`title`）、`author`、`reply_to`（被回复的那一层：`id`、`floor`、`author`、`source`，没有为 `null`）、`source`、`url` |
 | `post.updated` | 回复或主楼被编辑 | `post`、`thread`、`editor` |
 | `post.deleted` | 回复或帖子被删除、隐藏；删除帖子时是它的主楼 | `post_id`、`thread_id`、`floor`、`by`、`reason` |
-| `thread.solved` | 采纳答案 | `thread`（`id`、`title`）、`post`（`id`、`floor`、`body`）、`answerer`、`url`、`qq_text` |
+| `thread.solved` | 采纳答案 | `thread`（`id`、`title`）、`post`（`id`、`floor`、`body`）、`answerer`、`url` |
 | `content.pending` | 先审后发的版块有新内容等待审核；帖子是它的主楼 | `thread`（`id`、`title`）、`board`、`post`（`id`、`floor`、`body`）、`author`、`url` |
-| `notification.created` | 给某位成员产生通知，且他开启了这类通知的 QQ 提醒 | `user`、`type`、`actor`、`thread`、`post`、`url`、`qq_text`；升级（`level`）的没有 `actor`、`thread`、`post`，带 `level`；抽奖（`lottery`）的没有 `actor`、`post`，带 `result` 和 `prize` |
 | `member.activated` | 成员第一次登录；插件收到后查这个人的 QQ 个性签名，推给 `/bot/users/{user}/bio` | `user` |
-| `lottery.drawn` | 抽奖开奖 | `thread`（`id`、`title`）、`author`、`prizes`（每项 `name` 和 `winners`，按抽中的先后）、`entry_count`、`url`、`qq_text` |
+| `lottery.drawn` | 抽奖开奖 | `thread`（`id`、`title`）、`author`、`prizes`（每项 `name` 和 `winners`，按抽中的先后）、`entry_count`、`url` |
 | `report.created` | 有新举报 | `report`（`id`、`reason`、`held`：这一层是否因 L4 的举报先隐藏了）、`post`（`id`、`floor`、`thread_id`）、`boost`（举报的是短评时：`id`、`body`、`author`，否则为 `null`）、`reporter`、`url` |
 
-- `qq_text` 是可以直接发到 QQ 的纯文本，例如"【保研问答】rank 30% 能冲夏令营吗\n鼠鼠：……\nhttps://bbs.mousebaoyan.cn/t/42"。
-- 事件里的用户对象是 `{ id, display_name, qq }`，插件可以直接私聊。匿名写的人是 `{ anonymous: true, number, display_name }`，没有 `id` 和 `qq`；本人编辑、删除自己的匿名内容时，`editor`、`by` 也是这样。`source` 是内容来自的 QQ 消息，没有为 `null`。
-- `notification.created`：每类通知的 QQ 提醒由本人在设置里开关；没设置过时，回复我、@我、回答被采纳、审核、升级和抽奖的通知默认开，其余默认关。抽奖的只在中奖（`result` 为 `won`，带 `prize`）和自己发起的开奖了（`drawn`）时才有，没中和取消的只发站内通知。`qq_text` 例如"鼠鼠 回复了你：……\nrank 30% 能冲夏令营吗\nhttps://bbs.mousebaoyan.cn/t/42?floor=3"。
+- 事件里的用户对象是 `{ id, display_name, qq }`，插件发开奖结果时用它 @ 本人。匿名写的人是 `{ anonymous: true, number, display_name }`，没有 `id` 和 `qq`；本人编辑、删除自己的匿名内容时，`editor`、`by` 也是这样。`source` 是内容来自的 QQ 消息，没有为 `null`。
 - 审核可以挂在事件上：先发后审的版块监听 `thread.created`、`post.created`，先审后发的版块监听 `content.pending`，判定后调用 `PATCH` 修改 `status`。恢复隐藏的内容不会再发 `thread.created`、`post.created`。
 
 ## 6. 流程
@@ -543,17 +540,9 @@ sequenceDiagram
 
 论坛上的回复不转回群里（[总体设计 §8.6](design.md#86-通知与实时)）。
 
-### 6.6 通知转到 QQ
+### 6.6 通知
 
-```mermaid
-sequenceDiagram
-    participant F as 论坛
-    participant P as 插件
-    actor A as 群友
-    Note over F: 有人回复或 @ 了 A，A 开启了这类通知的 QQ 提醒
-    F--)P: 事件 notification.created，含 A 的 QQ 号和 qq_text
-    P->>A: 私聊提醒
-```
+论坛直接发邮件到本人的 `QQ号@qq.com`，不经过插件（[总体设计 §8.6](design.md#86-通知与实时)）。
 
 ### 6.7 成员同步
 
@@ -585,7 +574,7 @@ sequenceDiagram
 然后登录后台：
 
 1. 在服务器上运行 `docker exec mousehole node scripts/bootstrap.ts --qq 你的QQ号`（本地开发用 `pnpm bootstrap --qq 你的QQ号`），得到一次性登录链接，10 分钟内有效。这个 QQ 号的账号设为管理员，并锁定角色。
-2. 打开链接登录后台：关联 QQ 群、设主群，创建 bot token（按插件需要选择范围），配置 SMTP 并发一封测试邮件。
+2. 打开链接登录后台：关联 QQ 群、设主群，创建 bot token（按插件需要选择范围），配置发信邮箱并发测试邮件。
 3. 把 token 配到插件里。插件推送第一次全量后，群成员就都能登录了。
 
 ## 7. 示例

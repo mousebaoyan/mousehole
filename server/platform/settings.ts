@@ -16,15 +16,18 @@ const LoginSchema = z.object({
   code_hint: z.string().default("私聊机器人发送：登录 {code}"),
 });
 
-const SmtpSchema = z.object({
-  host: z.string().default(""),
-  port: z.number().int().default(465),
-  secure: z.boolean().default(true),
-  user: z.string().default(""),
+const SmtpAccountSchema = z.object({
+  host: z.string(),
+  port: z.number().int(),
+  secure: z.boolean(),
+  user: z.string(),
   // Encrypted at rest with APP_SECRET; plain text in memory.
-  password: z.string().default(""),
-  from: z.string().default(""),
+  password: z.string(),
 });
+export type SmtpAccount = z.infer<typeof SmtpAccountSchema>;
+
+// Mailboxes to send from, tried in order (platform/mail.ts).
+const SmtpSchema = z.object({ accounts: z.array(SmtpAccountSchema).default([]) });
 
 const SiteSchema = z.object({
   // One line across the top of every forum page; empty shows none.
@@ -71,7 +74,7 @@ async function load(): Promise<Settings> {
   return {
     site: SiteSchema.parse(stored.get("site") ?? {}),
     login: LoginSchema.parse(stored.get("login") ?? {}),
-    smtp: { ...smtp, password: smtp.password && decrypt(smtp.password) },
+    smtp: { accounts: smtp.accounts.map((a) => ({ ...a, password: decrypt(a.password) })) },
     bot: BotSchema.parse(stored.get("bot") ?? {}),
   };
 }
@@ -91,11 +94,8 @@ export async function saveSettings(trx: Transaction<DB>, change: Partial<Setting
   if (change.login) rows.push({ key: "login", value: JSON.stringify(change.login) });
   if (change.bot) rows.push({ key: "bot", value: JSON.stringify(change.bot) });
   if (change.smtp) {
-    const smtp = {
-      ...change.smtp,
-      password: change.smtp.password && encrypt(change.smtp.password),
-    };
-    rows.push({ key: "smtp", value: JSON.stringify(smtp) });
+    const accounts = change.smtp.accounts.map((a) => ({ ...a, password: encrypt(a.password) }));
+    rows.push({ key: "smtp", value: JSON.stringify({ accounts }) });
   }
   if (rows.length === 0) return;
   await trx

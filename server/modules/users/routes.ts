@@ -127,7 +127,7 @@ const ExportSchema = z.object({
   ),
 });
 
-const Switches = z.object({ site: z.boolean(), qq: z.boolean() });
+const Switches = z.object({ site: z.boolean(), email: z.boolean() });
 
 const AvatarSchema = z.object({ avatar_url: z.string().nullable() });
 
@@ -141,7 +141,7 @@ const SettingsSchema = z
     hide_from_guests: z.boolean().openapi({ description: "我的内容不给访客看" }),
     notify_prefs: z
       .record(z.string(), Switches)
-      .openapi({ description: "每类通知的站内（site）和 QQ 提醒（qq）开关，含默认值" }),
+      .openapi({ description: "每类通知的站内（site）和邮件（email）开关，含默认值" }),
   })
   .openapi("MySettings");
 

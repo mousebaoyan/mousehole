@@ -4,12 +4,13 @@ import type { DB } from "../../../db/types.ts";
 import { db } from "../../platform/db.ts";
 import { env } from "../../platform/env.ts";
 import { AppError } from "../../platform/errors.ts";
+import { queueMail } from "../../platform/mail.ts";
 import { excerpt } from "../../platform/markdown.ts";
 import { levelName, SITE_NAME } from "../../platform/site.ts";
-import { recordEvent } from "../events/service.ts";
 import { anonymousBrief, userBriefs, writer } from "../users/service.ts";
 
-// What people are told of; see design §8.6. reply: someone replied to my floor; mention: @ me;
+// What people are told of; see design §8.6. reply: someone replied to my floor, or to my thread
+// without naming a floor; mention: @ me;
 // like and boost: on my floor; watching: a new floor in a thread I watch; following: a new thread
 // by someone I follow; solved: my answer was accepted; moderation: something of mine was
 // approved, rejected, hidden or shown again; level: I went up a level; lottery: one I entered or
@@ -43,8 +44,8 @@ type Notice = {
   data?: Record<string, string>;
 };
 
-// Unless turned off, every type shows on the site; QQ reminders only come for these.
-const QQ_BY_DEFAULT = new Set<NotificationType>([
+// Unless turned off, every type shows on the site; emails only come for these.
+const EMAIL_BY_DEFAULT = new Set<NotificationType>([
   "reply",
   "mention",
   "solved",
@@ -54,16 +55,16 @@ const QQ_BY_DEFAULT = new Set<NotificationType>([
 ]);
 
 // Someone's switches for every type, what they set over the defaults.
-export function notifyPrefs(saved: Record<string, { site?: boolean; qq?: boolean }>) {
+export function notifyPrefs(saved: Record<string, { site?: boolean; email?: boolean }>) {
   return Object.fromEntries(
     NOTIFICATION_TYPES.map((type) => [
       type,
-      { site: saved[type]?.site ?? true, qq: saved[type]?.qq ?? QQ_BY_DEFAULT.has(type) },
+      { site: saved[type]?.site ?? true, email: saved[type]?.email ?? EMAIL_BY_DEFAULT.has(type) },
     ]),
   );
 }
 
-// What happened, as the QQ reminder says it after the person's name; levels and lotteries are said
+// What happened, as the email says it after the person's name; levels and lotteries are said
 // differently, having nobody behind them.
 const SAID: Record<Notice["type"], string> = {
   reply: "回复了你",
@@ -84,12 +85,20 @@ const MODERATED: Record<string, string> = {
   unhide: "恢复了你的内容",
 };
 
-// Characters of the floor in a QQ reminder.
-const QQ_EXCERPT = 60;
+// Characters of the floor in an email.
+const MAIL_EXCERPT = 200;
+
+// Emails go to the QQ mailbox that comes with every QQ number, so they reach members who never
+// logged in here too: someone whose question was brought over from a group learns of the answers.
+function mailbox(qq: number) {
+  return `${qq}@qq.com`;
+}
+
+const MAIL_FOOTER = `\n\n——\n不想收到这类邮件，可以在${SITE_NAME}的设置里关掉：${env.PUBLIC_URL}/settings`;
 
 // Written in the transaction that caused it. Nobody hears of their own doing, nor anyone who left
-// the groups or muted the thread. Each type shows on the site, and goes to QQ as an event for the
-// bot plugin, as each person set it.
+// the groups or muted the thread. Each type shows on the site and goes by email, as each person
+// set it.
 async function notify(trx: Transaction<DB>, userIds: number[], notice: Notice) {
   const ids = [...new Set(userIds)].filter((id) => id !== notice.actorId);
   if (ids.length === 0) return;
@@ -103,11 +112,10 @@ async function notify(trx: Transaction<DB>, userIds: number[], notice: Notice) {
     )
     .select([
       "users.id",
-      "users.display_name",
       "users.qq",
       sql<boolean>`coalesce((${prefs} ->> 'site')::boolean, true)`.as("site"),
-      sql<boolean>`coalesce((${prefs} ->> 'qq')::boolean, ${QQ_BY_DEFAULT.has(notice.type)})`.as(
-        "to_qq",
+      sql<boolean>`coalesce((${prefs} ->> 'email')::boolean, ${EMAIL_BY_DEFAULT.has(notice.type)})`.as(
+        "email",
       ),
     ])
     .where("users.id", "in", ids)
@@ -150,27 +158,16 @@ async function notify(trx: Transaction<DB>, userIds: number[], notice: Notice) {
       onSite.map((r) => r.id),
     );
   }
-  const toQq = recipients.filter((r) => r.to_qq);
-  if (toQq.length > 0) await remindOnQq(trx, toQq, notice);
+  const byEmail = recipients.filter((r) => r.email);
+  if (byEmail.length > 0) await remindByEmail(trx, byEmail, notice);
 }
 
-async function remindOnQq(
-  trx: Transaction<DB>,
-  people: { id: number; display_name: string; qq: number | null }[],
-  notice: Notice,
-) {
+async function remindByEmail(trx: Transaction<DB>, people: { qq: number }[], notice: Notice) {
   const about = await trx
     .selectFrom("posts")
     .innerJoin("threads", "threads.id", "posts.thread_id")
     .innerJoin("users", (join) => join.on("users.id", "=", notice.actorId))
-    .select([
-      "posts.floor",
-      "posts.html",
-      "threads.title",
-      "users.id as actor_id",
-      "users.display_name as actor_name",
-      "users.qq as actor_qq",
-    ])
+    .select(["posts.floor", "posts.html", "threads.title", "users.display_name as actor_name"])
     .where("posts.id", "=", notice.postId)
     .executeTakeFirstOrThrow();
   const url = `${env.PUBLIC_URL}/t/${notice.threadId}${about.floor > 1 ? `?floor=${about.floor}` : ""}`;
@@ -178,21 +175,15 @@ async function remindOnQq(
     notice.type === "moderation" ? MODERATED[notice.data?.action ?? ""] : SAID[notice.type];
   const reason = notice.data?.reason ? `（${notice.data.reason}）` : "";
   const actor =
-    notice.actorAlias === null
-      ? { id: about.actor_id, display_name: about.actor_name, qq: about.actor_qq }
-      : anonymousBrief(notice.actorAlias);
-  const text = `${actor.display_name} ${said}${reason}：${excerpt(about.html, QQ_EXCERPT)}\n${about.title}\n${url}`;
-  for (const person of people) {
-    await recordEvent(trx, "notification.created", {
-      user: { id: person.id, display_name: person.display_name, qq: person.qq },
-      type: notice.type,
-      actor,
-      thread: { id: notice.threadId, title: about.title },
-      post: { id: notice.postId, floor: about.floor },
-      url,
-      qq_text: text,
-    });
-  }
+    notice.actorAlias === null ? about.actor_name : anonymousBrief(notice.actorAlias).display_name;
+  await queueMail(
+    trx,
+    people.map((p) => ({
+      address: mailbox(p.qq),
+      subject: `${actor} ${said}：${about.title}`,
+      body: `${actor} ${said}${reason}：\n${excerpt(about.html, MAIL_EXCERPT)}\n\n${about.title}\n${url}${MAIL_FOOTER}`,
+    })),
+  );
 }
 
 // Going up a level, automatically or from an admin (design §6.6); going down is not told.
@@ -202,11 +193,9 @@ export async function notifyLevel(trx: Transaction<DB>, userId: number, level: n
   const person = await trx
     .selectFrom("users")
     .select([
-      "id",
-      "display_name",
       "qq",
       sql<boolean>`coalesce((${prefs} ->> 'site')::boolean, true)`.as("site"),
-      sql<boolean>`coalesce((${prefs} ->> 'qq')::boolean, true)`.as("to_qq"),
+      sql<boolean>`coalesce((${prefs} ->> 'email')::boolean, true)`.as("email"),
     ])
     .where("id", "=", userId)
     .executeTakeFirstOrThrow();
@@ -217,21 +206,21 @@ export async function notifyLevel(trx: Transaction<DB>, userId: number, level: n
       .execute();
     await tellUnread(trx, [userId]);
   }
-  if (person.to_qq) {
-    const url = `${env.PUBLIC_URL}/u/${userId}`;
-    await recordEvent(trx, "notification.created", {
-      user: { id: person.id, display_name: person.display_name, qq: person.qq },
-      type,
-      level,
-      url,
-      qq_text: `你在${SITE_NAME}升到了 ${levelName(level)}\n${url}`,
-    });
+  if (person.email) {
+    const said = `你在${SITE_NAME}升到了 ${levelName(level)}`;
+    await queueMail(trx, [
+      {
+        address: mailbox(person.qq),
+        subject: said,
+        body: `${said}\n${env.PUBLIC_URL}/u/${userId}${MAIL_FOOTER}`,
+      },
+    ]);
   }
 }
 
 // A lottery drawn or called off (design §8.13): each entrant hears how it went for them, its author
-// that it was drawn. Only a win and the author's go to QQ as well, or the bot would send hundreds
-// of messages at once.
+// that it was drawn. Only a win and the author's go by email as well, or a draw would send
+// hundreds of emails at once.
 export async function notifyLottery(
   trx: Transaction<DB>,
   thread: { id: number; title: string },
@@ -244,10 +233,9 @@ export async function notifyLottery(
     .selectFrom("users")
     .select([
       "id",
-      "display_name",
       "qq",
       sql<boolean>`coalesce((${prefs} ->> 'site')::boolean, true)`.as("site"),
-      sql<boolean>`coalesce((${prefs} ->> 'qq')::boolean, true)`.as("to_qq"),
+      sql<boolean>`coalesce((${prefs} ->> 'email')::boolean, true)`.as("email"),
     ])
     .where(
       "id",
@@ -276,24 +264,23 @@ export async function notifyLottery(
     );
   }
   const url = `${env.PUBLIC_URL}/t/${thread.id}`;
+  const mails = [];
   for (const t of told) {
     const p = person.get(t.userId);
-    if (!p?.to_qq || (t.result !== "won" && t.result !== "drawn")) continue;
+    if (!p?.email || (t.result !== "won" && t.result !== "drawn")) continue;
     const said = t.result === "won" ? `你中奖了：${t.prize}` : "你发起的抽奖开奖了";
-    await recordEvent(trx, "notification.created", {
-      user: { id: p.id, display_name: p.display_name, qq: p.qq },
-      type,
-      thread,
-      result: t.result,
-      prize: t.prize ?? null,
-      url,
-      qq_text: `${said}\n${thread.title}\n${url}`,
+    mails.push({
+      address: mailbox(p.qq),
+      subject: said,
+      body: `${said}\n\n${thread.title}\n${url}${MAIL_FOOTER}`,
     });
   }
+  await queueMail(trx, mails);
 }
 
-// A new floor: its author's floor if it answers one, then those @-ed in it, then those watching the
-// thread. Each person hears of it once, by the first of these that applies.
+// A new floor: the author of the floor it replies to, or the thread's when it names none, then
+// those @-ed in it, then those watching the thread. Each person hears of it once, by the first of
+// these that applies.
 export async function notifyPost(
   trx: Transaction<DB>,
   post: {
@@ -303,7 +290,7 @@ export async function notifyPost(
     authorAlias: number | null;
     mentions: number[];
   },
-  replyTo: number | null,
+  replyTo: number,
 ) {
   const notice = {
     actorId: post.authorId,
@@ -311,11 +298,8 @@ export async function notifyPost(
     threadId: post.threadId,
     postId: post.id,
   };
-  const told = new Set<number>();
-  if (replyTo !== null) {
-    await notify(trx, [replyTo], { ...notice, type: "reply" });
-    told.add(replyTo);
-  }
+  await notify(trx, [replyTo], { ...notice, type: "reply" });
+  const told = new Set([replyTo]);
   const mentioned = post.mentions.filter((id) => !told.has(id));
   await notify(trx, mentioned, { ...notice, type: "mention" });
   for (const id of mentioned) told.add(id);

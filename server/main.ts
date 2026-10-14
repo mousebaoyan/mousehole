@@ -27,14 +27,20 @@ import { securityHeaders } from "./platform/security-headers.ts";
 import { listen } from "./platform/db.ts";
 import { log } from "./platform/log.ts";
 import { clearIdempotencyKeys } from "./platform/idempotency.ts";
+import { MAIL_CHANNEL, sendQueued } from "./platform/mail.ts";
 import { migrate } from "./platform/migrate.ts";
 import { every } from "./platform/schedule.ts";
 
 await migrate();
-listen({ [EVENTS_CHANNEL]: eventsArrived, [NOTIFICATIONS_CHANNEL]: unreadChanged });
+listen({
+  [EVENTS_CHANNEL]: eventsArrived,
+  [NOTIFICATIONS_CHANNEL]: unreadChanged,
+  [MAIL_CHANNEL]: () => void sendQueued(),
+});
 indexMissingPosts().catch((error: unknown) => log("error", "Indexing posts failed", { error }));
 every(60_000, "Writing view counts", flushViews);
 every(60_000, "Drawing lotteries", drawDue);
+every(60_000, "Sending queued mail", sendQueued);
 every(3600_000, "Refreshing avatars", refreshAvatars);
 every(3600_000, "Raising levels", promoteActive);
 const DAY_MS = 24 * 3600_000;
