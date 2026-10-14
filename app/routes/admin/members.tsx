@@ -115,7 +115,11 @@ export default function Members({ loaderData, actionData }: Route.ComponentProps
       <ul className="mt-4 divide-y rounded-2xl border bg-card">
         {items.map((m) => (
           <li key={m.id} className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3 text-sm">
-            <Link to={`/u/${m.id}`} className="flex min-w-0 flex-1 items-center gap-2.5">
+            {/* A line of its own on phones, the badges and switches below it. */}
+            <Link
+              to={`/u/${m.id}`}
+              className="flex min-w-0 flex-1 basis-full items-center gap-2.5 sm:basis-0"
+            >
               <UserAvatar user={m} className="size-8" />
               <span className="min-w-0">
                 <span className="block truncate font-medium">{m.display_name}</span>
