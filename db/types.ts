@@ -419,6 +419,7 @@ export interface Users {
   qq_bio: Generated<string>;
   qq_nickname: Generated<string>;
   read_seconds: Generated<number>;
+  relations_public: Generated<boolean>;
   restricted_through: Timestamp | null;
   restricted_until: Timestamp | null;
   restriction: string | null;

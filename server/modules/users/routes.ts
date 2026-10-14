@@ -21,13 +21,16 @@ import { NOTIFICATION_TYPES, notifyPrefs } from "../notifications/service.ts";
 import { exportOwnBoosts } from "../reactions/service.ts";
 import { exportOwnPosts } from "../threads/service.ts";
 import {
+  assertRelationsShown,
   AVATARS_DIR,
   findUserId,
   getProfile,
   getSettings,
   getUser,
   listMembers,
+  listPeople,
   MAX_BIO,
+  RELATION_LISTS,
   restoreQqAvatar,
   searchUsers,
   setEndorsement,
@@ -69,6 +72,10 @@ const UserSchema = UserBriefSchema.extend({
   endorsed: z.boolean().optional().openapi({ description: "自己是否认可了 TA；只在登录时有" }),
   member_status: z.string().optional(),
   activated: z.boolean().optional(),
+  relations_public: z
+    .boolean()
+    .optional()
+    .openapi({ description: "TA 是否公开赞和关系；只给成员" }),
   stats: z.object({
     threads: z.number(),
     posts: z.number(),
@@ -140,6 +147,9 @@ const SettingsSchema = z
     avatar_custom: z.boolean().openapi({ description: "头像是自己上传的；false 是跟着 QQ" }),
     allow_proxy: z.boolean().openapi({ description: "是否允许 bot 代自己发帖、回复等" }),
     hide_from_guests: z.boolean().openapi({ description: "我的内容不给访客看" }),
+    relations_public: z
+      .boolean()
+      .openapi({ description: "公开我的赞和关系：赞过、概要里的名单、关注和认可的名单" }),
     notify_email: z
       .boolean()
       .openapi({ description: "邮件提醒的总开关；关掉后哪类通知都不发邮件" }),
@@ -231,6 +241,7 @@ export const usersRoutes = createRouter()
           ...(members && {
             member_status: u.member_status,
             activated: u.activated_at !== null,
+            relations_public: u.relations_public,
           }),
           ...(viewer && { followed: u.followed, endorsed: u.endorsed }),
           ...(viewer &&
@@ -249,6 +260,51 @@ export const usersRoutes = createRouter()
             following: u.following,
             endorsements: u.endorsements,
           },
+        },
+        200,
+      );
+    },
+  )
+  .openapi(
+    createRoute({
+      method: "get",
+      path: "/users/{user}/relations",
+      summary:
+        "TA 关注的人（following）、TA 的粉丝（followers）、TA 认可的人（endorsing）、认可 TA 的人（endorsers），最新的在前，每页 50 个",
+      request: {
+        params: UserParam,
+        query: z.object({
+          list: z.enum(RELATION_LISTS),
+          cursor: z.coerce.number().int().optional().openapi({ description: "已经列出的人数" }),
+        }),
+      },
+      responses: {
+        200: {
+          description: "关掉了公开的人不在名单里",
+          content: {
+            "application/json": {
+              schema: z.object({
+                items: z.array(z.object({ user: UserBriefSchema, created_at: z.number() })),
+                next_cursor: z.string().nullable(),
+              }),
+            },
+          },
+        },
+        403: errorResponse("不是成员，或者 TA 没有公开（relations_hidden）"),
+        404: errorResponse("用户不存在"),
+      },
+    }),
+    async (c) => {
+      const viewer = authorize(c, "read");
+      if (!isMember(viewer, c.var.bot)) throw new AppError(403, "forbidden", "成员才能看");
+      const userId = await findUserId(c.req.valid("param").user);
+      await assertRelationsShown(viewer.id, userId);
+      const { list, cursor } = c.req.valid("query");
+      const page = await listPeople(userId, list, cursor ?? 0);
+      return c.json(
+        {
+          items: page.items.map((p) => ({ user: p.user, created_at: unix(p.created_at) })),
+          next_cursor: page.next === null ? null : String(page.next),
         },
         200,
       );
@@ -391,6 +447,7 @@ export const usersRoutes = createRouter()
                   .openapi({ description: "最多 60 个字；null 是改回跟着 QQ" }),
                 allow_proxy: z.boolean().optional(),
                 hide_from_guests: z.boolean().optional(),
+                relations_public: z.boolean().optional(),
                 notify_email: z.boolean().optional(),
                 notify_prefs: z.partialRecord(z.enum(NOTIFICATION_TYPES), Switches).optional(),
               }),

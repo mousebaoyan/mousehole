@@ -343,7 +343,12 @@ export async function countUnread(
 }
 
 // Someone's replies, newest first, with the thread each is in; the cursor is the last one's ID.
-export async function listUserPosts(reach: number, authorId: number, cursor?: number) {
+// Someone's replies, or only their accepted answers.
+export async function listUserPosts(
+  reach: number,
+  authorId: number,
+  { solved, cursor }: { solved: boolean; cursor?: number },
+) {
   let query = visibleThreads(reach)
     .innerJoin("posts", "posts.thread_id", "threads.id")
     .select([
@@ -361,6 +366,7 @@ export async function listUserPosts(reach: number, authorId: number, cursor?: nu
     .where("posts.floor", ">", 1)
     .where("posts.status", "=", "visible")
     .where("posts.deleted_at", "is", null)
+    .$if(solved, (qb) => qb.whereRef("threads.solved_post_id", "=", "posts.id"))
     .orderBy("posts.id", "desc")
     .limit(PAGE_SIZE);
   if (cursor !== undefined) query = query.where("posts.id", "<", cursor);
@@ -370,6 +376,93 @@ export async function listUserPosts(reach: number, authorId: number, cursor?: nu
     items: rows.map(({ html, ...r }) => ({ ...r, excerpt: excerpt(html, EXCERPT) })),
     next_cursor: rows.length === PAGE_SIZE && last ? String(last.id) : null,
   };
+}
+
+// Floors in boards the reader can open, shown and not deleted, with their thread.
+function readableFloors(reach: number) {
+  return visibleThreads(reach)
+    .innerJoin("posts", "posts.thread_id", "threads.id")
+    .where("posts.status", "=", "visible")
+    .where("posts.deleted_at", "is", null);
+}
+
+const TOP_POSTS = 5;
+
+// Someone's most liked floors, opening posts included (design §9).
+export async function topPosts(reach: number, authorId: number) {
+  const rows = await readableFloors(reach)
+    .select([
+      "posts.id",
+      "posts.floor",
+      "posts.html",
+      "posts.like_count",
+      "posts.created_at",
+      "threads.id as thread_id",
+      "threads.title",
+    ])
+    .where("posts.author_id", "=", authorId)
+    .where("posts.anonymous", "=", false)
+    .$if(reach === GUEST, (qb) => qb.where(shownToGuests("posts.author_id")))
+    .where("posts.like_count", ">", 0)
+    .orderBy("posts.like_count", "desc")
+    .orderBy("posts.id", "desc")
+    .limit(TOP_POSTS)
+    .execute();
+  return rows.map(({ html, ...r }) => ({ ...r, excerpt: excerpt(html, EXCERPT) }));
+}
+
+// The floors someone reacted to, newest first; the cursor is how many were shown. For members
+// only, so guests' limits don't apply.
+export async function listLikedPosts(reach: number, userId: number, offset: number) {
+  const rows = await readableFloors(reach)
+    .innerJoin("reactions", "reactions.post_id", "posts.id")
+    .select([
+      "posts.id",
+      "posts.floor",
+      "posts.html",
+      "posts.like_count",
+      "posts.created_at",
+      "reactions.emoji",
+      "reactions.created_at as liked_at",
+      "threads.id as thread_id",
+      "threads.title",
+    ])
+    .where("reactions.user_id", "=", userId)
+    .orderBy("reactions.created_at", "desc")
+    .orderBy("posts.id", "desc")
+    .offset(offset)
+    .limit(PAGE_SIZE)
+    .execute();
+  return {
+    items: rows.map(({ html, ...r }) => ({ ...r, excerpt: excerpt(html, EXCERPT) })),
+    next: rows.length === PAGE_SIZE ? offset + PAGE_SIZE : null,
+  };
+}
+
+const TALLY_SIZE = 10;
+
+// Who liked someone's floors most, and whose floors they liked most (design §9). Anonymous
+// floors don't count, which would tell who wrote them, nor people who keep their likes and
+// relations to themselves.
+export async function likeTallies(reach: number, userId: number) {
+  const tally = (by: "reactions.user_id" | "posts.author_id", of: typeof by) =>
+    readableFloors(reach)
+      .innerJoin("reactions", "reactions.post_id", "posts.id")
+      .innerJoin("users", "users.id", by)
+      .select([`${by} as id`, (eb) => eb.fn.countAll<number>().as("count")])
+      .where(of, "=", userId)
+      .where("posts.anonymous", "=", false)
+      .where("users.relations_public", "=", true)
+      .groupBy(by)
+      .orderBy("count", "desc")
+      .orderBy(by)
+      .limit(TALLY_SIZE)
+      .execute();
+  const [likers, liked] = await Promise.all([
+    tally("reactions.user_id", "posts.author_id"),
+    tally("posts.author_id", "reactions.user_id"),
+  ]);
+  return { likers, liked };
 }
 
 // For the sitemap: what guests may read, most recently active first.

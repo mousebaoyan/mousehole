@@ -282,6 +282,54 @@ export async function findUserId(ref: UserRef) {
   return row.id;
 }
 
+// Whether someone's likes and relations show to this member (design §9): to themselves always,
+// to others unless they turned that off.
+export async function relationsShown(viewerId: number, userId: number) {
+  if (viewerId === userId) return true;
+  const { relations_public } = await db
+    .selectFrom("users")
+    .select("relations_public")
+    .where("id", "=", userId)
+    .executeTakeFirstOrThrow();
+  return relations_public;
+}
+
+export async function assertRelationsShown(viewerId: number, userId: number) {
+  if (!(await relationsShown(viewerId, userId))) {
+    throw new AppError(403, "relations_hidden", "TA 没有公开自己的赞和关系");
+  }
+}
+
+export const RELATION_LISTS = ["following", "followers", "endorsing", "endorsers"] as const;
+export type RelationList = (typeof RELATION_LISTS)[number];
+
+// Each list as the table it comes from, whose rows are about the person, and who is listed.
+const RELATIONS = {
+  following: { table: "user_follows", of: "follower_id", who: "followee_id" },
+  followers: { table: "user_follows", of: "followee_id", who: "follower_id" },
+  endorsing: { table: "endorsements", of: "endorser_id", who: "user_id" },
+  endorsers: { table: "endorsements", of: "user_id", who: "endorser_id" },
+} as const;
+
+const PEOPLE_PAGE = 50;
+
+// Whom someone follows or endorses, or who follows or endorses them, newest first; the cursor is
+// how many were shown. People who keep their relations to themselves are left out (design §9).
+export async function listPeople(userId: number, list: RelationList, offset: number) {
+  const { table, of, who } = RELATIONS[list];
+  const { rows } = await sql<{ id: number; created_at: Date }>`
+    SELECT r.${sql.ref(who)} AS id, r.created_at FROM ${sql.table(table)} r
+    JOIN users ON users.id = r.${sql.ref(who)}
+    WHERE r.${sql.ref(of)} = ${userId} AND users.relations_public
+    ORDER BY r.created_at DESC, id
+    OFFSET ${offset} LIMIT ${PEOPLE_PAGE}`.execute(db);
+  const user = await userBriefs(rows.map((r) => r.id));
+  return {
+    items: rows.map((r) => ({ user: user(r.id), created_at: r.created_at })),
+    next: rows.length === PEOPLE_PAGE ? offset + PEOPLE_PAGE : null,
+  };
+}
+
 // What the profile card and the user's page show; see design §6.1 and §9. `viewerId` is for
 // whether the reader follows and has endorsed them.
 export async function getUser(ref: UserRef, viewerId: number | null) {
@@ -298,6 +346,7 @@ export async function getUser(ref: UserRef, viewerId: number | null) {
       "group_members.last_sent_at",
       eb.fn.coalesce("users.custom_bio", "users.qq_bio").as("bio"),
       "users.hide_from_guests",
+      "users.relations_public",
       "users.qq",
       "users.member_status",
       "users.activated_at",
@@ -350,6 +399,7 @@ export async function getSettings(userId: number) {
       "avatar_custom",
       "allow_proxy",
       "hide_from_guests",
+      "relations_public",
       "notify_email",
       sql<Record<string, { site?: boolean; email?: boolean }>>`notify_prefs`.as("notify_prefs"),
     ])
@@ -364,6 +414,7 @@ export async function updateSettings(
     custom_bio?: string | null;
     allow_proxy?: boolean;
     hide_from_guests?: boolean;
+    relations_public?: boolean;
     notify_email?: boolean;
     notify_prefs?: Record<string, { site: boolean; email: boolean }>;
   },

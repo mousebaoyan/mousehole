@@ -189,8 +189,8 @@ token 由站长在后台创建，只显示一次。每个 token 绑定一个 bot
 | POST | `/auth/email/verify` | `{ qq, code }`：校验验证码，建立会话，返回 204；不对、过期或输错 5 次作废都返回 `400 email_code_invalid`，`message` 说明是哪种 | 访客 |
 | POST | `/auth/logout` | 退出当前会话；没有登录时也返回成功 | 访客 |
 | GET | `/me` | 当前用户；bot 代表某人时返回这个人。站长账号的 `qq` 为 `null` | 已登录 / `read` |
-| GET | `/me/settings` | 自己的设置：`custom_name`（自己起的名字，`null` 是跟着 QQ）、`custom_bio`（自己写的个性签名，`null` 是跟着 QQ）、`qq_bio`（QQ 的个性签名）、`avatar_custom`（头像是不是自己上传的）、`allow_proxy`、`hide_from_guests`（我的内容不给访客看）、`notify_email`（邮件提醒的总开关）、`notify_prefs`（每类通知的 `{ site, email }` 开关，含默认值） | 已登录 / `read` |
-| PATCH | `/me` | 修改设置，只改带了的字段，返回改好的设置：`custom_name`（最多 24 个字，`null` 改回跟着 QQ，显示名随即重算）、`custom_bio`（最多 60 个字，`null` 改回跟着 QQ）、`allow_proxy`、`hide_from_guests`、`notify_email`、`notify_prefs`（带了的类型整体替换） | 成员 / `act` |
+| GET | `/me/settings` | 自己的设置：`custom_name`（自己起的名字，`null` 是跟着 QQ）、`custom_bio`（自己写的个性签名，`null` 是跟着 QQ）、`qq_bio`（QQ 的个性签名）、`avatar_custom`（头像是不是自己上传的）、`allow_proxy`、`hide_from_guests`（我的内容不给访客看）、`relations_public`（公开我的赞和关系）、`notify_email`（邮件提醒的总开关）、`notify_prefs`（每类通知的 `{ site, email }` 开关，含默认值） | 已登录 / `read` |
+| PATCH | `/me` | 修改设置，只改带了的字段，返回改好的设置：`custom_name`（最多 24 个字，`null` 改回跟着 QQ，显示名随即重算）、`custom_bio`（最多 60 个字，`null` 改回跟着 QQ）、`allow_proxy`、`hide_from_guests`、`relations_public`、`notify_email`、`notify_prefs`（带了的类型整体替换） | 成员 / `act` |
 | PUT | `/me/avatar` | 上传头像：multipart 的 `file` 字段，最大 20MB，格式同图片上传，裁成 96px 的方图；之后不再跟着 QQ 刷新。返回 `{ avatar_url }` | 没被禁言的成员 / `act` |
 | DELETE | `/me/avatar` | 头像改回跟着 QQ，立刻拉一次 QQ 头像，返回 `{ avatar_url }`；拉取失败返回 `502 fetch_failed`，头像不变 | 成员 / `act` |
 | GET | `/me/export` | 导出自己的全部内容，作为附件 `mousehole-{id}.json` 下载：`user`（`id`、`qq`、`display_name`、`bio`）、`posts`（发过的主楼和回复，Markdown 原文，含待审核和已隐藏的，不含删掉的；`floor` 为 1 的就是自己发的帖子）、`boosts`、`bookmarks`；每小时最多 3 次 | 已登录，只能在网页上 |
@@ -210,9 +210,12 @@ token 由站长在后台创建，只显示一次。每个 token 绑定一个 bot
 | 方法 | 路径 | 说明 | 权限 |
 | --- | --- | --- | --- |
 | GET | `/users` | `q`：按名字找成员，最多 8 个，名字以它开头的在前，再按最近活跃；不含 bot 和冻结的账号。编辑器的 @ 补全用 | 已登录 / `read` |
-| GET | `/users/{user}` | 资料卡，`members_only` 为 `false`：显示名、头像、角色、专属头衔、个性签名，主群的群名片、入群时间和最近发言时间，以及统计（帖子数、回复数、获赞数、认可数、访问天数、阅读时间、读过的帖子和回复数）；QQ 号、是否冻结、是否激活只给成员和 bot。统计里还有关注数、粉丝数和认可数；登录时带 `followed`、`endorsed`，表示自己是否关注、认可了 TA。本人设置了不给访客看时，访客只拿到 `id`、显示名、头像、角色和等级，`members_only` 为 `true` | 访客 |
+| GET | `/users/{user}` | 资料卡，`members_only` 为 `false`：显示名、头像、角色、专属头衔、个性签名，主群的群名片、入群时间和最近发言时间，以及统计（帖子数、回复数、获赞数、认可数、访问天数、阅读时间、读过的帖子和回复数）；QQ 号、是否冻结、是否激活、是否公开赞和关系（`relations_public`）只给成员和 bot。统计里还有关注数、粉丝数和认可数；登录时带 `followed`、`endorsed`，表示自己是否关注、认可了 TA。本人设置了不给访客看时，访客只拿到 `id`、显示名、头像、角色和等级，`members_only` 为 `true` | 访客 |
 | GET | `/users/{user}/threads` | 发过的帖子，最新的在前，每页 30 个，不含匿名内容 | 访客 |
-| GET | `/users/{user}/posts` | 发过的回复（不含主楼），最新的在前，每页 30 个，`cursor` 是上一页最后一条的 ID；每条带所在的帖子和正文前 140 个字的纯文本，不含匿名内容 | 访客 |
+| GET | `/users/{user}/posts` | 发过的回复（不含主楼），最新的在前，每页 30 个，`cursor` 是上一页最后一条的 ID；`solved=true` 只要被采纳的回答。每条带所在的帖子和正文前 140 个字的纯文本，不含匿名内容 | 访客 |
+| GET | `/users/{user}/likes` | 留过表情回应的楼层，最新的在前，每页 30 个，`cursor` 是已经列出的条数；每条同上，另带 `emoji` 和 `liked_at`。TA 关掉了公开时只给本人，别人得到 `403 relations_hidden`（总体设计 §9） | 成员 / `read` |
+| GET | `/users/{user}/summary` | 概要：`top_posts` 获赞最多的 5 层（含主楼）；`likers` 最常赞 TA 的人、`liked` TA 最常赞的人，各 10 个，每项是 `{ user, count }`。匿名楼层不算，关掉公开的人不出现；两份名单只给成员，TA 关掉公开时只给本人，其余为 `null` | 访客 |
+| GET | `/users/{user}/relations` | 名单：`list` 为 `following`（TA 关注的人）、`followers`（粉丝）、`endorsing`（TA 认可的人）或 `endorsers`（认可 TA 的人），最新的在前，每页 50 个，`cursor` 是已经列出的人数；每项是 `{ user, created_at }`，关掉公开的人不在里面。可见范围同 `likes` | 成员 / `read` |
 | PUT | `/users/{user}/follow` | 关注：TA 发新帖时通知我；不能关注自己（`400`） | 成员 / `act` |
 | DELETE | `/users/{user}/follow` | 取消关注 | 成员 / `act` |
 | PUT | `/users/{user}/endorsement` | 认可 TA 的帮助，每人对每人一次；不能认可自己（`400`） | 成员 / `act` |
