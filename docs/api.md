@@ -259,7 +259,7 @@ token 由管理员在后台创建，只显示一次。每个 token 绑定一个 
 | 方法 | 路径 | 说明 | 权限 |
 | --- | --- | --- | --- |
 | POST | `/uploads` | 用 multipart 的 `file` 字段上传图片（JPEG、PNG、WebP、GIF、AVIF，最大 20MB），返回 `id`、`url`、`width`、`height`；`url` 是大图的地址，写进正文用它，同一张图再传返回同一个。不是能识别的图片返回 `400 invalid_image`；每人 10 分钟最多 30 张 | 成员 / `act` |
-| POST | `/uploads/fetch` | `{ url }`：论坛下载并转存，只接受 QQ 的图片域名（`multimedia.nt.qq.com.cn`、`gchat.qpic.cn`、`c2cpicdw.qpic.cn`、`gxh.vip.qq.com`），不跟随跳转，15 秒超时；下载失败返回 `502 fetch_failed` | `act` |
+| POST | `/uploads/fetch` | `{ url }`：论坛下载并转存，只接受 QQ 的图片域名（`multimedia.nt.qq.com.cn`、`gchat.qpic.cn`、`gxh.vip.qq.com`），不跟随跳转，15 秒超时；下载失败返回 `502 fetch_failed` | `act` |
 
 一般不需要单独调用 `/uploads/fetch`：`content.onebot` 里的图片会自动转存。
 

@@ -78,12 +78,7 @@ export const MAX_UPLOAD = 20 * 1024 * 1024;
 
 // Where pictures sent in QQ chats and stickers are served from. Their links expire within hours,
 // which is why they are copied here as soon as a bot passes them on.
-const QQ_IMAGE_HOSTS = new Set([
-  "multimedia.nt.qq.com.cn",
-  "gchat.qpic.cn",
-  "c2cpicdw.qpic.cn",
-  "gxh.vip.qq.com",
-]);
+const QQ_IMAGE_HOSTS = new Set(["multimedia.nt.qq.com.cn", "gchat.qpic.cn", "gxh.vip.qq.com"]);
 
 function fetchFailed(cause?: unknown) {
   return new AppError(502, "fetch_failed", "图片下载失败，链接可能已经过期", { cause });
