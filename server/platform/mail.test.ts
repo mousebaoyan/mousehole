@@ -1,5 +1,5 @@
 import { sql } from "kysely";
-import { describe, expect, test, vi } from "vitest";
+import { afterEach, describe, expect, test, vi } from "vitest";
 import { db } from "./db.ts";
 import { queueMail, sendMail, sendQueued, testMailboxes } from "./mail.ts";
 import { saveSettings } from "./settings.ts";
@@ -59,6 +59,10 @@ async function queue(...addresses: string[]) {
 }
 
 describe("发信", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   test("一个邮箱发不出去就换下一个，它歇着的时候不再试它", async () => {
     await mailboxes("a@qq.com", "b@qq.com");
     smtp.failures.set("a@qq.com", loginFailed());
@@ -111,5 +115,47 @@ describe("发信", () => {
     await sendQueued();
     expect(smtp.sent.at(-1)).toBe("e@qq.com → 1@qq.com");
     expect(await db.selectFrom("mail_queue").select("id").execute()).toEqual([]);
+  });
+
+  test("邮箱接连出错，每次歇得比上次久一倍，发出去以后从头算", async () => {
+    await mailboxes("g@qq.com");
+    smtp.failures.set("g@qq.com", loginFailed());
+    const start = Date.now();
+    const at = async (minutes: number) => {
+      vi.spyOn(Date, "now").mockReturnValue(start + minutes * 60_000);
+      await sendMail("1@qq.com", "验证码", "123456").catch(() => {});
+      return smtp.tries.splice(0).length;
+    };
+    // Rests 10 minutes, then 20, then 40.
+    expect([await at(0), await at(9), await at(11), await at(30), await at(32)]).toEqual([
+      1, 0, 1, 0, 1,
+    ]);
+    smtp.failures.clear();
+    expect(await at(73)).toBe(1);
+    smtp.failures.set("g@qq.com", loginFailed());
+    expect([await at(74), await at(83), await at(85)]).toEqual([1, 0, 1]);
+  });
+
+  test("一封邮件发不出去，隔 5、10、20、40 分钟再试，第 5 次还不行就丢掉", async () => {
+    await mailboxes("h@qq.com");
+    await queue("1@qq.com");
+    const waits = [];
+    for (let i = 0; i < 5; i += 1) {
+      // A test mail that goes through ends the mailbox's rest, so the mail can be tried again.
+      smtp.failures.clear();
+      await testMailboxes("admin@qq.com");
+      smtp.failures.set("h@qq.com", loginFailed());
+      await sendQueued();
+      const mail = await db
+        .selectFrom("mail_queue")
+        .select(sql<number>`round(extract(epoch from next_at - now()) / 60)::int`.as("wait"))
+        .executeTakeFirst();
+      waits.push(mail?.wait);
+      await db
+        .updateTable("mail_queue")
+        .set({ next_at: sql<Date>`now()` })
+        .execute();
+    }
+    expect(waits).toEqual([5, 10, 20, 40, undefined]);
   });
 });

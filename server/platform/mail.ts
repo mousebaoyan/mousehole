@@ -9,9 +9,11 @@ import { SITE_NAME } from "./site.ts";
 
 // Sending goes through the mailboxes from the admin settings in order. One that fails rests a
 // while and the next takes over: a QQ mailbox that sent too much refuses for minutes up to the
-// rest of the day.
-const REST_MS = 30 * 60_000;
-const resting = new Map<string, number>();
+// rest of the day, and trying again too soon may make that longer. Each failure in a row doubles
+// the rest.
+const FIRST_REST_MS = 10 * 60_000;
+const MAX_REST_MS = 8 * 60 * 60_000;
+const resting = new Map<string, { until: number; failures: number }>();
 
 function send(account: SmtpAccount, to: string, subject: string, text: string) {
   const transport = createTransport({
@@ -42,23 +44,29 @@ function refused(error: unknown) {
 }
 
 // "refused" when every mailbox tried turned the address down: sending again won't help.
+// "resting" when no mailbox could try.
 async function deliver(to: string, subject: string, text: string) {
   const { smtp } = await getSettings();
   let tried = 0;
   let refusals = 0;
   for (const account of smtp.accounts) {
-    if ((resting.get(account.user) ?? 0) > Date.now()) continue;
+    const rest = resting.get(account.user);
+    if (rest && rest.until > Date.now()) continue;
     tried += 1;
     try {
       await send(account, to, subject, text);
+      resting.delete(account.user);
       return "sent";
     } catch (error) {
-      resting.set(account.user, Date.now() + REST_MS);
+      const failures = (rest?.failures ?? 0) + 1;
+      const ms = Math.min(FIRST_REST_MS * 2 ** (failures - 1), MAX_REST_MS);
+      resting.set(account.user, { until: Date.now() + ms, failures });
       log("warn", "Sending mail failed", { account: account.user, error });
       if (refused(error)) refusals += 1;
     }
   }
-  return tried > 0 && refusals === tried ? "refused" : "failed";
+  if (tried === 0) return "resting";
+  return refusals === tried ? "refused" : "failed";
 }
 
 // Sends now, for whoever is waiting on it. Called after transactions commit: a slow mail server
@@ -108,6 +116,11 @@ export async function queueMail(
   await sql`SELECT pg_notify(${MAIL_CHANNEL}, '')`.execute(trx);
 }
 
+// A mail that fails waits 5, 10, 20 and 40 minutes before trying again, then is dropped: one the
+// mail servers keep failing on must not keep sending the mailboxes to rest.
+const RETRY_MINUTES = 5;
+const MAX_ATTEMPTS = 5;
+
 let sending = Promise.resolve();
 
 // After each NOTIFY, and every minute for what couldn't go yet. Runs one at a time.
@@ -118,7 +131,7 @@ export function sendQueued() {
   return sending;
 }
 
-// Oldest first, until no mailbox can send. A reminder a day late is no use any more.
+// Oldest due first, until no mailbox can send. A reminder a day late is no use any more.
 async function drain() {
   const stale = await db
     .deleteFrom("mail_queue")
@@ -131,13 +144,26 @@ async function drain() {
   for (;;) {
     const mail = await db
       .selectFrom("mail_queue")
-      .select(["id", "address", "subject", "body"])
+      .select(["id", "address", "subject", "body", "attempts"])
+      .where("next_at", "<=", sql<Date>`now()`)
       .orderBy("id")
       .limit(1)
       .executeTakeFirst();
     if (!mail) return;
     const outcome = await deliver(mail.address, mail.subject, mail.body);
-    if (outcome === "failed") return;
+    if (outcome === "resting") return;
+    const attempts = mail.attempts + 1;
+    if (outcome === "failed" && attempts < MAX_ATTEMPTS) {
+      const minutes = RETRY_MINUTES * 2 ** (attempts - 1);
+      await db
+        .updateTable("mail_queue")
+        .set({ attempts, next_at: sql<Date>`now() + make_interval(mins => ${minutes})` })
+        .where("id", "=", mail.id)
+        .execute();
+      continue;
+    }
+    if (outcome === "failed")
+      log("warn", "Dropped mail that kept failing", { address: mail.address });
     if (outcome === "refused") log("warn", "Mail refused", { address: mail.address });
     await db.deleteFrom("mail_queue").where("id", "=", mail.id).execute();
   }

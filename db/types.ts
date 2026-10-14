@@ -169,9 +169,11 @@ export interface LotteryEntries {
 
 export interface MailQueue {
   address: string;
+  attempts: Generated<number>;
   body: string;
   created_at: Generated<Timestamp>;
   id: Generated<number>;
+  next_at: Generated<Timestamp>;
   subject: string;
 }
 

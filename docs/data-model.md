@@ -87,7 +87,7 @@
 - 一条新楼层只给每人一条通知，按先后取第一个适用的：被回复的那一层的作者，没指定楼层时是楼主（`reply`）；@到的人（`mention`）；关注这个帖子的人（`watching`）。新帖通知 @到的人和作者的粉丝（`following`）。从群里收录来的帖子和楼层（`via` 为 `qq`）不产生通知。
 - 合并通知：`like:{楼层 ID}`、`boost:{楼层 ID}`、`watching:{帖子 ID}` 是 `group_key`，未读期间再次触发只更新触发者、次数、`data` 和时间，不新增行；`post_id` 留着第一次的，点进去从最早没看的那层开始。
 - 不通知：自己做的事、冻结的账号、把这个帖子设为 `muted` 的人、在 `users.notify_prefs` 里关掉了这类站内通知的人。`notify_prefs` 形如 `{ "like": { "site": false, "email": true } }`，站内通知没写的按开着算，邮件没写的按这类通知的默认值。
-- 要发的邮件（`mail_queue`：收件地址、标题、正文）和通知在同一个事务里写入，并 `NOTIFY mousehole_mail`；事务提交后，进程按 `id` 顺序取出来发，发出去就删掉。发不出去的每分钟再试，放了一天的删掉不发。
+- 要发的邮件（`mail_queue`：收件地址、标题、正文）和通知在同一个事务里写入，并 `NOTIFY mousehole_mail`；事务提交后，进程按 `id` 顺序取出到了 `next_at` 的来发，发出去就删掉。发不出去的 `attempts` 加一，`next_at` 往后推（[总体设计 §8.6](design.md#86-通知与实时)），试满 5 次的删掉；每分钟再取一次，放了一天的删掉不发。
 - 已读超过 180 天的通知每天清理。
 
 - 阅读记录（[总体设计 §8.9](design.md#89-阅读记录)）存在 `thread_users`：`read_floors` 是读过的楼层（`int4multirange`），上报时 `read_floors + 新区间` 并进去，相邻的区间自动合并；`last_read_at` 是最后一次上报的时间。列表里的 `last_read_floor` 取 `upper(read_floors) - 1`。
