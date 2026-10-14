@@ -5,6 +5,7 @@ import { beforeAll, describe, expect, test } from "vitest";
 import { as, createUser, login } from "../../../test/fixtures.ts";
 import { app } from "../../app.ts";
 import { db } from "../../platform/db.ts";
+import { env } from "../../platform/env.ts";
 import { clearUnusedUploads, UPLOADS_DIR } from "./service.ts";
 
 const api = testClient(app).api.v1;
@@ -59,6 +60,15 @@ describe("上传图片", () => {
       480,
     ]);
     expect((await upload(png)).id).toBe(first.id);
+  });
+
+  test("别的网站的页面不能引用图片；本站页面和直接打开都可以", async () => {
+    const { url } = await upload(await picture(200, 100, "#3f8f7a").png().toBuffer());
+    const from = (referer?: string) =>
+      app.request(url, { headers: referer === undefined ? {} : { referer } });
+    expect((await from()).status).toBe(200);
+    expect((await from(`${env.PUBLIC_URL}/t/1`)).status).toBe(200);
+    expect((await from("https://example.com/page")).status).toBe(403);
   });
 
   test("动图保留每一帧，只存大图", async () => {
