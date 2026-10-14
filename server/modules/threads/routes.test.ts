@@ -168,15 +168,23 @@ describe("发主题和回复", () => {
   });
 
   test("一个人 10 分钟里最多回复 60 次，再回复返回 429 和 Retry-After", async () => {
-    const thread = await newThread(await newBoard());
+    const board = await newBoard();
     const replier = as(await login((await createUser()).id));
-    const send = () =>
+    // Spread over threads and sent at once, as a thread takes its replies one at a time.
+    const threads = await Promise.all(
+      Array.from({ length: 6 }, () => newThread(board, {}, replier)),
+    );
+    const send = (i: number) =>
       api.threads[":id"].posts.$post(
-        { param: { id: String(thread) }, json: { content: { markdown: "刷屏" } } },
+        {
+          param: { id: String(threads[i % threads.length]) },
+          json: { content: { markdown: "刷屏" } },
+        },
         replier,
       );
-    for (let i = 0; i < 60; i++) expect((await send()).status).toBe(201);
-    const limited = await send();
+    const sent = await Promise.all(Array.from({ length: 60 }, (_, i) => send(i)));
+    expect(sent.map((r) => r.status)).toEqual(Array(60).fill(201));
+    const limited = await send(0);
     expect(limited.status).toBe(429);
     expect(Number(limited.headers.get("retry-after"))).toBeGreaterThan(0);
   });
@@ -197,13 +205,28 @@ describe("读主题", () => {
   test("楼层按批取：往后、往前各 20 层，不足 20 层就是到头了；删除的楼层保留位置", async () => {
     const board = await newBoard();
     const thread = await newThread(board);
-    for (let i = 0; i < 44; i++) await reply(thread, { content: { markdown: `楼 ${i + 2}` } });
+    // Floors 2 to 45, written directly: only reading them is tested here, floor 3 deleted.
+    const author = (
+      await db
+        .selectFrom("threads")
+        .select("author_id")
+        .where("id", "=", thread)
+        .executeTakeFirstOrThrow()
+    ).author_id;
     await db
-      .updateTable("posts")
-      .set({ deleted_at: new Date() })
-      .where("thread_id", "=", thread)
-      .where("floor", "=", 3)
+      .insertInto("posts")
+      .values(
+        range(2, 45).map((floor) => ({
+          thread_id: thread,
+          floor,
+          author_id: author,
+          body: `楼 ${floor}`,
+          html: `<p>楼 ${floor}</p>`,
+          deleted_at: floor === 3 ? new Date() : null,
+        })),
+      )
       .execute();
+    await db.updateTable("threads").set({ floor_count: 45 }).where("id", "=", thread).execute();
 
     expect(await floors(thread)).toEqual(range(1, 20));
     expect(await floors(thread, { after: "40" })).toEqual(range(41, 45));
