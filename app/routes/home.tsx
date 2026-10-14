@@ -4,12 +4,13 @@ import { readCounts, readFilter, ThreadFeed } from "~/components/thread-feed";
 import { shareMeta } from "~/share-meta";
 import { unixNow } from "~/time";
 import type { Route } from "./+types/home.ts";
+import { SITE_NAME, SITE_DESCRIPTION } from "../../server/platform/site.ts";
 
 export function meta() {
   return shareMeta(
-    "鼠洞",
-    "四非计算机保研鼠群的论坛：保研经验、院校信息、夏令营和预推免",
-    "鼠洞 · 四非计算机保研鼠群的论坛",
+    SITE_NAME,
+    `${SITE_DESCRIPTION}：保研经验、院校信息、夏令营和预推免`,
+    `${SITE_NAME} · ${SITE_DESCRIPTION}`,
   );
 }
 

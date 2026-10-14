@@ -6,9 +6,10 @@ import { Button, buttonVariants } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Textarea } from "~/components/ui/textarea";
 import type { Route } from "./+types/settings.ts";
+import { SITE_NAME } from "../../server/platform/site.ts";
 
 export function meta() {
-  return [{ title: "设置 · 鼠洞" }];
+  return [{ title: `设置 · ${SITE_NAME}` }];
 }
 
 // The notification types, in the order the table lists them.

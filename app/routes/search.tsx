@@ -7,9 +7,12 @@ import { UserAvatar } from "~/components/user-avatar";
 import { useNearView } from "~/near-view";
 import { ago, unixNow } from "~/time";
 import type { Route } from "./+types/search.ts";
+import { SITE_NAME } from "../../server/platform/site.ts";
 
 export function meta({ loaderData }: Route.MetaArgs) {
-  return [{ title: loaderData.q ? `${loaderData.q} · 搜索 · 鼠洞` : "搜索 · 鼠洞" }];
+  return [
+    { title: loaderData.q ? `${loaderData.q} · 搜索 · ${SITE_NAME}` : `搜索 · ${SITE_NAME}` },
+  ];
 }
 
 // Threads and replies for ?q=, a page at a time; on the first page, also members by name for

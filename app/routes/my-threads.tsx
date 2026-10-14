@@ -4,6 +4,7 @@ import { More } from "~/components/thread-feed";
 import { ThreadList } from "~/components/thread-list";
 import { unixNow } from "~/time";
 import type { Route } from "./+types/my-threads.ts";
+import { SITE_NAME } from "../../server/platform/site.ts";
 
 // The reader's own lists in the sidebar, by the path after /my/.
 const LISTS = [
@@ -24,7 +25,7 @@ function listOf(name: string) {
 }
 
 export function meta({ loaderData }: Route.MetaArgs) {
-  return [{ title: `${loaderData.list.title} · 鼠洞` }];
+  return [{ title: `${loaderData.list.title} · ${SITE_NAME}` }];
 }
 
 export async function loader({ request, params, context }: Route.LoaderArgs) {

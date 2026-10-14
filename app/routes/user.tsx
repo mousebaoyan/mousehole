@@ -14,9 +14,10 @@ import { useNearView } from "~/near-view";
 import { ago, unixNow } from "~/time";
 import type { Route } from "./+types/user.ts";
 import { ModerationButtons } from "./user-moderation.tsx";
+import { SITE_NAME } from "../../server/platform/site.ts";
 
 export function meta({ loaderData }: Route.MetaArgs) {
-  return [{ title: `${loaderData.user.display_name} · 鼠洞` }];
+  return [{ title: `${loaderData.user.display_name} · ${SITE_NAME}` }];
 }
 
 const TABS = [

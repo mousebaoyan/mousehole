@@ -19,6 +19,7 @@ import { hashToken, newToken } from "../../platform/tokens.ts";
 import { recordAudit } from "../audit/service.ts";
 import { deviceSummary } from "./device.ts";
 import { ensureBotUser, findMember, recordLogin, recordSeen } from "../users/service.ts";
+import { SITE_NAME } from "../../platform/site.ts";
 
 export const SESSION_TTL_MS = 90 * 24 * 60 * 60 * 1000;
 const LINK_TTL_MS = 10 * 60 * 1000;
@@ -328,8 +329,8 @@ export async function requestEmailCode(qq: number, ip: string | null) {
     .execute();
   await sendMail(
     `${qq}@qq.com`,
-    `鼠洞登录验证码：${code}`,
-    `你的鼠洞登录验证码是 ${code}，10 分钟内有效。\n\n如果不是你本人操作，请忽略这封邮件。`,
+    `${SITE_NAME}登录验证码：${code}`,
+    `你的${SITE_NAME}登录验证码是 ${code}，10 分钟内有效。\n\n如果不是你本人操作，请忽略这封邮件。`,
   );
 }
 

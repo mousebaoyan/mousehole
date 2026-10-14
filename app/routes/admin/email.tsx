@@ -5,6 +5,7 @@ import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import type { Route } from "./+types/email.ts";
 import { Field, readForm, Result, Section } from "~/components/form-parts";
+import { SITE_NAME } from "../../../server/platform/site.ts";
 
 export function meta() {
   return [{ title: "邮件 · 管理后台" }];
@@ -75,7 +76,7 @@ export default function Email({ loaderData: { smtp }, actionData }: Route.Compon
             >
               <Input name="password" type="password" autoComplete="new-password" />
             </Field>
-            <Field label="发件人" hint="例如 鼠洞 <bot@qq.com>，留空则用账号">
+            <Field label="发件人" hint={`例如 ${SITE_NAME} <bot@qq.com>，留空则用账号`}>
               <Input name="from" defaultValue={smtp.from} />
             </Field>
           </div>

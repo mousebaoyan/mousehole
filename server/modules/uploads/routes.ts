@@ -6,6 +6,7 @@ import { AppError } from "../../platform/errors.ts";
 import { authorizePosting, createRouter, errorResponse } from "../../platform/http.ts";
 import { rateLimit } from "../../platform/rate-limit.ts";
 import { fetchUpload, storeUpload, UPLOADS_DIR } from "./service.ts";
+import { SITE_NAME } from "../../platform/site.ts";
 
 const UploadSchema = z
   .object({ id: z.number(), url: z.string(), width: z.number(), height: z.number() })
@@ -78,7 +79,7 @@ const SITE = new URL(env.PUBLIC_URL).origin;
 export async function serveUpload(c: Context) {
   const referer = c.req.header("referer");
   if (referer !== undefined && URL.parse(referer)?.origin !== SITE) {
-    throw new AppError(403, "forbidden", "图片只能在鼠洞的页面里显示");
+    throw new AppError(403, "forbidden", `图片只能在${SITE_NAME}的页面里显示`);
   }
   const path = `${UPLOADS_DIR}/${c.req.param("dir")}/${c.req.param("file")}`;
   const file = await readFile(path).catch((error: unknown) => {

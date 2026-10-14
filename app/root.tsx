@@ -12,6 +12,7 @@ import type { Route } from "./+types/root.ts";
 import { Nonce } from "./nonce.ts";
 import { SITE_URL } from "./site.server.ts";
 import "./app.css";
+import { SITE_NAME } from "../server/platform/site.ts";
 
 // Runs before first paint so the page never flashes the wrong theme. Same key as the main site.
 const themeScript = `try{document.documentElement.dataset.theme=localStorage.getItem("theme")||(matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light")}catch{}`;
@@ -38,7 +39,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <meta name="theme-color" content="#fefdfb" media="(prefers-color-scheme: light)" />
         <meta name="theme-color" content="#161b1a" media="(prefers-color-scheme: dark)" />
         <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-        <meta property="og:site_name" content="鼠洞" />
+        <meta property="og:site_name" content={SITE_NAME} />
         {site && <meta property="og:image" content={`${site}/logo.png`} />}
         <script nonce={nonce} dangerouslySetInnerHTML={{ __html: themeScript }} />
         <Meta />
