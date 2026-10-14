@@ -102,8 +102,41 @@ function age(unix: number, now: number) {
 
 const ROLES: Record<string, string> = { admin: "管理员", moderator: "版主" };
 
+type LoaderData = Route.ComponentProps["loaderData"];
+
 export default function User({ loaderData, actionData }: Route.ComponentProps) {
-  const { user, tab, threads, posts, next_cursor, now } = loaderData;
+  const { user } = loaderData;
+  if (!user.members_only) return <Profile {...loaderData} user={user} actionData={actionData} />;
+  // Someone who keeps their content from guests, seen by a guest (design §8.10).
+  return (
+    <header className="flex items-center gap-4 px-1 sm:gap-5">
+      <UserAvatar user={user} className="size-16 text-2xl sm:size-20 sm:text-3xl" />
+      <div className="min-w-0">
+        <h1 className="text-xl font-semibold break-all">{user.display_name}</h1>
+        <p className="mt-1 text-meta text-muted-foreground">
+          TA 的资料和发言仅成员可见，
+          <Link to="/login" className="text-primary hover:underline">
+            登录
+          </Link>
+          后查看
+        </p>
+      </div>
+    </header>
+  );
+}
+
+function Profile({
+  user,
+  tab,
+  threads,
+  posts,
+  next_cursor,
+  now,
+  actionData,
+}: Omit<LoaderData, "user"> & {
+  user: Extract<LoaderData["user"], { members_only: false }>;
+  actionData: Route.ComponentProps["actionData"];
+}) {
   const me = useMe();
   const staff = me?.role === "moderator" || me?.role === "admin";
   const { stats } = user;

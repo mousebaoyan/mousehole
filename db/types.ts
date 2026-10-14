@@ -315,6 +315,7 @@ export interface Users {
   days_visited: Generated<number>;
   deleted_at: Timestamp | null;
   display_name: string;
+  hide_from_guests: Generated<boolean>;
   id: Generated<number>;
   last_seen_at: Timestamp | null;
   like_received: Generated<number>;

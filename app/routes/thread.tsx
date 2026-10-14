@@ -46,6 +46,10 @@ export async function loader({ params, request, context }: Route.LoaderArgs) {
     api.threads[":id"].posts.$get({ param, query: { after: String(start - 1) } }),
     api.threads.$get({ query: {} }),
   ]);
+  // Its author keeps it from guests (design §8.10).
+  if (threadRes.status === 401) {
+    throw data((await threadRes.json()).error.message, { status: 401 });
+  }
   if (!threadRes.ok || !afterRes.ok) throw data("帖子不存在", { status: 404 });
   const thread = await threadRes.json();
   const after = (await afterRes.json()).items;

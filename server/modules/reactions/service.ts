@@ -1,11 +1,11 @@
 import { sql } from "kysely";
-import type { Actor, Viewer } from "../../platform/access.ts";
+import type { Actor, Reader, Viewer } from "../../platform/access.ts";
 import { db } from "../../platform/db.ts";
 import { AppError } from "../../platform/errors.ts";
 import { recordAudit } from "../audit/service.ts";
 import { notifyOnPost } from "../notifications/service.ts";
 import { countBoosts, countReaction, getPost } from "../threads/service.ts";
-import { userBriefs } from "../users/service.ts";
+import { shownToGuests, userBriefs } from "../users/service.ts";
 
 // The heart is the like; every reaction counts as one. See design §8.1.
 export const REACTIONS = [
@@ -164,8 +164,12 @@ export async function removeBoost(actor: Actor, id: number, reason: string | und
   });
 }
 
-function selectBoosts() {
-  return db.selectFrom("boosts").select(["id", "post_id", "user_id", "body", "created_at"]);
+// Guests don't get the boosts of people who keep their content from them.
+function selectBoosts(members: boolean) {
+  return db
+    .selectFrom("boosts")
+    .select(["id", "post_id", "user_id", "body", "created_at"])
+    .$if(!members, (qb) => qb.where(shownToGuests("boosts.user_id")));
 }
 
 async function withBoostUsers(
@@ -188,7 +192,7 @@ export async function exportOwnBoosts(userId: number) {
 
 export async function listBoosts(members: boolean, postId: number) {
   await getPost(postId, { members, id: null, staff: false });
-  const rows = await selectBoosts()
+  const rows = await selectBoosts(members)
     .where("post_id", "=", postId)
     .orderBy("created_at")
     .orderBy("id")
@@ -198,7 +202,8 @@ export async function listBoosts(members: boolean, postId: number) {
 
 // What each floor carries besides its own row: its first boosts, and the reader's reaction and
 // boost.
-export async function floorExtras(userId: number | null, postIds: number[]) {
+export async function floorExtras(reader: Pick<Reader, "id" | "members">, postIds: number[]) {
+  const userId = reader.id;
   if (postIds.length === 0) {
     return {
       boosts: new Map<number, Boost[]>(),
@@ -209,7 +214,7 @@ export async function floorExtras(userId: number | null, postIds: number[]) {
   const [shown, reactions, own] = await Promise.all([
     db
       .selectFrom(
-        selectBoosts()
+        selectBoosts(reader.members)
           .select(
             sql<string>`row_number() OVER (PARTITION BY post_id ORDER BY created_at, id)`.as("n"),
           )

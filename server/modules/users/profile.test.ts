@@ -89,7 +89,9 @@ describe("资料卡和个人主页", () => {
 async function relation(who: Who) {
   const res = await api.users[":user"].$get({ param: { user: String(author.id) } }, who);
   if (!res.ok) throw new Error(`status ${res.status}`);
-  const { stats, followed, endorsed } = await res.json();
+  const user = await res.json();
+  if (user.members_only) throw new Error("members only");
+  const { stats, followed, endorsed } = user;
   return { followers: stats.followers, endorsements: stats.endorsements, followed, endorsed };
 }
 

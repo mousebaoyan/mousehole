@@ -212,6 +212,7 @@ export async function getUser(ref: UserRef, viewerId: number | null) {
       "group_members.joined_at",
       "group_members.last_sent_at",
       eb.fn.coalesce("users.custom_bio", "users.qq_bio").as("bio"),
+      "users.hide_from_guests",
       "users.qq",
       "users.member_status",
       "users.activated_at",
@@ -246,6 +247,13 @@ export async function getUser(ref: UserRef, viewerId: number | null) {
   return { ...user, avatar_url: avatarUrl(user.id, avatar_version) };
 }
 
+// For what guests get: leaves out what people who keep their content from guests wrote, given the
+// column holding the writer's user ID (design §8.10).
+export function shownToGuests(writer: "threads.author_id" | "posts.author_id" | "boosts.user_id") {
+  return sql<boolean>`NOT EXISTS (SELECT 1 FROM users
+    WHERE users.id = ${sql.ref(writer)} AND users.hide_from_guests)`;
+}
+
 // ---- One's own settings: see design §6.1 and §9.
 
 export const MAX_BIO = 60;
@@ -259,6 +267,7 @@ export async function getSettings(userId: number) {
       "qq_bio",
       "avatar_custom",
       "allow_proxy",
+      "hide_from_guests",
       sql<Record<string, { site?: boolean; qq?: boolean }>>`notify_prefs`.as("notify_prefs"),
     ])
     .where("id", "=", userId)
@@ -271,6 +280,7 @@ export async function updateSettings(
   change: {
     custom_bio?: string | null;
     allow_proxy?: boolean;
+    hide_from_guests?: boolean;
     notify_prefs?: Record<string, { site: boolean; qq: boolean }>;
   },
 ) {

@@ -64,7 +64,9 @@ describe("禁言和封禁", () => {
     const profile = async (who: Who) => {
       const res = await api.users[":user"].$get({ param: { user: String(m.id) } }, who);
       if (!res.ok) throw new Error(`status ${res.status}`);
-      return (await res.json()).restriction;
+      const user = await res.json();
+      if (user.members_only) throw new Error("members only");
+      return user.restriction;
     };
     expect(await profile(m.who)).toEqual({ type: "mute", until: tomorrow });
     expect(await profile(moderator)).toEqual({ type: "mute", until: tomorrow });

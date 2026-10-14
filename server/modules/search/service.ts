@@ -9,6 +9,7 @@ import {
   snippet,
   terms,
 } from "../../platform/search-terms.ts";
+import { shownToGuests } from "../users/service.ts";
 
 // ---- The index: one row per post, its text and, for an opening post, its thread's title weighted
 // above it. Kept in step in the writer's transaction; see docs/data-model.md.
@@ -57,8 +58,9 @@ export async function indexMissingPosts() {
 const PAGE = 20;
 const SIMILAR = 5;
 
-// Posts people may see: published, not deleted, in a thread and board they can open. The same
-// rules as the threads module's lists.
+// Posts people may see: published, not deleted, in a thread and board they can open, and for
+// guests not by someone who keeps their content from them. The same rules as the threads
+// module's lists.
 function visiblePosts(members: boolean) {
   return db
     .selectFrom("post_search")
@@ -69,7 +71,12 @@ function visiblePosts(members: boolean) {
     .where("posts.status", "=", "visible")
     .where("threads.deleted_at", "is", null)
     .where("threads.status", "=", "visible")
-    .$if(!members, (qb) => qb.where("boards.visibility", "=", "public"));
+    .$if(!members, (qb) =>
+      qb
+        .where("boards.visibility", "=", "public")
+        .where(shownToGuests("threads.author_id"))
+        .where(shownToGuests("posts.author_id")),
+    );
 }
 
 type Scope = { boardId?: number; tagId?: number; authorId?: number };

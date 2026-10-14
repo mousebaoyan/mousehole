@@ -94,6 +94,9 @@ const PostSchema = z
     boost_count: z.number(),
     my_boost: z.string().nullable().openapi({ description: "自己的短评；访客为 null" }),
     deleted: z.boolean().openapi({ description: "已删除的楼层保留楼层号，没有正文" }),
+    members_only: z.boolean().openapi({
+      description: "作者设置了不给访客看：访客拿到的这一层没有正文、表情和短评",
+    }),
     status: z.string().openapi({
       description: "visible 公开；pending 待审核、hidden 已隐藏，这两种只有作者和版主看得到",
     }),
@@ -164,7 +167,8 @@ function threadDetailJson(t: Thread, signedIn: boolean) {
 // Only one form of the body travels: the HTML for pages, the Markdown for editing and for bots.
 function postJson(p: Post, form: "html" | "markdown", extras: Extras) {
   const deleted = p.deleted_at !== null;
-  const text = deleted ? "" : form === "html" ? p.html : p.body;
+  const withheld = deleted || p.members_only;
+  const text = withheld ? "" : form === "html" ? p.html : p.body;
   return {
     id: p.id,
     thread_id: p.thread_id,
@@ -174,13 +178,14 @@ function postJson(p: Post, form: "html" | "markdown", extras: Extras) {
     via: p.via,
     reply_to: p.reply_to,
     reply_count: p.reply_count,
-    like_count: p.like_count,
-    reactions: p.reactions,
+    like_count: p.members_only ? 0 : p.like_count,
+    reactions: p.members_only ? {} : p.reactions,
     my_reaction: extras.myReaction.get(p.id) ?? null,
-    boosts: (extras.boosts.get(p.id) ?? []).map(boostJson),
-    boost_count: p.boost_count,
+    boosts: p.members_only ? [] : (extras.boosts.get(p.id) ?? []).map(boostJson),
+    boost_count: p.members_only ? 0 : p.boost_count,
     my_boost: extras.myBoost.get(p.id) ?? null,
     deleted,
+    members_only: p.members_only,
     status: p.status,
     edited_at: p.edited_at && unix(p.edited_at),
     created_at: unix(p.created_at),
@@ -430,7 +435,11 @@ export const threadsRoutes = createRouter()
       path: "/threads/{id}",
       summary: "帖子详情；楼层用 /threads/{id}/posts 取",
       request: { params: IdParam },
-      responses: { 200: threadResponse, 404: errorResponse("帖子不存在") },
+      responses: {
+        200: threadResponse,
+        401: errorResponse("楼主设置了不给访客看，访客要登录后查看"),
+        404: errorResponse("帖子不存在"),
+      },
     }),
     async (c) => {
       const { id } = c.req.valid("param");
@@ -506,7 +515,7 @@ export const threadsRoutes = createRouter()
       const range = before === undefined ? { after: after ?? 0 } : { before };
       const posts = await listPosts(c.req.valid("param").id, readerOf(c), range);
       const extras = await floorExtras(
-        c.var.viewer?.id ?? null,
+        readerOf(c),
         posts.map((p) => p.id),
       );
       return c.json({ items: posts.map((p) => postJson(p, body, extras)) }, 200);
@@ -522,7 +531,7 @@ export const threadsRoutes = createRouter()
     }),
     async (c) => {
       const post = await getPost(c.req.valid("param").id, readerOf(c));
-      const extras = await floorExtras(c.var.viewer?.id ?? null, [post.id]);
+      const extras = await floorExtras(readerOf(c), [post.id]);
       return c.json(postJson(post, c.req.valid("query").body, extras), 200);
     },
   )
@@ -547,7 +556,7 @@ export const threadsRoutes = createRouter()
       const { after, body } = c.req.valid("query");
       const replies = await listReplies(c.req.valid("param").id, readerOf(c), after);
       const extras = await floorExtras(
-        c.var.viewer?.id ?? null,
+        readerOf(c),
         replies.map((p) => p.id),
       );
       return c.json({ items: replies.map((p) => postJson(p, body, extras)) }, 200);
@@ -621,7 +630,7 @@ export const threadsRoutes = createRouter()
         c.req.valid("param").id,
         c.req.valid("json"),
       );
-      return c.json(postJson(post, "html", await floorExtras(null, [])), 201);
+      return c.json(postJson(post, "html", await floorExtras(readerOf(c), [])), 201);
     },
   )
   .openapi(
@@ -731,7 +740,7 @@ export const threadsRoutes = createRouter()
         );
       }
       const post = await getPost(id, readerOf(c));
-      return c.json(postJson(post, "html", await floorExtras(viewer.id, [post.id])), 200);
+      return c.json(postJson(post, "html", await floorExtras(readerOf(c), [post.id])), 200);
     },
   )
   .openapi(
