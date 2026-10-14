@@ -75,6 +75,11 @@ export default function Reports({ loaderData }: Route.ComponentProps) {
               <span className="text-muted-foreground">
                 {r.reporter.display_name} 举报于 <Time value={r.created_at} />
               </span>
+              {r.held && (
+                <span className="rounded bg-warning/10 px-1.5 py-px text-warning">
+                  已先隐藏，驳回时恢复
+                </span>
+              )}
               {r.handler && (
                 <span className="text-muted-foreground">
                   · {r.handler.display_name} 处理于 <Time value={r.handled_at} />

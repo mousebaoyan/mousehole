@@ -21,7 +21,7 @@ import { ThreadHeader } from "./thread-header.tsx";
 import { confirmDialog } from "~/components/ui/dialog";
 import { toast } from "~/components/ui/toast";
 import { browserApi } from "~/browser-api";
-import { isMine, RevealContext, sameWriter } from "~/components/writer";
+import { isMine, levelPower, RevealContext, sameWriter } from "~/components/writer";
 
 // Floors come 20 at a time; see design §9.
 const BATCH = 20;
@@ -229,6 +229,7 @@ function ThreadPage({
   // How the reader writes here (design §8.12).
   const myAlias = thread.my_alias ?? null;
   const authored = isMine(thread.author, me, myAlias);
+  const power = levelPower(thread.author, me);
   const self = {
     alias: myAlias,
     anonymous: authored ? thread.author_anonymous : thread.anonymous_replies,
@@ -347,8 +348,13 @@ function ThreadPage({
           <ThreadHeader
             thread={thread}
             current={current}
-            editable={staff || (authored && !thread.locked)}
+            editable={
+              staff ||
+              (authored && !thread.locked) ||
+              (power >= 3 && (!thread.locked || power >= 5))
+            }
             staff={staff}
+            power={power}
             reveal={
               me?.role === "admin" && anonymity
                 ? { shown: revealed !== null, toggle: () => void toggleReveal() }
@@ -380,7 +386,11 @@ function ThreadPage({
                 parent={posts.find((p) => p.id === post.reply_to?.id)}
                 self={self}
                 manage={{
-                  change: staff || (isMine(post.author, me, myAlias) && !thread.locked),
+                  edit:
+                    staff ||
+                    (isMine(post.author, me, myAlias) && !thread.locked) ||
+                    levelPower(post.author, me) >= 5,
+                  remove: staff || (isMine(post.author, me, myAlias) && !thread.locked),
                   history: staff || isMine(post.author, me, myAlias),
                   deleteThread:
                     staff ||

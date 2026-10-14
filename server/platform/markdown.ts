@@ -105,10 +105,11 @@ function link(href: string, text: string) {
 // An image a post may show: the file to load, the larger one it opens, and its size on the page.
 export type ShownImage = { src: string; href: string; width: number; height: number };
 
-// Marks up a paragraph's inline tokens: mentions, external links, images.
+// Marks up a paragraph's inline tokens: mentions, external links, images. Mentions and external
+// links are collected on the way.
 function inline(
   children: InstanceType<typeof Token>[],
-  mentions: Set<number>,
+  found: { mentions: Set<number>; links: Set<string> },
   images: Map<string, ShownImage>,
 ) {
   const out: InstanceType<typeof Token>[] = [];
@@ -118,9 +119,12 @@ function inline(
       const mention = MENTION.exec(href);
       if (mention && children.at(i + 1)?.content.startsWith("@")) {
         token.attrJoin("class", "mention");
-        mentions.add(Number(mention[1]));
+        found.mentions.add(Number(mention[1]));
       }
-      if (isExternal(href)) token.attrSet("rel", "ugc nofollow noopener");
+      if (isExternal(href)) {
+        token.attrSet("rel", "ugc nofollow noopener");
+        found.links.add(href);
+      }
     }
     if (token.type !== "image") {
       out.push(token);
@@ -137,7 +141,10 @@ function inline(
       out.push(shown);
     } else {
       const [open, ...rest] = link(src, token.content || src);
-      if (isExternal(src)) open.attrSet("rel", "ugc nofollow noopener");
+      if (isExternal(src)) {
+        open.attrSet("rel", "ugc nofollow noopener");
+        found.links.add(src);
+      }
       out.push(open, ...rest);
     }
   }
@@ -145,14 +152,15 @@ function inline(
 }
 
 // `images` says which of the image addresses in the text may be shown, and how. The result lists
-// those that are, so the caller can keep track of what the post uses.
+// those that are, so the caller can keep track of what the post uses, and the links to other
+// sites, which new members may only have a few of.
 export async function renderMarkdown(
   source: string,
   images: (srcs: string[]) => Promise<Map<string, ShownImage>>,
 ) {
   const tokens = md.parse(source, {});
   if (tokens.some((t) => t.type === "fence")) await loadLanguages();
-  const mentions = new Set<number>();
+  const found = { mentions: new Set<number>(), links: new Set<string>() };
   const srcs = tokens
     .flatMap((t) => t.children ?? [])
     .filter((t) => t.type === "image")
@@ -161,7 +169,7 @@ export async function renderMarkdown(
 
   for (const [i, token] of tokens.entries()) {
     if (token.type === "inline" && token.children) {
-      token.children = inline(token.children, mentions, shown);
+      token.children = inline(token.children, found, shown);
       // `- [x] done` in a list.
       const first = token.children.at(0);
       const task = first?.type === "text" ? TASK.exec(first.content) : null;
@@ -184,7 +192,12 @@ export async function renderMarkdown(
   }
 
   const html = sanitizer.process(md.renderer.render(tokens, md.options, {}));
-  return { html, mentions: [...mentions], images: [...shown.keys()] };
+  return {
+    html,
+    mentions: [...found.mentions],
+    images: [...shown.keys()],
+    links: [...found.links],
+  };
 }
 
 // The ones the renderer writes.

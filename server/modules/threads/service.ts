@@ -635,6 +635,60 @@ function via(actor: Actor, source: Source | undefined) {
   return source ? "qq" : actor.tokenId === null ? "web" : "bot";
 }
 
+// What levels allow (design §6.6). Moderators and admins aren't held by any of it.
+const POLL_LEVEL = 2;
+// L0's limits, which content synced from the groups doesn't count towards.
+const L0_LINKS = 2;
+const L0_PER_DAY = { thread: 3, reply: 20 };
+
+function levelRequired(message: string) {
+  return new AppError(403, "level_required", message);
+}
+
+async function assertWithinL0(
+  viewer: Viewer,
+  source: Source | undefined,
+  links: string[],
+  kind: "thread" | "reply",
+) {
+  if (viewer.level > 0 || STAFF.includes(viewer.role) || source) return;
+  if (links.length > L0_LINKS) {
+    throw levelRequired(`L0 每层最多 ${L0_LINKS} 个站外链接，升到 L1 后不限`);
+  }
+  const today = await db
+    .selectFrom("posts")
+    .select(sql<number>`count(*)::integer`.as("count"))
+    .where("author_id", "=", viewer.id)
+    .where("deleted_at", "is", null)
+    .where("via", "<>", "qq")
+    .where("floor", kind === "thread" ? "=" : ">", 1)
+    .where("created_at", ">=", sql<Date>`date_trunc('day', now(), 'Asia/Shanghai')`)
+    .executeTakeFirstOrThrow();
+  if (today.count >= L0_PER_DAY[kind]) {
+    const what = kind === "thread" ? "个帖子" : "条回复";
+    throw levelRequired(`L0 每天最多发 ${L0_PER_DAY[kind]} ${what}，升到 L1 后不限`);
+  }
+}
+
+function assertMayPost(viewer: Viewer, board: { post_role: string }) {
+  if (board.post_role === "moderator" && !STAFF.includes(viewer.role)) {
+    throw forbidden("这个版块只有版主能发帖");
+  }
+}
+
+// The power a level gives over someone else's content, from L3 up: the viewer's level when the
+// writer is below it and not a moderator or admin, else 0. Nothing anonymous, whose writer's
+// level would show in what is allowed.
+async function levelPower(viewer: Viewer, authorId: number, anonymous: boolean) {
+  if (viewer.level < 3 || anonymous || authorId === viewer.id) return 0;
+  const author = await db
+    .selectFrom("users")
+    .select(["level", "role"])
+    .where("id", "=", authorId)
+    .executeTakeFirstOrThrow();
+  return author.level < viewer.level && !STAFF.includes(author.role) ? viewer.level : 0;
+}
+
 export async function createThread(
   actor: Actor,
   viewer: Viewer,
@@ -654,13 +708,15 @@ export async function createThread(
   const reader: Reader = { members, id: viewer.id, staff: false };
   const board = await getBoard(input.board, members);
   const anonymous = input.anonymous ?? false;
-  if (board.post_role === "moderator" && !STAFF.includes(viewer.role)) {
-    throw new AppError(403, "forbidden", "这个版块只有版主能发帖");
+  assertMayPost(viewer, board);
+  if (input.poll && viewer.level < POLL_LEVEL && !STAFF.includes(viewer.role)) {
+    throw levelRequired(`L${POLL_LEVEL} 起才能发投票帖`);
   }
   const tagIds = await findTags(input.tags);
   if (input.source) await assertNotLinked(input.source);
   const { markdown } = await resolveContent(viewer, input.content, input.source, null);
-  const { html, images, mentions } = await renderMarkdown(markdown, showImages);
+  const { html, images, mentions, links } = await renderMarkdown(markdown, showImages);
+  await assertWithinL0(viewer, input.source, links, "thread");
 
   const status = statusFor(board.review_mode, viewer);
   const id = await db.transaction().execute(async (trx) => {
@@ -757,7 +813,8 @@ export async function createPost(
     threadId,
   );
   const replyTo = input.reply_to_id ?? replyToId ?? undefined;
-  const { html, images, mentions } = await renderMarkdown(markdown, showImages);
+  const { html, images, mentions, links } = await renderMarkdown(markdown, showImages);
+  await assertWithinL0(viewer, input.source, links, "reply");
   const anonymous = writesAnonymously(thread, viewer.id);
 
   const status = statusFor(thread.review_mode, viewer);
@@ -846,7 +903,9 @@ export async function editPost(
   const post = await getPost(postId, reader);
   if (post.deleted_at !== null) throw new AppError(404, "post_not_found", "回复不存在");
   const thread = await assertVisible(post.thread_id, reader);
-  assertMayChange(staff, viewer, post.author_id, thread.locked);
+  // L5 edits the floors of those below them.
+  const power = staff ? 0 : await levelPower(viewer, post.author_id, "anonymous" in post.author);
+  if (power < 5) assertMayChange(staff, viewer, post.author_id, thread.locked);
   if (markdown === post.body) return post;
   const shown = post.status === "visible" && thread.status === "visible";
   const { html, images } = await renderMarkdown(markdown, showImages);
@@ -948,7 +1007,8 @@ export type ThreadChange = {
   locked?: boolean;
 };
 
-// Authors may retitle and retag; moving, pinning, featuring and locking are for moderators.
+// Authors may retitle and retag; moderators may do anything. Pinning and featuring are theirs
+// alone; moving and locking also go to L3 and L5 over those below them.
 export async function editThread(
   actor: Actor,
   viewer: Viewer,
@@ -958,13 +1018,21 @@ export async function editThread(
   change: ThreadChange,
 ) {
   const reader: Reader = { members, id: viewer.id, staff };
-  const { title, tags, board: slug, ...moderation } = change;
+  const { title, tags, board: slug, locked, ...moderation } = change;
   const thread = await getThread(threadId, reader);
-  assertMayChange(staff, viewer, thread.author_id, thread.locked);
-  if (!staff && (slug !== undefined || Object.keys(moderation).length > 0)) {
-    throw forbidden("只有版主能移动、置顶、加精和锁定帖子");
+  // L3 changes the title, tags and board of threads by those below them, L5 also locks them; a
+  // locked one only L5 may change.
+  const power = staff ? 0 : await levelPower(viewer, thread.author_id, thread.author_anonymous);
+  if (power < 3) assertMayChange(staff, viewer, thread.author_id, thread.locked);
+  else if (thread.locked && power < 5) throw new AppError(403, "thread_locked", "帖子已锁定");
+  if (!staff && (Object.keys(moderation).length > 0 || (slug !== undefined && power < 3))) {
+    throw forbidden("只有版主能置顶、加精和移动自己的帖子");
+  }
+  if (!staff && locked !== undefined && power < 5) {
+    throw forbidden("只有版主和 L5 能锁定帖子，L5 只能锁定等级比自己低的人的帖子");
   }
   const board = slug === undefined ? null : await getBoard(slug, members);
+  if (board && !staff) assertMayPost(viewer, board);
   const tagIds = tags === undefined ? null : await findTags(tags);
 
   await db.transaction().execute(async (trx) => {
@@ -1037,7 +1105,7 @@ export async function editThread(
       await countBoard(trx, board.id, { threads: 1, posts: old.reply_count });
     }
 
-    const columns = { title, board_id: board?.id, ...moderation };
+    const columns = { title, board_id: board?.id, locked, ...moderation };
     if (Object.values(columns).some((v) => v !== undefined)) {
       await trx.updateTable("threads").set(columns).where("id", "=", threadId).execute();
     }
@@ -1317,6 +1385,31 @@ async function countReply(
 // Who was @-ed in a post, to tell them when it is published after review.
 async function mentionsOf(body: string) {
   return (await renderMarkdown(body, showImages)).mentions;
+}
+
+// An L4 reporting a floor by someone below them hides it until a moderator looks (design §6.6):
+// whether this report would. Not the opening post, which goes with its thread.
+export async function reportHolds(viewer: Viewer, post: Awaited<ReturnType<typeof getPost>>) {
+  if (post.floor === 1 || post.status !== "visible") return false;
+  return (await levelPower(viewer, post.author_id, "anonymous" in post.author)) >= 4;
+}
+
+export async function holdReported(trx: Transaction<DB>, postId: number, reporterId: number) {
+  await trx.updateTable("posts").set({ status: "hidden" }).where("id", "=", postId).execute();
+  await withdrawPost(trx, postId, reporterId, "被举报，等版主处理");
+}
+
+// A held floor comes back when its report is dismissed, unless a moderator dealt with it since.
+export async function releaseReported(trx: Transaction<DB>, postId: number) {
+  const released = await trx
+    .updateTable("posts")
+    .set({ status: "visible" })
+    .where("id", "=", postId)
+    .where("status", "=", "hidden")
+    .where("deleted_at", "is", null)
+    .returning("id")
+    .executeTakeFirst();
+  if (released) await publishPost(trx, postId, null);
 }
 
 // Replying, accepting an answer and reviewing a reply wait until the thread itself is public.

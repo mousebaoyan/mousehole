@@ -133,7 +133,15 @@ export async function applyStanding(trx: Transaction<DB>, actor: Actor | null, r
 export async function findMember(ref: UserRef) {
   return db
     .selectFrom("users")
-    .select(["id", "role", "member_status", "allow_proxy", "restriction", "restricted_until"])
+    .select([
+      "id",
+      "role",
+      "level",
+      "member_status",
+      "allow_proxy",
+      "restriction",
+      "restricted_until",
+    ])
     .where((eb) => ("id" in ref ? eb("id", "=", ref.id) : eb("qq", "=", ref.qq)))
     .where("deleted_at", "is", null)
     .executeTakeFirst();
@@ -540,7 +548,16 @@ export async function setEndorsement(viewer: Viewer, ref: UserRef, endorse: bool
 export async function getProfile(userId: number) {
   const { avatar_version, ...profile } = await db
     .selectFrom("users")
-    .select(["id", "display_name", "avatar_version", "role", "qq", "member_status", "activated_at"])
+    .select([
+      "id",
+      "display_name",
+      "avatar_version",
+      "role",
+      "level",
+      "qq",
+      "member_status",
+      "activated_at",
+    ])
     .where("id", "=", userId)
     .executeTakeFirstOrThrow();
   return { ...profile, avatar_url: avatarUrl(userId, avatar_version) };

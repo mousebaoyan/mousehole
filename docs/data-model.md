@@ -126,6 +126,7 @@
 表：`reports`、`audit_logs`、`settings`。
 
 - 举报的是短评时填 `boost_id`，`post_id` 填它所在的楼层；同一个人对同一条内容只能举报一次。
+- `reports.held`：L4 举报等级比自己低的人的回复时，这一层在同一个事务里改为 `hidden`（[总体设计 §6.6](design.md#66-等级)）；驳回这条举报时，这一层还是 `hidden` 就恢复。
 
 - 审计日志记什么见[总体设计 §13](design.md#13-安全与隐私)。每行有 `actor_id`（以谁的身份）、`operator_id`（谁让 bot 做的）、`token_id`、`ip`、`user_agent`（截到 500 字）、`action`、对象和 `data`；`data` 存看得出改了什么的字段，正文只存开头 100 个字。和改动在同一个事务里写入。按操作人查走 `audit_logs_actor`，按 IP 查走 `audit_logs_ip`。
 - 设置每个分组一行（`login`、`smtp` 等），字段的默认值写在代码里，加字段不用迁移。在进程内缓存，后台修改后立即刷新，不用重启。SMTP 密码用 `APP_SECRET` 做 AES-256-GCM 加密后存入（IV、认证标签和密文拼起来存 base64）。

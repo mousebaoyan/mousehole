@@ -218,6 +218,14 @@ async function seed() {
     console.log("已经有帖子了，不再发演示帖子");
     return;
   }
+  // Demo members at different levels, so pages show them and posting isn't held to L0's limits.
+  const writers = new Set(DEMO_THREADS.flatMap((t) => [t.by, ...t.replies.map((r) => r.by)]));
+  for (const by of writers) {
+    await call(`/users/qq:${FIRST_QQ + by}/level`, {
+      method: "PUT",
+      body: { level: 1 + (by % 4), locked: false },
+    });
+  }
   for (const thread of DEMO_THREADS) {
     const { replies, by, body, ...fields } = thread;
     const posted = await call("/threads", {
