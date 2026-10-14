@@ -169,6 +169,10 @@ token 由管理员在后台创建，只显示一次。每个 token 绑定一个 
 | PUT | `/me/avatar` | 上传头像：multipart 的 `file` 字段，最大 20MB，格式同图片上传，裁成 96px 的方图；之后不再跟着 QQ 刷新。返回 `{ avatar_url }` | 没被禁言的成员 / `act` |
 | DELETE | `/me/avatar` | 头像改回跟着 QQ，立刻拉一次 QQ 头像，返回 `{ avatar_url }`；拉取失败返回 `502 fetch_failed`，头像不变 | 成员 / `act` |
 | GET | `/me/export` | 导出自己的全部内容，作为附件 `mousehole-{id}.json` 下载：`user`（`id`、`qq`、`display_name`、`bio`）、`posts`（发过的主楼和回复，Markdown 原文，含待审核和已隐藏的，不含删掉的；`floor` 为 1 的就是自己发的帖子）、`boosts`、`bookmarks`；每小时最多 3 次 | 已登录，只能在网页上 |
+| GET | `/me/drafts` | 自己的草稿，最近改过的在前：`thread`（回复的帖子 `{ id, title }`，发帖的为 `null`）、`title`、`excerpt`（正文前 100 个字）、`updated_at` | 已登录，只能在网页上 |
+| GET | `/me/drafts/{key}` | 一份草稿，`key` 为 `new` 是发帖的，为帖子 ID 是回复这个帖子的：`title`、`board`、`kind`、`tags`、`body`、`reply_to`（`{ id, floor, name }` 或 `null`）、`updated_at`；没有返回 `404 draft_not_found` | 已登录，只能在网页上 |
+| PUT | `/me/drafts/{key}` | 保存草稿，整份替换：`{ body, title?, board?, kind?, tags?, reply_to_id? }`；回复的帖子不存在返回 `404`，不在这个帖子里的 `reply_to_id`、不存在的版块不保存。发帖、回复成功后论坛删掉对应的草稿，180 天没动过的每天清理 | 已登录，只能在网页上 |
+| DELETE | `/me/drafts/{key}` | 放弃草稿 | 已登录，只能在网页上 |
 | GET | `/me/sessions` | 已登录的设备：`user_agent`、`device`（例如"Chrome · macOS"）、`ip`、时间、是否当前设备 | 已登录 |
 | DELETE | `/me/sessions/{id}` | 让某个设备下线 | 已登录 |
 

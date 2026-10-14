@@ -6,6 +6,7 @@ import { auditRoutes } from "./modules/audit/routes.ts";
 import { authenticate, authRoutes, bearerToken } from "./modules/auth/routes.ts";
 import { tokenRoutes } from "./modules/auth/token-routes.ts";
 import { boardsRoutes } from "./modules/boards/routes.ts";
+import { draftsRoutes } from "./modules/drafts/routes.ts";
 import { eventsRoutes } from "./modules/events/routes.ts";
 import { membersRoutes } from "./modules/members/routes.ts";
 import { moderationRoutes } from "./modules/moderation/routes.ts";
@@ -30,6 +31,7 @@ const api = createRouter()
   .route("/", membersRoutes)
   .route("/", boardsRoutes)
   .route("/", threadsRoutes)
+  .route("/", draftsRoutes)
   .route("/", uploadsRoutes)
   .route("/", qqRoutes)
   .route("/", reactionsRoutes)

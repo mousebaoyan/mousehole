@@ -72,6 +72,18 @@ export interface Boosts {
   user_id: number;
 }
 
+export interface Drafts {
+  board_id: number | null;
+  body: Generated<string>;
+  kind: string | null;
+  reply_to_id: number | null;
+  tags: Generated<string[]>;
+  thread_id: number | null;
+  title: Generated<string>;
+  updated_at: Generated<Timestamp>;
+  user_id: number;
+}
+
 export interface EmailCodes {
   attempts: Generated<number>;
   code: string;
@@ -339,6 +351,7 @@ export interface DB {
   audit_logs: AuditLogs;
   boards: Boards;
   boosts: Boosts;
+  drafts: Drafts;
   email_codes: EmailCodes;
   endorsements: Endorsements;
   events: Events;
