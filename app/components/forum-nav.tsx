@@ -1,4 +1,4 @@
-import { Bookmark, ExternalLink, FilePen, History, Home, MessagesSquare } from "lucide-react";
+import { Bookmark, ExternalLink, FilePen, History, Home, Lock, MessagesSquare } from "lucide-react";
 import { Link, NavLink } from "react-router";
 import { cn } from "cn";
 import { useDrafts } from "~/components/composer";
@@ -21,6 +21,7 @@ export function ForumNav() {
   const me = useMe();
   const drafts = useDrafts();
   const boards = useBoards();
+  const staff = me?.role === "moderator" || me?.role === "admin";
   // Schools and majors are many; they stay in the list's tag filter.
   const topics = useTags().filter((t) => t.kind === "topic");
   return (
@@ -50,6 +51,12 @@ export function ForumNav() {
           <NavLink key={b.slug} to={`/b/${b.slug}`} className={item}>
             <span className="ml-1 size-2 rounded-full" style={{ backgroundColor: b.color }} />
             <span className="ml-0.5 flex-1">{b.name}</span>
+            {/* Out of reach until a level (design §6.6); the board's page says how to get there. */}
+            {me && !staff && b.read_level > me.level && (
+              <span className="flex items-center gap-0.5 text-xs text-muted-foreground">
+                <Lock className="size-3" /> L{b.read_level}
+              </span>
+            )}
           </NavLink>
         ))}
       </div>

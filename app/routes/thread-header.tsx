@@ -23,7 +23,7 @@ import { Button, buttonVariants } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Dialog } from "~/components/ui/dialog";
 import { Select } from "~/components/ui/select";
-import { useBoards } from "~/forum";
+import { usePostableBoards } from "~/forum";
 import type { ThreadDetail } from "~/api-types";
 import { ReviewItems } from "./review-items.tsx";
 
@@ -272,12 +272,7 @@ export function ThreadHeader({
         </p>
       )}
       {(staff || power >= 3) && (
-        <MoveDialog
-          ref={move}
-          current={thread.board.slug}
-          staff={staff}
-          onMove={(board) => change({ board })}
-        />
+        <MoveDialog ref={move} current={thread.board.slug} onMove={(board) => change({ board })} />
       )}
     </header>
   );
@@ -330,15 +325,13 @@ function ThreadForm({
 function MoveDialog({
   ref,
   current,
-  staff,
   onMove,
 }: {
   ref: Ref<HTMLDialogElement>;
   current: string;
-  staff: boolean;
   onMove: (board: string) => void;
 }) {
-  const boards = useBoards().filter((b) => staff || b.post_role === "user");
+  const boards = usePostableBoards();
   const [board, setBoard] = useState(current);
   return (
     <Dialog ref={ref} className="w-[min(22rem,calc(100%-2rem))]">

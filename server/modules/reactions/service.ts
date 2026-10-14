@@ -1,5 +1,5 @@
 import { sql } from "kysely";
-import type { Actor, Reader, Viewer } from "../../platform/access.ts";
+import { GUEST, type Actor, type Reader, type Viewer } from "../../platform/access.ts";
 import { db } from "../../platform/db.ts";
 import { AppError } from "../../platform/errors.ts";
 import { recordAudit } from "../audit/service.ts";
@@ -30,13 +30,8 @@ export const REACTIONS = [
 export type Reaction = (typeof REACTIONS)[number];
 
 // One reaction per person per post: another emoji replaces it, none takes it back.
-export async function react(
-  viewer: Viewer,
-  members: boolean,
-  postId: number,
-  emoji: Reaction | null,
-) {
-  const post = await getPost(postId, { members, id: viewer.id, staff: false });
+export async function react(viewer: Viewer, reach: number, postId: number, emoji: Reaction | null) {
+  const post = await getPost(postId, { reach, id: viewer.id, staff: false });
   if (post.deleted_at !== null) throw new AppError(404, "post_not_found", "回复不存在");
   if (post.author_id === viewer.id) throw new AppError(403, "forbidden", "不能给自己点赞");
 
@@ -76,12 +71,12 @@ const PAGE = 50;
 
 // Who reacted, newest first, optionally with one emoji only; the cursor is how many were shown.
 export async function listReactions(
-  members: boolean,
+  reach: number,
   postId: number,
   emoji: Reaction | undefined,
   offset: number,
 ) {
-  await getPost(postId, { members, id: null, staff: false });
+  await getPost(postId, { reach, id: null, staff: false });
   let query = db
     .selectFrom("reactions")
     .select(["user_id", "emoji", "created_at"])
@@ -116,11 +111,11 @@ export function boostLength(body: string) {
 export async function setBoost(
   actor: Actor,
   viewer: Viewer,
-  members: boolean,
+  reach: number,
   postId: number,
   body: string,
 ) {
-  const post = await getPost(postId, { members, id: viewer.id, staff: false });
+  const post = await getPost(postId, { reach, id: viewer.id, staff: false });
   if (post.deleted_at !== null) throw new AppError(404, "post_not_found", "回复不存在");
   // As the person writes in this thread: anonymous or not (design §8.12).
   const thread = await db
@@ -197,7 +192,7 @@ export async function removeBoost(actor: Actor, id: number, reason: string | und
 
 // Guests don't get the boosts of people who keep their content from them.
 // With the writer's number in the thread for anonymous ones.
-function selectBoosts(members: boolean) {
+function selectBoosts(reach: number) {
   return db
     .selectFrom("boosts")
     .innerJoin("posts", "posts.id", "boosts.post_id")
@@ -215,7 +210,7 @@ function selectBoosts(members: boolean) {
       "boosts.created_at",
       "alias.number as alias",
     ])
-    .$if(!members, (qb) => qb.where(shownToGuests("boosts.user_id")));
+    .$if(reach === GUEST, (qb) => qb.where(shownToGuests("boosts.user_id")));
 }
 
 async function withBoostUsers(
@@ -243,9 +238,9 @@ export async function exportOwnBoosts(userId: number) {
     .execute();
 }
 
-export async function listBoosts(members: boolean, postId: number) {
-  await getPost(postId, { members, id: null, staff: false });
-  const rows = await selectBoosts(members)
+export async function listBoosts(reach: number, postId: number) {
+  await getPost(postId, { reach, id: null, staff: false });
+  const rows = await selectBoosts(reach)
     .where("boosts.post_id", "=", postId)
     .orderBy("boosts.created_at")
     .orderBy("boosts.id")
@@ -255,7 +250,7 @@ export async function listBoosts(members: boolean, postId: number) {
 
 // What each floor carries besides its own row: its first boosts, and the reader's reaction and
 // boost.
-export async function floorExtras(reader: Pick<Reader, "id" | "members">, postIds: number[]) {
+export async function floorExtras(reader: Pick<Reader, "id" | "reach">, postIds: number[]) {
   const userId = reader.id;
   if (postIds.length === 0) {
     return {
@@ -267,7 +262,7 @@ export async function floorExtras(reader: Pick<Reader, "id" | "members">, postId
   const [shown, reactions, own] = await Promise.all([
     db
       .selectFrom(
-        selectBoosts(reader.members)
+        selectBoosts(reader.reach)
           .select(
             sql<string>`row_number() OVER (
               PARTITION BY boosts.post_id ORDER BY boosts.created_at, boosts.id)`.as("n"),

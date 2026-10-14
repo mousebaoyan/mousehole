@@ -1,6 +1,9 @@
-import { data, redirect } from "react-router";
+import { Lock } from "lucide-react";
+import { data, Link, redirect } from "react-router";
 import { apiContext } from "../api.server.ts";
 import { readCounts, readFilter, ThreadFeed } from "~/components/thread-feed";
+import { buttonVariants } from "~/components/ui/button";
+import { useMe } from "~/forum";
 import { shareMeta } from "~/share-meta";
 import { unixNow } from "~/time";
 import type { Route } from "./+types/board.ts";
@@ -22,6 +25,10 @@ export async function loader({ request, params, context }: Route.LoaderArgs) {
   ]);
   if (!boardRes.ok) throw data("版块不存在", { status: 404 });
   if (res.status === 401) return redirect("/login");
+  // A member short of the board's level (design §8.10).
+  if (res.status === 403) {
+    return { board: await boardRes.json(), locked: (await res.json()).error.message };
+  }
   if (!res.ok) throw data((await res.json()).error.message, { status: res.status });
   const page = await res.json();
   return {
@@ -37,6 +44,7 @@ export async function loader({ request, params, context }: Route.LoaderArgs) {
 
 export default function Board({ loaderData }: Route.ComponentProps) {
   const { board } = loaderData;
+  const me = useMe();
   return (
     <>
       <header className="mb-5 flex items-start gap-4 px-1">
@@ -52,7 +60,19 @@ export default function Board({ loaderData }: Route.ComponentProps) {
           </p>
         </div>
       </header>
-      <ThreadFeed {...loaderData} />
+      {"locked" in loaderData ? (
+        <div className="flex flex-col items-center gap-3 py-16 text-center">
+          <Lock className="size-8 text-muted-foreground" />
+          <p className="text-muted-foreground">{loaderData.locked}</p>
+          {me && (
+            <Link to={`/u/${me.id}`} className={buttonVariants({ variant: "outline" })}>
+              看看升级进度
+            </Link>
+          )}
+        </div>
+      ) : (
+        <ThreadFeed {...loaderData} />
+      )}
     </>
   );
 }

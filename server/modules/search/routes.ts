@@ -1,5 +1,5 @@
 import { createRoute, z } from "@hono/zod-openapi";
-import { isMember } from "../../platform/access.ts";
+import { reachOf } from "../../platform/access.ts";
 import { createRouter, errorResponse } from "../../platform/http.ts";
 import { getBoard, getTagId } from "../boards/service.ts";
 import { threadJson, ThreadSchema } from "../threads/schemas.ts";
@@ -65,17 +65,17 @@ export const searchRoutes = createRouter()
     async (c) => {
       const { q, board, tag, author, title_only, cursor, ...rest } = c.req.valid("query");
       const { viewer, bot } = c.var;
-      const members = isMember(viewer, bot);
+      const reach = reachOf(viewer, bot);
       const filter = {
         ...rest,
         titleOnly: title_only,
-        boardId: board === undefined ? undefined : (await getBoard(board, members)).id,
+        boardId: board === undefined ? undefined : (await getBoard(board, reach)).id,
         tagId: tag === undefined ? undefined : await getTagId(tag),
         authorId: author === undefined ? undefined : await findUserId(author),
       };
-      const { hits, next_cursor } = await search(members, q, filter, cursor);
+      const { hits, next_cursor } = await search(reach, q, filter, cursor);
       const threads = await threadsByIds(
-        members,
+        reach,
         viewer?.id ?? null,
         hits.map((h) => h.thread_id),
       );
@@ -115,10 +115,10 @@ export const searchRoutes = createRouter()
     }),
     async (c) => {
       const { viewer, bot } = c.var;
-      const members = isMember(viewer, bot);
-      const found = await similar(members, c.req.valid("query").text);
+      const reach = reachOf(viewer, bot);
+      const found = await similar(reach, c.req.valid("query").text);
       const threads = await threadsByIds(
-        members,
+        reach,
         viewer?.id ?? null,
         found.map((f) => f.thread_id),
       );

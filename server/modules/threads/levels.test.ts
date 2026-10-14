@@ -185,4 +185,51 @@ describe("等级的权限", () => {
     );
     expect(await shown()).toContain(lows);
   });
+
+  test("版块的阅读门槛：没达到的成员列表和搜索里没有，打开时告诉要几级；版主和访客各照规则", async () => {
+    const created = await api.boards.$post(
+      { json: { slug: "l3only", name: "高阶", read_level: 3 } },
+      admin,
+    );
+    if (!created.ok) throw new Error(`status ${created.status}`);
+    expect(await created.json()).toMatchObject({ visibility: "members", read_level: 3 });
+    const [l1, l3, moderator] = await Promise.all([person(1), person(3), person(0, "moderator")]);
+    const posted = await api.threads.$post(
+      { json: { board: "l3only", title: "高阶版块的独门秘籍", content: { markdown: "正文" } } },
+      l3.who,
+    );
+    if (!posted.ok) throw new Error(`status ${posted.status}`);
+    const { id } = await posted.json();
+    const param = { id: String(id) };
+
+    const opened = await api.threads[":id"].$get({ param }, l1.who);
+    expect(opened.status).toBe(403);
+    if (opened.ok) throw new Error("opened");
+    expect((await opened.json()).error).toMatchObject({ code: "level_required" });
+    expect((await api.threads.$get({ query: { board: "l3only" } }, l1.who)).status).toBe(403);
+    const listed = async (who: Who) => {
+      const res = await api.threads.$get({ query: {} }, who);
+      if (!res.ok) throw new Error(`status ${res.status}`);
+      return (await res.json()).items.map((t) => t.id);
+    };
+    expect(await listed(l1.who)).not.toContain(id);
+    const found = await api.search.$get({ query: { q: "独门秘籍" } }, l1.who);
+    if (!found.ok) throw new Error(`status ${found.status}`);
+    expect((await found.json()).items).toEqual([]);
+
+    expect(await listed(l3.who)).toContain(id);
+    expect((await api.threads[":id"].$get({ param }, moderator.who)).status).toBe(200);
+    expect((await api.threads[":id"].$get({ param })).status).toBe(404);
+  });
+
+  test("版块的发帖门槛", async () => {
+    await api.boards.$post({ json: { slug: "l2post", name: "进阶", post_level: 2 } }, admin);
+    const post = (who: Who) =>
+      api.threads.$post(
+        { json: { board: "l2post", title: "进阶版块的帖子", content: { markdown: "正文" } } },
+        who,
+      );
+    expect((await post((await person(1)).who)).status).toBe(403);
+    expect((await post((await person(2)).who)).status).toBe(201);
+  });
 });

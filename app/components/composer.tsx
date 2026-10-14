@@ -31,7 +31,7 @@ import { Checkbox } from "~/components/ui/checkbox";
 import { chooseDialog, confirmDialog } from "~/components/ui/dialog";
 import { Input } from "~/components/ui/input";
 import { Select } from "~/components/ui/select";
-import { useBoards, useMe } from "~/forum";
+import { useMe, usePostableBoards } from "~/forum";
 import { useHydrated } from "~/hydrated";
 
 type ThreadRef = { id: number; title: string };
@@ -648,7 +648,7 @@ function ThreadFields({
 }) {
   const me = useMe();
   const staff = me?.role === "moderator" || me?.role === "admin";
-  const boards = useBoards().filter((b) => b.post_role === "user" || staff);
+  const boards = usePostableBoards();
   const id = useId();
   return (
     <div className="flex flex-col gap-2 border-t px-4 py-2.5">

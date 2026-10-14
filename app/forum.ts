@@ -19,6 +19,17 @@ export function useBoards() {
   return useForum().boards;
 }
 
+// The boards the reader may start threads in, or move them to (design §8.1): moderators all of
+// them, members those open to members at their level.
+export function usePostableBoards() {
+  const me = useMe();
+  const staff = me?.role === "moderator" || me?.role === "admin";
+  const level = me?.level ?? 0;
+  return useBoards().filter(
+    (b) => staff || (b.post_role === "user" && Math.max(b.read_level, b.post_level) <= level),
+  );
+}
+
 export function useTags() {
   return useForum().tags;
 }

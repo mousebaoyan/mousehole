@@ -11,7 +11,7 @@
 - **指代用户**：路径、请求头和请求体里的用户，可以写论坛用户 ID（`123`），也可以写 QQ 号（`qq:123456789`）。
 - **QQ 号**：返回给已登录的成员、bot 和管理员；访客和冻结的账号看不到（站点设置可以改成公开）。
 - **分页**：列表返回 `{ "items": [...], "next_cursor": "..." }`，取下一页时带 `?cursor=`。帖子里的楼层不用游标，按楼层号取，见[楼层](#35-楼层)。
-- **错误**：HTTP 状态码加 `{ "error": { "code": "thread_locked", "message": "帖子已锁定" } }`。`code` 固定不变，插件据此判断；`message` 给人看，以后可能调整。各接口都可能返回的错误码：`invalid_request`（400，参数不对，`message` 指出哪个字段）、`unauthorized`（401，没有登录）、`forbidden`（403，没有权限）、`level_required`（403，等级不够：L0 的链接数和每天的帖子、回复数，L2 才能发投票帖）、`not_found`（404）、`internal_error`（500）。
+- **错误**：HTTP 状态码加 `{ "error": { "code": "thread_locked", "message": "帖子已锁定" } }`。`code` 固定不变，插件据此判断；`message` 给人看，以后可能调整。各接口都可能返回的错误码：`invalid_request`（400，参数不对，`message` 指出哪个字段）、`unauthorized`（401，没有登录）、`forbidden`（403，没有权限）、`level_required`（403，等级不够：L0 的链接数和每天的帖子、回复数，L2 才能发投票帖，版块的阅读和发帖门槛；`message` 里有要几级）、`not_found`（404）、`internal_error`（500）。
 - **限流**：按 IP、用户和 token 分别限流，超出时返回 `429 rate_limited` 和 `Retry-After`（秒）。
 - **CSRF**：网页的写请求校验 Origin；带 Bearer token 的请求不受影响。
 
@@ -23,11 +23,12 @@
   "qq": 123456789, "card": "26-某某大学-CV", "title": "26届",
   "joined_at": 1740000000, "member_status": "member", "activated": true }
 
-// 版块。visibility：public 公开，members 仅成员；post_role：谁能发帖，user 成员、moderator 版主；
+// 版块。visibility：public 公开，members 仅成员；read_level：仅成员的版块还要几级才能看，0 不限；
+// post_role：谁能发帖，user 成员、moderator 版主；post_level：成员要几级才能发帖，0 不限；版主和管理员不受等级限制；
 // default_kind：发帖时默认的类型，discussion 讨论、question 问答；review_mode：after 先发后审，before 先审后发
 { "id": 2, "slug": "qa", "name": "保研问答", "description": "定位、材料、流程等问题", "color": "#e07b53",
-  "visibility": "public", "post_role": "user", "default_kind": "question", "review_mode": "after",
-  "thread_count": 1284 }
+  "visibility": "public", "read_level": 0, "post_role": "user", "post_level": 0,
+  "default_kind": "question", "review_mode": "after", "thread_count": 1284 }
 
 // 标签。kind：topic 话题、school 院校、major 方向
 { "id": 1, "name": "夏令营", "kind": "topic", "thread_count": 42 }
@@ -218,9 +219,9 @@ token 由管理员在后台创建，只显示一次。每个 token 绑定一个 
 | 方法 | 路径 | 说明 | 权限 |
 | --- | --- | --- | --- |
 | GET | `/site` | 页面要用的站点设置：`{ banner }`，公告横幅，空字符串不显示 | 访客 |
-| GET | `/boards` | 版块列表，按后台排好的顺序；访客看不到仅成员版块 | 访客 |
+| GET | `/boards` | 版块列表，按后台排好的顺序；访客看不到仅成员版块，成员看得到等级不够的版块（`read_level` 比自己高） | 访客 |
 | GET | `/boards/{slug}` | 版块信息；访客看仅成员版块返回 `404 board_not_found` | 访客 |
-| POST | `/boards` | 新建版块：`slug`（小写字母、数字和短横线，建好后不能改）、`name`，以及可选的 `description`、`color`、`visibility`、`post_role`、`default_kind`、`review_mode`（不带时用站点设置里的默认值）；排在最后。地址重复返回 `409 board_exists` | 管理员 / `admin` |
+| POST | `/boards` | 新建版块：`slug`（小写字母、数字和短横线，建好后不能改）、`name`，以及可选的 `description`、`color`、`visibility`、`read_level`、`post_role`、`post_level`、`default_kind`、`review_mode`（不带时用站点设置里的默认值）。`read_level` 大于 0 时版块自动是仅成员，`visibility` 改成公开时 `read_level` 归零；排在最后。地址重复返回 `409 board_exists` | 管理员 / `admin` |
 | PATCH | `/boards/{slug}` | 修改版块，只改带了的字段；`position` 把版块移到第几位（从 0 开始），其他版块依次顺延 | 管理员 / `admin` |
 | DELETE | `/boards/{slug}` | 删除版块；有过帖子（包括已删除的）的版块返回 `409 board_not_empty` | 管理员 / `admin` |
 | GET | `/tags` | 标签列表：话题、院校、方向依次排列，同一类里用得多的在前 | 访客 |

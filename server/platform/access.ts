@@ -84,13 +84,23 @@ export function checkPermission(viewer: Viewer | null, bot: Bot | null, need: Sc
   return viewer;
 }
 
-// Who is reading, for what they may open: members see members-only boards; content waiting for
+// Who is reading, for what they may open: boards within their reach; content waiting for
 // review or hidden shows to moderators, and to its author.
-export type Reader = { members: boolean; id: number | null; staff: boolean };
+export type Reader = { reach: number; id: number | null; staff: boolean };
 
 // Who may see members-only boards and what is in them; everyone else gets the public site.
 export function isMember(viewer: Viewer | null, bot: Bot | null) {
   return viewer?.member_status === "member" && (bot === null || bot.scopes.includes("read"));
+}
+
+// How far into the forum someone reads (design §8.10): guests the public boards only, members
+// the boards up to their level, and moderators, admins and the bot's own account all of them.
+export const GUEST = -1;
+export const EVERY_BOARD = 5;
+
+export function reachOf(viewer: Viewer | null, bot: Bot | null) {
+  if (!viewer || !isMember(viewer, bot)) return GUEST;
+  return STAFF.includes(viewer.role) || viewer.role === "bot" ? EVERY_BOARD : viewer.level;
 }
 
 // Muted members still read, bookmark and follow, but don't post, reply, edit, react or boost.
