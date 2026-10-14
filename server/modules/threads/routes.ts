@@ -55,6 +55,7 @@ import {
   listUserPosts,
   MAX_BODY,
   NOTIFY_LEVELS,
+  PAGE_SIZE,
   publicThreads,
   recordReading,
   recordView,
@@ -414,6 +415,13 @@ export const threadsRoutes = createRouter()
               "latest 按最后回复，created 按发布时间，hot 热门，unsolved 待解答；要登录的：new 最近 7 天发布、自己没打开过，unread 读过、之后有新楼层，read 读过的、按最后阅读时间，posted 自己发过或回复过的，bookmarked 自己收藏的、按收藏时间",
           }),
           cursor: z.string().optional(),
+          limit: z.coerce
+            .number()
+            .int()
+            .min(1)
+            .max(PAGE_SIZE)
+            .optional()
+            .openapi({ description: "每页几个，默认也是最多 30 个" }),
         }),
       },
       responses: {

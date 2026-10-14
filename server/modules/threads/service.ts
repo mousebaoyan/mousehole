@@ -228,9 +228,16 @@ function inScope({ board, tagId }: Awaited<ReturnType<typeof scopeOf>>) {
 export async function listThreads(
   reach: number,
   userId: number | null,
-  filter: { board?: string; tag?: string; author?: number; view: ThreadView; cursor?: string },
+  filter: {
+    board?: string;
+    tag?: string;
+    author?: number;
+    view: ThreadView;
+    cursor?: string;
+    limit?: number;
+  },
 ) {
-  const { view, cursor } = filter;
+  const { view, cursor, limit = PAGE_SIZE } = filter;
   const scope = await scopeOf(reach, filter);
   const { board, tagId } = scope;
   const time =
@@ -244,7 +251,7 @@ export async function listThreads(
     // Microseconds, exact for PostgreSQL timestamps, unlike a JavaScript Date.
     .select(sql<number>`(extract(epoch FROM ${sql.ref(time)}) * 1000000)::bigint`.as("micros"))
     .where(inScope(scope))
-    .limit(PAGE_SIZE);
+    .limit(limit);
   if (filter.author !== undefined) {
     query = query
       .where("threads.author_id", "=", filter.author)
@@ -278,7 +285,7 @@ export async function listThreads(
       .where("threads.id", "=", sql<number>`any(${ids}::integer[])`)
       .orderBy(sql`array_position(${ids}::integer[], threads.id)`)
       .offset(offset);
-    next = () => String(offset + PAGE_SIZE);
+    next = () => String(offset + limit);
   } else {
     if (view === "unsolved") {
       query = query
@@ -320,7 +327,7 @@ export async function listThreads(
   const last = rows.at(-1);
   return {
     items: await withUsers([...pinned, ...rows]),
-    next_cursor: rows.length === PAGE_SIZE && last ? next(last) : null,
+    next_cursor: rows.length === limit && last ? next(last) : null,
   };
 }
 

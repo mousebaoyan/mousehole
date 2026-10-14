@@ -50,7 +50,8 @@ export async function loader({ params, request, context }: Route.LoaderArgs) {
   const [threadRes, afterRes, latestRes] = await Promise.all([
     api.threads[":id"].$get({ param }),
     api.threads[":id"].posts.$get({ param, query: { after: String(start - 1) } }),
-    api.threads.$get({ query: {} }),
+    // Enough for the five suggestions below, this one and pinned ones aside.
+    api.threads.$get({ query: { limit: "6" } }),
   ]);
   // Its author keeps it from guests, or its board wants a higher level (design §8.10).
   if (threadRes.status === 401 || threadRes.status === 403) {
