@@ -411,6 +411,7 @@ export interface Users {
   level_since: Timestamp | null;
   like_received: Generated<number>;
   member_status: Generated<string>;
+  notify_email: Generated<boolean>;
   notify_prefs: Generated<Json>;
   post_count: Generated<number>;
   posts_read: Generated<number>;

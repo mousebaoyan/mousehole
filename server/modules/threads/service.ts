@@ -1382,7 +1382,8 @@ async function publishPost(
         authorAlias: post.alias,
         mentions: announce.mentions,
       },
-      replyTo ?? post.thread_author_id,
+      replyTo,
+      post.thread_author_id,
     );
   }
 }

@@ -101,6 +101,8 @@ function headline(n: Item) {
   switch (n.type) {
     case "reply":
       return `${who} 回复了你`;
+    case "thread_reply":
+      return many ? `你的帖子有 ${n.count} 层新回复` : `${who} 回复了你的帖子`;
     case "mention":
       return `${who} 提到了你`;
     case "like":

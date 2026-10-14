@@ -139,6 +139,9 @@ const SettingsSchema = z
     avatar_custom: z.boolean().openapi({ description: "头像是自己上传的；false 是跟着 QQ" }),
     allow_proxy: z.boolean().openapi({ description: "是否允许 bot 代自己发帖、回复等" }),
     hide_from_guests: z.boolean().openapi({ description: "我的内容不给访客看" }),
+    notify_email: z
+      .boolean()
+      .openapi({ description: "邮件提醒的总开关；关掉后哪类通知都不发邮件" }),
     notify_prefs: z
       .record(z.string(), Switches)
       .openapi({ description: "每类通知的站内（site）和邮件（email）开关，含默认值" }),
@@ -387,6 +390,7 @@ export const usersRoutes = createRouter()
                   .openapi({ description: "最多 60 个字；null 是改回跟着 QQ" }),
                 allow_proxy: z.boolean().optional(),
                 hide_from_guests: z.boolean().optional(),
+                notify_email: z.boolean().optional(),
                 notify_prefs: z.partialRecord(z.enum(NOTIFICATION_TYPES), Switches).optional(),
               }),
             },
