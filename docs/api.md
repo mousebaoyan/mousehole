@@ -6,12 +6,12 @@
 
 - **地址**：`https://bbs.mousebaoyan.cn/api/v1`。下文的路径都省略 `/api/v1` 前缀。
 - **格式**：请求和响应都是 JSON，字段用 snake_case，时间是 Unix 秒。请求体较大时可以用 `Content-Encoding: gzip` 压缩；响应按 `Accept-Encoding` 用 Brotli 或 gzip 压缩。请求体默认不超过 1MB，成员全量同步不超过 4MB，gzip 的按解压后的大小算，超出返回 `413 payload_too_large`。
-- **正文**：回复默认只带渲染好的 `html`；带 `?body=markdown` 时改为只带 Markdown 原文 `body`，插件转发到 QQ、网页编辑时用。
+- **正文**：楼层默认只带渲染好的 `html`；带 `?body=markdown` 时改为只带 Markdown 原文 `body`，网页编辑时用。
 - **认证**：网页用 Cookie 会话（名为 `session`，HttpOnly、SameSite=Lax，90 天有效，超过一小时没用过的会话在下次使用时续期）；bot 用 `Authorization: Bearer <token>`。
 - **指代用户**：路径、请求头和请求体里的用户，可以写论坛用户 ID（`123`），也可以写 QQ 号（`qq:123456789`）。
 - **QQ 号**：返回给已登录的成员、bot 和管理员；访客和冻结的账号看不到（站点设置可以改成公开）。
-- **分页**：列表返回 `{ "items": [...], "next_cursor": "..." }`，取下一页时带 `?cursor=`。主题里的楼层不用游标，按楼层号取，见[回复](#35-回复)。
-- **错误**：HTTP 状态码加 `{ "error": { "code": "thread_locked", "message": "主题已锁定" } }`。`code` 固定不变，插件据此判断；`message` 给人看，以后可能调整。各接口都可能返回的错误码：`invalid_request`（400，参数不对，`message` 指出哪个字段）、`unauthorized`（401，没有登录）、`forbidden`（403，没有权限）、`not_found`（404）、`internal_error`（500）。
+- **分页**：列表返回 `{ "items": [...], "next_cursor": "..." }`，取下一页时带 `?cursor=`。帖子里的楼层不用游标，按楼层号取，见[楼层](#35-楼层)。
+- **错误**：HTTP 状态码加 `{ "error": { "code": "thread_locked", "message": "帖子已锁定" } }`。`code` 固定不变，插件据此判断；`message` 给人看，以后可能调整。各接口都可能返回的错误码：`invalid_request`（400，参数不对，`message` 指出哪个字段）、`unauthorized`（401，没有登录）、`forbidden`（403，没有权限）、`not_found`（404）、`internal_error`（500）。
 - **限流**：按 IP、用户和 token 分别限流，超出时返回 `429 rate_limited` 和 `Retry-After`（秒）。
 - **CSRF**：网页的写请求校验 Origin；带 Bearer token 的请求不受影响。
 
@@ -23,8 +23,8 @@
   "qq": 123456789, "card": "26-某某大学-CV", "level": 5, "title": "26届",
   "joined_at": 1740000000, "member_status": "member", "activated": true }
 
-// 版块。visibility：public 公开，members 仅成员；post_role：谁能发主题，user 成员、moderator 版主；
-// default_kind：发主题时默认的类型，discussion 讨论、question 问答；review_mode：after 先发后审，before 先审后发
+// 版块。visibility：public 公开，members 仅成员；post_role：谁能发帖，user 成员、moderator 版主；
+// default_kind：发帖时默认的类型，discussion 讨论、question 问答；review_mode：after 先发后审，before 先审后发
 { "id": 2, "slug": "qa", "name": "保研问答", "description": "定位、材料、流程等问题", "color": "#e07b53",
   "visibility": "public", "post_role": "user", "default_kind": "question", "review_mode": "after",
   "thread_count": 1284 }
@@ -32,12 +32,12 @@
 // 标签。kind：topic 话题、school 院校、major 方向
 { "id": 1, "name": "夏令营", "kind": "topic", "thread_count": 42 }
 
-// 主题和回复里的用户只带这几项；title 是主群里的专属头衔，没有为空字符串
+// 帖子和楼层里的用户只带这几项；title 是主群里的专属头衔，没有为空字符串
 { "id": 7, "display_name": "鼠鼠", "role": "user", "level": 5, "title": "26届" }
 
-// 主题。匿名主题的 author 为 null；floor_count 是最大的楼层号；主题详情里的 solved_floor 是采纳的回答在第几楼，excerpt 是主楼正文的前 100 个字；pinned：0 不置顶，1 版块内置顶，2 全站置顶；
-// posters 是作者以外、最近 20 层里最近回复的最多 4 个人；url 只在主题详情里有；
-// last_read_floor 是自己读过的最高一楼，没打开过为 0，只在登录时返回；主题详情里还有 read_floors，是读过的楼层区间，例如 [[1, 20], [480, 495]]，
+// 帖子。匿名帖子的 author 为 null；floor_count 是最大的楼层号；帖子详情里的 solved_floor 是采纳的回答在第几楼，excerpt 是主楼正文的前 100 个字；pinned：0 不置顶，1 版块内置顶，2 全站置顶；
+// posters 是楼主以外、最近 20 层里最近回复的最多 4 个人；url 只在帖子详情里有；
+// last_read_floor 是自己读过的最高一楼，没打开过为 0，只在登录时返回；帖子详情里还有 read_floors，是读过的楼层区间，例如 [[1, 20], [480, 495]]，
 // 以及 bookmarked（是否收藏）和 notify_level（关注级别，见 /threads/{id}/subscription），也只在登录时返回；
 // status：visible 公开，pending 待审核，hidden 已隐藏，后两种只有作者和版主能看到
 { "id": 42, "board": { "slug": "qa", "name": "保研问答", "color": "#e07b53" }, "kind": "question",
@@ -46,8 +46,8 @@
   "reply_count": 5, "floor_count": 6, "view_count": 120, "like_count": 3, "last_read_floor": 4,
   "last_post_at": 1760000000, "created_at": 1759990000, "url": "https://bbs.mousebaoyan.cn/t/42" }
 
-// 回复。source 只返回给 bot 和管理员；正文只带 html 或 body 中的一个，见上面的「正文」；
-// 删除的楼层 deleted 为 true，正文为空字符串；status 同主题，主楼的跟着主题
+// 楼层。source 只返回给 bot 和管理员；正文只带 html 或 body 中的一个，见上面的「正文」；
+// 删除的楼层 deleted 为 true，正文为空字符串；status 同帖子，主楼的跟着帖子
 { "id": 108, "thread_id": 42, "floor": 3, "reply_to": { "id": 105, "floor": 2, "author": { … } },
   "author": { … }, "html": "<p>…</p>", "via": "qq", "deleted": false,
   "source": { "chat_type": "group", "chat_id": 987654321, "message_id": 7731 },
@@ -57,9 +57,9 @@
   "edited_at": null, "created_at": 1760000000 }
 
 // 通知。type：reply 回复了我的楼层，mention @了我，like 赞了我的楼层，boost 给我的楼层留了短评，
-// watching 关注的主题有新楼层，following 关注的人发了新主题，solved 我的回答被采纳，
+// watching 关注的帖子有新楼层，following 关注的人发了新帖，solved 我的回答被采纳，
 // moderation 版主审核或隐藏了我的内容（data 带 action：approve 通过、reject 不通过、hide 隐藏、unhide 恢复，以及 reason）。
-// like、boost 按楼层，watching 按主题，
+// like、boost 按楼层，watching 按帖子，
 // 未读期间合并成一条：actor 是最近的人，count 是次数。post 是新的那一层，点赞和短评是被赞的那一层；
 // excerpt 是它正文的前 80 个字，待审核和已隐藏的只给作者看，别人为空字符串；data 里点赞带最近的 emoji，短评带最近的 body
 { "id": 9001, "type": "like", "actor": { … }, "count": 3, "thread": { "id": 42, "title": "…" },
@@ -96,7 +96,7 @@ token 由管理员在后台创建，只显示一次。每个 token 绑定一个 
 ### 2.3 规则
 
 - **权限取交集**：以 bot 自己的账号操作时，能做什么由 token 的范围决定；代表某位成员时，还要这位成员自己有这个权限。例如代表普通成员时，即使 token 有 `moderate`，也不能锁帖。
-- **只能代表成员**：被代表的人必须是同步过、没注销的账号，否则返回 `404 unknown_member`。冻结的账号只能读，写操作返回 `403 member_frozen`。有人刚进群、论坛还没同步到时，插件先推送一条增量。
+- **只能代表成员**：被代表的人必须是同步过的账号，否则返回 `404 unknown_member`。冻结的账号只能读，写操作返回 `403 member_frozen`。有人刚进群、论坛还没同步到时，插件先推送一条增量。
 - **代发开关**：成员关闭"允许代发"后，只有他本人让 bot 操作（`X-Operator` 就是本人）时才放行，否则写操作返回 `403 proxy_disabled`。读操作不受影响。
 - **操作人校验**：带 `X-Operator` 时，论坛会检查操作人有没有资格：代表别人操作时，操作人必须是版主或管理员；执行版主或管理员操作时，操作人自己也必须有这个权限。不通过返回 `403 operator_not_allowed`。没有操作人的场景（例如定时任务、成员同步）可以不带这个头；后台可以设为代表成员时必须带，没带的返回 `400 operator_required`，bot 以自己的账号操作不受影响。
 - **来源标注**：代表成员发的内容，带来源消息时 `via` 为 `qq`，页面标"来自群聊"；否则为 `bot`，标"由机器人代发"。本人可以编辑和删除。
@@ -112,7 +112,7 @@ token 由管理员在后台创建，只显示一次。每个 token 绑定一个 
 
 ### 2.5 内容格式
 
-发主题和回复时，`content` 三选一；编辑只接受 `markdown`：
+发帖和回复时，`content` 三选一；编辑只接受 `markdown`：
 
 ```jsonc
 { "markdown": "正文……" }
@@ -130,7 +130,7 @@ token 由管理员在后台创建，只显示一次。每个 token 绑定一个 
 | `image`、`mface` | 论坛立即下载转存（QQ 图片链接几小时就过期），只接受 QQ 的图片域名；下载失败时显示"[图片已失效]"。`mface` 的 `summary` 作为图片说明 |
 | `face` | QQ 经典表情；一期显示为"[表情]"，二期换成表情图 |
 | `at` | 已同步的成员转为 @论坛用户，并触发提醒；`all` 忽略；其他显示为"@昵称"（`name`，没有就是"@群友"），不显示 QQ 号 |
-| `reply` | 被回复的消息是同一个主题里某一条的来源时，记为回复那一条（`reply_to`，请求里带了 `reply_to_id` 时以它为准）；否则忽略 |
+| `reply` | 被回复的消息是同一个帖子里某一层的来源时，记为回复那一层（`reply_to`，请求里带了 `reply_to_id` 时以它为准）；否则忽略 |
 | `file` | "[文件] 文件名" |
 | `video`、`record`、`forward`、`json` | "[视频]""[语音]""[聊天记录]""[卡片]" |
 | 其他 | "[消息]" |
@@ -165,11 +165,9 @@ token 由管理员在后台创建，只显示一次。每个 token 绑定一个 
 | GET | `/me` | 当前用户；bot 代表某人时返回这个人 | 已登录 / `read` |
 | GET | `/me/settings` | 自己的设置：`custom_name`（自己起的名字，`null` 是跟着 QQ）、`bio`、`allow_proxy`、`notify_prefs`（每类通知的 `{ site, qq }` 开关，含默认值） | 已登录 / `read` |
 | PATCH | `/me` | 修改设置，只改带了的字段，返回改好的设置：`custom_name`（最多 24 个字，`null` 改回跟着 QQ，显示名随即重算）、`bio`（最多 60 个字）、`allow_proxy`、`notify_prefs`（带了的类型整体替换） | 成员 / `act` |
-| GET | `/me/export` | 导出自己的全部内容，作为附件 `mousehole-{id}.json` 下载：`user`（`id`、`qq`、`display_name`、`bio`）、`posts`（发过的主楼和回复，Markdown 原文，含待审核和已隐藏的，不含删掉的；`floor` 为 1 的就是自己发的主题）、`boosts`、`bookmarks`；每小时最多 3 次 | 已登录，只能在网页上 |
+| GET | `/me/export` | 导出自己的全部内容，作为附件 `mousehole-{id}.json` 下载：`user`（`id`、`qq`、`display_name`、`bio`）、`posts`（发过的主楼和回复，Markdown 原文，含待审核和已隐藏的，不含删掉的；`floor` 为 1 的就是自己发的帖子）、`boosts`、`bookmarks`；每小时最多 3 次 | 已登录，只能在网页上 |
 | GET | `/me/sessions` | 已登录的设备：`user_agent`、`device`（例如"Chrome · macOS"）、`ip`、时间、是否当前设备 | 已登录 |
 | DELETE | `/me/sessions/{id}` | 让某个设备下线 | 已登录 |
-| GET | `/me/export` | 导出自己的全部内容 | 已登录，冻结了也可以 |
-| DELETE | `/me` | 注销账号：`{ keep_content }`，`true` 保留内容、署名改为"已注销用户"，`false` 一并删除 | 已登录，冻结了也可以 |
 
 禁言中的成员发帖、回复、编辑、点赞、短评、上传图片和预览返回 `403 muted`，`message` 里有到期时间；收藏、关注、读通知等不受影响。bot 代表被封禁的人做写操作返回 `403 banned`。资料卡里的 `restriction`（`{ type, until }`）只给本人和版主看。
 
@@ -180,10 +178,10 @@ token 由管理员在后台创建，只显示一次。每个 token 绑定一个 
 | 方法 | 路径 | 说明 | 权限 |
 | --- | --- | --- | --- |
 | GET | `/users` | `q`：按名字找成员，最多 8 个，名字以它开头的在前，再按最近活跃；不含 bot 和冻结的账号。编辑器的 @ 补全用 | 已登录 / `read` |
-| GET | `/users/{user}` | 资料卡：显示名、头像、角色、群等级、专属头衔、简介，主群的群名片、入群时间和最近发言时间，以及统计（主题数、回复数、获赞数、认可数、访问天数、阅读时间、读过的主题和回复数）；QQ 号、是否冻结、是否激活只给成员和 bot。统计里还有关注数、粉丝数和认可数；登录时带 `followed`、`endorsed`，表示自己是否关注、认可了 TA。注销的账号返回 `404 user_not_found` | 访客 |
-| GET | `/users/{user}/threads` | 发过的主题，最新的在前，每页 30 个，不含匿名内容 | 访客 |
-| GET | `/users/{user}/posts` | 发过的回复（不含主楼），最新的在前，每页 30 个，`cursor` 是上一页最后一条的 ID；每条带所在的主题和正文前 140 个字的纯文本，不含匿名内容 | 访客 |
-| PUT | `/users/{user}/follow` | 关注：TA 发新主题时通知我；不能关注自己（`400`） | 成员 / `act` |
+| GET | `/users/{user}` | 资料卡：显示名、头像、角色、群等级、专属头衔、简介，主群的群名片、入群时间和最近发言时间，以及统计（帖子数、回复数、获赞数、认可数、访问天数、阅读时间、读过的帖子和回复数）；QQ 号、是否冻结、是否激活只给成员和 bot。统计里还有关注数、粉丝数和认可数；登录时带 `followed`、`endorsed`，表示自己是否关注、认可了 TA | 访客 |
+| GET | `/users/{user}/threads` | 发过的帖子，最新的在前，每页 30 个，不含匿名内容 | 访客 |
+| GET | `/users/{user}/posts` | 发过的回复（不含主楼），最新的在前，每页 30 个，`cursor` 是上一页最后一条的 ID；每条带所在的帖子和正文前 140 个字的纯文本，不含匿名内容 | 访客 |
+| PUT | `/users/{user}/follow` | 关注：TA 发新帖时通知我；不能关注自己（`400`） | 成员 / `act` |
 | DELETE | `/users/{user}/follow` | 取消关注 | 成员 / `act` |
 | PUT | `/users/{user}/endorsement` | 认可 TA 的帮助，每人对每人一次；不能认可自己（`400`） | 成员 / `act` |
 | DELETE | `/users/{user}/endorsement` | 撤回认可 | 成员 / `act` |
@@ -200,46 +198,46 @@ token 由管理员在后台创建，只显示一次。每个 token 绑定一个 
 | GET | `/boards/{slug}` | 版块信息；访客看仅成员版块返回 `404 board_not_found` | 访客 |
 | POST | `/boards` | 新建版块：`slug`（小写字母、数字和短横线，建好后不能改）、`name`，以及可选的 `description`、`color`、`visibility`、`post_role`、`default_kind`、`review_mode`（不带时用站点设置里的默认值）；排在最后。地址重复返回 `409 board_exists` | 管理员 / `admin` |
 | PATCH | `/boards/{slug}` | 修改版块，只改带了的字段；`position` 把版块移到第几位（从 0 开始），其他版块依次顺延 | 管理员 / `admin` |
-| DELETE | `/boards/{slug}` | 删除版块；有过主题（包括已删除的）的版块返回 `409 board_not_empty` | 管理员 / `admin` |
+| DELETE | `/boards/{slug}` | 删除版块；有过帖子（包括已删除的）的版块返回 `409 board_not_empty` | 管理员 / `admin` |
 | GET | `/tags` | 标签列表：话题、院校、方向依次排列，同一类里用得多的在前 | 访客 |
 | POST | `/tags` | 新建标签：`{ name, kind }`；重名返回 `409 tag_exists` | 版主 / `moderate` |
 | PATCH | `/tags/{id}` | 改名、改类别；新名字已有标签在用时返回 `409 tag_exists` | 版主 / `moderate` |
-| POST | `/tags/{id}/merge` | `{ into }`：合并到另一个标签，主题都改用那个标签，这个标签删除 | 版主 / `moderate` |
-| DELETE | `/tags/{id}` | 删除标签，主题上的这个标签一并去掉 | 版主 / `moderate` |
+| POST | `/tags/{id}/merge` | `{ into }`：合并到另一个标签，帖子都改用那个标签，这个标签删除 | 版主 / `moderate` |
+| DELETE | `/tags/{id}` | 删除标签，帖子上的这个标签一并去掉 | 版主 / `moderate` |
 
-### 3.4 主题
+### 3.4 帖子
 
 | 方法 | 路径 | 说明 | 权限 |
 | --- | --- | --- | --- |
-| GET | `/threads` | 主题列表，每页 30 个：`board`、`tag`、`author`、`kind`、`view`、`cursor`；版块或标签不存在返回 404。`view` 默认 `latest`（按最后回复），还可以是 `created`（按发布时间）、`hot`（热门）、`unsolved`（待解答）；以下几种要登录：`new`（最近 7 天发布、自己还没打开过）、`unread`（读过、之后有新楼层）、`read`（读过的，按最后阅读时间）、`posted`（自己发过或回复过的，删掉的回复不算，按最后回复）、`bookmarked`（收藏的，按收藏时间）。`latest` 的第一页先列置顶的主题：首页是全站置顶，版块页还有版块内置顶；按标签筛选时不置顶 | 访客 |
-| GET | `/threads/counts` | 当前范围里新和未读的主题各有几个：`board`、`tag`，返回 `{ new, unread }` | 成员 |
-| POST | `/threads` | 发主题：`board`、`title`（4–80 个字）、`content`、`kind`（不带时用版块的默认类型）、`tags`（最多 5 个，只能用已有的）、`source`；只有版主能发的版块返回 `403 forbidden`。先审后发的版块里，版主以外的人发的主题 `status` 为 `pending`，通过后才公开 | 成员 / `act` |
-| GET | `/threads/{id}` | 主题详情；楼层（包括主楼）用 `/threads/{id}/posts` 取 | 访客 |
-| PATCH | `/threads/{id}` | 只改带了的字段：作者可以改 `title`、`tags`；版主还可以改 `board`（移动版块）、`pinned`（0–2）、`featured`、`locked`、`status`（`visible` 或 `hidden`，见下面的「审核」）和 `reason`（隐藏的理由，最多 200 个字，会告诉作者）。改标题记在主楼的编辑记录里；锁定后只有版主能改 | 作者、版主 / `act`、`moderate` |
-| DELETE | `/threads/{id}` | 删除主题；有人回复后作者不能删，只有版主能删 | 作者、版主 / `act`、`moderate` |
-| PUT | `/threads/{id}/solution` | 采纳答案：`{ post_id }`，只能是问答主题里公开、没删的回复（不含主楼），否则 `400`；主题待审核或已隐藏时返回 `403`；再采纳别的就换掉。回答的人收到通知，产生 `thread.solved` 事件；锁定后只有版主能改。返回主题详情 | 主题作者、版主 / `act`、`moderate` |
+| GET | `/threads` | 帖子列表，每页 30 个：`board`、`tag`、`author`、`kind`、`view`、`cursor`；版块或标签不存在返回 404。`view` 默认 `latest`（按最后回复），还可以是 `created`（按发布时间）、`hot`（热门）、`unsolved`（待解答）；以下几种要登录：`new`（最近 7 天发布、自己还没打开过）、`unread`（读过、之后有新楼层）、`read`（读过的，按最后阅读时间）、`posted`（自己发过或回复过的，删掉的回复不算，按最后回复）、`bookmarked`（收藏的，按收藏时间）。`latest` 的第一页先列置顶的帖子：首页是全站置顶，版块页还有版块内置顶；按标签筛选时不置顶 | 访客 |
+| GET | `/threads/counts` | 当前范围里新和未读的帖子各有几个：`board`、`tag`，返回 `{ new, unread }` | 成员 |
+| POST | `/threads` | 发帖：`board`、`title`（4–80 个字）、`content`、`kind`（不带时用版块的默认类型）、`tags`（最多 5 个，只能用已有的）、`source`；只有版主能发的版块返回 `403 forbidden`。先审后发的版块里，版主以外的人发的帖子 `status` 为 `pending`，通过后才公开 | 成员 / `act` |
+| GET | `/threads/{id}` | 帖子详情；楼层（包括主楼）用 `/threads/{id}/posts` 取 | 访客 |
+| PATCH | `/threads/{id}` | 只改带了的字段：楼主可以改 `title`、`tags`；版主还可以改 `board`（移动版块）、`pinned`（0–2）、`featured`、`locked`、`status`（`visible` 或 `hidden`，见下面的「审核」）和 `reason`（隐藏的理由，最多 200 个字，会告诉作者）。改标题记在主楼的编辑记录里；锁定后只有版主能改 | 楼主、版主 / `act`、`moderate` |
+| DELETE | `/threads/{id}` | 删除帖子；有人回复后楼主不能删，只有版主能删 | 楼主、版主 / `act`、`moderate` |
+| PUT | `/threads/{id}/solution` | 采纳答案：`{ post_id }`，只能是问答帖子里公开、没删的回复（不含主楼），否则 `400`；帖子待审核或已隐藏时返回 `403`；再采纳别的就换掉。回答的人收到通知，产生 `thread.solved` 事件；锁定后只有版主能改。返回帖子详情 | 楼主、版主 / `act`、`moderate` |
 | DELETE | `/threads/{id}/solution` | 取消采纳；采纳的回答被删除时也自动取消 | 同上 |
-| PUT | `/threads/{id}/subscription` | 关注级别：`{ level }`，`watching` 每个新楼层都通知，`normal` 回复我、@我时通知，`muted` 都不通知；没设置过是 `normal`，发主题的人是 `watching` | 成员 / `act` |
+| PUT | `/threads/{id}/subscription` | 关注级别：`{ level }`，`watching` 每个新楼层都通知，`normal` 回复我、@我时通知，`muted` 都不通知；没设置过是 `normal`，发帖的人是 `watching` | 成员 / `act` |
 | PUT | `/threads/{id}/bookmark` | 收藏；已经收藏的不变，收藏列表里的位置也不变 | 成员 / `act` |
 | DELETE | `/threads/{id}/bookmark` | 取消收藏 | 成员 / `act` |
 | POST | `/threads/{id}/read` | 记录阅读：`{ floors: [[1, 20], [480, 495]], seconds: 95 }`，读过的楼层区间（含两端）并入已读，超出楼层数的部分不算；自己看不到的楼层（待审核、已隐藏），读过它后面的一楼或者读到能看到的最后一楼时一并算读过，但不计入阅读统计；`seconds` 计入阅读时间，单次最多算 120 秒。只有网页上报，见[总体设计 §8.9](design.md#89-阅读记录)，bot 调用返回 `403` | 登录用户 |
-| GET | `/threads/{id}/stream` | SSE：这个主题的新回复、编辑和删除，事件名是 `post.created`、`post.updated`、`post.deleted`，`data` 是楼层号；每 20 秒一条心跳注释 | 访客 |
+| GET | `/threads/{id}/stream` | SSE：这个帖子的新回复、编辑和删除，事件名是 `post.created`、`post.updated`、`post.deleted`，`data` 是楼层号；每 20 秒一条心跳注释 | 访客 |
 
 主楼正文用 `PATCH /posts/{主楼 ID}` 修改。
 
-### 3.5 回复
+### 3.5 楼层
 
 | 方法 | 路径 | 说明 | 权限 |
 | --- | --- | --- | --- |
-| GET | `/threads/{id}/posts` | 楼层列表，按楼层号升序，每次最多 20 层：`after=N` 取第 N 楼之后的（默认 0，从主楼开始），`before=N` 取第 N 楼之前的，二选一；不足 20 层说明这个方向到头了。每层带 `reply_to`（回复的是哪一条，没有为 `null`）和 `reply_count`（有几条回复它）；删除的楼层也在，带 `deleted: true`；待审核和已隐藏的楼层只给作者和版主，别人看到的楼层号会跳过它们 | 访客 |
+| GET | `/threads/{id}/posts` | 楼层列表，按楼层号升序，每次最多 20 层：`after=N` 取第 N 楼之后的（默认 0，从主楼开始），`before=N` 取第 N 楼之前的，二选一；不足 20 层说明这个方向到头了。每层带 `reply_to`（回复的是哪一层，没有为 `null`）和 `reply_count`（有几条回复它）；删除的楼层也在，带 `deleted: true`；待审核和已隐藏的楼层只给作者和版主，别人看到的楼层号会跳过它们 | 访客 |
 | POST | `/preview` | `{ markdown }`：渲染成发布后的 HTML，返回 `{ html }`，编辑器预览用；每人每分钟最多 120 次 | 成员 / `act` |
-| POST | `/threads/{id}/posts` | 回复：`content`、`reply_to_id`（回复同一主题里的哪一条，可选）、`source`；锁定的主题只有版主能回复，否则返回 `403 thread_locked`；主题待审核或已隐藏时不能回复（`403 forbidden`）。先审后发的版块里，版主以外的人发的回复 `status` 为 `pending` | 成员 / `act` |
-| GET | `/posts/{id}` | 单条回复 | 访客 |
-| GET | `/posts/{id}/replies` | 回复这一条的楼层，按楼层号升序，每次最多 20 层：`after=N` 取第 N 楼之后的，不足 20 层说明取完了 | 访客 |
-| PATCH | `/posts/{id}` | 修改 `content`，旧的正文进编辑记录；版主也能改别人的，还可以改 `status` 和 `reason`，同主题。主楼的状态跟着主题（`400`）；主题待审核或已隐藏时不能改回复的状态（`403`）；锁定的主题只有版主能改 | 作者、版主 / `act`、`moderate` |
-| DELETE | `/posts/{id}` | 删除；楼层号保留，显示"该楼已删除"。主楼不能单独删除（`400`），要删就删整个主题 | 作者、版主 / `act`、`moderate` |
+| POST | `/threads/{id}/posts` | 回复：`content`、`reply_to_id`（回复同一帖子里的哪一层，可选）、`source`；锁定的帖子只有版主能回复，否则返回 `403 thread_locked`；帖子待审核或已隐藏时不能回复（`403 forbidden`）。先审后发的版块里，版主以外的人发的回复 `status` 为 `pending` | 成员 / `act` |
+| GET | `/posts/{id}` | 单个楼层 | 访客 |
+| GET | `/posts/{id}/replies` | 回复这一层的楼层，按楼层号升序，每次最多 20 层：`after=N` 取第 N 楼之后的，不足 20 层说明取完了 | 访客 |
+| PATCH | `/posts/{id}` | 修改 `content`，旧的正文进编辑记录；版主也能改别人的，还可以改 `status` 和 `reason`，同帖子。主楼的状态跟着帖子（`400`）；帖子待审核或已隐藏时不能改回复的状态（`403`）；锁定的帖子只有版主能改 | 作者、版主 / `act`、`moderate` |
+| DELETE | `/posts/{id}` | 删除；楼层号保留，显示"该楼已删除"。主楼不能单独删除（`400`），要删就删整个帖子 | 作者、版主 / `act`、`moderate` |
 | GET | `/posts/{id}/revisions` | 编辑记录，最近的在前：每次修改之前的 `body`，改标题时还有旧的 `title`，以及修改人 | 作者、版主 / `read` |
-| PUT | `/posts/{id}/reaction` | 表情回应：`{ emoji }`，取 `heart`（点赞）、`+1`、`laughing`、`open_mouth`、`clap`、`tada`、`hugs`、`thinking`、`sob`、`mouse` 之一；每人一个，已有就替换；不能回应自己的回复 | 成员 / `act` |
+| PUT | `/posts/{id}/reaction` | 表情回应：`{ emoji }`，取 `heart`（点赞）、`+1`、`laughing`、`open_mouth`、`clap`、`tada`、`hugs`、`thinking`、`sob`、`mouse` 之一；每人一个，已有就替换；不能回应自己的楼层 | 成员 / `act` |
 | DELETE | `/posts/{id}/reaction` | 取消自己的回应 | 成员 / `act` |
 | GET | `/posts/{id}/reactions` | 谁回应了什么，最近的在前，每次 50 个：可按 `emoji` 筛选，`cursor` 翻页 | 访客 |
 | POST | `/posts/{id}/report` | 举报：`{ reason }`（最多 200 个字）；每人对每层一次，再举报返回 `409 already_reported`；产生 `report.created` 事件 | 没被禁言的成员 / `act` |
@@ -253,8 +251,8 @@ token 由管理员在后台创建，只显示一次。每个 token 绑定一个 
 
 | 方法 | 路径 | 说明 | 权限 |
 | --- | --- | --- | --- |
-| GET | `/search` | `q`（最多 100 个字）、`board`、`tag`、`author`、`cursor`；每个主题一条，带最相关的那一层（`post`：`id`、`floor`）和命中处前后的纯文本 `snippet`；按相关度排，旧的逐渐靠后，每页 20 个。只有一个汉字时只搜标题 | 访客 |
-| GET | `/search/similar` | `text`：一段提问原文（最多 2000 个字）；返回最相似的 5 个主题和 0 到 1 之间的得分 `score` | 访客 |
+| GET | `/search` | `q`（最多 100 个字）、`board`、`tag`、`author`、`cursor`；每个帖子一条，带最相关的那一层（`post`：`id`、`floor`）和命中处前后的纯文本 `snippet`；按相关度排，旧的逐渐靠后，每页 20 个。只有一个汉字时只搜标题 | 访客 |
+| GET | `/search/similar` | `text`：一段提问原文（最多 2000 个字）；返回最相似的 5 个帖子和 0 到 1 之间的得分 `score` | 访客 |
 
 ### 3.7 上传
 
@@ -278,16 +276,16 @@ token 由管理员在后台创建，只显示一次。每个 token 绑定一个 
 
 | 方法 | 路径 | 说明 | 权限 |
 | --- | --- | --- | --- |
-| GET | `/admin/overview` | 概览：`members`（`total`、`activated`、`frozen`，不算 bot 和已注销的账号）、`content`（`threads_today`、`posts_today`：今天公开的主题和回复，按北京时间；`pending`：待审核；`reports`：待处理的举报）、`events`（`streams`：现在连着的事件流；`polled_at`：最近一次按游标拉取的时间，进程重启后为 `null`）、`storage`（`database`、`uploads`：数据库和上传图片占用的字节数）；群的同步状态见 `/admin/groups` | 管理员 / `admin` |
-| GET | `/admin/settings` | 站点设置，按分组返回：`site`（`banner` 公告横幅，`qq_public` 访客能否看到 QQ 号，`review_mode` 新建版块不指定时的审核方式）、`login`（三种登录方式的开关和口令提示）、`smtp`（密码只返回 `password_set`）、`bot`（`require_operator`）；站点名称、简介、Logo 和等级名称见[总体设计 §15](design.md#15-待定事项) | 管理员 / `admin` |
+| GET | `/admin/overview` | 概览：`members`（`total`、`activated`、`frozen`，不算 bot）、`content`（`threads_today`、`posts_today`：今天公开的帖子和回复，按北京时间；`pending`：待审核；`reports`：待处理的举报）、`events`（`streams`：现在连着的事件流；`polled_at`：最近一次按游标拉取的时间，进程重启后为 `null`）、`storage`（`database`、`uploads`：数据库和上传图片占用的字节数）；群的同步状态见 `/admin/groups` | 管理员 / `admin` |
+| GET | `/admin/settings` | 站点设置，按分组返回：`site`（`banner` 公告横幅，`qq_public` 访客能否看到 QQ 号，`review_mode` 新建版块不指定时的审核方式）、`login`（三种登录方式的开关和口令提示）、`smtp`（密码只返回 `password_set`）、`bot`（`require_operator`） | 管理员 / `admin` |
 | PATCH | `/admin/settings` | 修改站点设置，立即生效：只改带了的分组和字段；SMTP 密码不带就不变，传空字符串清空 | 管理员 / `admin` |
 | POST | `/admin/settings/test-email` | `{ qq }`：用当前 SMTP 设置发一封测试邮件 | 管理员 / `admin` |
 | GET | `/admin/groups` | 已关联的群和同步状态：最近一次增量、全量、群资料的时间，被拦下的全量 | 管理员 / `admin` |
 | POST | `/admin/groups` | 关联群：`{ group_id }`；第一个关联的群自动成为主群；已关联返回 `409 group_exists` | 管理员 / `admin` |
 | PATCH | `/admin/groups/{group_id}` | 启用、停用、设为主群：`{ enabled?, is_primary?: true }`；相关成员的成员资格、显示名和等级随即重算 | 管理员 / `admin` |
 | GET | `/admin/members` | 成员列表，新建的在前，每页 50 个：`q`（名字，或者 5–12 位数字时也按 QQ 号）、`status`（`member`、`frozen`）、`role`、`restricted`（只看禁言或封禁中的）、`cursor` | 版主 / `moderate` |
-| GET | `/admin/content` | 待审核或已隐藏的内容，最新的在前，每页 30 条：`status`（`pending`，默认；`hidden`）、`cursor`（上一页最后一条的 ID）；主题以主楼出现，每条带楼层号、主题、版块、作者和摘要 | 版主 / `moderate` |
-| GET | `/admin/reports` | 举报列表，最新的在前，每页 30 条：`status`（默认 `open`）、`cursor`（上一页最后一条的 ID）；每条带举报人、理由、被举报的楼层（主题、楼层号、作者、摘要、是否已删除）或短评、处理人 | 版主 / `moderate` |
+| GET | `/admin/content` | 待审核或已隐藏的内容，最新的在前，每页 30 条：`status`（`pending`，默认；`hidden`）、`cursor`（上一页最后一条的 ID）；帖子以主楼出现，每条带楼层号、帖子、版块、作者和摘要 | 版主 / `moderate` |
+| GET | `/admin/reports` | 举报列表，最新的在前，每页 30 条：`status`（默认 `open`）、`cursor`（上一页最后一条的 ID）；每条带举报人、理由、被举报的楼层（帖子、楼层号、作者、摘要、是否已删除）或短评、处理人 | 版主 / `moderate` |
 | PATCH | `/admin/reports/{id}` | 处理举报：`{ status }`，可选 `resolved`（已处理，内容另外删除或隐藏）、`dismissed`（驳回）；记操作日志 | 版主 / `moderate` |
 | GET | `/admin/audit-logs` | 操作日志，最新的在前，每页 50 条：`actor`（用户 ID 或 `qq:号码`）、`action`、`target_type`、`target_id`、`cursor`；每条带以谁的身份、经由哪个 token、谁让 bot 做的、`data` 和 IP | 管理员 / `admin` |
 | GET | `/admin/tokens` | bot token 列表，包括已吊销的；不含 token 本身 | 管理员，只能在网页上操作 |
@@ -304,8 +302,8 @@ token 由管理员在后台创建，只显示一次。每个 token 绑定一个 
 | PUT | `/bot/groups/{group_id}/info` | 推送群资料，见 4.4 | `sync` |
 | PUT | `/bot/groups/{group_id}/members` | 全量同步成员，见第 4 节 | `sync` |
 | PATCH | `/bot/groups/{group_id}/members` | 增量同步成员，见第 4 节 | `sync` |
-| GET | `/bot/messages/{chat_type}/{chat_id}/{message_id}` | 某条 QQ 消息对应的论坛内容：`{ kind, thread_id, post_id }`，`kind` 为 `source`（内容来自这条消息）或 `notice`（bot 发的帖子通知）；没有对应时返回 `404 message_not_linked` | `read` |
-| PUT | `/bot/messages/{chat_type}/{chat_id}/{message_id}` | 记录 bot 发出的帖子通知：`{ thread_id, post_id? }`；同一条消息再记一次就覆盖；这条消息已经是某条内容的来源时返回 `409 source_exists` | `act` |
+| GET | `/bot/messages/{chat_type}/{chat_id}/{message_id}` | 某条 QQ 消息对应的论坛内容：`{ kind, thread_id, post_id }`，`kind` 为 `source`（内容来自这条消息）或 `notice`（bot 发的转存回执）；没有对应时返回 `404 message_not_linked` | `read` |
+| PUT | `/bot/messages/{chat_type}/{chat_id}/{message_id}` | 记录 bot 发出的转存回执：`{ thread_id, post_id? }`；同一条消息再记一次就覆盖；这条消息已经是某条内容的来源时返回 `409 source_exists` | `act` |
 | GET | `/bot/events` | SSE 事件流，见第 5 节 | `events` |
 | GET | `/bot/events/batch` | 按游标拉取事件：`after`、`limit`（1–500，默认 100）、`types`，返回 `{ items: [{ id, type, data, created_at }], next_after }`，`next_after` 是下次的 `after` | `events` |
 
@@ -399,18 +397,18 @@ data: {"post":{…},"thread":{…},"author":{…},"qq_text":"……","url":"http
 
 | 类型 | 触发时机 | 主要字段 |
 | --- | --- | --- |
-| `thread.created` | 新主题公开（先审后发的版块在审核通过时） | `thread`（`id`、`title`、`kind`）、`board`（`slug`、`name`）、`author`、`source`、`url`、`qq_text` |
-| `post.created` | 新回复公开 | `post`（`id`、`floor`、`body`）、`thread`（`id`、`title`）、`author`、`reply_to`（被回复的那条：`id`、`floor`、`author`、`source`，没有为 `null`）、`source`、`url`、`qq_text` |
+| `thread.created` | 新帖公开（先审后发的版块在审核通过时） | `thread`（`id`、`title`、`kind`）、`board`（`slug`、`name`）、`author`、`source`、`url`、`qq_text` |
+| `post.created` | 新回复公开 | `post`（`id`、`floor`、`body`）、`thread`（`id`、`title`）、`author`、`reply_to`（被回复的那一层：`id`、`floor`、`author`、`source`，没有为 `null`）、`source`、`url`、`qq_text` |
 | `post.updated` | 回复或主楼被编辑 | `post`、`thread`、`editor` |
-| `post.deleted` | 回复或主题被删除、隐藏；删除主题时是它的主楼 | `post_id`、`thread_id`、`floor`、`by`、`reason` |
+| `post.deleted` | 回复或帖子被删除、隐藏；删除帖子时是它的主楼 | `post_id`、`thread_id`、`floor`、`by`、`reason` |
 | `thread.solved` | 采纳答案 | `thread`（`id`、`title`）、`post`（`id`、`floor`、`body`）、`answerer`、`url`、`qq_text` |
-| `content.pending` | 先审后发的版块有新内容等待审核；主题是它的主楼 | `thread`（`id`、`title`）、`board`、`post`（`id`、`floor`、`body`）、`author`、`url` |
+| `content.pending` | 先审后发的版块有新内容等待审核；帖子是它的主楼 | `thread`（`id`、`title`）、`board`、`post`（`id`、`floor`、`body`）、`author`、`url` |
 | `notification.created` | 给某位成员产生通知，且他开启了这类通知的 QQ 提醒 | `user`、`type`、`actor`、`thread`、`post`、`url`、`qq_text` |
 | `member.activated` | 成员第一次登录 | `user` |
 | `report.created` | 有新举报 | `report`（`id`、`reason`）、`post`（`id`、`floor`、`thread_id`）、`boost`（举报的是短评时：`id`、`body`、`author`，否则为 `null`）、`reporter`、`url` |
 
 - `qq_text` 是可以直接发到 QQ 的纯文本，例如"【保研问答】rank 30% 能冲夏令营吗\n鼠鼠：……\nhttps://bbs.mousebaoyan.cn/t/42"。
-- 事件里的用户对象是 `{ id, display_name, qq }`，插件可以直接 @ 或私聊。匿名内容（二期）的事件不带作者。`source` 是内容来自的 QQ 消息，没有为 `null`。
+- 事件里的用户对象是 `{ id, display_name, qq }`，插件可以直接私聊。匿名内容（二期）的事件不带作者。`source` 是内容来自的 QQ 消息，没有为 `null`。
 - `notification.created`：每类通知的 QQ 提醒由本人在设置里开关；没设置过时，回复我、@我、回答被采纳和审核通知默认开，其余默认关。`qq_text` 例如"鼠鼠 回复了你：……\nrank 30% 能冲夏令营吗\nhttps://bbs.mousebaoyan.cn/t/42?floor=3"。
 - 审核可以挂在事件上：先发后审的版块监听 `thread.created`、`post.created`，先审后发的版块监听 `content.pending`，判定后调用 `PATCH` 修改 `status`。恢复隐藏的内容不会再发 `thread.created`、`post.created`。
 
@@ -479,9 +477,9 @@ sequenceDiagram
     M->>P: 让 bot 把这条转到论坛
     P->>F: GET /search/similar，可选，先看有没有类似讨论
     P->>F: POST /threads，X-Act-As 为 A，X-Operator 为 M，带 Idempotency-Key 和 source
-    F-->>P: 主题 42，标“来自群聊”
+    F-->>P: 帖子 42，标“来自群聊”
     F--)P: 事件 thread.created
-    P->>A: 在群里发帖子通知，消息 7735
+    P->>A: 在群里发转存回执，消息 7735
     P->>F: PUT /bot/messages/group/群号/7735，thread_id 为 42
 ```
 
@@ -492,14 +490,14 @@ sequenceDiagram
     actor C as 回答的群友
     participant P as 插件
     participant F as 论坛
-    C->>P: 引用帖子通知 7735 回复
+    C->>P: 引用转存回执 7735 回复
     P->>F: GET /bot/messages/group/群号/7735
-    F-->>P: 主题 42
+    F-->>P: 帖子 42
     P->>F: POST /threads/42/posts，X-Act-As 为 C，source 为 C 的消息
     F--)P: 事件 post.created
 ```
 
-反过来，论坛上有人回复了来自群聊的内容时，`post.created` 的 `reply_to.source` 带着原消息，插件可以在群里引用原消息，把这条回复转发回去。
+论坛上的回复不转回群里（[总体设计 §8.6](design.md#86-通知与实时)）。
 
 ### 6.6 通知转到 QQ
 
@@ -510,7 +508,7 @@ sequenceDiagram
     actor A as 群友
     Note over F: 有人回复或 @ 了 A，A 开启了这类通知的 QQ 提醒
     F--)P: 事件 notification.created，含 A 的 QQ 号和 qq_text
-    P->>A: 私聊或在群里 @ 提醒，方式由插件决定
+    P->>A: 私聊提醒
 ```
 
 ### 6.7 成员同步
@@ -536,9 +534,9 @@ sequenceDiagram
 
 1. 在 1Panel 的 PostgreSQL 里新建 `mousehole` 库和同名账号，账号只有这个库的权限。
 2. 在服务器上新建一个目录，放进 `deploy/compose.yml` 和 `.env`：`DATABASE_URL` 用 PostgreSQL 的容器名连接，`PUBLIC_URL=https://bbs.mousebaoyan.cn`，`APP_SECRET` 用 `openssl rand -base64 32` 生成。再建 `data/` 目录，属主改成 1000（镜像里的 `node` 用户）。
-3. 在 `main` 上打 `v0.1.0` 这样的标签，GitHub Actions 构建镜像并推到 GHCR。GHCR 的包是私有的话，服务器要先 `docker login ghcr.io`，或者把包设为公开。然后 `docker compose pull && docker compose up -d`，启动时自动迁移。
+3. 在 `main` 上打 `v0.1.0` 这样的标签，GitHub Actions 构建镜像并推到 GHCR。第一次推送后，在 GitHub 的包设置里把 `mousehole` 设为公开，服务器不用登录就能拉取。然后 `docker compose pull && docker compose up -d`，启动时自动迁移。
 4. 在 1Panel 里新建网站，反向代理到 `127.0.0.1:3080`，申请证书，把 `deploy/openresty.conf` 的内容放进站点配置；Cloudflare 上加 A 记录，仅 DNS。
-5. 把 `deploy/gatus-endpoints.json` 的两条加进 Gatus 的 `endpoints`；在 1Panel 的计划任务里每天备份 `mousehole` 库。
+5. 把 `deploy/gatus-endpoints.json` 的两条加进 Gatus 的 `endpoints`；按[总体设计 §12](design.md#12-部署与运维) 配好备份和日志切割。
 
 然后登录后台：
 
