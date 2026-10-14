@@ -46,6 +46,7 @@ import {
   threadDeleted,
   threadSolved,
 } from "./events.ts";
+import { createLottery, getLottery, type LotterySpec } from "./lotteries.ts";
 import { createPoll, getPoll, type PollSpec } from "./polls.ts";
 
 export const PAGE_SIZE = 30;
@@ -424,7 +425,11 @@ export async function getThread(id: number, reader: Reader) {
     throw threadNotFound();
   }
   const [thread] = await withUsers([row]);
-  return { ...thread, poll: thread.kind === "poll" ? await getPoll(id, reader.id) : null };
+  return {
+    ...thread,
+    poll: thread.kind === "poll" ? await getPoll(id, reader.id) : null,
+    lottery: thread.kind === "lottery" ? await getLottery(id, reader.id) : null,
+  };
 }
 
 // The level a thread's board needs to be read, for a member it is out of reach of.
@@ -666,7 +671,8 @@ function via(actor: Actor, source: Source | undefined) {
 }
 
 // What levels allow (design §6.6). Moderators and admins aren't held by any of it.
-const POLL_LEVEL = 2;
+// Polls and lotteries.
+const KIND_LEVEL = 2;
 // L0's limits, which content synced from the groups doesn't count towards.
 const L0_LINKS = 2;
 const L0_PER_DAY = { thread: 3, reply: 20 };
@@ -735,6 +741,7 @@ export async function createThread(
     content: Content;
     kind?: string;
     poll?: PollSpec;
+    lottery?: LotterySpec;
     tags: string[];
     source?: Source;
     anonymous?: boolean;
@@ -745,8 +752,8 @@ export async function createThread(
   const board = await getBoard(input.board, reach);
   const anonymous = input.anonymous ?? false;
   assertMayPost(viewer, board);
-  if (input.poll && viewer.level < POLL_LEVEL && !STAFF.includes(viewer.role)) {
-    throw levelRequired(`L${POLL_LEVEL} 起才能发投票帖`);
+  if ((input.poll || input.lottery) && viewer.level < KIND_LEVEL && !STAFF.includes(viewer.role)) {
+    throw levelRequired(`L${KIND_LEVEL} 起才能发${input.poll ? "投票帖" : "抽奖帖"}`);
   }
   const tagIds = await findTags(input.tags);
   if (input.source) await assertNotLinked(input.source);
@@ -787,6 +794,7 @@ export async function createThread(
     // Number 1, the thread being new.
     if (anonymous) await aliasIn(trx, thread.id, viewer.id);
     if (input.poll) await createPoll(trx, thread.id, input.poll);
+    if (input.lottery) await createLottery(trx, thread.id, input.lottery);
     await linkUploads(trx, opening.id, images);
     if (input.source) await linkSource(trx, input.source, thread.id, opening.id);
     // Posted from the composer; what a bot posts for them leaves their draft alone.

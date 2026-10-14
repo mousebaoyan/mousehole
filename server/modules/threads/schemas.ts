@@ -1,6 +1,7 @@
 import { z } from "@hono/zod-openapi";
 import { unix } from "../../platform/http.ts";
 import { UserBriefSchema, WriterSchema } from "../users/schemas.ts";
+import type { Lottery } from "./lotteries.ts";
 import type { Poll } from "./polls.ts";
 import type { threadsByIds } from "./service.ts";
 
@@ -9,7 +10,9 @@ export const ThreadSchema = z
   .object({
     id: z.number(),
     board: z.object({ slug: z.string(), name: z.string(), color: z.string() }),
-    kind: z.string().openapi({ description: "discussion：讨论；question：问答；poll：投票" }),
+    kind: z
+      .string()
+      .openapi({ description: "discussion：讨论；question：问答；poll：投票；lottery：抽奖" }),
     title: z.string(),
     author: WriterSchema,
     posters: z
@@ -86,4 +89,32 @@ export const PollSchema = z
 
 export function pollJson(p: Poll) {
   return { ...p, closes_at: p.closes_at && unix(p.closes_at) };
+}
+
+export const LotterySchema = z
+  .object({
+    prizes: z.array(
+      z.object({
+        name: z.string(),
+        winners: z.number().openapi({ description: "抽几人" }),
+        won_by: z
+          .array(UserBriefSchema)
+          .nullable()
+          .openapi({ description: "中奖的人，按抽中的先后；开奖前为 null" }),
+      }),
+    ),
+    entry: z.string().openapi({ description: "button 点按钮参与，reply 回复帖子就算参与" }),
+    min_level: z.number().openapi({ description: "参与要几级；版主和管理员不受限制" }),
+    draws_at: z.number().openapi({ description: "开奖时间" }),
+    drawn_at: z.number().nullable().openapi({ description: "实际开奖的时间；没开奖为 null" }),
+    cancelled: z.boolean(),
+    seed_hash: z.string().openapi({ description: "种子的 SHA-256，发帖时就公布" }),
+    seed: z.string().nullable().openapi({ description: "种子，开奖后公开；之前为 null" }),
+    entry_count: z.number().openapi({ description: "参与人数" }),
+    entered: z.boolean().nullable().openapi({ description: "自己是否参与了；访客为 null" }),
+  })
+  .openapi("Lottery");
+
+export function lotteryJson(l: Lottery) {
+  return { ...l, draws_at: unix(l.draws_at), drawn_at: l.drawn_at && unix(l.drawn_at) };
 }

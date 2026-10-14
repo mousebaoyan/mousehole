@@ -24,7 +24,14 @@ import { BoostSchema, boostJson } from "../reactions/schemas.ts";
 import { floorExtras } from "../reactions/service.ts";
 import { showImages } from "../uploads/service.ts";
 import { UserBriefSchema, UserRefSchema, WriterSchema } from "../users/schemas.ts";
-import { pollJson, PollSchema, threadJson, ThreadSchema } from "./schemas.ts";
+import {
+  lotteryJson,
+  LotterySchema,
+  pollJson,
+  PollSchema,
+  threadJson,
+  ThreadSchema,
+} from "./schemas.ts";
 import { findUserId } from "../users/service.ts";
 import {
   countUnread,
@@ -67,6 +74,7 @@ const ThreadDetailSchema = ThreadSchema.extend({
   author_anonymous: z.boolean().openapi({ description: "楼主匿名" }),
   anonymous_replies: z.boolean().openapi({ description: "楼主以外的人回复时匿名" }),
   poll: PollSchema.nullable().openapi({ description: "投票帖的投票；其他类型为 null" }),
+  lottery: LotterySchema.nullable().openapi({ description: "抽奖帖的抽奖；其他类型为 null" }),
   my_alias: z
     .number()
     .nullable()
@@ -168,6 +176,7 @@ function threadDetailJson(t: Thread, signedIn: boolean) {
     author_anonymous: t.author_anonymous,
     anonymous_replies: t.anonymous_replies,
     poll: t.poll && pollJson(t.poll),
+    lottery: t.lottery && lotteryJson(t.lottery),
     ...(signedIn && {
       my_alias: t.my_alias,
       read_floors: t.read_floors,
@@ -261,11 +270,13 @@ const YEAR_S = 365 * 86_400;
 
 // When something set at posting ends: far enough off to mean it, and within a year to catch a
 // mistyped year.
-const Deadline = z
-  .number()
-  .int()
-  .refine((t) => t >= Date.now() / 1000 + SOON_S, "截止时间最早是 10 分钟以后")
-  .refine((t) => t <= Date.now() / 1000 + YEAR_S, "截止时间最晚是一年以内");
+function deadline(what: string) {
+  return z
+    .number()
+    .int()
+    .refine((t) => t >= Date.now() / 1000 + SOON_S, `${what}最早是 10 分钟以后`)
+    .refine((t) => t <= Date.now() / 1000 + YEAR_S, `${what}最晚是一年以内`);
+}
 
 const PollInput = z
   .object({
@@ -286,7 +297,8 @@ const PollInput = z
     results: z.enum(["voted", "always"]).default("voted").openapi({
       description: "voted 投过票或结束后才看得到结果，always 随时公开",
     }),
-    closes_at: Deadline.nullable()
+    closes_at: deadline("截止时间")
+      .nullable()
       .default(null)
       .openapi({ description: "截止时间，Unix 秒，10 分钟以后、一年以内；null 不限" }),
   })
@@ -295,6 +307,28 @@ const PollInput = z
     path: ["max_choices"],
   })
   .openapi("PollInput", { description: "选项、单选还是多选、是否匿名发出后都不能改" });
+
+const LotteryInput = z
+  .object({
+    prizes: z
+      .array(
+        z.object({
+          name: z.string().trim().min(1).max(50),
+          winners: z.number().int().min(1).max(100).openapi({ description: "抽几人" }),
+        }),
+      )
+      .min(1)
+      .max(10)
+      .openapi({ description: "奖项，按顺序开奖：参与的人排出先后后，先抽满第一个" }),
+    entry: z.enum(["button", "reply"]).default("button").openapi({
+      description: "button 点按钮参与，reply 开奖前回复过帖子就算参与",
+    }),
+    min_level: z.number().int().min(0).max(5).default(0).openapi({ description: "参与要几级" }),
+    draws_at: deadline("开奖时间").openapi({
+      description: "开奖时间，Unix 秒，10 分钟以后、一年以内",
+    }),
+  })
+  .openapi("LotteryInput", { description: "发出后都不能改" });
 
 const Tags = z
   .array(z.string())
@@ -629,8 +663,11 @@ export const threadsRoutes = createRouter()
               board: z.string(),
               title: Title,
               content: Content,
-              kind: z.enum(["discussion", "question", "poll"]).optional(),
+              kind: z.enum(["discussion", "question", "poll", "lottery"]).optional(),
               poll: PollInput.optional().openapi({ description: "投票帖必带，其他类型不能带" }),
+              lottery: LotteryInput.optional().openapi({
+                description: "抽奖帖必带，其他类型不能带",
+              }),
               tags: Tags.default([]),
               source: Source.optional(),
               anonymous: z.boolean().optional().openapi({ description: "楼主匿名，发出后不能改" }),
@@ -642,6 +679,15 @@ export const threadsRoutes = createRouter()
             .refine((b) => (b.kind === "poll") === (b.poll !== undefined), {
               message: "投票帖要带 poll，其他类型不能带",
               path: ["poll"],
+            })
+            .refine((b) => (b.kind === "lottery") === (b.lottery !== undefined), {
+              message: "抽奖帖要带 lottery，其他类型不能带",
+              path: ["lottery"],
+            })
+            // Winners must find the author, and the list of them is public (design §8.13).
+            .refine((b) => b.kind !== "lottery" || !(b.anonymous || b.anonymous_replies), {
+              message: "抽奖帖不能匿名",
+              path: ["anonymous"],
             }),
         ),
       },

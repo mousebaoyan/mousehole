@@ -12,7 +12,8 @@ import { anonymousBrief, userBriefs, writer } from "../users/service.ts";
 // What people are told of; see design §8.6. reply: someone replied to my floor; mention: @ me;
 // like and boost: on my floor; watching: a new floor in a thread I watch; following: a new thread
 // by someone I follow; solved: my answer was accepted; moderation: something of mine was
-// approved, rejected, hidden or shown again; level: I went up a level.
+// approved, rejected, hidden or shown again; level: I went up a level; lottery: one I entered or
+// started was drawn or called off.
 export const NOTIFICATION_TYPES = [
   "reply",
   "mention",
@@ -23,6 +24,7 @@ export const NOTIFICATION_TYPES = [
   "solved",
   "moderation",
   "level",
+  "lottery",
 ] as const;
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
 
@@ -30,9 +32,9 @@ export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
 // up, with the latest person in front: "A 等 3 人".
 const MERGED = new Set<NotificationType>(["like", "boost", "watching"]);
 
-// About something done to a floor; levels are told by notifyLevel.
+// About something done to a floor; levels and lotteries are told by their own.
 type Notice = {
-  type: Exclude<NotificationType, "level">;
+  type: Exclude<NotificationType, "level" | "lottery">;
   actorId: number;
   // Their number in the thread when they did it anonymously (design §8.12).
   actorAlias: number | null;
@@ -48,6 +50,7 @@ const QQ_BY_DEFAULT = new Set<NotificationType>([
   "solved",
   "moderation",
   "level",
+  "lottery",
 ]);
 
 // Someone's switches for every type, what they set over the defaults.
@@ -60,9 +63,9 @@ export function notifyPrefs(saved: Record<string, { site?: boolean; qq?: boolean
   );
 }
 
-// What happened, as the QQ reminder says it after the person's name; a new level is said
-// differently, having nobody behind it.
-const SAID: Record<Exclude<NotificationType, "level">, string> = {
+// What happened, as the QQ reminder says it after the person's name; levels and lotteries are said
+// differently, having nobody behind them.
+const SAID: Record<Notice["type"], string> = {
   reply: "回复了你",
   mention: "提到了你",
   like: "赞了你",
@@ -223,6 +226,70 @@ export async function notifyLevel(trx: Transaction<DB>, userId: number, level: n
       level,
       url,
       qq_text: `你在${SITE_NAME}升到了 ${levelName(level)}\n${url}`,
+    });
+  }
+}
+
+// A lottery drawn or called off (design §8.13): each entrant hears how it went for them, its author
+// that it was drawn. Only a win and the author's go to QQ as well, or the bot would send hundreds
+// of messages at once.
+export async function notifyLottery(
+  trx: Transaction<DB>,
+  thread: { id: number; title: string },
+  told: { userId: number; result: "won" | "lost" | "drawn" | "cancelled"; prize?: string }[],
+) {
+  if (told.length === 0) return;
+  const type = "lottery";
+  const prefs = sql`notify_prefs -> ${type}`;
+  const people = await trx
+    .selectFrom("users")
+    .select([
+      "id",
+      "display_name",
+      "qq",
+      sql<boolean>`coalesce((${prefs} ->> 'site')::boolean, true)`.as("site"),
+      sql<boolean>`coalesce((${prefs} ->> 'qq')::boolean, true)`.as("to_qq"),
+    ])
+    .where(
+      "id",
+      "in",
+      told.map((t) => t.userId),
+    )
+    .where("member_status", "=", "member")
+    .where("deleted_at", "is", null)
+    .execute();
+  const person = new Map(people.map((p) => [p.id, p]));
+  const onSite = told.filter((t) => person.get(t.userId)?.site);
+  if (onSite.length > 0) {
+    await trx
+      .insertInto("notifications")
+      .values(
+        onSite.map((t) => ({
+          user_id: t.userId,
+          type,
+          thread_id: thread.id,
+          data: { result: t.result, ...(t.prize !== undefined && { prize: t.prize }) },
+        })),
+      )
+      .execute();
+    await tellUnread(
+      trx,
+      onSite.map((t) => t.userId),
+    );
+  }
+  const url = `${env.PUBLIC_URL}/t/${thread.id}`;
+  for (const t of told) {
+    const p = person.get(t.userId);
+    if (!p?.to_qq || (t.result !== "won" && t.result !== "drawn")) continue;
+    const said = t.result === "won" ? `你中奖了：${t.prize}` : "你发起的抽奖开奖了";
+    await recordEvent(trx, "notification.created", {
+      user: { id: p.id, display_name: p.display_name, qq: p.qq },
+      type,
+      thread,
+      result: t.result,
+      prize: t.prize ?? null,
+      url,
+      qq_text: `${said}\n${thread.title}\n${url}`,
     });
   }
 }

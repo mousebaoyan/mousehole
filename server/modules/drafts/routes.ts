@@ -26,6 +26,21 @@ const DraftPollSchema = z
       "写了一半的投票，选项可以是空的；截止时间是 days 或 closes_at，其余字段同发帖的 poll",
   });
 
+const DraftLotterySchema = z
+  .object({
+    prizes: z
+      .array(z.object({ name: z.string().max(50), winners: z.number().int().min(1).max(100) }))
+      .max(10),
+    entry: z.enum(["button", "reply"]),
+    min_level: z.number().int().min(0).max(5),
+    days: z.number().int().min(1).max(30).nullable().openapi({ description: "选的是几天后开奖" }),
+    draws_at: z.number().int().nullable().openapi({ description: "自定义的开奖时间" }),
+  })
+  .openapi("DraftLottery", {
+    description:
+      "写了一半的抽奖，奖品可以是空的；开奖时间是 days 或 draws_at，其余字段同发帖的 lottery",
+  });
+
 const DraftSchema = z
   .object({
     thread_id: z.number().nullable().openapi({ description: "回复哪个帖子；null 是发帖" }),
@@ -33,6 +48,7 @@ const DraftSchema = z
     board: z.string().nullable(),
     kind: z.string().nullable(),
     poll: DraftPollSchema.nullable(),
+    lottery: DraftLotterySchema.nullable(),
     tags: z.array(z.string()),
     author_anonymous: z.boolean(),
     anonymous_replies: z.boolean(),
@@ -113,8 +129,9 @@ export const draftsRoutes = createRouter()
                 body: z.string().max(MAX_BODY),
                 title: z.string().max(80).optional(),
                 board: z.string().nullable().optional(),
-                kind: z.enum(["discussion", "question", "poll"]).nullable().optional(),
+                kind: z.enum(["discussion", "question", "poll", "lottery"]).nullable().optional(),
                 poll: DraftPollSchema.nullable().optional(),
+                lottery: DraftLotterySchema.nullable().optional(),
                 tags: z.array(z.string().max(20)).max(5).optional(),
                 author_anonymous: z.boolean().optional(),
                 anonymous_replies: z.boolean().optional(),
