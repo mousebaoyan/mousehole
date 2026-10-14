@@ -347,7 +347,7 @@ export const authRoutes = createRouter()
     async (c) => {
       const viewer = c.var.viewer;
       const sessionId = c.var.sessionId;
-      if (viewer && sessionId) await endSession(viewer.id, sessionId);
+      if (viewer && sessionId) await endSession(actorOf(c, viewer), sessionId, true);
       deleteCookie(c, COOKIE, { path: "/" });
       return c.body(null, 204);
     },
@@ -394,7 +394,7 @@ export const authRoutes = createRouter()
     }),
     async (c) => {
       const viewer = requireWeb(c);
-      await endSession(viewer.id, c.req.valid("param").id);
+      await endSession(actorOf(c, viewer), c.req.valid("param").id, false);
       return c.body(null, 204);
     },
   );

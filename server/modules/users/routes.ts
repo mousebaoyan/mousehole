@@ -402,7 +402,7 @@ export const usersRoutes = createRouter()
     async (c) => {
       const viewer = authorize(c, "act");
       const { custom_name, ...change } = c.req.valid("json");
-      await updateSettings(viewer.id, change);
+      await updateSettings(actorOf(c, viewer), change);
       if (custom_name !== undefined)
         await setCustomName(actorOf(c, viewer), viewer.id, custom_name);
       return c.json(await settingsJson(viewer.id), 200);
@@ -436,7 +436,7 @@ export const usersRoutes = createRouter()
       const viewer = authorizePosting(c);
       rateLimit(`upload:${viewer.id}`, 30, 10 * 60_000);
       const file = Buffer.from(await c.req.valid("form").file.arrayBuffer());
-      return c.json({ avatar_url: await uploadAvatar(viewer.id, file) }, 200);
+      return c.json({ avatar_url: await uploadAvatar(actorOf(c, viewer), file) }, 200);
     },
   )
   .openapi(
@@ -451,7 +451,7 @@ export const usersRoutes = createRouter()
     }),
     async (c) => {
       const viewer = authorize(c, "act");
-      return c.json({ avatar_url: await restoreQqAvatar(viewer.id) }, 200);
+      return c.json({ avatar_url: await restoreQqAvatar(actorOf(c, viewer)) }, 200);
     },
   )
   .openapi(
@@ -470,8 +470,9 @@ export const usersRoutes = createRouter()
       responses: { 204: { description: "已更新" }, 404: errorResponse("用户不存在") },
     }),
     async (c) => {
-      authorize(c, "sync");
-      await setQqBio(await findUserId(c.req.valid("param").user), c.req.valid("json").bio);
+      const viewer = authorize(c, "sync");
+      const userId = await findUserId(c.req.valid("param").user);
+      await setQqBio(actorOf(c, viewer), userId, c.req.valid("json").bio);
       return c.body(null, 204);
     },
   )

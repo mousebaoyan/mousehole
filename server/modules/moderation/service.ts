@@ -90,12 +90,19 @@ async function boostOf(id: number) {
   return boost;
 }
 
-export async function reportPost(viewer: Viewer, members: boolean, postId: number, reason: string) {
+export async function reportPost(
+  actor: Actor,
+  viewer: Viewer,
+  members: boolean,
+  postId: number,
+  reason: string,
+) {
   const post = await getPost(postId, { members, id: viewer.id, staff: false });
-  await fileReport(viewer, post, null, reason);
+  await fileReport(actor, viewer, post, null, reason);
 }
 
 export async function reportBoost(
+  actor: Actor,
   viewer: Viewer,
   members: boolean,
   boostId: number,
@@ -103,11 +110,12 @@ export async function reportBoost(
 ) {
   const boost = await boostOf(boostId);
   const post = await getPost(boost.post_id, { members, id: viewer.id, staff: false });
-  await fileReport(viewer, post, boost, reason);
+  await fileReport(actor, viewer, post, boost, reason);
 }
 
 // Each person once for each floor or boost. The bot plugin hears of it.
 async function fileReport(
+  actor: Actor,
   viewer: Viewer,
   post: Awaited<ReturnType<typeof getPost>>,
   boost: Awaited<ReturnType<typeof boostOf>> | null,
@@ -122,6 +130,12 @@ async function fileReport(
       .returning("id")
       .executeTakeFirst();
     if (!created) throw alreadyReported();
+    await recordAudit(trx, actor, {
+      action: "report.create",
+      target_type: boost ? "boost" : "post",
+      target_id: boost?.id ?? post.id,
+      data: { reason },
+    });
     await recordEvent(trx, "report.created", {
       report: { id: created.id, reason },
       post: { id: post.id, floor: post.floor, thread_id: post.thread_id },

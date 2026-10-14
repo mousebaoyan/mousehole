@@ -45,6 +45,7 @@ export interface AuditLogs {
   target_id: number | null;
   target_type: string | null;
   token_id: number | null;
+  user_agent: string | null;
 }
 
 export interface Boards {

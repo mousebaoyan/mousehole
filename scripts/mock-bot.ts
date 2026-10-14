@@ -170,7 +170,7 @@ async function setup(owner?: number) {
     .where("role", "=", "admin")
     .executeTakeFirst();
   if (!admin) throw new Error("还没有管理员，先运行 pnpm bootstrap --qq <你的QQ号>");
-  const actor = { userId: admin.id, operatorId: null, tokenId: null, ip: null };
+  const actor = { userId: admin.id, operatorId: null, tokenId: null, ip: null, userAgent: null };
   const { token } = await createBotToken(actor, {
     name: "mock-bot",
     botQq: BOT_QQ,

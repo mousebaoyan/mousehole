@@ -67,7 +67,7 @@ describe("设置", () => {
     const user = await createUser();
     const mine = as(await login(user.id));
     const { token } = await createBotToken(
-      { userId: user.id, operatorId: null, tokenId: null, ip: null },
+      { userId: user.id, operatorId: null, tokenId: null, ip: null, userAgent: null },
       { name: "同步", botQq: nextQq(), scopes: ["sync"] },
     );
     const bot = { headers: { authorization: `Bearer ${token}` } };

@@ -130,7 +130,13 @@ export const moderationRoutes = createRouter()
     async (c) => {
       const viewer = authorizePosting(c);
       const members = isMember(viewer, c.var.bot);
-      await reportPost(viewer, members, c.req.valid("param").id, c.req.valid("json").reason);
+      await reportPost(
+        actorOf(c, viewer),
+        viewer,
+        members,
+        c.req.valid("param").id,
+        c.req.valid("json").reason,
+      );
       return c.body(null, 204);
     },
   )
@@ -145,7 +151,13 @@ export const moderationRoutes = createRouter()
     async (c) => {
       const viewer = authorizePosting(c);
       const members = isMember(viewer, c.var.bot);
-      await reportBoost(viewer, members, c.req.valid("param").id, c.req.valid("json").reason);
+      await reportBoost(
+        actorOf(c, viewer),
+        viewer,
+        members,
+        c.req.valid("param").id,
+        c.req.valid("json").reason,
+      );
       return c.body(null, 204);
     },
   )

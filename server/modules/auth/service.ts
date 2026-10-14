@@ -76,7 +76,13 @@ export async function loginWithLink(token: string, client: Client) {
       .$narrowType<{ user_id: NotNull }>()
       .executeTakeFirst();
     if (!ticket) throw new AppError(400, "login_link_invalid", "登录链接无效或已过期，请重新获取");
-    const actor = { userId: ticket.user_id, operatorId: null, tokenId: null, ip: client.ip };
+    const actor = {
+      userId: ticket.user_id,
+      operatorId: null,
+      tokenId: null,
+      ip: client.ip,
+      userAgent: client.userAgent,
+    };
     await recordAudit(trx, actor, { action: "auth.login", data: { method: "link" } });
     return startSession(trx, ticket.user_id, client);
   });
@@ -160,13 +166,23 @@ export async function listSessions(userId: number) {
     .execute();
 }
 
-export async function endSession(userId: number, sessionId: number) {
-  const ended = await db
-    .deleteFrom("sessions")
-    .where("id", "=", sessionId)
-    .where("user_id", "=", userId)
-    .executeTakeFirst();
-  if (ended.numDeletedRows === 0n) throw new AppError(404, "not_found", "这个设备已经下线了");
+// Logging out, or signing another device out; `logout` tells the two apart in the audit log.
+export async function endSession(actor: Actor, sessionId: number, logout: boolean) {
+  await db.transaction().execute(async (trx) => {
+    const ended = await trx
+      .deleteFrom("sessions")
+      .where("id", "=", sessionId)
+      .where("user_id", "=", actor.userId)
+      .returning("user_agent")
+      .executeTakeFirst();
+    if (!ended) throw new AppError(404, "not_found", "这个设备已经下线了");
+    await recordAudit(trx, actor, {
+      action: logout ? "auth.logout" : "auth.session_end",
+      target_type: "session",
+      target_id: sessionId,
+      data: { device: deviceSummary(ended.user_agent) },
+    });
+  });
 }
 
 // A ban logs the person out everywhere.
@@ -362,7 +378,13 @@ export async function loginWithEmailCode(qq: number, code: string, client: Clien
 
   return db.transaction().execute(async (trx) => {
     await trx.deleteFrom("email_codes").where("user_id", "=", member.id).execute();
-    const actor = { userId: member.id, operatorId: null, tokenId: null, ip: client.ip };
+    const actor = {
+      userId: member.id,
+      operatorId: null,
+      tokenId: null,
+      ip: client.ip,
+      userAgent: client.userAgent,
+    };
     await recordAudit(trx, actor, { action: "auth.login", data: { method: "email" } });
     return startSession(trx, member.id, client);
   });
@@ -432,7 +454,13 @@ export async function pollLoginCode(secret: string, client: Client) {
       .$narrowType<{ user_id: NotNull }>()
       .executeTakeFirst();
     if (!used) return null;
-    const actor = { userId: used.user_id, operatorId: null, tokenId: null, ip: client.ip };
+    const actor = {
+      userId: used.user_id,
+      operatorId: null,
+      tokenId: null,
+      ip: client.ip,
+      userAgent: client.userAgent,
+    };
     await recordAudit(trx, actor, { action: "auth.login", data: { method: "code" } });
     return { status: "confirmed" as const, token: await startSession(trx, used.user_id, client) };
   });

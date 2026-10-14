@@ -13,6 +13,8 @@ export function meta() {
 // What each action is called here; others show as they are written.
 const ACTIONS: Record<string, string> = {
   "auth.login": "登录",
+  "auth.logout": "退出",
+  "auth.session_end": "让设备下线",
   "auth.code_confirm": "确认登录口令",
   "auth.link_issue": "签发登录链接",
   "thread.create": "发帖",
@@ -20,15 +22,30 @@ const ACTIONS: Record<string, string> = {
   "thread.delete": "删除帖子",
   "thread.solve": "采纳答案",
   "thread.unsolve": "取消采纳",
+  "thread.approve": "通过帖子",
+  "thread.reject": "不通过帖子",
+  "thread.hide": "隐藏帖子",
+  "thread.unhide": "恢复帖子",
   "post.create": "回复",
   "post.edit": "编辑回复",
   "post.delete": "删除回复",
+  "post.approve": "通过回复",
+  "post.reject": "不通过回复",
+  "post.hide": "隐藏回复",
+  "post.unhide": "恢复回复",
+  "boost.set": "留短评",
+  "boost.unset": "删掉自己的短评",
   "boost.delete": "删除短评",
+  "report.create": "举报",
   "report.resolve": "处理举报",
   "report.dismiss": "驳回举报",
   "user.restrict": "禁言或封禁",
   "user.unrestrict": "解除禁言或封禁",
   "user.bootstrap": "初始化管理员",
+  "user.settings": "修改设置",
+  "user.rename": "改名字",
+  "user.avatar": "改头像",
+  "user.qq_bio": "推送 QQ 签名",
   "member.role": "角色变更",
   "member.freeze": "冻结",
   "member.restore": "恢复",
@@ -49,18 +66,23 @@ const ACTIONS: Record<string, string> = {
 export async function loader({ request, context }: Route.LoaderArgs) {
   const search = new URL(request.url).searchParams;
   const actor = search.get("actor")?.trim() ?? "";
+  const ip = search.get("ip")?.trim() ?? "";
   const action = search.get("action") ?? "";
   const res = await context.get(apiContext).admin["audit-logs"].$get({
     query: {
       actor: /^(qq:)?\d{1,12}$/.test(actor) ? actor : undefined,
+      ip: ip || undefined,
       action: action || undefined,
       cursor: search.get("cursor") ?? undefined,
     },
   });
-  if (res.status === 404) return { actor, action, items: [], next_cursor: null };
+  // An unknown actor or a malformed address finds nothing.
+  if (res.status === 404 || res.status === 400) {
+    return { actor, ip, action, items: [], next_cursor: null };
+  }
   if (!res.ok) throw new Error("Audit logs failed");
   const page = await res.json();
-  return { actor, action, items: page.items, next_cursor: page.next_cursor };
+  return { actor, ip, action, items: page.items, next_cursor: page.next_cursor };
 }
 
 // Where a log's target is on the site, when it is somewhere one can go.
@@ -72,7 +94,7 @@ function targetLink(type: string | null, id: number | null) {
 }
 
 export default function Logs({ loaderData }: Route.ComponentProps) {
-  const { actor, action, items, next_cursor } = loaderData;
+  const { actor, ip, action, items, next_cursor } = loaderData;
   return (
     <>
       <h1 className="text-xl font-semibold">操作日志</h1>
@@ -84,6 +106,15 @@ export default function Logs({ loaderData }: Route.ComponentProps) {
             defaultValue={actor}
             placeholder="操作人：用户 ID 或 qq:QQ号"
             aria-label="操作人"
+            className="w-full bg-transparent outline-none"
+          />
+        </label>
+        <label className="flex h-9 w-44 items-center gap-2 rounded-lg border px-3 focus-within:ring-2 focus-within:ring-ring/40">
+          <input
+            name="ip"
+            defaultValue={ip}
+            placeholder="IP"
+            aria-label="IP"
             className="w-full bg-transparent outline-none"
           />
         </label>
@@ -142,7 +173,19 @@ export default function Logs({ loaderData }: Route.ComponentProps) {
                   {JSON.stringify(log.data)}
                 </code>
               )}
-              {log.ip && <span className="text-xs text-muted-foreground">IP {log.ip}</span>}
+              {(log.ip || log.device) && (
+                <p className="flex flex-wrap gap-x-3 text-xs text-muted-foreground">
+                  {log.ip && (
+                    <Link
+                      to={`?${new URLSearchParams({ ip: log.ip })}`}
+                      className="hover:text-foreground"
+                    >
+                      IP {log.ip}
+                    </Link>
+                  )}
+                  {log.device && <span title={log.user_agent ?? undefined}>{log.device}</span>}
+                </p>
+              )}
             </li>
           );
         })}
@@ -152,7 +195,7 @@ export default function Logs({ loaderData }: Route.ComponentProps) {
       </ul>
       {next_cursor !== null && (
         <Link
-          to={`?${new URLSearchParams({ actor, action, cursor: next_cursor })}`}
+          to={`?${new URLSearchParams({ actor, ip, action, cursor: next_cursor })}`}
           className="mt-4 block text-center text-meta text-muted-foreground hover:text-foreground"
         >
           更早的

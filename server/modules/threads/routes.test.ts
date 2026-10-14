@@ -144,7 +144,13 @@ describe("发帖和回复", () => {
     const board = await newBoard();
     const { qq } = await createUser();
     const { token } = await createBotToken(
-      { userId: (await createUser("admin")).id, operatorId: null, tokenId: null, ip: null },
+      {
+        userId: (await createUser("admin")).id,
+        operatorId: null,
+        tokenId: null,
+        ip: null,
+        userAgent: null,
+      },
       { name: "插件", botQq: nextQq(), scopes: ["act", "read"] },
     );
     const res = await api.threads.$post(

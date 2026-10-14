@@ -34,7 +34,7 @@ beforeEach(async () => {
     .values({ qq: ++qq, display_name: "管理员", role: "admin" })
     .returning("id")
     .executeTakeFirstOrThrow();
-  const actor = { userId, operatorId: null, tokenId: null, ip: null };
+  const actor = { userId, operatorId: null, tokenId: null, ip: null, userAgent: null };
   token = (await createBotToken(actor, { name: "bot", botQq: ++qq, scopes: ["act"] })).token;
 });
 

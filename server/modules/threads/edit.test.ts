@@ -1,3 +1,4 @@
+import { sql } from "kysely";
 import { testClient } from "hono/testing";
 import { beforeAll, describe, expect, test } from "vitest";
 import { as, createUser, login } from "../../../test/fixtures.ts";
@@ -70,7 +71,7 @@ async function counts(table: "boards" | "tags", column: "slug" | "name", value: 
 }
 
 describe("编辑", () => {
-  test("作者改正文，旧正文进编辑记录；别人不能改，版主能改并记审计日志", async () => {
+  test("作者改正文，旧正文进编辑记录；别人不能改，版主能改；每次修改都记审计日志", async () => {
     const thread = await newThread(await newBoard());
     const [opening] = await posts(thread);
 
@@ -91,11 +92,15 @@ describe("编辑", () => {
 
     const audit = await db
       .selectFrom("audit_logs")
-      .select("action")
+      .select(["action", sql<string>`data->>'text'`.as("text")])
       .where("target_type", "=", "post")
       .where("target_id", "=", opening.id)
+      .orderBy("id")
       .execute();
-    expect(audit).toEqual([{ action: "post.edit" }]);
+    expect(audit).toEqual([
+      { action: "post.edit", text: "改过的正文" },
+      { action: "post.edit", text: "版主改的" },
+    ]);
   });
 
   test("改标题记在主楼的编辑记录里；改标签时两边的帖子数跟着变", async () => {

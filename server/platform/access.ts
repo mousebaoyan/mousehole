@@ -36,6 +36,7 @@ export type Actor = {
   operatorId: number | null;
   tokenId: number | null;
   ip: string | null;
+  userAgent: string | null;
 };
 
 // Bot token scopes, which double as the capability a route needs.

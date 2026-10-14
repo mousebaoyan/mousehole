@@ -519,16 +519,8 @@ export async function listReplies(postId: number, reader: Reader, after: number)
 // ---- Writing
 
 // Bots' writes go to the audit log; people's own posts are their own record.
-async function auditBot(
-  trx: Transaction<DB>,
-  actor: Actor,
-  action: string,
-  type: string,
-  id: number,
-) {
-  if (actor.tokenId === null) return;
-  await recordAudit(trx, actor, { action, target_type: type, target_id: id });
-}
+// What the audit log keeps of a post's text: enough to recognise it.
+const AUDIT_EXCERPT = 100;
 
 // What a post says: Markdown, or a QQ message's segments that become Markdown. See docs/api.md
 // §2.5.
@@ -652,7 +644,12 @@ export async function createThread(
     await indexPost(trx, opening.id);
     if (status === "visible") await publishThread(trx, thread.id, { mentions });
     else await contentPending(trx, opening.id);
-    await auditBot(trx, actor, "thread.create", "thread", thread.id);
+    await recordAudit(trx, actor, {
+      action: "thread.create",
+      target_type: "thread",
+      target_id: thread.id,
+      data: { title: input.title, board: board.slug, text: excerpt(html, AUDIT_EXCERPT) },
+    });
     return thread.id;
   });
   return getThread(id, reader);
@@ -723,7 +720,16 @@ export async function createPost(
     await indexPost(trx, post.id);
     if (status === "visible") await publishPost(trx, post.id, { mentions });
     else await contentPending(trx, post.id);
-    await auditBot(trx, actor, "post.create", "post", post.id);
+    await recordAudit(trx, actor, {
+      action: "post.create",
+      target_type: "post",
+      target_id: post.id,
+      data: {
+        thread_id: threadId,
+        floor: numbered.floor_count,
+        text: excerpt(html, AUDIT_EXCERPT),
+      },
+    });
     return post.id;
   });
   return getPost(id, reader);
@@ -740,17 +746,6 @@ function assertMayChange(staff: boolean, viewer: Viewer, authorId: number, locke
   if (staff) return;
   if (authorId !== viewer.id) throw forbidden("只能修改自己发的内容");
   if (locked) throw new AppError(403, "thread_locked", "帖子已锁定");
-}
-
-// Moderators changing other people's content, and bots changing anyone's, go to the audit log.
-async function auditChange(
-  trx: Transaction<DB>,
-  actor: Actor,
-  authorId: number,
-  entry: Parameters<typeof recordAudit>[2],
-) {
-  if (actor.tokenId === null && actor.userId === authorId) return;
-  await recordAudit(trx, actor, entry);
 }
 
 // The old text goes into the post's edit history.
@@ -795,10 +790,16 @@ export async function editPost(
     await linkUploads(trx, postId, images);
     await indexPost(trx, postId);
     if (shown) await postUpdated(trx, postId, viewer.id);
-    await auditChange(trx, actor, post.author_id, {
+    await recordAudit(trx, actor, {
       action: "post.edit",
       target_type: "post",
       target_id: postId,
+      data: {
+        thread_id: post.thread_id,
+        floor: post.floor,
+        rev: edited.edit_count,
+        text: excerpt(html, AUDIT_EXCERPT),
+      },
     });
   });
   return getPost(postId, reader);
@@ -926,7 +927,7 @@ export async function editThread(
       await trx.updateTable("threads").set(columns).where("id", "=", threadId).execute();
     }
     if (retitled !== null) await indexPost(trx, retitled);
-    await auditChange(trx, actor, thread.author_id, {
+    await recordAudit(trx, actor, {
       action: "thread.update",
       target_type: "thread",
       target_id: threadId,
@@ -957,10 +958,11 @@ export async function deleteThread(
       .where("id", "=", threadId)
       .execute();
     if (thread.status === "visible") await withdrawThread(trx, threadId, viewer.id, null);
-    await auditChange(trx, actor, thread.author_id, {
+    await recordAudit(trx, actor, {
       action: "thread.delete",
       target_type: "thread",
       target_id: threadId,
+      data: { title: thread.title },
     });
   });
 }
@@ -999,10 +1001,11 @@ export async function deletePost(
       .execute();
     await unindexPost(trx, postId);
     if (post.status === "visible") await withdrawPost(trx, postId, viewer.id, null);
-    await auditChange(trx, actor, post.author_id, {
+    await recordAudit(trx, actor, {
       action: "post.delete",
       target_type: "post",
       target_id: postId,
+      data: { thread_id: post.thread_id, floor: post.floor },
     });
   });
 }
@@ -1386,7 +1389,7 @@ export async function setSolution(
         {},
       );
     }
-    await auditChange(trx, actor, thread.author_id, {
+    await recordAudit(trx, actor, {
       action: answer ? "thread.solve" : "thread.unsolve",
       target_type: "thread",
       target_id: threadId,

@@ -1,5 +1,6 @@
 import { createRoute, z } from "@hono/zod-openapi";
 import { authorize, createRouter, errorResponse, unix } from "../../platform/http.ts";
+import { deviceSummary } from "../auth/device.ts";
 import { UserBriefSchema, UserRefSchema } from "../users/schemas.ts";
 import { findUserId, userBriefs } from "../users/service.ts";
 import { listAuditLogs } from "./service.ts";
@@ -8,10 +9,11 @@ export const auditRoutes = createRouter().openapi(
   createRoute({
     method: "get",
     path: "/admin/audit-logs",
-    summary: "操作日志，最新的在前，每页 50 条：按操作人、动作、对象筛选",
+    summary: "操作日志，最新的在前，每页 50 条：按操作人、IP、动作、对象筛选",
     request: {
       query: z.object({
         actor: UserRefSchema.optional(),
+        ip: z.union([z.ipv4(), z.ipv6()]).optional(),
         action: z.string().max(40).optional().openapi({ example: "user.restrict" }),
         target_type: z.string().max(20).optional().openapi({ example: "user" }),
         target_id: z.coerce.number().int().optional(),
@@ -35,6 +37,11 @@ export const auditRoutes = createRouter().openapi(
                   target_id: z.number().nullable(),
                   data: z.record(z.string(), z.unknown()),
                   ip: z.string().nullable(),
+                  user_agent: z.string().nullable(),
+                  device: z
+                    .string()
+                    .nullable()
+                    .openapi({ description: "从 User-Agent 看出的设备，例如 Chrome · macOS" }),
                   created_at: z.number(),
                 }),
               ),
@@ -43,15 +50,17 @@ export const auditRoutes = createRouter().openapi(
           },
         },
       },
+      400: errorResponse("IP 格式不对"),
       403: errorResponse("不是管理员"),
       404: errorResponse("操作人不存在"),
     },
   }),
   async (c) => {
     authorize(c, "admin");
-    const { actor, action, target_type, target_id, cursor } = c.req.valid("query");
+    const { actor, ip, action, target_type, target_id, cursor } = c.req.valid("query");
     const page = await listAuditLogs({
       actorId: actor === undefined ? undefined : await findUserId(actor),
+      ip,
       action,
       targetType: target_type,
       targetId: target_id,
@@ -67,6 +76,7 @@ export const auditRoutes = createRouter().openapi(
           actor: actor_id === null ? null : user(actor_id),
           operator: operator_id === null ? null : user(operator_id),
           token: token_name,
+          device: r.user_agent === null ? null : deviceSummary(r.user_agent),
           created_at: unix(created_at),
         })),
         next_cursor: page.next_cursor,

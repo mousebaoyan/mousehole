@@ -17,7 +17,7 @@ let lastIp = 0;
 
 beforeAll(async () => {
   const admin = await createUser("admin");
-  const actor = { userId: admin.id, operatorId: null, tokenId: null, ip: null };
+  const actor = { userId: admin.id, operatorId: null, tokenId: null, ip: null, userAgent: null };
   token = (await createBotToken(actor, { name: "插件", botQq: nextQq(), scopes: ["auth"] })).token;
 });
 
