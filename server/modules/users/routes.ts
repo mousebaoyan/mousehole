@@ -183,7 +183,6 @@ export const usersRoutes = createRouter()
           display_name: u.display_name,
           avatar_url: u.avatar_url,
           role: u.role,
-          level: u.level,
           title: u.title,
           card: u.card,
           bio: u.bio,

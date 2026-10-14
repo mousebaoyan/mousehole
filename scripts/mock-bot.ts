@@ -98,7 +98,6 @@ function fakeGroup(firstQq: number, owner?: number) {
     nickname: `${NAMES[i % NAMES.length]}${i}`,
     card: `${25 + (i % 3)}-${SCHOOLS[i % SCHOOLS.length]}-${FIELDS[i % FIELDS.length]}`,
     role: i === 0 ? "owner" : i < 3 ? "admin" : "member",
-    level: String(1 + ((i * 7) % 80)),
     join_time: 1_700_000_000 + i * 86_400,
     is_robot: false,
   }));
@@ -107,7 +106,6 @@ function fakeGroup(firstQq: number, owner?: number) {
     nickname: "鼠洞 bot",
     card: "",
     role: "member",
-    level: "1",
     join_time: 1_700_000_000,
     is_robot: true,
   };

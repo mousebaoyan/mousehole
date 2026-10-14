@@ -50,7 +50,7 @@ async function sync(full: boolean, groupId: number, observedAt: number, members:
 function account(qq: number) {
   return db
     .selectFrom("users")
-    .select(["id", "role", "member_status", "display_name", "level"])
+    .select(["id", "role", "member_status", "display_name"])
     .where("qq", "=", qq)
     .executeTakeFirstOrThrow();
 }
@@ -71,7 +71,7 @@ describe("成员同步", () => {
     const counts = await sync(true, groupId, T, [
       { user_id: owner, role: "owner", card: "群主" },
       { user_id: admin, role: "admin", nickname: "管理昵称" },
-      { user_id: member, card: "26-某大学", level: 12 },
+      { user_id: member, card: "26-某大学" },
     ]);
 
     expect(counts).toMatchObject({ joined: 3, left: 0, held: false });
@@ -81,7 +81,6 @@ describe("成员同步", () => {
       role: "user",
       member_status: "member",
       display_name: "26-某大学",
-      level: 12,
     });
   });
 

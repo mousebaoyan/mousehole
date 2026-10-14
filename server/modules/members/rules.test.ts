@@ -8,7 +8,6 @@ const account: Account = {
   custom_name: null,
   qq_nickname: "昵称",
   display_name: "旧名字",
-  level: null,
   member_status: "member",
 };
 
@@ -16,7 +15,7 @@ function group(change: Partial<Membership>): Membership {
   return {
     card: "",
     role: "member",
-    level: null,
+    joined_at: null,
     left_at: null,
     enabled: true,
     is_primary: false,
@@ -28,7 +27,7 @@ describe("合并成员记录", () => {
   test("没带的字段保持原值，最后发言时间按小时取整", () => {
     const first = mergeRecord(
       undefined,
-      { user_id: 1, card: "名片", level: 5 },
+      { user_id: 1, card: "名片", title: "头衔" },
       new Date(1000),
       true,
     );
@@ -38,7 +37,7 @@ describe("合并成员记录", () => {
     const lastSent = Date.UTC(2026, 9, 13, 8, 47) / 1000;
     const next = mergeRecord(first.row, { user_id: 1, last_sent_time: lastSent }, observed, true);
     expect(next.change).toBe("updated");
-    expect(next.row).toMatchObject({ card: "名片", level: 5, observed_at: observed });
+    expect(next.row).toMatchObject({ card: "名片", title: "头衔", observed_at: observed });
     expect(next.row.last_sent_at).toEqual(new Date(Date.UTC(2026, 9, 13, 8)));
 
     // Another message in the same hour is not a change.
@@ -53,21 +52,15 @@ describe("合并成员记录", () => {
 });
 
 describe("由群记录推导账号", () => {
-  test("主群的群名片和等级优先；不在主群时取等级最高的群", () => {
+  test("主群的群名片优先；不在主群时取最早加入的群", () => {
     const groups = [
-      group({ card: "主群名片", level: 3, is_primary: true }),
-      group({ card: "二群名片", level: 9 }),
-      group({ card: "三群名片", level: 6 }),
+      group({ card: "主群名片", joined_at: new Date(3000), is_primary: true }),
+      group({ card: "后进的群", joined_at: new Date(2000) }),
+      group({ card: "先进的群", joined_at: new Date(1000) }),
+      group({ card: "不知道入群时间" }),
     ];
-    expect(deriveAccount(account, groups, undefined)).toMatchObject({
-      display_name: "主群名片",
-      level: 3,
-    });
-    const noPrimary = groups.slice(1);
-    expect(deriveAccount(account, noPrimary, undefined)).toMatchObject({
-      display_name: "二群名片",
-      level: 9,
-    });
+    expect(deriveAccount(account, groups, undefined).display_name).toBe("主群名片");
+    expect(deriveAccount(account, groups.slice(1), undefined).display_name).toBe("先进的群");
   });
 
   test("没有群名片时用 QQ 昵称，自己设置的名字优先", () => {
@@ -84,8 +77,8 @@ describe("由群记录推导账号", () => {
     expect(deriveAccount(account, both, undefined).role).toBe("admin");
   });
 
-  test("不在任何启用的群里就冻结，角色变回普通用户，名字和等级保留", () => {
-    const moderator = { ...account, role: "moderator", level: 7 };
+  test("不在任何启用的群里就冻结，角色变回普通用户，名字保留", () => {
+    const moderator = { ...account, role: "moderator" };
     const gone = [
       group({ role: "admin", left_at: new Date() }),
       group({ role: "admin", enabled: false }),
@@ -93,7 +86,6 @@ describe("由群记录推导账号", () => {
     expect(deriveAccount(moderator, gone, undefined)).toEqual({
       member_status: "frozen",
       role: "user",
-      level: 7,
       display_name: "旧名字",
     });
   });

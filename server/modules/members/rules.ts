@@ -10,7 +10,6 @@ export type MemberRecord = {
   card?: string;
   role?: GroupRole;
   title?: string;
-  level?: number | null;
   join_time?: number;
   last_sent_time?: number;
   is_robot?: boolean;
@@ -23,7 +22,6 @@ export type MemberRow = {
   card: string;
   role: string;
   title: string;
-  level: number | null;
   joined_at: Date | null;
   last_sent_at: Date | null;
   left_at: Date | null;
@@ -56,7 +54,6 @@ export function mergeRecord(
     card: record.card ?? existing?.card ?? "",
     role: record.role ?? existing?.role ?? "member",
     title: record.title ?? existing?.title ?? "",
-    level: record.level !== undefined ? record.level : (existing?.level ?? null),
     joined_at:
       record.join_time !== undefined ? fromUnix(record.join_time) : (existing?.joined_at ?? null),
     // Rounded to the hour, so a chatty member doesn't rewrite the row on every push.
@@ -75,7 +72,6 @@ export function mergeRecord(
     row.card === existing.card &&
     row.role === existing.role &&
     row.title === existing.title &&
-    row.level === existing.level &&
     sameDate(row.joined_at, existing.joined_at) &&
     sameDate(row.last_sent_at, existing.last_sent_at) &&
     row.left_reason === existing.left_reason;
@@ -95,14 +91,13 @@ export type Account = {
   custom_name: string | null;
   qq_nickname: string;
   display_name: string;
-  level: number | null;
   member_status: string;
 };
 
 export type Membership = {
   card: string;
   role: string;
-  level: number | null;
+  joined_at: Date | null;
   left_at: Date | null;
   enabled: boolean;
   is_primary: boolean;
@@ -120,11 +115,10 @@ export function deriveAccount(
   account: Account,
   memberships: Membership[],
   isRobot: boolean | undefined,
-): Pick<Account, "member_status" | "role" | "level" | "display_name"> {
+): Pick<Account, "member_status" | "role" | "display_name"> {
   const current = {
     member_status: account.member_status,
     role: account.role,
-    level: account.level,
     display_name: account.display_name,
   };
   // Accounts no group knows of, like the bootstrap admin, keep what they were created with,
@@ -134,17 +128,21 @@ export function deriveAccount(
   }
 
   const active = memberships.filter((m) => m.enabled && m.left_at === null);
-  // The primary group speaks for the account; otherwise the group where its level is highest.
+  // The primary group speaks for the account; otherwise the group it joined first, which stays
+  // put while the member chats in several.
   const chosen =
     active.find((m) => m.is_primary) ??
-    active.toSorted((a, b) => (b.level ?? -1) - (a.level ?? -1)).at(0);
+    active
+      .toSorted(
+        (a, b) => (a.joined_at?.getTime() ?? Infinity) - (b.joined_at?.getTime() ?? Infinity),
+      )
+      .at(0);
   const robot = isRobot ?? account.role === "bot";
   const groupRole = FORUM_ROLES.find(([group]) => active.some((m) => m.role === group))?.[1];
 
   return {
     member_status: active.length > 0 ? "member" : "frozen",
     role: account.role_locked ? account.role : robot ? "bot" : (groupRole ?? "user"),
-    level: chosen ? chosen.level : account.level,
     display_name:
       account.custom_name ??
       (chosen ? chosen.card || account.qq_nickname || String(account.qq) : account.display_name),
