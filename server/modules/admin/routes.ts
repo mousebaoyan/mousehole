@@ -9,6 +9,14 @@ import { uploadBytes } from "../uploads/service.ts";
 import { memberStats } from "../users/service.ts";
 import { databaseBytes, updateSettings } from "./service.ts";
 
+const SiteSettings = z.object({
+  banner: z.string().trim().max(200).openapi({ description: "公告横幅，空字符串不显示" }),
+  qq_public: z.boolean().openapi({ description: "访客也能看到 QQ 号" }),
+  review_mode: z
+    .enum(["after", "before"])
+    .openapi({ description: "新建版块时不指定审核方式就用这个" }),
+});
+
 const LoginSettings = z.object({
   code: z.boolean(),
   link: z.boolean(),
@@ -28,6 +36,7 @@ const BotSettings = z.object({ require_operator: z.boolean() });
 
 const SettingsSchema = z
   .object({
+    site: SiteSettings,
     login: LoginSettings,
     smtp: SmtpSettings.extend({ password_set: z.boolean() }),
     bot: BotSettings,
@@ -35,6 +44,20 @@ const SettingsSchema = z
   .openapi("Settings");
 
 export const adminRoutes = createRouter()
+  .openapi(
+    createRoute({
+      method: "get",
+      path: "/site",
+      summary: "页面要用的站点设置：公告横幅",
+      responses: {
+        200: {
+          description: "站点设置",
+          content: { "application/json": { schema: z.object({ banner: z.string() }) } },
+        },
+      },
+    }),
+    async (c) => c.json({ banner: (await getSettings()).site.banner }, 200),
+  )
   .openapi(
     createRoute({
       method: "get",
@@ -116,9 +139,9 @@ export const adminRoutes = createRouter()
     }),
     async (c) => {
       authorize(c, "admin");
-      const { login, smtp, bot } = await getSettings();
+      const { site, login, smtp, bot } = await getSettings();
       const { password, ...rest } = smtp;
-      return c.json({ login, smtp: { ...rest, password_set: password !== "" }, bot }, 200);
+      return c.json({ site, login, smtp: { ...rest, password_set: password !== "" }, bot }, 200);
     },
   )
   .openapi(
@@ -132,6 +155,7 @@ export const adminRoutes = createRouter()
           content: {
             "application/json": {
               schema: z.object({
+                site: SiteSettings.partial().optional(),
                 login: LoginSettings.partial().optional(),
                 smtp: SmtpSettings.extend({ password: z.string().max(200) })
                   .partial()

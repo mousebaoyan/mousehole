@@ -4,6 +4,7 @@ import type { Boards, DB, Tags } from "../../../db/types.ts";
 import type { Actor } from "../../platform/access.ts";
 import { db } from "../../platform/db.ts";
 import { AppError } from "../../platform/errors.ts";
+import { getSettings } from "../../platform/settings.ts";
 import { recordAudit } from "../audit/service.ts";
 
 const BOARD = [
@@ -63,11 +64,13 @@ export async function createBoard(
   actor: Actor,
   board: BoardFields & { slug: string; name: string },
 ) {
+  const { site } = await getSettings();
   return db.transaction().execute(async (trx) => {
     const created = await trx
       .insertInto("boards")
       .values({
         ...board,
+        review_mode: board.review_mode ?? site.review_mode,
         position: sql<number>`(SELECT coalesce(max(position) + 1, 0) FROM boards)`,
       })
       .onConflict((oc) => oc.column("slug").doNothing())

@@ -18,7 +18,7 @@
 ### 主要对象（节选）
 
 ```jsonc
-// 用户。qq、member_status、activated 只返回给成员、bot 和管理员；avatar_url 是论坛缓存的 QQ 头像，还没拉到时为 null
+// 用户。qq、member_status、activated 只返回给成员、bot 和管理员，站点设置 qq_public 打开时 qq 也返回给访客；avatar_url 是论坛缓存的 QQ 头像，还没拉到时为 null
 { "id": 7, "display_name": "鼠鼠", "avatar_url": "/avatars/7.webp?v=3", "role": "user",
   "qq": 123456789, "card": "26-某某大学-CV", "level": 5, "level_name": "活跃", "title": "26届",
   "joined_at": 1740000000, "member_status": "member", "activated": true }
@@ -194,9 +194,10 @@ token 由管理员在后台创建，只显示一次。每个 token 绑定一个 
 
 | 方法 | 路径 | 说明 | 权限 |
 | --- | --- | --- | --- |
+| GET | `/site` | 页面要用的站点设置：`{ banner }`，公告横幅，空字符串不显示 | 访客 |
 | GET | `/boards` | 版块列表，按后台排好的顺序；访客看不到仅成员版块 | 访客 |
 | GET | `/boards/{slug}` | 版块信息；访客看仅成员版块返回 `404 board_not_found` | 访客 |
-| POST | `/boards` | 新建版块：`slug`（小写字母、数字和短横线，建好后不能改）、`name`，以及可选的 `description`、`color`、`visibility`、`post_role`、`default_kind`、`review_mode`；排在最后。地址重复返回 `409 board_exists` | 管理员 / `admin` |
+| POST | `/boards` | 新建版块：`slug`（小写字母、数字和短横线，建好后不能改）、`name`，以及可选的 `description`、`color`、`visibility`、`post_role`、`default_kind`、`review_mode`（不带时用站点设置里的默认值）；排在最后。地址重复返回 `409 board_exists` | 管理员 / `admin` |
 | PATCH | `/boards/{slug}` | 修改版块，只改带了的字段；`position` 把版块移到第几位（从 0 开始），其他版块依次顺延 | 管理员 / `admin` |
 | DELETE | `/boards/{slug}` | 删除版块；有过主题（包括已删除的）的版块返回 `409 board_not_empty` | 管理员 / `admin` |
 | GET | `/tags` | 标签列表：话题、院校、方向依次排列，同一类里用得多的在前 | 访客 |
@@ -277,7 +278,7 @@ token 由管理员在后台创建，只显示一次。每个 token 绑定一个 
 | 方法 | 路径 | 说明 | 权限 |
 | --- | --- | --- | --- |
 | GET | `/admin/overview` | 概览：`members`（`total`、`activated`、`frozen`，不算 bot 和已注销的账号）、`content`（`threads_today`、`posts_today`：今天公开的主题和回复，按北京时间；`pending`：待审核；`reports`：待处理的举报）、`events`（`streams`：现在连着的事件流；`polled_at`：最近一次按游标拉取的时间，进程重启后为 `null`）、`storage`（`database`、`uploads`：数据库和上传图片占用的字节数）；群的同步状态见 `/admin/groups` | 管理员 / `admin` |
-| GET | `/admin/settings` | 站点设置，按分组返回：`login`（三种登录方式的开关和口令提示）、`smtp`（密码只返回 `password_set`）、`bot`（`require_operator`）；站点信息、QQ 号可见范围、默认审核方式、等级名称等随对应功能加入 | 管理员 / `admin` |
+| GET | `/admin/settings` | 站点设置，按分组返回：`site`（`banner` 公告横幅，`qq_public` 访客能否看到 QQ 号，`review_mode` 新建版块不指定时的审核方式）、`login`（三种登录方式的开关和口令提示）、`smtp`（密码只返回 `password_set`）、`bot`（`require_operator`）；站点名称、简介、Logo 和等级名称还没做 | 管理员 / `admin` |
 | PATCH | `/admin/settings` | 修改站点设置，立即生效：只改带了的分组和字段；SMTP 密码不带就不变，传空字符串清空 | 管理员 / `admin` |
 | POST | `/admin/settings/test-email` | `{ qq }`：用当前 SMTP 设置发一封测试邮件 | 管理员 / `admin` |
 | GET | `/admin/groups` | 已关联的群和同步状态：最近一次增量、全量、群资料的时间，被拦下的全量 | 管理员 / `admin` |

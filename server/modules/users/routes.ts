@@ -4,6 +4,7 @@ import type { Context } from "hono";
 import { AppError } from "../../platform/errors.ts";
 import { isMember, restrictionOf, STAFF, type Restriction } from "../../platform/access.ts";
 import { actorOf, authorize, createRouter, errorResponse, unix } from "../../platform/http.ts";
+import { getSettings as getSiteSettings } from "../../platform/settings.ts";
 import { UserBriefSchema, UserRefSchema } from "./schemas.ts";
 import { setCustomName } from "../members/service.ts";
 import { NOTIFICATION_TYPES, notifyPrefs } from "../notifications/service.ts";
@@ -36,7 +37,10 @@ const UserSchema = UserBriefSchema.extend({
   bio: z.string(),
   joined_at: z.number().nullable().openapi({ description: "加入主群的时间" }),
   last_sent_at: z.number().nullable().openapi({ description: "最近一次在主群发言，精确到小时" }),
-  qq: z.number().optional().openapi({ description: "qq、member_status、activated 只给成员和 bot" }),
+  qq: z.number().optional().openapi({
+    description:
+      "qq 只给成员和 bot，站点设置为公开时也给访客；member_status、activated 只给成员和 bot",
+  }),
   restriction: z
     .object({ type: z.string(), until: z.number().nullable() })
     .nullable()
@@ -128,6 +132,7 @@ export const usersRoutes = createRouter()
       const { viewer, bot } = c.var;
       const u = await getUser(c.req.valid("param").user, viewer?.id ?? null);
       const members = isMember(viewer, bot);
+      const { site } = await getSiteSettings();
       return c.json(
         {
           id: u.id,
@@ -140,9 +145,10 @@ export const usersRoutes = createRouter()
           bio: u.bio,
           joined_at: u.joined_at && unix(u.joined_at),
           last_sent_at: u.last_sent_at && unix(u.last_sent_at),
-          // Like a group's member list, which people outside it can't see.
+          // Like a group's member list, which people outside it can't see, unless the site
+          // shows QQ numbers to everyone.
+          ...((members || site.qq_public) && { qq: u.qq }),
           ...(members && {
-            qq: u.qq,
             member_status: u.member_status,
             activated: u.activated_at !== null,
           }),
