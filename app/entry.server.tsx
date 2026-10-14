@@ -2,11 +2,23 @@ import { PassThrough } from "node:stream";
 import { createReadableStreamFromReadable } from "@react-router/node";
 import { isbot } from "isbot";
 import { renderToPipeableStream, type RenderToPipeableStreamOptions } from "react-dom/server";
-import { ServerRouter, type EntryContext, type RouterContextProvider } from "react-router";
+import {
+  isRouteErrorResponse,
+  ServerRouter,
+  type EntryContext,
+  type RouterContextProvider,
+} from "react-router";
 import { log } from "../server/platform/log.ts";
 import { Nonce, nonceContext } from "./nonce.ts";
 
 export const streamTimeout = 5_000;
+
+// Errors from loaders, actions and rendering. A response thrown on purpose, such as the 404 of a
+// page that doesn't exist, is no error, and neither is a request the browser gave up on.
+export function handleError(error: unknown, { request }: { request: Request }) {
+  if (isRouteErrorResponse(error) || request.signal.aborted) return;
+  log("error", "Request failed", { error, url: request.url });
+}
 
 // React Router's default, with the CSP nonce on every script it writes inline.
 export default function handleRequest(

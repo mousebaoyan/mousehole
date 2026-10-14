@@ -42,6 +42,7 @@ process.once("SIGTERM", () => {
 
 export default await createHonoServer<{ Variables: SecureHeadersVariables }>({
   defaultLogger: false,
+  listeningListener: ({ port }) => log("info", "Listening", { port }),
   // Before the static files, so they get the headers too.
   beforeAll(server) {
     server.use(securityHeaders);
