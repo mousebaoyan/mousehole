@@ -3,11 +3,21 @@ import { createRoute, z } from "@hono/zod-openapi";
 import type { Context } from "hono";
 import { AppError } from "../../platform/errors.ts";
 import { isMember, restrictionOf, STAFF, type Restriction } from "../../platform/access.ts";
-import { actorOf, authorize, createRouter, errorResponse, unix } from "../../platform/http.ts";
+import {
+  actorOf,
+  authorize,
+  createRouter,
+  errorResponse,
+  requireWeb,
+  unix,
+} from "../../platform/http.ts";
+import { rateLimit } from "../../platform/rate-limit.ts";
 import { getSettings as getSiteSettings } from "../../platform/settings.ts";
 import { UserBriefSchema, UserRefSchema } from "./schemas.ts";
 import { setCustomName } from "../members/service.ts";
 import { NOTIFICATION_TYPES, notifyPrefs } from "../notifications/service.ts";
+import { exportOwnBoosts } from "../reactions/service.ts";
+import { exportOwnPosts } from "../threads/service.ts";
 import {
   AVATARS_DIR,
   getProfile,
@@ -69,6 +79,40 @@ const UserParam = z.object({ user: UserRefSchema });
 function restrictionJson(r: Restriction) {
   return r && { type: r.type, until: r.until && unix(r.until) };
 }
+
+const ExportSchema = z.object({
+  exported_at: z.number(),
+  user: z.object({
+    id: z.number(),
+    qq: z.number().nullable(),
+    display_name: z.string(),
+    bio: z.string(),
+  }),
+  posts: z.array(
+    z.object({
+      id: z.number(),
+      thread_id: z.number(),
+      title: z.string(),
+      board: z.string(),
+      floor: z.number().openapi({ description: "1 是主楼，也就是自己发的主题" }),
+      body: z.string().openapi({ description: "Markdown 原文" }),
+      status: z.string(),
+      created_at: z.number(),
+      edited_at: z.number().nullable(),
+    }),
+  ),
+  boosts: z.array(
+    z.object({
+      thread_id: z.number(),
+      floor: z.number(),
+      body: z.string(),
+      created_at: z.number(),
+    }),
+  ),
+  bookmarks: z.array(
+    z.object({ thread_id: z.number(), title: z.string(), bookmarked_at: z.number().nullable() }),
+  ),
+});
 
 const Switches = z.object({ site: z.boolean(), qq: z.boolean() });
 
@@ -237,6 +281,50 @@ export const usersRoutes = createRouter()
       },
     }),
     async (c) => c.json(await settingsJson(authorize(c, "read").id), 200),
+  )
+  .openapi(
+    createRoute({
+      method: "get",
+      path: "/me/export",
+      summary:
+        "导出自己的全部内容，作为附件下载：资料、发过的主楼和回复（Markdown 原文，含待审核和已隐藏的）、短评和收藏；每小时最多 3 次，只能在网页上",
+      responses: {
+        200: {
+          description: "JSON 文件",
+          content: { "application/json": { schema: ExportSchema } },
+        },
+        401: errorResponse("没有登录"),
+        403: errorResponse("bot 不能代为导出"),
+        429: errorResponse("导出太频繁"),
+      },
+    }),
+    async (c) => {
+      const viewer = requireWeb(c);
+      rateLimit(`export:${viewer.id}`, 3, 60 * 60_000);
+      const [user, { posts, bookmarks }, boosts] = await Promise.all([
+        getUser({ id: viewer.id }, viewer.id),
+        exportOwnPosts(viewer.id),
+        exportOwnBoosts(viewer.id),
+      ]);
+      c.header("content-disposition", `attachment; filename="mousehole-${viewer.id}.json"`);
+      return c.json(
+        {
+          exported_at: unix(new Date()),
+          user: { id: user.id, qq: user.qq, display_name: user.display_name, bio: user.bio },
+          posts: posts.map((p) => ({
+            ...p,
+            created_at: unix(p.created_at),
+            edited_at: p.edited_at && unix(p.edited_at),
+          })),
+          boosts: boosts.map((b) => ({ ...b, created_at: unix(b.created_at) })),
+          bookmarks: bookmarks.map((b) => ({
+            ...b,
+            bookmarked_at: b.bookmarked_at && unix(b.bookmarked_at),
+          })),
+        },
+        200,
+      );
+    },
   )
   .openapi(
     createRoute({
