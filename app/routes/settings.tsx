@@ -28,6 +28,7 @@ const TYPES = [
   { type: "following", label: "关注的人发新帖" },
   { type: "solved", label: "回答被采纳" },
   { type: "moderation", label: "内容被审核或隐藏" },
+  { type: "level", label: "升级" },
   { type: "lottery", label: "抽奖开奖或取消" },
 ] as const;
 
