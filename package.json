@@ -19,7 +19,8 @@
     "db:codegen": "kysely-codegen",
     "test": "vitest run",
     "bootstrap": "node --env-file-if-exists=.env scripts/bootstrap.ts",
-    "mock-bot": "node --env-file-if-exists=.env scripts/mock-bot.ts"
+    "mock-bot": "node --env-file-if-exists=.env scripts/mock-bot.ts",
+    "load-test": "node --env-file-if-exists=.env scripts/load-test.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.9.0",
