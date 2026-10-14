@@ -96,7 +96,7 @@ export default function Login({ loaderData, actionData }: Route.ComponentProps) 
               <li className="flex items-center gap-3">
                 <MessageCircle className="size-5 shrink-0 text-brand-strong" />
                 <span>
-                  私聊机器人发送<span className="mx-1 font-medium">登录链接</span>
+                  私聊机器人发送<span className="mx-1 font-medium">登录</span>
                 </span>
               </li>
               <li className="flex items-center gap-3">

@@ -116,6 +116,9 @@ export default function Tokens({ loaderData: { tokens }, actionData }: Route.Com
           </div>
           <fieldset className="mt-4">
             <legend className="text-sm font-medium">范围</legend>
+            <p className="mt-1 text-meta text-muted-foreground">
+              鼠洞插件要 read、act、sync、auth、events
+            </p>
             <div className="mt-2 grid gap-x-6 sm:grid-cols-2">
               {SCOPES.map((s) => (
                 <label
