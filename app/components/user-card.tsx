@@ -137,6 +137,19 @@ export function UserCard({
 type Profile = NonNullable<ReturnType<typeof useFetcher<typeof loader>>["data"]>;
 
 function CardBody({ profile }: { profile: Profile }) {
+  if (!profile.members_only) return <FullCard profile={profile} />;
+  return (
+    <>
+      <div className="flex items-center gap-3">
+        <UserAvatar user={profile} className="size-14 text-xl" />
+        <p className="min-w-0 truncate font-semibold">{profile.display_name}</p>
+      </div>
+      <p className="mt-3 text-meta text-muted-foreground">TA 的资料和发言仅成员可见</p>
+    </>
+  );
+}
+
+function FullCard({ profile }: { profile: Extract<Profile, { members_only: false }> }) {
   const relations = useRelations(profile);
   const numbers = [
     { label: "帖子", value: profile.stats.threads },

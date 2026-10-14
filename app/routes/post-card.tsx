@@ -101,14 +101,16 @@ export function PostCard({
   const replyTo = post.reply_to;
   const target = parent ?? parentFetcher.data;
 
-  if (post.deleted) {
+  // Its author keeps their content from guests (design §8.10).
+  if (post.deleted || post.members_only) {
     return (
       <li
         id={`floor-${post.floor}`}
         data-floor={post.floor}
         className="relative scroll-mt-20 px-3 py-4 text-meta text-muted-foreground sm:px-4"
       >
-        <span className="tabular-nums">#{post.floor}</span> 该楼已删除
+        <span className="tabular-nums">#{post.floor}</span>{" "}
+        {post.deleted ? "该楼已删除" : "仅成员可见，登录后查看"}
       </li>
     );
   }
@@ -473,8 +475,10 @@ function PostPreview({
             <Arrow className="size-3.5" /> 跳到 #{post.floor}
           </a>
         </div>
-        {post.deleted ? (
-          <p className="mt-1 text-meta text-muted-foreground">该楼已删除</p>
+        {post.deleted || post.members_only ? (
+          <p className="mt-1 text-meta text-muted-foreground">
+            {post.deleted ? "该楼已删除" : "仅成员可见"}
+          </p>
         ) : (
           <div
             className={cn(PROSE, "mt-1")}

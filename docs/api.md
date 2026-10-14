@@ -47,9 +47,10 @@
   "last_post_at": 1760000000, "created_at": 1759990000, "url": "https://bbs.mousebaoyan.cn/t/42" }
 
 // 楼层。source 只返回给 bot 和管理员；正文只带 html 或 body 中的一个，见上面的「正文」；
-// 删除的楼层 deleted 为 true，正文为空字符串；status 同帖子，主楼的跟着帖子
+// 删除的楼层 deleted 为 true，正文为空字符串；status 同帖子，主楼的跟着帖子；
+// 作者设置了不给访客看时，访客拿到的 members_only 为 true，正文为空，没有表情和短评（总体设计 §8.10）
 { "id": 108, "thread_id": 42, "floor": 3, "reply_to": { "id": 105, "floor": 2, "author": { … } },
-  "author": { … }, "html": "<p>…</p>", "via": "qq", "deleted": false,
+  "author": { … }, "html": "<p>…</p>", "via": "qq", "deleted": false, "members_only": false,
   "source": { "chat_type": "group", "chat_id": 987654321, "message_id": 7731 },
   "status": "visible", "reactions": { "heart": 2, "+1": 1 }, "my_reaction": "heart", "reply_count": 1,
   "boosts": [ { "id": 31, "user": { … }, "body": "学到了", "created_at": 1760000100 } ],
@@ -163,8 +164,8 @@ token 由管理员在后台创建，只显示一次。每个 token 绑定一个 
 | POST | `/auth/email/verify` | `{ qq, code }`：校验验证码，建立会话，返回 204；不对、过期或输错 5 次作废都返回 `400 email_code_invalid`，`message` 说明是哪种 | 访客 |
 | POST | `/auth/logout` | 退出当前会话；没有登录时也返回成功 | 访客 |
 | GET | `/me` | 当前用户；bot 代表某人时返回这个人 | 已登录 / `read` |
-| GET | `/me/settings` | 自己的设置：`custom_name`（自己起的名字，`null` 是跟着 QQ）、`custom_bio`（自己写的个性签名，`null` 是跟着 QQ）、`qq_bio`（QQ 的个性签名）、`avatar_custom`（头像是不是自己上传的）、`allow_proxy`、`notify_prefs`（每类通知的 `{ site, qq }` 开关，含默认值） | 已登录 / `read` |
-| PATCH | `/me` | 修改设置，只改带了的字段，返回改好的设置：`custom_name`（最多 24 个字，`null` 改回跟着 QQ，显示名随即重算）、`custom_bio`（最多 60 个字，`null` 改回跟着 QQ）、`allow_proxy`、`notify_prefs`（带了的类型整体替换） | 成员 / `act` |
+| GET | `/me/settings` | 自己的设置：`custom_name`（自己起的名字，`null` 是跟着 QQ）、`custom_bio`（自己写的个性签名，`null` 是跟着 QQ）、`qq_bio`（QQ 的个性签名）、`avatar_custom`（头像是不是自己上传的）、`allow_proxy`、`hide_from_guests`（我的内容不给访客看）、`notify_prefs`（每类通知的 `{ site, qq }` 开关，含默认值） | 已登录 / `read` |
+| PATCH | `/me` | 修改设置，只改带了的字段，返回改好的设置：`custom_name`（最多 24 个字，`null` 改回跟着 QQ，显示名随即重算）、`custom_bio`（最多 60 个字，`null` 改回跟着 QQ）、`allow_proxy`、`hide_from_guests`、`notify_prefs`（带了的类型整体替换）。插件的"不给访客看"命令用 `X-Act-As` 代成员改 `hide_from_guests`，没登录过论坛的也可以 | 成员 / `act` |
 | PUT | `/me/avatar` | 上传头像：multipart 的 `file` 字段，最大 20MB，格式同图片上传，裁成 96px 的方图；之后不再跟着 QQ 刷新。返回 `{ avatar_url }` | 没被禁言的成员 / `act` |
 | DELETE | `/me/avatar` | 头像改回跟着 QQ，立刻拉一次 QQ 头像，返回 `{ avatar_url }`；拉取失败返回 `502 fetch_failed`，头像不变 | 成员 / `act` |
 | GET | `/me/export` | 导出自己的全部内容，作为附件 `mousehole-{id}.json` 下载：`user`（`id`、`qq`、`display_name`、`bio`）、`posts`（发过的主楼和回复，Markdown 原文，含待审核和已隐藏的，不含删掉的；`floor` 为 1 的就是自己发的帖子）、`boosts`、`bookmarks`；每小时最多 3 次 | 已登录，只能在网页上 |
@@ -180,7 +181,7 @@ token 由管理员在后台创建，只显示一次。每个 token 绑定一个 
 | 方法 | 路径 | 说明 | 权限 |
 | --- | --- | --- | --- |
 | GET | `/users` | `q`：按名字找成员，最多 8 个，名字以它开头的在前，再按最近活跃；不含 bot 和冻结的账号。编辑器的 @ 补全用 | 已登录 / `read` |
-| GET | `/users/{user}` | 资料卡：显示名、头像、角色、专属头衔、个性签名，主群的群名片、入群时间和最近发言时间，以及统计（帖子数、回复数、获赞数、认可数、访问天数、阅读时间、读过的帖子和回复数）；QQ 号、是否冻结、是否激活只给成员和 bot。统计里还有关注数、粉丝数和认可数；登录时带 `followed`、`endorsed`，表示自己是否关注、认可了 TA | 访客 |
+| GET | `/users/{user}` | 资料卡，`members_only` 为 `false`：显示名、头像、角色、专属头衔、个性签名，主群的群名片、入群时间和最近发言时间，以及统计（帖子数、回复数、获赞数、认可数、访问天数、阅读时间、读过的帖子和回复数）；QQ 号、是否冻结、是否激活只给成员和 bot。统计里还有关注数、粉丝数和认可数；登录时带 `followed`、`endorsed`，表示自己是否关注、认可了 TA。本人设置了不给访客看时，访客只拿到 `id`、显示名、头像和角色，`members_only` 为 `true` | 访客 |
 | GET | `/users/{user}/threads` | 发过的帖子，最新的在前，每页 30 个，不含匿名内容 | 访客 |
 | GET | `/users/{user}/posts` | 发过的回复（不含主楼），最新的在前，每页 30 个，`cursor` 是上一页最后一条的 ID；每条带所在的帖子和正文前 140 个字的纯文本，不含匿名内容 | 访客 |
 | PUT | `/users/{user}/follow` | 关注：TA 发新帖时通知我；不能关注自己（`400`） | 成员 / `act` |
@@ -214,7 +215,7 @@ token 由管理员在后台创建，只显示一次。每个 token 绑定一个 
 | GET | `/threads` | 帖子列表，每页 30 个：`board`、`tag`、`author`、`kind`、`view`、`cursor`；版块或标签不存在返回 404。`view` 默认 `latest`（按最后回复），还可以是 `created`（按发布时间）、`hot`（热门）、`unsolved`（待解答）；以下几种要登录：`new`（最近 7 天发布、自己还没打开过）、`unread`（读过、之后有新楼层）、`read`（读过的，按最后阅读时间）、`posted`（自己发过或回复过的，删掉的回复不算，按最后回复）、`bookmarked`（收藏的，按收藏时间）。`latest` 的第一页先列置顶的帖子：首页是全站置顶，版块页还有版块内置顶；按标签筛选时不置顶 | 访客 |
 | GET | `/threads/counts` | 当前范围里新和未读的帖子各有几个：`board`、`tag`，返回 `{ new, unread }` | 成员 |
 | POST | `/threads` | 发帖：`board`、`title`（4–80 个字）、`content`、`kind`（不带时用版块的默认类型）、`tags`（最多 5 个，只能用已有的）、`source`；只有版主能发的版块返回 `403 forbidden`。先审后发的版块里，版主以外的人发的帖子 `status` 为 `pending`，通过后才公开 | 成员 / `act` |
-| GET | `/threads/{id}` | 帖子详情；楼层（包括主楼）用 `/threads/{id}/posts` 取 | 访客 |
+| GET | `/threads/{id}` | 帖子详情；楼层（包括主楼）用 `/threads/{id}/posts` 取。楼主设置了不给访客看时，访客得到 `401 login_required` | 访客 |
 | PATCH | `/threads/{id}` | 只改带了的字段：楼主可以改 `title`、`tags`；版主还可以改 `board`（移动版块）、`pinned`（0–2）、`featured`、`locked`、`status`（`visible` 或 `hidden`，见下面的「审核」）和 `reason`（隐藏的理由，最多 200 个字，会告诉作者）。改标题记在主楼的编辑记录里；锁定后只有版主能改 | 楼主、版主 / `act`、`moderate` |
 | DELETE | `/threads/{id}` | 删除帖子；有人回复后楼主不能删，只有版主能删 | 楼主、版主 / `act`、`moderate` |
 | PUT | `/threads/{id}/solution` | 采纳答案：`{ post_id }`，只能是问答帖子里公开、没删的回复（不含主楼），否则 `400`；帖子待审核或已隐藏时返回 `403`；再采纳别的就换掉。回答的人收到通知，产生 `thread.solved` 事件；锁定后只有版主能改。返回帖子详情 | 楼主、版主 / `act`、`moderate` |

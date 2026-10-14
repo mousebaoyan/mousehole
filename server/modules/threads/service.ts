@@ -17,6 +17,7 @@ import {
   countReading,
   countUserPosts,
   membersByQq,
+  shownToGuests,
   userBriefs,
 } from "../users/service.ts";
 import {
@@ -53,7 +54,8 @@ function threadNotFound() {
   return new AppError(404, "thread_not_found", "帖子不存在");
 }
 
-// What a viewer may open: published, not deleted, and in a board they can see.
+// What a viewer may open: published, not deleted, in a board they can see, and for guests not by
+// someone who keeps their content from them.
 function visibleThreads(members: boolean) {
   return openableThreads({ members, id: null, staff: false });
 }
@@ -71,7 +73,9 @@ function openableThreads(reader: Reader) {
           : eb.or([eb("threads.status", "=", "visible"), eb("threads.author_id", "=", reader.id)]),
       ),
     )
-    .$if(!reader.members, (qb) => qb.where("boards.visibility", "=", "public"));
+    .$if(!reader.members, (qb) =>
+      qb.where("boards.visibility", "=", "public").where(shownToGuests("threads.author_id")),
+    );
 }
 
 // With the reader's own row in thread_users, which a guest doesn't have.
@@ -326,6 +330,7 @@ export async function listUserPosts(members: boolean, authorId: number, cursor?:
       "threads.title",
     ])
     .where("posts.author_id", "=", authorId)
+    .$if(!members, (qb) => qb.where(shownToGuests("posts.author_id")))
     .where("posts.floor", ">", 1)
     .where("posts.status", "=", "visible")
     .where("posts.deleted_at", "is", null)
@@ -375,9 +380,27 @@ export async function getThread(id: number, reader: Reader) {
     ])
     .where("threads.id", "=", id)
     .executeTakeFirst();
-  if (!row) throw threadNotFound();
+  if (!row) {
+    if (!reader.members && (await keptFromGuests(id))) {
+      throw new AppError(401, "login_required", "楼主设置了仅成员可见");
+    }
+    throw threadNotFound();
+  }
   const [thread] = await withUsers([row]);
   return thread;
+}
+
+// A thread guests could read but for its author's switch: they are asked to log in rather than
+// told it is gone.
+async function keptFromGuests(id: number) {
+  const row = await openableThreads({ members: true, id: null, staff: false })
+    .innerJoin("users", "users.id", "threads.author_id")
+    .select("threads.id")
+    .where("threads.id", "=", id)
+    .where("boards.visibility", "=", "public")
+    .where("users.hide_from_guests", "=", true)
+    .executeTakeFirst();
+  return row !== undefined;
 }
 
 // Floors waiting for review or hidden show to moderators and their authors only.
@@ -404,6 +427,11 @@ function selectPosts(reader: Reader) {
       "target.floor as target_floor",
       "target.author_id as target_author_id",
       "posts.status",
+      // Floors guests get without their content (design §8.10).
+      (reader.members
+        ? sql<boolean>`false`
+        : sql<boolean>`NOT ${shownToGuests("posts.author_id")}`
+      ).as("members_only"),
     ])
     .$if(!reader.staff, (qb) =>
       qb.where((eb) =>

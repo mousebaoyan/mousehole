@@ -49,6 +49,7 @@ const MeSchema = z
   .openapi("Me");
 
 const UserSchema = UserBriefSchema.extend({
+  members_only: z.literal(false),
   card: z.string().nullable().openapi({ description: "主群的群名片；不在主群为 null" }),
   bio: z.string(),
   joined_at: z.number().nullable().openapi({ description: "加入主群的时间" }),
@@ -79,6 +80,11 @@ const UserSchema = UserBriefSchema.extend({
     endorsements: z.number(),
   }),
 }).openapi("User");
+
+// What guests get of someone who keeps their content from them (design §8.10).
+const MembersOnlyUserSchema = UserBriefSchema.extend({ members_only: z.literal(true) }).openapi(
+  "MembersOnlyUser",
+);
 
 const UserParam = z.object({ user: UserRefSchema });
 
@@ -131,6 +137,7 @@ const SettingsSchema = z
     qq_bio: z.string().openapi({ description: "QQ 的个性签名，由 bot 推送" }),
     avatar_custom: z.boolean().openapi({ description: "头像是自己上传的；false 是跟着 QQ" }),
     allow_proxy: z.boolean().openapi({ description: "是否允许 bot 代自己发帖、回复等" }),
+    hide_from_guests: z.boolean().openapi({ description: "我的内容不给访客看" }),
     notify_prefs: z
       .record(z.string(), Switches)
       .openapi({ description: "每类通知的站内（site）和 QQ 提醒（qq）开关，含默认值" }),
@@ -178,7 +185,14 @@ export const usersRoutes = createRouter()
       summary: "资料卡：群里的资料和论坛里的统计",
       request: { params: UserParam },
       responses: {
-        200: { description: "用户", content: { "application/json": { schema: UserSchema } } },
+        200: {
+          description: "用户；本人设置了不给访客看时，访客只拿到名字和头像，members_only 为 true",
+          content: {
+            "application/json": {
+              schema: z.discriminatedUnion("members_only", [UserSchema, MembersOnlyUserSchema]),
+            },
+          },
+        },
         404: errorResponse("用户不存在"),
       },
     }),
@@ -186,13 +200,20 @@ export const usersRoutes = createRouter()
       const { viewer, bot } = c.var;
       const u = await getUser(c.req.valid("param").user, viewer?.id ?? null);
       const members = isMember(viewer, bot);
+      const brief = {
+        id: u.id,
+        display_name: u.display_name,
+        avatar_url: u.avatar_url,
+        role: u.role,
+      };
+      if (u.hide_from_guests && !members) {
+        return c.json({ ...brief, title: "", members_only: true as const }, 200);
+      }
       const { site } = await getSiteSettings();
       return c.json(
         {
-          id: u.id,
-          display_name: u.display_name,
-          avatar_url: u.avatar_url,
-          role: u.role,
+          ...brief,
+          members_only: false as const,
           title: u.title,
           card: u.card,
           bio: u.bio,
@@ -363,6 +384,7 @@ export const usersRoutes = createRouter()
                   .optional()
                   .openapi({ description: "最多 60 个字；null 是改回跟着 QQ" }),
                 allow_proxy: z.boolean().optional(),
+                hide_from_guests: z.boolean().optional(),
                 notify_prefs: z.partialRecord(z.enum(NOTIFICATION_TYPES), Switches).optional(),
               }),
             },

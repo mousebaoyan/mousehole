@@ -56,6 +56,7 @@ export async function action({ request, context }: Route.ActionArgs) {
       custom_name: field("custom_name") || null,
       custom_bio: field("custom_bio") || null,
       allow_proxy: on("allow_proxy"),
+      hide_from_guests: on("hide_from_guests"),
       notify_prefs: Object.fromEntries(
         TYPES.map(({ type }) => [type, { site: on(`${type}.site`), qq: on(`${type}.qq`) }]),
       ),
@@ -93,6 +94,15 @@ export default function Settings({ loaderData, actionData }: Route.ComponentProp
               />
             </Field>
           </div>
+        </Section>
+
+        <Section title="隐私">
+          <Check
+            name="hide_from_guests"
+            label="我的内容不给访客看"
+            hint="没登录的人和搜索引擎看不到我发的帖子、回复和短评，我的主页只显示名字和头像；以前发的也算。半分钟内生效"
+            checked={settings.hide_from_guests}
+          />
         </Section>
 
         <Section title="机器人代发">

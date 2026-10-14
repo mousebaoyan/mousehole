@@ -74,7 +74,9 @@ describe("设置", () => {
     const bio = async () => {
       const res = await api.users[":user"].$get({ param: { user: String(user.id) } });
       if (!res.ok) throw new Error(`status ${res.status}`);
-      return (await res.json()).bio;
+      const profile = await res.json();
+      if (profile.members_only) throw new Error("members only");
+      return profile.bio;
     };
 
     const pushed = await api.bot.users[":user"].bio.$put(

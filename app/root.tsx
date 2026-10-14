@@ -1,5 +1,6 @@
 import {
   isRouteErrorResponse,
+  Link,
   Links,
   Meta,
   Outlet,
@@ -11,6 +12,7 @@ import { use } from "react";
 import type { Route } from "./+types/root.ts";
 import { Nonce } from "./nonce.ts";
 import { SITE_URL } from "./site.server.ts";
+import { buttonVariants } from "~/components/ui/button";
 import { DialogHost } from "~/components/ui/dialog";
 import { Toaster } from "~/components/ui/toast";
 import "./app.css";
@@ -62,7 +64,11 @@ export default function App() {
   return <Outlet />;
 }
 
-const TITLES: Partial<Record<number, string>> = { 403: "没有权限", 404: "页面不存在" };
+const TITLES: Partial<Record<number, string>> = {
+  401: "登录后查看",
+  403: "没有权限",
+  404: "页面不存在",
+};
 
 export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
   const response = isRouteErrorResponse(error) ? error : null;
@@ -77,6 +83,11 @@ export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
     <main className="mx-auto max-w-3xl p-6">
       <h1 className="text-2xl font-semibold">{title}</h1>
       <p className="mt-2 text-muted-foreground">{detail}</p>
+      {response?.status === 401 && (
+        <Link to="/login" className={buttonVariants({ className: "mt-4" })}>
+          登录
+        </Link>
+      )}
     </main>
   );
 }
