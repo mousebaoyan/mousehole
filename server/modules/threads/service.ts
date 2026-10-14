@@ -26,7 +26,7 @@ import { onebotToMarkdown, type Segment } from "../qq/onebot.ts";
 import { notifyOnPost, notifyPost, notifyThread } from "../notifications/service.ts";
 import { assertNotLinked, findLink, linkSource, type Source } from "../qq/service.ts";
 import { indexPost, unindexPost } from "../search/service.ts";
-import { fetchUpload, linkUploads, showImages } from "../uploads/service.ts";
+import { fetchUpload, linkUploads, showImages, uploadName } from "../uploads/service.ts";
 import {
   countLikes,
   countPosting,
@@ -632,7 +632,8 @@ const AUDIT_EXCERPT = 100;
 export type Content = { markdown: string } | { onebot: Segment[] };
 
 // Images in a message are copied here now, before QQ's links expire; one that can't be fetched
-// becomes "[图片已失效]". A quoted message counts as replying to the floor it became, within the
+// becomes "[图片已失效]". One already stored here stays as it is, so a floor organized anew from
+// older messages keeps their pictures. A quoted message counts as replying to the floor it became, within the
 // same thread.
 async function resolveContent(
   viewer: Viewer,
@@ -643,14 +644,16 @@ async function resolveContent(
   if ("markdown" in content) return { markdown: content.markdown, replyToId: null };
   const converted = await onebotToMarkdown(content.onebot, {
     members: membersByQq,
-    image: (url) =>
-      fetchUpload(viewer.id, url).then(
-        (upload) => upload.url,
-        (error: unknown) => {
-          log("warn", "QQ image not copied", { error, url });
-          return null;
-        },
-      ),
+    image: async (url) =>
+      uploadName(url)
+        ? url
+        : fetchUpload(viewer.id, url).then(
+            (upload) => upload.url,
+            (error: unknown) => {
+              log("warn", "QQ image not copied", { error, url });
+              return null;
+            },
+          ),
     quoted: async (messageId) => {
       if (!source || threadId === null) return null;
       const link = await findLink({
