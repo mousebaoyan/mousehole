@@ -10,7 +10,12 @@ export default defineConfig(({ mode }) => {
 
   return {
     plugins: [
-      reactRouterHonoServer({ serverEntryPoint: "server/main.ts" }),
+      reactRouterHonoServer({
+        serverEntryPoint: "server/main.ts",
+        // Pages import the site's name from here; in development the browser loads it as a
+        // module, which otherwise only files under app/ may be.
+        dev: { exclude: [/^\/server\/platform\/site\.ts(\?.*)?$/] },
+      }),
       tailwindcss(),
       reactRouter(),
       babel({ include: /\/app\/.+\.tsx?$/, plugins: ["babel-plugin-react-compiler"] }),
