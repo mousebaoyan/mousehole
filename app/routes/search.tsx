@@ -210,12 +210,8 @@ function SearchFilters({ filters, authorName }: { filters: Filters; authorName: 
           { to: url({ board: "" }), label: "全部版块", chosen: !board },
           ...boards.map((b) => ({
             to: url({ board: b.slug }),
-            label: (
-              <>
-                <Dot color={b.color} />
-                {b.name}
-              </>
-            ),
+            label: b.name,
+            color: b.color,
             chosen: b === board,
           })),
         ]}

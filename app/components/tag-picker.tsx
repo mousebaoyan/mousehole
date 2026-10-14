@@ -1,8 +1,7 @@
 import { Plus, X } from "lucide-react";
 import { useRef, useState } from "react";
-import { useDismiss } from "~/components/disclosure";
+import { SearchBox, useDismiss } from "~/components/disclosure";
 import { Button } from "~/components/ui/button";
-import { Input } from "~/components/ui/input";
 import { useTags } from "~/forum";
 
 const MAX_TAGS = 5;
@@ -13,7 +12,7 @@ const TAG_GROUPS = [
   { kind: "major", label: "方向" },
 ];
 
-// The chosen tags, and a list to add more from; schools are many, so the list can be filtered.
+// The chosen tags, and a list to add more from; schools are many, so the list can be searched.
 export function TagPicker({
   chosen,
   onChange,
@@ -25,7 +24,6 @@ export function TagPicker({
   const [open, setOpen] = useState(false);
   const [filter, setFilter] = useState("");
   const root = useRef<HTMLDivElement>(null);
-  const input = useRef<HTMLInputElement>(null);
   useDismiss(open, () => setOpen(false), root);
   const matching = tags.filter((t) => !chosen.includes(t.name) && t.name.includes(filter.trim()));
 
@@ -53,10 +51,7 @@ export function TagPicker({
           variant="ghost"
           size="sm"
           aria-expanded={open}
-          onClick={() => {
-            setOpen(!open);
-            requestAnimationFrame(() => input.current?.focus());
-          }}
+          onClick={() => setOpen(!open)}
           className="text-muted-foreground"
         >
           <Plus /> 标签
@@ -64,16 +59,8 @@ export function TagPicker({
       )}
       {open && (
         <div className="absolute top-full left-0 z-50 mt-2 flex max-h-80 w-64 flex-col rounded-xl border bg-popover text-sm text-popover-foreground shadow-lg">
-          <div className="border-b p-1.5">
-            <Input
-              ref={input}
-              value={filter}
-              onChange={(e) => setFilter(e.target.value)}
-              aria-label="筛选标签"
-              placeholder="筛选"
-            />
-          </div>
           <div className="overflow-y-auto p-1">
+            <SearchBox value={filter} onChange={setFilter} />
             {TAG_GROUPS.map((g) => {
               const group = matching.filter((t) => t.kind === g.kind);
               return (

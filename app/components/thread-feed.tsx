@@ -105,12 +105,8 @@ export function ThreadFeed({
               { to: listUrl(null, tag, view), label: "全部版块", chosen: board === null },
               ...boards.map((b) => ({
                 to: listUrl(b.slug, tag, view),
-                label: (
-                  <>
-                    <Dot color={b.color} />
-                    {b.name}
-                  </>
-                ),
+                label: b.name,
+                color: b.color,
                 chosen: b.slug === slug,
               })),
             ]}
