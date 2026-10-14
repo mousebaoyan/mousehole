@@ -60,7 +60,7 @@ describe("版块", () => {
       .execute();
     const frozen = as(await login(frozenUser.id));
     const { token } = await createBotToken(
-      { userId: frozenUser.id, operatorId: null, tokenId: null, ip: null },
+      { userId: frozenUser.id, operatorId: null, tokenId: null, ip: null, userAgent: null },
       { name: "同步", botQq: nextQq(), scopes: ["sync"] },
     );
     const syncBot = { headers: { authorization: `Bearer ${token}` } };

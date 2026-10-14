@@ -102,6 +102,12 @@ export async function setCustomName(actor: Actor, userId: number, name: string |
   await db.transaction().execute(async (trx) => {
     await saveCustomName(trx, userId, name);
     await refreshAccounts(trx, actor, [userId]);
+    await recordAudit(trx, actor, {
+      action: "user.rename",
+      target_type: "user",
+      target_id: userId,
+      data: { name },
+    });
   });
 }
 

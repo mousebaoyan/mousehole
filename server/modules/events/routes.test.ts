@@ -18,7 +18,7 @@ let askerQq = 0;
 beforeAll(async () => {
   const admin = await createUser("admin");
   const { token } = await createBotToken(
-    { userId: admin.id, operatorId: null, tokenId: null, ip: null },
+    { userId: admin.id, operatorId: null, tokenId: null, ip: null, userAgent: null },
     { name: "插件", botQq: nextQq(), scopes: ["read", "act", "admin", "events"] },
   );
   bot = { headers: { authorization: `Bearer ${token}` } };

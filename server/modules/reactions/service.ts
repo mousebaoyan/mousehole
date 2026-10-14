@@ -107,7 +107,13 @@ export function boostLength(body: string) {
 }
 
 // One per person per floor; leaving another replaces it where it stood.
-export async function setBoost(viewer: Viewer, members: boolean, postId: number, body: string) {
+export async function setBoost(
+  actor: Actor,
+  viewer: Viewer,
+  members: boolean,
+  postId: number,
+  body: string,
+) {
   const post = await getPost(postId, { members, id: viewer.id, staff: false });
   if (post.deleted_at !== null) throw new AppError(404, "post_not_found", "回复不存在");
   const row = await db.transaction().execute(async (trx) => {
@@ -122,6 +128,12 @@ export async function setBoost(viewer: Viewer, members: boolean, postId: number,
       await countBoosts(trx, postId, 1);
       await notifyOnPost(trx, "boost", post, viewer.id, { body });
     }
+    await recordAudit(trx, actor, {
+      action: "boost.set",
+      target_type: "post",
+      target_id: postId,
+      data: { body },
+    });
     return saved;
   });
   const [boost] = await withBoostUsers([row]);
@@ -132,7 +144,7 @@ function boostNotFound() {
   return new AppError(404, "boost_not_found", "短评不存在");
 }
 
-export async function deleteOwnBoost(viewer: Viewer, postId: number) {
+export async function deleteOwnBoost(actor: Actor, viewer: Viewer, postId: number) {
   await db.transaction().execute(async (trx) => {
     const deleted = await trx
       .deleteFrom("boosts")
@@ -142,6 +154,11 @@ export async function deleteOwnBoost(viewer: Viewer, postId: number) {
       .executeTakeFirst();
     if (!deleted) throw boostNotFound();
     await countBoosts(trx, deleted.post_id, -1);
+    await recordAudit(trx, actor, {
+      action: "boost.unset",
+      target_type: "post",
+      target_id: postId,
+    });
   });
 }
 

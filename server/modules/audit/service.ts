@@ -3,7 +3,10 @@ import type { AuditLogs, DB } from "../../../db/types.ts";
 import type { Actor } from "../../platform/access.ts";
 import { db } from "../../platform/db.ts";
 
-type Entry = Omit<Insertable<AuditLogs>, "actor_id" | "operator_id" | "token_id" | "ip">;
+type Entry = Omit<
+  Insertable<AuditLogs>,
+  "actor_id" | "operator_id" | "token_id" | "ip" | "user_agent"
+>;
 
 // Written in the caller's transaction, so the log and the change commit together.
 export async function recordAudit(trx: Transaction<DB>, actor: Actor | null, entry: Entry) {
@@ -15,16 +18,18 @@ export async function recordAudit(trx: Transaction<DB>, actor: Actor | null, ent
       operator_id: actor?.operatorId,
       token_id: actor?.tokenId,
       ip: actor?.ip,
+      user_agent: actor?.userAgent?.slice(0, 500),
     })
     .execute();
 }
 
 const PAGE = 50;
 
-// For admins: newest first, narrowed by who did it, what was done, or what to; the cursor is the
-// last one's ID.
+// For admins: newest first, narrowed by who did it, from where, what was done, or what to; the
+// cursor is the last one's ID.
 export async function listAuditLogs(filter: {
   actorId?: number;
+  ip?: string;
   action?: string;
   targetType?: string;
   targetId?: number;
@@ -43,11 +48,14 @@ export async function listAuditLogs(filter: {
       "audit_logs.target_id",
       sql<Record<string, unknown>>`audit_logs.data`.as("data"),
       sql<string | null>`host(audit_logs.ip)`.as("ip"),
+      "audit_logs.user_agent",
       "audit_logs.created_at",
     ])
     .orderBy("audit_logs.id", "desc")
     .limit(PAGE);
   if (filter.actorId !== undefined) query = query.where("audit_logs.actor_id", "=", filter.actorId);
+  if (filter.ip !== undefined)
+    query = query.where(sql<boolean>`audit_logs.ip = ${filter.ip}::inet`);
   if (filter.action !== undefined) query = query.where("audit_logs.action", "=", filter.action);
   if (filter.targetType !== undefined) {
     query = query.where("audit_logs.target_type", "=", filter.targetType);

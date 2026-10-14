@@ -24,7 +24,7 @@ beforeAll(async () => {
     .values({ qq: ++lastQq, display_name: "管理员", role: "admin" })
     .returning("id")
     .executeTakeFirstOrThrow();
-  const actor = { userId: id, operatorId: null, tokenId: null, ip: null };
+  const actor = { userId: id, operatorId: null, tokenId: null, ip: null, userAgent: null };
   const { token } = await createBotToken(actor, {
     name: "插件",
     botQq: ++lastQq,

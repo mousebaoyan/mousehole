@@ -276,7 +276,7 @@ export async function getSettings(userId: number) {
 
 // Only what is given changes; each notification type given replaces what was saved for it.
 export async function updateSettings(
-  userId: number,
+  actor: Actor,
   change: {
     custom_bio?: string | null;
     allow_proxy?: boolean;
@@ -286,28 +286,36 @@ export async function updateSettings(
 ) {
   const { notify_prefs, ...rest } = change;
   if (Object.keys(change).length === 0) return;
-  await db
-    .updateTable("users")
-    .set({
-      ...rest,
-      ...(notify_prefs && {
-        notify_prefs: sql`notify_prefs || ${JSON.stringify(notify_prefs)}::jsonb`,
-      }),
-    })
-    .where("id", "=", userId)
-    .execute();
+  await db.transaction().execute(async (trx) => {
+    await trx
+      .updateTable("users")
+      .set({
+        ...rest,
+        ...(notify_prefs && {
+          notify_prefs: sql`notify_prefs || ${JSON.stringify(notify_prefs)}::jsonb`,
+        }),
+      })
+      .where("id", "=", actor.userId)
+      .execute();
+    await recordAudit(trx, actor, { action: "user.settings", data: change });
+  });
 }
 
 // The QQ signature, which the bot looks up when someone first logs in. Shown until they write
 // their own; longer ones are cut to fit, by characters as people see them so an emoji stays
 // whole.
-export async function setQqBio(userId: number, bio: string) {
+export async function setQqBio(actor: Actor, userId: number, bio: string) {
   const characters = Array.from(new Intl.Segmenter().segment(bio), (s) => s.segment);
-  await db
-    .updateTable("users")
-    .set({ qq_bio: characters.slice(0, MAX_BIO).join("") })
-    .where("id", "=", userId)
-    .execute();
+  const qq_bio = characters.slice(0, MAX_BIO).join("");
+  await db.transaction().execute(async (trx) => {
+    await trx.updateTable("users").set({ qq_bio }).where("id", "=", userId).execute();
+    await recordAudit(trx, actor, {
+      action: "user.qq_bio",
+      target_type: "user",
+      target_id: userId,
+      data: { bio: qq_bio },
+    });
+  });
 }
 
 // Written by members, which then works out the display name from it.
@@ -598,36 +606,41 @@ async function modifiedAt(path: string) {
   );
 }
 
-async function saveAvatar(id: number, avatar: Buffer, custom: boolean) {
+// Uploaded or put back by the person, with the audit entry; the daily refresh writes no entry.
+async function saveAvatar(id: number, avatar: Buffer, custom: boolean, actor?: Actor) {
   await mkdir(AVATARS_DIR, { recursive: true });
   const path = `${AVATARS_DIR}/${id}.webp`;
   await writeFile(`${path}.tmp`, avatar);
   await rename(`${path}.tmp`, path);
-  const { avatar_version } = await db
-    .updateTable("users")
-    .set((eb) => ({ avatar_version: eb("avatar_version", "+", 1), avatar_custom: custom }))
-    .where("id", "=", id)
-    .returning("avatar_version")
-    .executeTakeFirstOrThrow();
+  const avatar_version = await db.transaction().execute(async (trx) => {
+    const row = await trx
+      .updateTable("users")
+      .set((eb) => ({ avatar_version: eb("avatar_version", "+", 1), avatar_custom: custom }))
+      .where("id", "=", id)
+      .returning("avatar_version")
+      .executeTakeFirstOrThrow();
+    if (actor) await recordAudit(trx, actor, { action: "user.avatar", data: { custom } });
+    return row.avatar_version;
+  });
   return avatarUrl(id, avatar_version);
 }
 
-export async function uploadAvatar(userId: number, file: Buffer) {
-  return saveAvatar(userId, await processAvatar(file), true);
+export async function uploadAvatar(actor: Actor, file: Buffer) {
+  return saveAvatar(actor.userId, await processAvatar(file), true, actor);
 }
 
 // Back to the QQ avatar, fetched right away so the page shows it.
-export async function restoreQqAvatar(userId: number) {
+export async function restoreQqAvatar(actor: Actor) {
   const { qq } = await db
     .selectFrom("users")
     .select("qq")
-    .where("id", "=", userId)
+    .where("id", "=", actor.userId)
     .$narrowType<{ qq: number }>()
     .executeTakeFirstOrThrow();
   const avatar = await fetchAvatar(qq).catch((error: unknown) => {
     throw new AppError(502, "fetch_failed", "QQ 头像获取失败，请稍后再试", { cause: error });
   });
-  return saveAvatar(userId, avatar, false);
+  return saveAvatar(actor.userId, avatar, false, actor);
 }
 
 // One at a time: a daily trickle to QQ rather than a burst. A picture that didn't change only

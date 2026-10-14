@@ -69,7 +69,13 @@ describe("导出自己的内容", () => {
   test("要登录，bot 不能代为导出", async () => {
     expect((await api.me.export.$get({})).status).toBe(401);
     const { token } = await createBotToken(
-      { userId: (await createUser("admin")).id, operatorId: null, tokenId: null, ip: null },
+      {
+        userId: (await createUser("admin")).id,
+        operatorId: null,
+        tokenId: null,
+        ip: null,
+        userAgent: null,
+      },
       { name: "插件", botQq: nextQq(), scopes: ["read", "act"] },
     );
     const asBot = { headers: { authorization: `Bearer ${token}`, "x-act-as": `qq:${me.qq}` } };

@@ -140,6 +140,7 @@ export const reactionsRoutes = createRouter()
       const viewer = authorizePosting(c);
       const members = isMember(viewer, c.var.bot);
       const boost = await setBoost(
+        actorOf(c, viewer),
         viewer,
         members,
         c.req.valid("param").id,
@@ -157,7 +158,8 @@ export const reactionsRoutes = createRouter()
       responses: { 204: { description: "已删除" }, 404: errorResponse("没有留过短评") },
     }),
     async (c) => {
-      await deleteOwnBoost(authorize(c, "act"), c.req.valid("param").id);
+      const viewer = authorize(c, "act");
+      await deleteOwnBoost(actorOf(c, viewer), viewer, c.req.valid("param").id);
       return c.body(null, 204);
     },
   )

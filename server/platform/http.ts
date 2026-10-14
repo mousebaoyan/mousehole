@@ -105,5 +105,6 @@ export function actorOf(c: Context<AppEnv>, viewer: Viewer): Actor {
     operatorId: bot?.operator?.id ?? null,
     tokenId: bot?.tokenId ?? null,
     ip: clientIp(c),
+    userAgent: c.req.header("user-agent") ?? null,
   };
 }
