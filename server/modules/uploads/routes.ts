@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { createRoute, z } from "@hono/zod-openapi";
 import type { Context } from "hono";
+import { env } from "../../platform/env.ts";
 import { AppError } from "../../platform/errors.ts";
 import { authorizePosting, createRouter, errorResponse } from "../../platform/http.ts";
 import { rateLimit } from "../../platform/rate-limit.ts";
@@ -69,9 +70,16 @@ export const uploadsRoutes = createRouter()
     },
   );
 
+const SITE = new URL(env.PUBLIC_URL).origin;
+
 // The files themselves. Their names come from their content, so they never change and can be
-// cached for a year. The route's pattern admits only such names.
+// cached for a year. The route's pattern admits only such names. Other sites' pages may not
+// show them (design §11.2); opened directly, as from QQ, there is no Referer and they show.
 export async function serveUpload(c: Context) {
+  const referer = c.req.header("referer");
+  if (referer !== undefined && URL.parse(referer)?.origin !== SITE) {
+    throw new AppError(403, "forbidden", "图片只能在鼠洞的页面里显示");
+  }
   const path = `${UPLOADS_DIR}/${c.req.param("dir")}/${c.req.param("file")}`;
   const file = await readFile(path).catch((error: unknown) => {
     if (error instanceof Error && "code" in error && error.code === "ENOENT") {
