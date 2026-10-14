@@ -551,10 +551,10 @@ sequenceDiagram
 
 服务器上（`deploy/` 里的文件是现成的配置）：
 
-1. 在 1Panel 的 PostgreSQL 里新建 `mousehole` 库和同名账号，账号只有这个库的权限。
-2. 在服务器上新建一个目录，放进 `deploy/compose.yml` 和 `.env`：`DATABASE_URL` 用 PostgreSQL 的容器名连接，`PUBLIC_URL=https://bbs.mousebaoyan.cn`，`APP_SECRET` 用 `openssl rand -base64 32` 生成。再建 `data/` 目录，属主改成 1000（镜像里的 `node` 用户）。
+1. 在 PostgreSQL 里新建 `mousehole` 库和同名账号，账号只有这个库的权限，密码在服务器上生成，直接写进下一步的 `.env`；再在 1Panel 数据库页面点"从服务器同步"，交给 1Panel 管理。
+2. 新建 `/opt/1panel/www/sites/mousehole/`，放进 `deploy/compose.yml` 和 `.env`：`DATABASE_URL` 用 PostgreSQL 的容器名连接，`PUBLIC_URL=https://bbs.mousebaoyan.cn`，`APP_SECRET` 用 `openssl rand -base64 32` 生成。再建 `data/` 目录，属主改成 1000（镜像里的 `node` 用户）。
 3. 在 `main` 上打 `v0.1.0` 这样的标签，GitHub Actions 构建镜像并推到 GHCR。第一次推送后，在 GitHub 的包设置里把 `mousehole` 设为公开，服务器不用登录就能拉取。然后 `docker compose pull && docker compose up -d`，启动时自动迁移。
-4. 在 1Panel 里新建网站，反向代理到 `127.0.0.1:3080`，申请证书，把 `deploy/openresty.conf` 的内容放进站点配置；Cloudflare 上加 A 记录，仅 DNS。
+4. Cloudflare 上加 `bbs` 的 A 记录，仅 DNS。在 1Panel 里新建反向代理网站 `bbs.mousebaoyan.cn`，代理到 `127.0.0.1:3080`，证书用已有的 `*.mousebaoyan.cn`；站点的 HTTPS 设置里关闭 HSTS、开启 HTTP3，再按 `deploy/openresty.conf` 开头的说明替换站点的反代配置、加上限流区。
 5. 把 `deploy/gatus-endpoints.json` 的两条加进 Gatus 的 `endpoints`；按[总体设计 §12](design.md#12-部署与运维) 配好备份和日志切割。
 
 然后登录后台：

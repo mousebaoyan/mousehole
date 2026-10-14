@@ -1,6 +1,6 @@
 # The forum on the server, next to 1Panel's PostgreSQL; see docs/design.md §12 and §13.
-# Beside this file: .env with DATABASE_URL, PUBLIC_URL and APP_SECRET, and data/ owned by
-# uid 1000, the image's node user, for uploads and avatars.
+# It lives in /opt/1panel/www/sites/mousehole/, beside .env with DATABASE_URL, PUBLIC_URL and
+# APP_SECRET, and data/ owned by uid 1000, the image's node user, for uploads and avatars.
 services:
   mousehole:
     image: ghcr.io/mousebaoyan/mousehole:${MOUSEHOLE_VERSION:-latest}

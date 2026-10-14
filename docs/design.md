@@ -523,8 +523,8 @@ bot 把 QQ 群的信息推送给论坛。两种方式都支持，推荐一起用
 ## 12. 部署与运维
 
 - **镜像**：基于 `node:26-slim` 多阶段构建（`Dockerfile`），以 `node` 用户（uid 1000）运行，V8 堆上限 192MB，自带 `/healthz` 健康检查。CI 在每个 PR 上确认镜像能构建；在 `main` 上打 `v1.2.3` 这样的版本标签时，GitHub Actions 构建镜像并推到 `ghcr.io/mousebaoyan/mousehole`（标签是版本号和 `latest`）。这个包设为公开，服务器不用登录就能拉取；镜像里没有密钥，源码本来也是公开的。服务器只拉镜像，不在服务器上编译。
-- **compose**：见 `deploy/compose.yml`。`mousehole` 服务加入 `1panel-network`，通过容器名连接 PostgreSQL；端口只监听 `127.0.0.1:3080`（3000 已被占用）；`data/`（上传的图片和头像）挂载为数据卷；内存上限 384MB，日志轮转。更新就是 `docker compose pull && docker compose up -d`；停止时先写入内存里的浏览数。
-- **数据库**：在 1Panel 里新建 `mousehole` 库和同名账号，这个账号只有 `mousehole` 库的权限；连接串通过环境变量传入。
+- **compose**：见 `deploy/compose.yml`，服务器上和 `.env`、`data/` 一起放在 `/opt/1panel/www/sites/mousehole/`。`mousehole` 服务加入 `1panel-network`，通过容器名连接 PostgreSQL；端口只监听 `127.0.0.1:3080`（3000 已被占用）；`data/`（上传的图片和头像）挂载为数据卷；内存上限 384MB，日志轮转。更新就是 `docker compose pull && docker compose up -d`；停止时先写入内存里的浏览数。
+- **数据库**：1Panel 的 PostgreSQL 里的 `mousehole` 库和同名账号，这个账号只有 `mousehole` 库的权限；连接串通过环境变量传入。
 - **迁移**：启动时自动执行，先取 advisory lock，防止重复执行。
 - **备份**：本机和异地各存一份。异地放在服务器上 AList 挂的 Google Drive 里，通过 AList 的 WebDAV 上传。
 
@@ -537,7 +537,7 @@ bot 把 QQ 群的信息推送给论坛。两种方式都支持，推荐一起用
   - 每季度把备份恢复到本地试一次，确认能用。服务器快照照常做，作为整机的兜底。
   - 用 1Panel 的 WebDAV 备份账号还是 rclone，部署时看服务器上的条件再定（第 14 节 M10）。
 - **日志**：论坛只往 stdout 写 JSON 日志，Docker 按 10MB 一个文件轮转，留 5 个（`deploy/compose.yml`）。OpenResty 的访问日志用 1Panel 的"切割网站日志"计划任务每天切割，留 30 份。操作日志（`audit_logs`，第 10 节）在库里永久保留，随数据库一起备份，每年预计几万到十几万行，占用很小。
-- **反代**：在 1Panel 的 OpenResty 里新建站点，配置见 `deploy/openresty.conf`。SSE 路径关闭缓冲（`proxy_buffering off`）并延长超时；上传大小上限 20MB。开启 HTTP/2 和 HTTP/3，跨境链路丢包时 HTTP/3 更稳。站点关闭 gzip，压缩交给应用：服务器上的 OpenResty 没有 Brotli 模块，默认配置也不压缩 JSON。转发时设置 `X-Real-IP`，并按 IP 限制连接数和请求速率。
+- **反代**：1Panel 里的反向代理网站，证书、HTTP/3 和关闭 HSTS 用 1Panel 的站点设置，其余配置见 `deploy/openresty.conf`。SSE 路径关闭缓冲（`proxy_buffering off`）并延长超时；上传大小上限 20MB。开启 HTTP/2 和 HTTP/3，跨境链路丢包时 HTTP/3 更稳。站点关闭 gzip，压缩交给应用：服务器上的 OpenResty 没有 Brotli 模块，默认配置也不压缩 JSON。转发时设置 `X-Real-IP`，并按 IP 限制连接数和请求速率。
 - **域名**：Cloudflare 上设为仅 DNS（灰云），直连服务器。开代理反而会让大陆访问绕路，变慢。
 - **监控**：`/healthz` 接入服务器上已有的 Gatus（`deploy/gatus-endpoints.json`：容器内和经过公网各一条）；页面可以配置 Umami 统计；日志以 JSON 格式输出到 stdout。
 - **定时任务**：在进程里运行（`platform/schedule.ts`），失败只记日志，下一轮再试。每分钟写入浏览数，发出待发的邮件；每小时检查升级，刷新满一天的头像；每天复查 L4 的等级，清理过期的会话、登录口令和链接、邮件验证码，7 天前的幂等记录，上传后一天没用上的图片，7 天前的事件，半年前读过的通知，以及 180 天没动过的草稿。
