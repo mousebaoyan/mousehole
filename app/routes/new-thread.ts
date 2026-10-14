@@ -29,7 +29,7 @@ export async function action({ request, context }: Route.ActionArgs) {
               max_choices: number("max_choices"),
               anonymous: text("poll_anonymous") === "true",
               results: text("results") === "always" ? "always" : "voted",
-              days: number("days"),
+              closes_at: number("closes_at"),
             }
           : undefined,
       tags: form.getAll("tags").filter((t) => typeof t === "string"),

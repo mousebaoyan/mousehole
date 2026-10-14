@@ -33,12 +33,14 @@ import { Input } from "~/components/ui/input";
 import { Select } from "~/components/ui/select";
 import { useMe, usePostableBoards } from "~/forum";
 import { useHydrated } from "~/hydrated";
+import { fromWallClock, unixNow, wallClock } from "~/time";
 
 type ThreadRef = { id: number; title: string };
 type ReplyRef = { id: number; floor: number; name: string };
 type Kind = "discussion" | "question" | "poll";
 
 // A poll being set up, as the API takes it (design §8.11); blank options are left out on posting.
+// It closes some days after posting or at a time of the author's; neither is never.
 type PollDraft = {
   options: string[];
   multiple: boolean;
@@ -46,6 +48,7 @@ type PollDraft = {
   anonymous: boolean;
   results: "voted" | "always";
   days: number | null;
+  closes_at: number | null;
 };
 
 // A new thread, a reply to one, or a change to a floor already posted.
@@ -86,6 +89,7 @@ const EMPTY: Content = {
     anonymous: false,
     results: "voted",
     days: null,
+    closes_at: null,
   },
   tags: [],
   anonymous: false,
@@ -460,7 +464,8 @@ function Composer({
         form.set("max_choices", poll.multiple ? String(poll.max_choices ?? "") : "");
         form.set("poll_anonymous", String(poll.anonymous));
         form.set("results", poll.results);
-        form.set("days", String(poll.days ?? ""));
+        const closesAt = poll.days === null ? poll.closes_at : unixNow() + poll.days * 86_400;
+        form.set("closes_at", String(closesAt ?? ""));
       }
       void sending.submit(form, { ...options, action: "/new" });
     } else if (target.mode === "edit") {
@@ -732,10 +737,16 @@ function ThreadFields({
 
 const MAX_OPTIONS = 20;
 
-const DAYS = [
+const DEADLINES = [
   { value: "", label: "不限时间" },
-  ...[1, 3, 7, 30].map((d) => ({ value: String(d), label: `${d} 天后截止` })),
+  ...[1, 3, 7].map((d) => ({ value: String(d), label: `${d} 天后截止` })),
+  { value: "at", label: "自定义截止时间" },
 ];
+
+// Where a custom time starts: three days on, on the hour.
+function defaultDeadline() {
+  return Math.ceil((unixNow() + 3 * 86_400) / 3600) * 3600;
+}
 
 // How the poll works, fixed once posted. Kept out of the scrolling part, which would clip the
 // dropdowns.
@@ -774,12 +785,30 @@ function PollSettings({
         />
       )}
       <Select
-        value={String(poll.days ?? "")}
-        onValueChange={(v) => onChange({ ...poll, days: v ? Number(v) : null })}
-        options={DAYS}
+        value={poll.closes_at === null ? String(poll.days ?? "") : "at"}
+        onValueChange={(v) =>
+          onChange({
+            ...poll,
+            days: v && v !== "at" ? Number(v) : null,
+            closes_at: v === "at" ? defaultDeadline() : null,
+          })
+        }
+        options={DEADLINES}
         aria-label="截止时间"
-        className="w-32"
+        className="w-40"
       />
+      {poll.closes_at !== null && (
+        // Beijing time, as every time on the forum is shown.
+        <Input
+          type="datetime-local"
+          value={wallClock(poll.closes_at)}
+          onChange={(e) => {
+            if (e.target.value) onChange({ ...poll, closes_at: fromWallClock(e.target.value) });
+          }}
+          aria-label="截止时间"
+          className="h-8 w-48"
+        />
+      )}
       <span className="flex items-center gap-2">
         <Checkbox
           id={`${id}-anonymous`}

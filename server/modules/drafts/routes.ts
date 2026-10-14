@@ -18,9 +18,13 @@ const DraftPollSchema = z
     max_choices: z.number().int().nullable(),
     anonymous: z.boolean(),
     results: z.enum(["voted", "always"]),
-    days: z.number().int().min(1).max(30).nullable(),
+    days: z.number().int().min(1).max(30).nullable().openapi({ description: "选的是几天后截止" }),
+    closes_at: z.number().int().nullable().openapi({ description: "自定义的截止时间" }),
   })
-  .openapi("DraftPoll", { description: "写了一半的投票，选项可以是空的；字段同发帖的 poll" });
+  .openapi("DraftPoll", {
+    description:
+      "写了一半的投票，选项可以是空的；截止时间是 days 或 closes_at，其余字段同发帖的 poll",
+  });
 
 const DraftSchema = z
   .object({

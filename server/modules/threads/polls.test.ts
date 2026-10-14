@@ -31,10 +31,11 @@ type PollInput = {
   max_choices?: number | null;
   anonymous?: boolean;
   results?: "voted" | "always";
+  closes_at?: number | null;
 };
 
-async function newPoll(poll: PollInput) {
-  const res = await api.threads.$post(
+function postPoll(poll: PollInput) {
+  return api.threads.$post(
     {
       json: {
         board: "polls",
@@ -46,10 +47,14 @@ async function newPoll(poll: PollInput) {
     },
     people.author,
   );
+}
+
+async function newPoll(poll: PollInput) {
+  const res = await postPoll(poll);
   if (!res.ok) throw new Error(`status ${res.status}`);
   const thread = await res.json();
   if (!thread.poll) throw new Error("no poll");
-  return { id: thread.id, options: thread.poll.options.map((o) => o.id) };
+  return { id: thread.id, options: thread.poll.options.map((o) => o.id), poll: thread.poll };
 }
 
 function vote(thread: number, options: number[], who: Who) {
@@ -130,7 +135,7 @@ describe("投票", () => {
     expect(votes(await pollOf(id, guest))).toEqual([1, 0, 1, 0]);
   });
 
-  test("结束后不能再投：楼主和版主能提前结束，到了截止时间也结束", async () => {
+  test("结束后不能再投：楼主和版主能提前结束，到了截止时间也结束；截止时间在 10 分钟以后、一年以内", async () => {
     const { id, options } = await newPoll({ options: ["能", "不能"] });
     const param = { id: String(id) };
     expect((await api.threads[":id"].poll.close.$post({ param }, people.first)).status).toBe(403);
@@ -142,7 +147,12 @@ describe("投票", () => {
     });
     expect((await vote(id, [options[0]], people.first)).status).toBe(403);
 
-    const timed = await newPoll({ options: ["能", "不能"] });
+    const now = Math.floor(Date.now() / 1000);
+    for (const closes_at of [now + 60, now + 400 * 86_400]) {
+      expect((await postPoll({ options: ["能", "不能"], closes_at })).status).toBe(400);
+    }
+    const timed = await newPoll({ options: ["能", "不能"], closes_at: now + 3600 });
+    expect(timed.poll).toMatchObject({ closes_at: now + 3600, closed: false });
     await db
       .updateTable("polls")
       .set({ closes_at: sql<Date>`now() - interval '1 minute'` })

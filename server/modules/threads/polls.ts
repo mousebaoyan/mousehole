@@ -16,8 +16,8 @@ export type PollSpec = {
   max_choices: number | null;
   anonymous: boolean;
   results: "voted" | "always";
-  // Closes this many days after it is posted; null for never.
-  days: number | null;
+  // Unix seconds; null for never.
+  closes_at: number | null;
 };
 
 export async function createPoll(trx: Transaction<DB>, threadId: number, spec: PollSpec) {
@@ -29,7 +29,7 @@ export async function createPoll(trx: Transaction<DB>, threadId: number, spec: P
       max_choices: spec.multiple ? spec.max_choices : null,
       anonymous: spec.anonymous,
       results: spec.results,
-      closes_at: spec.days === null ? null : sql<Date>`now() + make_interval(days => ${spec.days})`,
+      closes_at: spec.closes_at === null ? null : new Date(spec.closes_at * 1000),
     })
     .execute();
   await trx

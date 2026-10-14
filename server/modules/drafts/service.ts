@@ -7,13 +7,16 @@ import type { PollSpec } from "../threads/polls.ts";
 // What people are still writing, saved by the composer as they type; see design §8.2. A null
 // thread is the one new thread each person may have in progress.
 
+type DraftPoll = PollSpec & { days: number | null };
+
 export type DraftContent = {
   body: string;
   title?: string;
   board?: string | null;
   kind?: "discussion" | "question" | "poll" | null;
-  // As far as it has been written: options may still be blank.
-  poll?: PollSpec | null;
+  // As far as it has been written: options may still be blank, and the end may be a number of
+  // days still to count from posting.
+  poll?: DraftPoll | null;
   tags?: string[];
   author_anonymous?: boolean;
   anonymous_replies?: boolean;
@@ -64,7 +67,7 @@ export async function getDraft(userId: number, threadId: number | null) {
       "drafts.title",
       "boards.slug as board",
       "drafts.kind",
-      sql<PollSpec | null>`drafts.poll`.as("poll"),
+      sql<DraftPoll | null>`drafts.poll`.as("poll"),
       "drafts.tags",
       "drafts.author_anonymous",
       "drafts.anonymous_replies",

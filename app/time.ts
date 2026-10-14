@@ -46,11 +46,22 @@ export function ago(unix: number, now: number) {
   return date(unix, now);
 }
 
-// For posts: "今天 09:12", "昨天 21:40", "10月3日 08:00".
+// For posts: "今天 09:12", "昨天 21:40", "10月3日 08:00"; for deadlines also "明天 22:00".
 export function stamp(unix: number, now: number) {
   const days = day(now) - day(unix);
   const time = clock.format(new Date(unix * 1000));
   if (days === 0) return `今天 ${time}`;
   if (days === 1) return `昨天 ${time}`;
+  if (days === -1) return `明天 ${time}`;
   return `${date(unix, now)} ${time}`;
+}
+
+// What <input type="datetime-local">, which knows no time zone, shows and takes: Beijing's wall
+// clock, to the minute.
+export function wallClock(unix: number) {
+  return new Date((unix + OFFSET_S) * 1000).toISOString().slice(0, 16);
+}
+
+export function fromWallClock(value: string) {
+  return Date.parse(`${value}:00+08:00`) / 1000;
 }
