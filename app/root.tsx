@@ -6,13 +6,16 @@ import {
   Scripts,
   ScrollRestoration,
 } from "react-router";
+import { use } from "react";
 import type { Route } from "./+types/root.ts";
+import { Nonce } from "./nonce.ts";
 import "./app.css";
 
 // Runs before first paint so the page never flashes the wrong theme. Same key as the main site.
 const themeScript = `try{document.documentElement.dataset.theme=localStorage.getItem("theme")||(matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light")}catch{}`;
 
 export function Layout({ children }: { children: React.ReactNode }) {
+  const nonce = use(Nonce);
   return (
     // themeScript sets data-theme before hydration; this only silences that one attribute.
     <html lang="zh-CN" suppressHydrationWarning>
@@ -22,14 +25,14 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <meta name="theme-color" content="#fefdfb" media="(prefers-color-scheme: light)" />
         <meta name="theme-color" content="#161b1a" media="(prefers-color-scheme: dark)" />
         <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-        <script dangerouslySetInnerHTML={{ __html: themeScript }} />
+        <script nonce={nonce} dangerouslySetInnerHTML={{ __html: themeScript }} />
         <Meta />
         <Links />
       </head>
       <body>
         {children}
-        <ScrollRestoration />
-        <Scripts />
+        <ScrollRestoration nonce={nonce} />
+        <Scripts nonce={nonce} />
       </body>
     </html>
   );

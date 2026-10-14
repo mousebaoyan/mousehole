@@ -1,6 +1,8 @@
 import { RouterContextProvider } from "react-router";
+import type { SecureHeadersVariables } from "hono/secure-headers";
 import { createHonoServer } from "react-router-hono-server/node";
 import { apiContext, createApi } from "../app/api.server.ts";
+import { nonceContext } from "../app/nonce.ts";
 import { app } from "./app.ts";
 import { clearExpiredLogins } from "./modules/auth/service.ts";
 import { clearOldEvents, EVENTS_CHANNEL, eventsArrived } from "./modules/events/service.ts";
@@ -14,6 +16,7 @@ import { flushViews } from "./modules/threads/service.ts";
 import { clearUnusedUploads } from "./modules/uploads/service.ts";
 import { refreshAvatars } from "./modules/users/service.ts";
 import { compressResponses } from "./platform/compress.ts";
+import { securityHeaders } from "./platform/security-headers.ts";
 import { listen } from "./platform/db.ts";
 import { log } from "./platform/log.ts";
 import { clearIdempotencyKeys } from "./platform/idempotency.ts";
@@ -37,8 +40,12 @@ process.once("SIGTERM", () => {
   void flushViews().finally(() => process.exit(0));
 });
 
-export default await createHonoServer({
+export default await createHonoServer<{ Variables: SecureHeadersVariables }>({
   defaultLogger: false,
+  // Before the static files, so they get the headers too.
+  beforeAll(server) {
+    server.use(securityHeaders);
+  },
   // Built files have Brotli and gzip copies beside them; see scripts/compress-assets.ts.
   serveStaticOptions: {
     clientAssets: { precompressed: true },
@@ -51,6 +58,7 @@ export default await createHonoServer({
   getLoadContext(c) {
     const context = new RouterContextProvider();
     context.set(apiContext, createApi(c.req.raw));
+    context.set(nonceContext, c.get("secureHeadersNonce"));
     return context;
   },
 });
