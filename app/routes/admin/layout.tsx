@@ -19,9 +19,10 @@ import { cn } from "cn";
 import { Logo } from "~/components/logo";
 import { ThemeToggle } from "~/components/theme-toggle";
 import type { Route } from "./+types/layout.ts";
+import { SITE_NAME } from "../../../server/platform/site.ts";
 
 export function meta() {
-  return [{ title: "管理后台 · 鼠洞" }];
+  return [{ title: `管理后台 · ${SITE_NAME}` }];
 }
 
 // Admins see it all; moderators the pages for their work (design §10), starting at reports.

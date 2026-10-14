@@ -8,6 +8,7 @@ import { contentStats } from "../threads/service.ts";
 import { uploadBytes } from "../uploads/service.ts";
 import { memberStats } from "../users/service.ts";
 import { databaseBytes, updateSettings } from "./service.ts";
+import { SITE_NAME } from "../../platform/site.ts";
 
 const SiteSettings = z.object({
   banner: z.string().trim().max(200).openapi({ description: "公告横幅，空字符串不显示" }),
@@ -196,7 +197,11 @@ export const adminRoutes = createRouter()
     }),
     async (c) => {
       authorize(c, "admin");
-      await sendMail(`${c.req.valid("json").qq}@qq.com`, "鼠洞测试邮件", "SMTP 设置可以正常发信。");
+      await sendMail(
+        `${c.req.valid("json").qq}@qq.com`,
+        `${SITE_NAME}测试邮件`,
+        "SMTP 设置可以正常发信。",
+      );
       return c.body(null, 204);
     },
   );

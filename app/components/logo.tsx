@@ -1,5 +1,6 @@
 import { useId } from "react";
 import { Link } from "react-router";
+import { SITE_NAME } from "../../server/platform/site.ts";
 
 // A mouse looking out of its hole, after the 鼠群 logo. The hole is also the rising sun, and
 // the mouse sits above the water: 上岸. Four lines for 四非, and read upwards they get longer,
@@ -47,7 +48,7 @@ export function Logo() {
   return (
     <Link to="/" className="flex shrink-0 items-center gap-2 font-semibold tracking-tight">
       <LogoMark className="size-9" />
-      <span className="text-lg">鼠洞</span>
+      <span className="text-lg">{SITE_NAME}</span>
     </Link>
   );
 }

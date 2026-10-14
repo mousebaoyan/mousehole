@@ -21,6 +21,7 @@ import { env } from "./platform/env.ts";
 import { createRouter, handleError, type AppEnv } from "./platform/http.ts";
 import { requestBody } from "./platform/body.ts";
 import { idempotency } from "./platform/idempotency.ts";
+import { SITE_NAME } from "./platform/site.ts";
 
 const api = createRouter()
   .route("/", authRoutes)
@@ -39,7 +40,7 @@ const api = createRouter()
   .route("/", adminRoutes)
   .route("/", auditRoutes);
 
-api.doc31("/openapi.json", { openapi: "3.1.0", info: { title: "鼠洞", version: "1" } });
+api.doc31("/openapi.json", { openapi: "3.1.0", info: { title: SITE_NAME, version: "1" } });
 
 api.all("*", (c) => c.json({ error: { code: "not_found", message: "接口不存在" } }, 404));
 

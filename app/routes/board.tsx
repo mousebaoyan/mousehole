@@ -4,10 +4,11 @@ import { readCounts, readFilter, ThreadFeed } from "~/components/thread-feed";
 import { shareMeta } from "~/share-meta";
 import { unixNow } from "~/time";
 import type { Route } from "./+types/board.ts";
+import { SITE_NAME } from "../../server/platform/site.ts";
 
 export function meta({ loaderData }: Route.MetaArgs) {
   const { name, description } = loaderData.board;
-  return shareMeta(name, description || `鼠洞的${name}版块`);
+  return shareMeta(name, description || `${SITE_NAME}的${name}版块`);
 }
 
 export async function loader({ request, params, context }: Route.LoaderArgs) {

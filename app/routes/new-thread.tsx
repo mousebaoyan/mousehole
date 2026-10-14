@@ -10,9 +10,10 @@ import { NativeSelect } from "~/components/ui/native-select";
 import { useBoards, useMe } from "~/forum";
 import { useHydrated } from "~/hydrated";
 import type { Route } from "./+types/new-thread.ts";
+import { SITE_NAME } from "../../server/platform/site.ts";
 
 export function meta() {
-  return [{ title: "发帖 · 鼠洞" }];
+  return [{ title: `发帖 · ${SITE_NAME}` }];
 }
 
 const KINDS = [

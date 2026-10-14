@@ -15,9 +15,10 @@ import { Input } from "~/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import type { Route } from "./+types/login.ts";
 import type { action as codeAction } from "./login-code.ts";
+import { SITE_NAME } from "../../server/platform/site.ts";
 
 export function meta() {
-  return [{ title: "登录 · 鼠洞" }];
+  return [{ title: `登录 · ${SITE_NAME}` }];
 }
 
 // Also the code login's poll: it shows this browser's code until a bot confirms it, then logs in.
@@ -60,7 +61,7 @@ export default function Login({ loaderData, actionData }: Route.ComponentProps) 
   return (
     <>
       <LogoMark className="size-12" />
-      <h1 className="mt-4 text-xl font-semibold">登录鼠洞</h1>
+      <h1 className="mt-4 text-xl font-semibold">登录{SITE_NAME}</h1>
       <p className="mt-1 text-sm text-muted-foreground">仅限鼠群成员，使用 QQ 号登录</p>
       <div className="mt-6 w-full max-w-sm rounded-2xl border bg-card p-5 shadow-sm sm:p-6">
         <Tabs defaultValue={actionData ? "email" : first}>

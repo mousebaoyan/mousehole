@@ -3,9 +3,10 @@ import { apiContext, cookiesFrom } from "../api.server.ts";
 import { LogoMark } from "~/components/logo";
 import { Button } from "~/components/ui/button";
 import type { Route } from "./+types/login-link.ts";
+import { SITE_NAME } from "../../server/platform/site.ts";
 
 export function meta() {
-  return [{ title: "确认登录 · 鼠洞" }];
+  return [{ title: `确认登录 · ${SITE_NAME}` }];
 }
 
 // Opening the link only shows this page. QQ fetches links in chats for previews,
@@ -23,7 +24,7 @@ export default function LoginLink({ actionData }: Route.ComponentProps) {
     <>
       <LogoMark className="size-12" />
       <h1 className="mt-4 text-xl font-semibold">确认登录</h1>
-      <p className="mt-1 text-sm text-muted-foreground">确认后，此设备将登录鼠洞</p>
+      <p className="mt-1 text-sm text-muted-foreground">确认后，此设备将登录{SITE_NAME}</p>
       <Form method="post" className="mt-6 w-full max-w-xs">
         <Button type="submit" size="lg" className="w-full">
           确认登录

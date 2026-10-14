@@ -26,9 +26,10 @@ import { UserAvatar } from "~/components/user-avatar";
 import { useNearView } from "~/near-view";
 import { ago, unixNow } from "~/time";
 import type { Route } from "./+types/notifications.ts";
+import { SITE_NAME } from "../../server/platform/site.ts";
 
 export function meta() {
-  return [{ title: "通知 · 鼠洞" }];
+  return [{ title: `通知 · ${SITE_NAME}` }];
 }
 
 // All of them, or ?unread for the unread ones only; a page at a time.
