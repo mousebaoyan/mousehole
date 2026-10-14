@@ -4,9 +4,10 @@ import { Form, Link, useNavigation } from "react-router";
 import { apiContext } from "../../api.server.ts";
 import { Button, buttonVariants } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
-import { NativeSelect } from "~/components/ui/native-select";
+import { Select } from "~/components/ui/select";
 import type { Route } from "./+types/boards.ts";
 import { Badge, choice, Field, readForm, Result, Section } from "~/components/form-parts";
+import { confirmSubmit } from "~/components/ui/dialog";
 
 export function meta() {
   return [{ title: "版块 · 管理后台" }];
@@ -116,11 +117,10 @@ export default function Boards({
                       className="ml-auto"
                       formNoValidate
                       disabled={busy}
-                      onClick={(e) => {
-                        if (!confirm(`删除版块「${b.name}」？有过帖子的版块不能删除。`)) {
-                          e.preventDefault();
-                        }
-                      }}
+                      onClick={confirmSubmit(
+                        `删除版块「${b.name}」？有过帖子的版块不能删除。`,
+                        "删除",
+                      )}
                     >
                       删除
                     </Button>
@@ -224,16 +224,16 @@ function BoardFields({ board, review }: { board?: Board; review?: string }) {
         <Input name="description" defaultValue={board?.description} maxLength={100} />
       </Field>
       <Field label="可见范围">
-        <Options name="visibility" options={VISIBILITY} value={board?.visibility} />
+        <Select name="visibility" options={VISIBILITY} defaultValue={board?.visibility} />
       </Field>
       <Field label="谁能发帖" hint="回复不受限制">
-        <Options name="post_role" options={POST_ROLE} value={board?.post_role} />
+        <Select name="post_role" options={POST_ROLE} defaultValue={board?.post_role} />
       </Field>
       <Field label="默认类型" hint="问答帖子可以采纳答案">
-        <Options name="default_kind" options={KIND} value={board?.default_kind} />
+        <Select name="default_kind" options={KIND} defaultValue={board?.default_kind} />
       </Field>
       <Field label="审核方式" hint="先审后发：版主以外的人发的内容，通过审核才公开">
-        <Options name="review_mode" options={REVIEW} value={board?.review_mode ?? review} />
+        <Select name="review_mode" options={REVIEW} defaultValue={board?.review_mode ?? review} />
       </Field>
       <Field label="颜色" hint="列表和导航里的圆点">
         <input
@@ -244,25 +244,5 @@ function BoardFields({ board, review }: { board?: Board; review?: string }) {
         />
       </Field>
     </div>
-  );
-}
-
-function Options({
-  name,
-  options,
-  value,
-}: {
-  name: string;
-  options: readonly { value: string; label: string }[];
-  value: string | undefined;
-}) {
-  return (
-    <NativeSelect name={name} defaultValue={value}>
-      {options.map((o) => (
-        <option key={o.value} value={o.value}>
-          {o.label}
-        </option>
-      ))}
-    </NativeSelect>
   );
 }

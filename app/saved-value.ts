@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useFetcher } from "react-router";
+import { toast } from "~/components/ui/toast";
 
 // What an action answers when it saves one value: the value as saved, or why it couldn't be.
 export type Saved<T> = { ok: true; saved: T } | { ok: false; message: string };
@@ -19,7 +20,7 @@ export function useSavedValue<T>(
     setSaved({ value: fetcher.data?.ok ? fetcher.data.saved : saved.value, data: fetcher.data });
   }
   useEffect(() => {
-    if (fetcher.state === "idle" && fetcher.data?.ok === false) alert(fetcher.data.message);
+    if (fetcher.state === "idle" && fetcher.data?.ok === false) toast(fetcher.data.message);
   }, [fetcher.state, fetcher.data]);
 
   const pending = fetcher.formData?.get(field);

@@ -2,7 +2,7 @@ import { Bot, Search } from "lucide-react";
 import { Form, Link } from "react-router";
 import { apiContext } from "../../api.server.ts";
 import { Time } from "~/components/form-parts";
-import { NativeSelect } from "~/components/ui/native-select";
+import { Select } from "~/components/ui/select";
 import { UserAvatar } from "~/components/user-avatar";
 import type { Route } from "./+types/logs.ts";
 
@@ -87,20 +87,17 @@ export default function Logs({ loaderData }: Route.ComponentProps) {
             className="w-full bg-transparent outline-none"
           />
         </label>
-        <NativeSelect
+        <Select
           name="action"
           defaultValue={action}
+          options={[
+            { value: "", label: "全部动作" },
+            ...Object.entries(ACTIONS).map(([value, label]) => ({ value, label })),
+          ]}
           aria-label="动作"
-          onChange={(e) => e.currentTarget.form?.requestSubmit()}
-          className="w-40 [&_select]:h-9"
-        >
-          <option value="">全部动作</option>
-          {Object.entries(ACTIONS).map(([value, label]) => (
-            <option key={value} value={value}>
-              {label}
-            </option>
-          ))}
-        </NativeSelect>
+          submitOnChange
+          className="w-40 [&>button]:h-9"
+        />
       </Form>
       <ul className="mt-4 divide-y rounded-2xl border bg-card text-sm">
         {items.map((log) => {

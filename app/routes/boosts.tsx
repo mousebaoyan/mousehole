@@ -9,6 +9,8 @@ import { Button } from "~/components/ui/button";
 import { UserAvatar } from "~/components/user-avatar";
 import { useMe } from "~/forum";
 import { useSavedValue } from "~/saved-value";
+import { confirmDialog } from "~/components/ui/dialog";
+import { toast } from "~/components/ui/toast";
 
 const BOOST_MAX = 16;
 
@@ -81,7 +83,7 @@ export function BoostChip({
 }) {
   const removing = useFetcher<{ ok: true } | { ok: false; message: string }>();
   useEffect(() => {
-    if (removing.state === "idle" && removing.data?.ok === false) alert(removing.data.message);
+    if (removing.state === "idle" && removing.data?.ok === false) toast(removing.data.message);
   }, [removing.state, removing.data]);
   if (removing.state !== "idle" || removing.data?.ok) return null;
 
@@ -125,9 +127,9 @@ export function BoostChip({
               <button
                 type="button"
                 className={cn(menuItem, "text-destructive [&_svg]:text-destructive")}
-                onClick={() => {
+                onClick={async () => {
                   close();
-                  if (!confirm("删除这条短评？")) return;
+                  if (!(await confirmDialog("删除这条短评？", "删除"))) return;
                   void removing.submit(
                     { intent: "remove-boost", boost_id: id },
                     { method: "post", action: `/t/${threadId}`, defaultShouldRevalidate: false },

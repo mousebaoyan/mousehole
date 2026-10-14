@@ -17,6 +17,8 @@ import { PostCard } from "./post-card.tsx";
 import { REACTIONS } from "./reactions.tsx";
 import { useReading } from "./reading.ts";
 import { ThreadHeader } from "./thread-header.tsx";
+import { confirmDialog } from "~/components/ui/dialog";
+import { toast } from "~/components/ui/toast";
 
 // Floors come 20 at a time; see design §9.
 const BATCH = 20;
@@ -211,7 +213,7 @@ function ThreadPage({
   useEffect(() => {
     if (changes.state !== "idle" || !changes.data) return;
     if (changes.data.ok) void navigate(`?floor=${changes.data.floor}`, { replace: true });
-    else alert(changes.data.message);
+    else toast(changes.data.message);
   }, [changes.state, changes.data, navigate]);
   const later = useFetcher<PostItem[]>();
   const earlier = useFetcher<PostItem[]>();
@@ -364,9 +366,9 @@ function ThreadPage({
                   { method: "post", defaultShouldRevalidate: false },
                 )
               }
-              onDelete={() => {
+              onDelete={async () => {
                 const question = post.floor === 1 ? "删除这个帖子？" : `删除 #${post.floor}？`;
-                if (!confirm(question)) return;
+                if (!(await confirmDialog(question, "删除"))) return;
                 void changes.submit(
                   post.floor === 1
                     ? { intent: "delete-thread", board: thread.board.slug }

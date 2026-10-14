@@ -6,7 +6,7 @@ import { MarkdownEditor } from "~/components/markdown-editor";
 import { TagPicker } from "~/components/tag-picker";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
-import { NativeSelect } from "~/components/ui/native-select";
+import { Select } from "~/components/ui/select";
 import { useBoards, useMe } from "~/forum";
 import { useHydrated } from "~/hydrated";
 import type { Route } from "./+types/new-thread.ts";
@@ -148,28 +148,22 @@ function ThreadForm({ restore }: { restore: boolean }) {
         className="h-11 text-base md:text-base"
       />
       <div className="flex flex-wrap items-center gap-3">
-        <NativeSelect
+        <Select
+          name="board"
           value={draft.board}
-          onChange={(e) => {
-            const board = boards.find((b) => b.slug === e.target.value);
+          onValueChange={(slug) => {
+            const board = boards.find((b) => b.slug === slug);
             change({
-              board: e.target.value,
+              board: slug,
               kind: board?.default_kind === "question" ? "question" : "discussion",
             });
           }}
+          options={boards.map((b) => ({ value: b.slug, label: b.name }))}
+          placeholder="选择版块"
           aria-label="版块"
           required
           className="w-44"
-        >
-          <option value="" disabled>
-            选择版块
-          </option>
-          {boards.map((b) => (
-            <option key={b.slug} value={b.slug}>
-              {b.name}
-            </option>
-          ))}
-        </NativeSelect>
+        />
         <fieldset className="flex rounded-full bg-secondary p-0.5 text-sm">
           <legend className="sr-only">类型</legend>
           {KINDS.map((k) => (

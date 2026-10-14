@@ -25,6 +25,7 @@
       }
     ],
     "import/no-cycle": "error",
+    "no-alert": "error",
     "import/no-unassigned-import": [
       "error",
       {

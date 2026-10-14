@@ -13,6 +13,7 @@ import { cn } from "cn";
 import { MarkdownEditor } from "~/components/markdown-editor";
 import { Button } from "~/components/ui/button";
 import { useMe } from "~/forum";
+import { confirmDialog } from "~/components/ui/dialog";
 
 type ComposerTarget = {
   thread: { id: number; title: string };
@@ -69,10 +70,11 @@ export function ComposerProvider({ children }: { children: ReactNode }) {
     else localStorage.removeItem(draftKey(draft.thread.id));
   }
 
-  function discard() {
+  async function discard() {
     if (!draft) return;
     const changed = draft.edit ? draft.text !== draft.edit.markdown : draft.text.trim() !== "";
-    if (changed && !confirm(draft.edit ? "放弃这次修改？" : "放弃这条回复？")) return;
+    const question = draft.edit ? "放弃这次修改？" : "放弃这条回复？";
+    if (changed && !(await confirmDialog(question, "放弃"))) return;
     if (!draft.edit) localStorage.removeItem(draftKey(draft.thread.id));
     setDraft(null);
   }

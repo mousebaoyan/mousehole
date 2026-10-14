@@ -1,8 +1,8 @@
 import { Lock, Search } from "lucide-react";
-import { Form, Link, useRouteLoaderData, useSubmit } from "react-router";
+import { Form, Link, useRouteLoaderData } from "react-router";
 import { apiContext } from "../../api.server.ts";
 import { Badge, readForm, Time } from "~/components/form-parts";
-import { NativeSelect } from "~/components/ui/native-select";
+import { Select } from "~/components/ui/select";
 import { UserAvatar } from "~/components/user-avatar";
 import { restrictionText } from "~/restriction";
 
@@ -58,7 +58,6 @@ export default function Members({ loaderData, actionData }: Route.ComponentProps
   const { q, status, items, next_cursor } = loaderData;
   // From the admin layout: whether this is an admin, who may set roles.
   const admin = useRouteLoaderData<typeof adminLoader>("routes/admin/layout")?.admin === true;
-  const submit = useSubmit();
   return (
     <>
       <h1 className="text-xl font-semibold">成员</h1>
@@ -74,19 +73,14 @@ export default function Members({ loaderData, actionData }: Route.ComponentProps
             className="w-full bg-transparent outline-none"
           />
         </label>
-        <NativeSelect
+        <Select
           name="status"
           defaultValue={status}
+          options={STATUSES}
           aria-label="状态"
-          className="w-36"
-          onChange={(e) => void submit(e.currentTarget.form)}
-        >
-          {STATUSES.map((s) => (
-            <option key={s.value} value={s.value}>
-              {s.label}
-            </option>
-          ))}
-        </NativeSelect>
+          submitOnChange
+          className="w-36 [&>button]:h-9"
+        />
       </Form>
       {actionData && (
         <p role="alert" className="mt-3 text-meta text-destructive">
@@ -117,20 +111,17 @@ export default function Members({ loaderData, actionData }: Route.ComponentProps
                 {m.role_locked && (
                   <Lock aria-label="角色已锁定" className="size-3.5 text-muted-foreground" />
                 )}
-                <NativeSelect
+                <Select
                   name="role"
                   defaultValue={m.role_locked ? m.role : ""}
+                  options={[
+                    { value: "", label: `按群（${ROLES.find((r) => r.value === m.role)?.label}）` },
+                    ...ROLES,
+                  ]}
                   aria-label={`${m.display_name} 的角色`}
+                  submitOnChange
                   className="w-36"
-                  onChange={(e) => void submit(e.currentTarget.form, { method: "post" })}
-                >
-                  <option value="">按群（{ROLES.find((r) => r.value === m.role)?.label}）</option>
-                  {ROLES.map((r) => (
-                    <option key={r.value} value={r.value}>
-                      {r.label}
-                    </option>
-                  ))}
-                </NativeSelect>
+                />
               </Form>
             ) : (
               <Badge>

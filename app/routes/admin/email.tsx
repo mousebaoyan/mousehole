@@ -4,7 +4,7 @@ import { apiContext } from "../../api.server.ts";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import type { Route } from "./+types/email.ts";
-import { Field, readForm, Result, Section } from "~/components/form-parts";
+import { Check, Field, readForm, Result, Section } from "~/components/form-parts";
 import { SITE_NAME } from "../../../server/platform/site.ts";
 
 export function meta() {
@@ -80,15 +80,9 @@ export default function Email({ loaderData: { smtp }, actionData }: Route.Compon
               <Input name="from" defaultValue={smtp.from} />
             </Field>
           </div>
-          <label className="mt-4 flex items-center gap-3 text-sm">
-            <input
-              type="checkbox"
-              name="secure"
-              defaultChecked={smtp.secure}
-              className="size-4 accent-primary"
-            />
-            使用 SSL/TLS
-          </label>
+          <div className="mt-3">
+            <Check name="secure" label="使用 SSL/TLS" checked={smtp.secure} />
+          </div>
           <Button type="submit" name="intent" value="save" className="mt-5" disabled={busy}>
             保存
           </Button>

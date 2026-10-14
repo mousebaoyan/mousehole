@@ -1,6 +1,8 @@
 import { useEffect, useRef } from "react";
 import { useFetcher } from "react-router";
 import { Button } from "~/components/ui/button";
+import { Radio } from "~/components/ui/checkbox";
+import { Dialog } from "~/components/ui/dialog";
 import { Textarea } from "~/components/ui/textarea";
 
 const REASONS = ["垃圾广告", "人身攻击", "违法违规", "其他"];
@@ -24,11 +26,7 @@ export function ReportDialog({
   const sending = useFetcher<{ ok: boolean; message: string }>();
   const result = sending.state === "idle" ? sending.data : undefined;
   return (
-    <dialog
-      ref={ref}
-      onClose={onClose}
-      className="m-auto w-[min(24rem,calc(100%-2rem))] rounded-2xl border bg-popover p-5 text-popover-foreground shadow-xl backdrop:bg-black/30"
-    >
+    <Dialog ref={ref} onClose={onClose}>
       <h2 className="font-semibold">举报{target.label}</h2>
       {result?.ok ? (
         <form method="dialog">
@@ -62,13 +60,7 @@ export function ReportDialog({
                 key={reason}
                 className="flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-sm has-checked:border-brand has-checked:bg-brand/10"
               >
-                <input
-                  type="radio"
-                  name="reason"
-                  value={reason}
-                  required
-                  className="accent-brand"
-                />
+                <Radio name="reason" value={reason} required className="checked:border-brand" />
                 {reason}
               </label>
             ))}
@@ -99,6 +91,6 @@ export function ReportDialog({
           </div>
         </form>
       )}
-    </dialog>
+    </Dialog>
   );
 }

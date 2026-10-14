@@ -20,7 +20,8 @@ import { Dropdown, menuItem } from "~/components/disclosure";
 import { TagPicker } from "~/components/tag-picker";
 import { Button, buttonVariants } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
-import { NativeSelect } from "~/components/ui/native-select";
+import { Dialog } from "~/components/ui/dialog";
+import { Select } from "~/components/ui/select";
 import { useBoards } from "~/forum";
 import type { ThreadDetail } from "~/api-types";
 import { ReviewItems } from "./review-items.tsx";
@@ -278,10 +279,7 @@ function MoveDialog({
   const boards = useBoards();
   const [board, setBoard] = useState(current);
   return (
-    <dialog
-      ref={ref}
-      className="m-auto w-[min(22rem,calc(100%-2rem))] rounded-2xl border bg-popover p-5 text-popover-foreground shadow-xl backdrop:bg-black/30"
-    >
+    <Dialog ref={ref} className="w-[min(22rem,calc(100%-2rem))]">
       <form
         method="dialog"
         onSubmit={() => {
@@ -289,18 +287,13 @@ function MoveDialog({
         }}
       >
         <h2 className="font-semibold">移动到版块</h2>
-        <NativeSelect
+        <Select
           value={board}
-          onChange={(e) => setBoard(e.target.value)}
+          onValueChange={setBoard}
+          options={boards.map((b) => ({ value: b.slug, label: b.name }))}
           aria-label="版块"
           className="mt-4"
-        >
-          {boards.map((b) => (
-            <option key={b.slug} value={b.slug}>
-              {b.name}
-            </option>
-          ))}
-        </NativeSelect>
+        />
         <div className="mt-4 flex justify-end gap-2">
           <Button
             type="button"
@@ -312,6 +305,6 @@ function MoveDialog({
           <Button type="submit">移动</Button>
         </div>
       </form>
-    </dialog>
+    </Dialog>
   );
 }
