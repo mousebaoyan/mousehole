@@ -1,10 +1,15 @@
 import { Download, LogOut, Monitor } from "lucide-react";
-import { Form, redirect, useFetcher, useNavigation } from "react-router";
+import { useState } from "react";
+import { Form, redirect, useFetcher, useNavigation, useRevalidator } from "react-router";
 import { apiContext } from "../api.server.ts";
+import { browserApi } from "~/browser-api";
 import { Check, Field, readForm, Result, Section, Time } from "~/components/form-parts";
 import { Button, buttonVariants } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Textarea } from "~/components/ui/textarea";
+import { toast } from "~/components/ui/toast";
+import { UserAvatar } from "~/components/user-avatar";
+import { useMe } from "~/forum";
 import type { Route } from "./+types/settings.ts";
 import { Checkbox } from "~/components/ui/checkbox";
 import { SITE_NAME } from "../../server/platform/site.ts";
@@ -40,11 +45,16 @@ export async function action({ request, context }: Route.ActionArgs) {
     await api.me.sessions[":id"].$delete({ param: { id: field("id") } });
     return null;
   }
+  if (field("intent") === "qq-avatar") {
+    const res = await api.me.avatar.$delete();
+    if (res.ok) return { ok: true, message: "头像已改回 QQ 头像" };
+    return { ok: false, message: (await res.json()).error.message };
+  }
   const on = (name: string) => field(name) === "on";
   const res = await api.me.$patch({
     json: {
       custom_name: field("custom_name") || null,
-      bio: field("bio"),
+      custom_bio: field("custom_bio") || null,
       allow_proxy: on("allow_proxy"),
       notify_prefs: Object.fromEntries(
         TYPES.map(({ type }) => [type, { site: on(`${type}.site`), qq: on(`${type}.qq`) }]),
@@ -64,6 +74,7 @@ export default function Settings({ loaderData, actionData }: Route.ComponentProp
       <Form method="post">
         <Section title="资料">
           <div className="flex flex-col gap-4">
+            <AvatarField custom={settings.avatar_custom} />
             <Field label="名字" hint="最多 24 个字；留空就跟着 QQ 群名片">
               <Input
                 name="custom_name"
@@ -72,10 +83,11 @@ export default function Settings({ loaderData, actionData }: Route.ComponentProp
                 maxLength={24}
               />
             </Field>
-            <Field label="个性签名" hint="最多 60 个字，显示在资料卡和个人主页上">
+            <Field label="个性签名" hint="最多 60 个字，显示在资料卡和个人主页上；留空就跟着 QQ">
               <Textarea
-                name="bio"
-                defaultValue={settings.bio}
+                name="custom_bio"
+                defaultValue={settings.custom_bio ?? ""}
+                placeholder={settings.qq_bio || "跟着 QQ 的个性签名"}
                 maxLength={60}
                 className="min-h-16"
               />
@@ -175,5 +187,55 @@ function Device({ session: s }: { session: Session }) {
         </signOut.Form>
       )}
     </li>
+  );
+}
+
+// The picture goes straight to /api/v1, like images in posts; the page then loads again, and the
+// header shows the new avatar too. Going back to the QQ one is a submit of the settings form.
+function AvatarField({ custom }: { custom: boolean }) {
+  const me = useMe();
+  const { revalidate } = useRevalidator();
+  const [uploading, setUploading] = useState(false);
+  if (!me) return null;
+
+  async function upload(file: File) {
+    setUploading(true);
+    const res = await browserApi.me.avatar.$put({ form: { file } });
+    if (res.ok) await revalidate();
+    else toast((await res.json()).error.message);
+    setUploading(false);
+  }
+
+  return (
+    <div className="flex items-center gap-4">
+      <UserAvatar user={me} className="size-16 text-lg" />
+      <div className="flex flex-wrap items-center gap-2">
+        <label
+          className={buttonVariants({
+            variant: "outline",
+            size: "sm",
+            className: "cursor-pointer has-disabled:pointer-events-none has-disabled:opacity-50",
+          })}
+        >
+          {uploading ? "上传中…" : "上传头像"}
+          <input
+            type="file"
+            accept="image/*"
+            disabled={uploading}
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              e.target.value = "";
+              if (file) void upload(file);
+            }}
+            className="sr-only"
+          />
+        </label>
+        {custom && (
+          <Button type="submit" name="intent" value="qq-avatar" variant="ghost" size="sm">
+            改回 QQ 头像
+          </Button>
+        )}
+      </div>
+    </div>
   );
 }

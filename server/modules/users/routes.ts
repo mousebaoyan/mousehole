@@ -6,6 +6,7 @@ import { isMember, restrictionOf, STAFF, type Restriction } from "../../platform
 import {
   actorOf,
   authorize,
+  authorizePosting,
   createRouter,
   errorResponse,
   requireWeb,
@@ -20,14 +21,19 @@ import { exportOwnBoosts } from "../reactions/service.ts";
 import { exportOwnPosts } from "../threads/service.ts";
 import {
   AVATARS_DIR,
+  findUserId,
   getProfile,
   getSettings,
   getUser,
   listMembers,
+  MAX_BIO,
+  restoreQqAvatar,
   searchUsers,
   setEndorsement,
   setFollow,
+  setQqBio,
   updateSettings,
+  uploadAvatar,
 } from "./service.ts";
 
 const MeSchema = z
@@ -116,10 +122,14 @@ const ExportSchema = z.object({
 
 const Switches = z.object({ site: z.boolean(), qq: z.boolean() });
 
+const AvatarSchema = z.object({ avatar_url: z.string().nullable() });
+
 const SettingsSchema = z
   .object({
     custom_name: z.string().nullable().openapi({ description: "自己起的名字；null 是跟着 QQ" }),
-    bio: z.string(),
+    custom_bio: z.string().nullable().openapi({ description: "自己写的个性签名；null 是跟着 QQ" }),
+    qq_bio: z.string().openapi({ description: "QQ 的个性签名，由 bot 推送" }),
+    avatar_custom: z.boolean().openapi({ description: "头像是自己上传的；false 是跟着 QQ" }),
     allow_proxy: z.boolean().openapi({ description: "是否允许 bot 代自己发帖、回复等" }),
     notify_prefs: z
       .record(z.string(), Switches)
@@ -345,7 +355,13 @@ export const usersRoutes = createRouter()
                   .nullable()
                   .optional()
                   .openapi({ description: "最多 24 个字；null 是改回跟着 QQ" }),
-                bio: z.string().trim().max(60).optional(),
+                custom_bio: z
+                  .string()
+                  .trim()
+                  .max(MAX_BIO)
+                  .nullable()
+                  .optional()
+                  .openapi({ description: "最多 60 个字；null 是改回跟着 QQ" }),
                 allow_proxy: z.boolean().optional(),
                 notify_prefs: z.partialRecord(z.enum(NOTIFICATION_TYPES), Switches).optional(),
               }),
@@ -368,6 +384,73 @@ export const usersRoutes = createRouter()
       if (custom_name !== undefined)
         await setCustomName(actorOf(c, viewer), viewer.id, custom_name);
       return c.json(await settingsJson(viewer.id), 200);
+    },
+  )
+  .openapi(
+    createRoute({
+      method: "put",
+      path: "/me/avatar",
+      summary: "上传头像：multipart 的 file 字段，最大 20MB，裁成 96px 的方图；之后不再跟着 QQ",
+      request: {
+        body: {
+          required: true,
+          content: {
+            "multipart/form-data": {
+              schema: z.object({
+                file: z.instanceof(File).openapi({ type: "string", format: "binary" }),
+              }),
+            },
+          },
+        },
+      },
+      responses: {
+        200: { description: "新头像", content: { "application/json": { schema: AvatarSchema } } },
+        400: errorResponse("不是能识别的图片"),
+        413: errorResponse("超过 20MB"),
+        429: errorResponse("上传太频繁"),
+      },
+    }),
+    async (c) => {
+      const viewer = authorizePosting(c);
+      rateLimit(`upload:${viewer.id}`, 30, 10 * 60_000);
+      const file = Buffer.from(await c.req.valid("form").file.arrayBuffer());
+      return c.json({ avatar_url: await uploadAvatar(viewer.id, file) }, 200);
+    },
+  )
+  .openapi(
+    createRoute({
+      method: "delete",
+      path: "/me/avatar",
+      summary: "头像改回跟着 QQ，立刻拉一次 QQ 头像",
+      responses: {
+        200: { description: "QQ 头像", content: { "application/json": { schema: AvatarSchema } } },
+        502: errorResponse("QQ 头像获取失败"),
+      },
+    }),
+    async (c) => {
+      const viewer = authorize(c, "act");
+      return c.json({ avatar_url: await restoreQqAvatar(viewer.id) }, 200);
+    },
+  )
+  .openapi(
+    createRoute({
+      method: "put",
+      path: "/bot/users/{user}/bio",
+      summary:
+        "推送 QQ 的个性签名，超过 60 个字的截掉；本人没写过自己的就显示它。成员第一次登录（member.activated）时推送",
+      request: {
+        params: UserParam,
+        body: {
+          required: true,
+          content: { "application/json": { schema: z.object({ bio: z.string().max(1000) }) } },
+        },
+      },
+      responses: { 204: { description: "已更新" }, 404: errorResponse("用户不存在") },
+    }),
+    async (c) => {
+      authorize(c, "sync");
+      await setQqBio(await findUserId(c.req.valid("param").user), c.req.valid("json").bio);
+      return c.body(null, 204);
     },
   )
   .openapi(
