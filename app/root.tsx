@@ -39,7 +39,10 @@ export function Layout({ children }: { children: React.ReactNode }) {
     <html lang="zh-CN" suppressHydrationWarning>
       <head>
         <meta charSet="utf-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <meta
+          name="viewport"
+          content="width=device-width, initial-scale=1, interactive-widget=resizes-content"
+        />
         <meta name="theme-color" content="#fefdfb" media="(prefers-color-scheme: light)" />
         <meta name="theme-color" content="#161b1a" media="(prefers-color-scheme: dark)" />
         <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
