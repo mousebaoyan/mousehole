@@ -1702,7 +1702,8 @@ function adjust(json: RawBuilder<Json>, emoji: string, delta: number) {
 }
 
 // Kept with the reaction, in its transaction: the post's counts by emoji, and since every reaction
-// is a like, the likes of the post, of its thread when it is the opening post, and of its author.
+// is a like, the likes of the post, of its thread when it is the opening post, and of its author
+// unless the post is anonymous, whose author a changing count would give away.
 export async function countReaction(
   trx: Transaction<DB>,
   postId: number,
@@ -1716,7 +1717,7 @@ export async function countReaction(
     .updateTable("posts")
     .set((eb) => ({ reactions, like_count: eb("like_count", "+", likes) }))
     .where("id", "=", postId)
-    .returning(["thread_id", "floor", "author_id"])
+    .returning(["thread_id", "floor", "author_id", "anonymous"])
     .executeTakeFirstOrThrow();
   if (likes === 0) return;
   if (post.floor === 1) {
@@ -1726,7 +1727,7 @@ export async function countReaction(
       .where("id", "=", post.thread_id)
       .execute();
   }
-  await countLikes(trx, post.author_id, likes);
+  if (!post.anonymous) await countLikes(trx, post.author_id, likes);
 }
 
 export async function countBoosts(trx: Transaction<DB>, postId: number, boosts: number) {
