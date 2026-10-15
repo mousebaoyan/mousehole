@@ -139,14 +139,22 @@ export function PostCard({
           <CircleCheck className="size-4" /> 已采纳
         </div>
       )}
-      <div className="flex items-center gap-3">
-        <UserCard user={post.author} className="flex rounded-full">
-          <UserAvatar user={post.author} thread={threadId} className="size-10 max-sm:size-9" />
+      <div className="flex items-center gap-x-2">
+        {/* Avatar and name are one control, so either opens the same card in the same place. */}
+        <UserCard
+          user={post.author}
+          className="group flex max-w-full min-w-0 items-center gap-3 rounded-lg text-left"
+        >
+          <UserAvatar
+            user={post.author}
+            thread={threadId}
+            className="size-10 shrink-0 max-sm:size-9"
+          />
+          <span className="truncate text-body font-semibold group-hover:underline">
+            <WriterName writer={post.author} />
+          </span>
         </UserCard>
         <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-1.5 gap-y-1">
-          <UserCard user={post.author} className="mr-0.5 text-body font-semibold hover:underline">
-            <WriterName writer={post.author} />
-          </UserCard>
           <UserBadges user={post.author} op={op} mine={own} />
           {/* The opening post's state is the thread's, shown above it. */}
           {post.floor > 1 && post.status !== "visible" && (

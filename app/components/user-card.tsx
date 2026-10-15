@@ -113,7 +113,7 @@ function PersonCard({
   const profile = card.data;
 
   return (
-    <span ref={root} className="relative">
+    <span ref={root} className="relative min-w-0">
       <button
         type="button"
         aria-expanded={open}
