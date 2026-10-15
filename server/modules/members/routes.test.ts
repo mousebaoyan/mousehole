@@ -189,6 +189,35 @@ describe("成员同步", () => {
     expect(await account(both)).toMatchObject({ member_status: "member" });
   });
 
+  test("头衔和资料卡上的群信息跟名字取自同一个群：主群，不在主群时最早加入的", async () => {
+    const primary = await newGroup();
+    expect((await patchGroup(primary, { is_primary: true })).status).toBe(204);
+    const [early, late] = [await newGroup(), await newGroup()];
+    const qq = ++lastQq;
+    await sync(true, late, T, [{ user_id: qq, card: "晚", title: "晚的头衔", join_time: T - 100 }]);
+    await sync(true, early, T, [
+      { user_id: qq, card: "早", title: "早的头衔", join_time: T - 200 },
+    ]);
+    const { id } = await account(qq);
+    const profile = async () =>
+      (await api.users[":user"].$get({ param: { user: String(id) } }, siteOwner)).json();
+
+    expect(await profile()).toMatchObject({
+      display_name: "早",
+      title: "早的头衔",
+      card: "早",
+      joined_at: T - 200,
+    });
+
+    await sync(true, primary, T, [{ user_id: qq, card: "主", title: "主的头衔" }]);
+    expect(await profile()).toMatchObject({
+      display_name: "主",
+      title: "主的头衔",
+      card: "主",
+      joined_at: null,
+    });
+  });
+
   test("QQ 机器人同步为 bot 角色", async () => {
     const groupId = await newGroup();
     const qq = ++lastQq;

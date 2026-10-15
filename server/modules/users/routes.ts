@@ -56,17 +56,16 @@ const MeSchema = z
 const UserSchema = UserBriefSchema.extend({
   members_only: z.literal(false),
   bio: z.string(),
-  card: z
-    .string()
-    .nullable()
-    .optional()
-    .openapi({ description: "主群的群名片，不在主群为 null；这一项和下面两项只给成员和 bot" }),
-  joined_at: z.number().nullable().optional().openapi({ description: "加入主群的时间" }),
+  card: z.string().nullable().optional().openapi({
+    description:
+      "群名片，取自主群，不在主群时取最早加入的群，都不在为 null；这一项和下面两项只给成员和 bot",
+  }),
+  joined_at: z.number().nullable().optional().openapi({ description: "加入这个群的时间" }),
   last_sent_at: z
     .number()
     .nullable()
     .optional()
-    .openapi({ description: "最近一次在主群发言，精确到小时" }),
+    .openapi({ description: "最近一次在这个群发言，精确到小时" }),
   qq: z.number().nullable().optional().openapi({
     description:
       "qq 只给成员和 bot，站点设置为公开时也给访客，站长账号为 null；member_status、activated 只给成员和 bot",
