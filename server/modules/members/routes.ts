@@ -296,13 +296,18 @@ export const membersRoutes = createRouter()
       },
       responses: {
         204: { description: "已设置" },
-        403: errorResponse("不是管理员，或者是 bot 账号、自己"),
+        403: errorResponse("不是管理员，或者是 bot 账号、自己；任免管理员只有站长能做"),
         404: errorResponse("用户不存在"),
       },
     }),
     async (c) => {
       const viewer = authorize(c, "admin");
-      await setRole(actorOf(c, viewer), c.req.valid("param").user, c.req.valid("json").role);
+      await setRole(
+        actorOf(c, viewer),
+        viewer.role === "owner",
+        c.req.valid("param").user,
+        c.req.valid("json").role,
+      );
       return c.body(null, 204);
     },
   );
