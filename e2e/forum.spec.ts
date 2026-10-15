@@ -15,7 +15,7 @@ async function signIn(page: Page, args: string[]) {
   await page.waitForURL((url) => !url.pathname.startsWith("/login"));
 }
 
-test("站长设公告，管理员建版块、发帖再回复", async ({ page }) => {
+test("站长设公告，管理员建版块、发帖再回复，从通知打开别人的回复", async ({ page }) => {
   await signIn(page, ["--owner"]);
   await page.goto("/admin/site");
   await page.getByLabel("公告横幅").fill("端到端测试的公告");
@@ -47,4 +47,19 @@ test("站长设公告，管理员建版块、发帖再回复", async ({ page }) 
   await page.getByLabel("回复内容").fill("一楼说得对");
   await page.locator("footer").getByRole("button", { name: "回复" }).click();
   await expect(page.locator("#floor-2")).toContainText("一楼说得对");
+
+  // Someone else replies; the notification opens the thread at that floor, not at the top.
+  const thread = page.url();
+  await signIn(page, ["--qq", "10002"]);
+  await page.goto(thread);
+  await page.getByRole("button", { name: "回复", exact: true }).last().click();
+  await page.getByLabel("回复内容").fill("楼上说得对");
+  await page.locator("footer").getByRole("button", { name: "回复" }).click();
+  await expect(page.locator("#floor-3")).toContainText("楼上说得对");
+
+  await signIn(page, ["--qq", "10001"]);
+  await page.setViewportSize({ width: 390, height: 400 });
+  await page.goto("/notifications");
+  await page.locator('a[href$="?floor=3"]').click();
+  await expect(page.locator("#floor-3")).toBeInViewport();
 });
