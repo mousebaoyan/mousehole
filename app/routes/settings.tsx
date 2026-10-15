@@ -1,9 +1,10 @@
 import { Download, LogOut, Monitor } from "lucide-react";
 import { useEffect, useState } from "react";
-import { Form, redirect, useFetcher, useNavigation, useRevalidator } from "react-router";
+import { redirect, useFetcher, useRevalidator } from "react-router";
 import { apiContext } from "../api.server.ts";
 import { browserApi } from "~/browser-api";
-import { Check, Field, readForm, Result, Section, Time } from "~/components/form-parts";
+import { Check, Field, readForm, Section, Time } from "~/components/form-parts";
+import { SettingsForm } from "~/components/settings-form";
 import { Button, buttonVariants } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Textarea } from "~/components/ui/textarea";
@@ -84,7 +85,6 @@ export async function action({ request, context }: Route.ActionArgs) {
 
 export default function Settings({ loaderData, actionData }: Route.ComponentProps) {
   const { settings, sessions } = loaderData;
-  const busy = useNavigation().state !== "idle";
   return (
     <div className="flex gap-8">
       <div className="max-w-2xl min-w-0 flex-1">
@@ -100,7 +100,7 @@ export default function Settings({ loaderData, actionData }: Route.ComponentProp
             </a>
           ))}
         </nav>
-        <Form method="post">
+        <SettingsForm result={actionData ?? undefined}>
           <Section {...SECTIONS.profile}>
             <div className="flex flex-col gap-4">
               <AvatarField custom={settings.avatar_custom} />
@@ -201,14 +201,7 @@ export default function Settings({ loaderData, actionData }: Route.ComponentProp
               </tbody>
             </table>
           </Section>
-
-          <div className="mt-6 flex items-center gap-3">
-            <Button type="submit" disabled={busy}>
-              保存
-            </Button>
-            <Result result={actionData ?? undefined} />
-          </div>
-        </Form>
+        </SettingsForm>
 
         <Section {...SECTIONS.devices} description="不再使用的设备可以在这里下线">
           <ul className="divide-y">
@@ -305,11 +298,16 @@ function Device({ session: s }: { session: Session }) {
 }
 
 // The picture goes straight to /api/v1, like images in posts; the page then loads again, and the
-// header shows the new avatar too. Going back to the QQ one is a submit of the settings form.
+// header shows the new avatar too.
 function AvatarField({ custom }: { custom: boolean }) {
   const me = useMe();
   const { revalidate } = useRevalidator();
   const [uploading, setUploading] = useState(false);
+  // Not a submit of the settings form, which would count its unsaved changes as saved.
+  const revert = useFetcher<typeof action>();
+  useEffect(() => {
+    if (revert.data) toast(revert.data.message);
+  }, [revert.data]);
   if (!me) return null;
 
   async function upload(file: File) {
@@ -345,7 +343,12 @@ function AvatarField({ custom }: { custom: boolean }) {
           />
         </label>
         {custom && (
-          <Button type="submit" name="intent" value="qq-avatar" variant="ghost" size="sm">
+          <Button
+            variant="ghost"
+            size="sm"
+            disabled={revert.state !== "idle"}
+            onClick={() => void revert.submit({ intent: "qq-avatar" }, { method: "post" })}
+          >
             改回 QQ 头像
           </Button>
         )}
