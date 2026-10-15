@@ -88,7 +88,7 @@
 - 通知的 `type`：`reply`、`thread_reply`、`mention`、`like`、`boost`、`watching`、`following`、`solved`、`moderation`、`level`、`lottery`，含义见[接口](api.md)的通知对象。都和触发它的写入在同一个事务里插入。
 - 一条新楼层只给每人一条通知，按先后取第一个适用的：被回复的那一层的作者（`reply`）；@到的人（`mention`）；没指定楼层时是楼主（`thread_reply`）；关注这个帖子的人（`watching`）。新帖通知 @到的人和作者的粉丝（`following`）。从群里收录来的帖子和楼层（`via` 为 `qq`）不产生通知。
 - 合并通知：`like:{楼层 ID}`、`boost:{楼层 ID}`、`thread_reply:{帖子 ID}`、`watching:{帖子 ID}` 是 `group_key`，未读期间再次触发只更新触发者、次数、`data` 和时间，不新增行；`post_id` 留着第一次的，点进去从最早没看的那层开始。
-- 不通知：自己做的事、冻结的账号、把这个帖子设为 `muted` 的人、在 `users.notify_prefs` 里关掉了这类站内通知的人。`notify_prefs` 形如 `{ "like": { "site": false, "email": true } }`，站内通知没写的按开着算，邮件没写的按这类通知的默认值。`users.notify_email` 是邮件提醒的总开关，关掉时哪类都不发邮件，`notify_prefs` 里的设置留着。
+- 不通知：自己做的事、冻结的账号、把这个帖子设为 `muted` 的人、在 `users.notify_prefs` 里关掉了这类站内通知的人。`notify_prefs` 形如 `{ "like": { "site": false, "email": true } }`，站内通知没写的按开着算，邮件没写的按站长设的默认值（`settings` 的 `notify`，形如 `{ "email": { "thread_reply": "on", "like": "never" } }`，没写的类型用代码里的默认）；站长设为 `never` 的类型不管怎么写都不发邮件。`users.notify_email` 是邮件提醒的总开关，关掉时哪类都不发邮件，`notify_prefs` 里的设置留着。
 - 要发的邮件（`mail_queue`：收件地址、标题、正文）和通知在同一个事务里写入，并 `NOTIFY mousehole_mail`；事务提交后，进程按 `id` 顺序取出到了 `next_at` 的来发，发出去就删掉。发不出去的 `attempts` 加一，`next_at` 往后推（[总体设计 §8.6](design.md#86-通知与实时)），试满 5 次的删掉；每分钟再取一次，放了一天的删掉不发。
 - 已读超过 180 天的通知每天清理。
 

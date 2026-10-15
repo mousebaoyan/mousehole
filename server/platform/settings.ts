@@ -43,11 +43,21 @@ const BotSchema = z.object({
   require_operator: z.boolean().default(false),
 });
 
+// Per notification type, whether it may go by email and whether it does for people who never
+// set it: on and off are that default, never takes the choice away. Types not here keep the
+// notifications module's own default.
+const EMAIL_POLICIES = ["on", "off", "never"] as const;
+export type EmailPolicy = (typeof EMAIL_POLICIES)[number];
+const NotifySchema = z.object({
+  email: z.partialRecord(z.string(), z.enum(EMAIL_POLICIES)).default({}),
+});
+
 export type Settings = {
   site: z.infer<typeof SiteSchema>;
   login: z.infer<typeof LoginSchema>;
   smtp: z.infer<typeof SmtpSchema>;
   bot: z.infer<typeof BotSchema>;
+  notify: z.infer<typeof NotifySchema>;
 };
 
 let cache: Promise<Settings> | null = null;
@@ -76,6 +86,7 @@ async function load(): Promise<Settings> {
     login: LoginSchema.parse(stored.get("login") ?? {}),
     smtp: { accounts: smtp.accounts.map((a) => ({ ...a, password: decrypt(a.password) })) },
     bot: BotSchema.parse(stored.get("bot") ?? {}),
+    notify: NotifySchema.parse(stored.get("notify") ?? {}),
   };
 }
 
@@ -93,6 +104,7 @@ export async function saveSettings(trx: Transaction<DB>, change: Partial<Setting
   if (change.site) rows.push({ key: "site", value: JSON.stringify(change.site) });
   if (change.login) rows.push({ key: "login", value: JSON.stringify(change.login) });
   if (change.bot) rows.push({ key: "bot", value: JSON.stringify(change.bot) });
+  if (change.notify) rows.push({ key: "notify", value: JSON.stringify(change.notify) });
   if (change.smtp) {
     const accounts = change.smtp.accounts.map((a) => ({ ...a, password: encrypt(a.password) }));
     rows.push({ key: "smtp", value: JSON.stringify({ accounts }) });

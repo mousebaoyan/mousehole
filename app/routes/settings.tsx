@@ -12,26 +12,12 @@ import { UserAvatar } from "~/components/user-avatar";
 import { useMe } from "~/forum";
 import type { Route } from "./+types/settings.ts";
 import { Checkbox } from "~/components/ui/checkbox";
+import { NOTIFICATION_TYPES } from "~/notification-types";
 import { SITE_NAME } from "../../server/platform/site.ts";
 
 export function meta() {
   return [{ title: `设置 · ${SITE_NAME}` }];
 }
-
-// The notification types, in the order the table lists them.
-const TYPES = [
-  { type: "reply", label: "回复我的楼层" },
-  { type: "thread_reply", label: "回复我的帖子（没指定回复哪一层）" },
-  { type: "mention", label: "@我" },
-  { type: "like", label: "点赞" },
-  { type: "boost", label: "短评" },
-  { type: "watching", label: "关注的帖子有新回复" },
-  { type: "following", label: "关注的人发新帖" },
-  { type: "solved", label: "回答被采纳" },
-  { type: "moderation", label: "内容被审核或隐藏" },
-  { type: "level", label: "升级" },
-  { type: "lottery", label: "抽奖开奖或取消" },
-] as const;
 
 // The page's sections, for the navigation beside them.
 const SECTIONS = {
@@ -64,6 +50,10 @@ export async function action({ request, context }: Route.ActionArgs) {
     return { ok: false, message: (await res.json()).error.message };
   }
   const on = (name: string) => field(name) === "on";
+  // Only the switches changed here are sent: the rest keep following the owner's defaults.
+  const shown = await api.me.settings.$get();
+  if (!shown.ok) throw new Error("Settings failed");
+  const { notify_prefs } = await shown.json();
   const res = await api.me.$patch({
     json: {
       custom_name: field("custom_name") || null,
@@ -73,7 +63,18 @@ export async function action({ request, context }: Route.ActionArgs) {
       relations_public: on("relations_public"),
       notify_email: on("notify_email"),
       notify_prefs: Object.fromEntries(
-        TYPES.map(({ type }) => [type, { site: on(`${type}.site`), email: on(`${type}.email`) }]),
+        NOTIFICATION_TYPES.map(({ type }) => {
+          const was = notify_prefs[type];
+          const site = on(`${type}.site`);
+          const email = on(`${type}.email`);
+          return [
+            type,
+            {
+              ...(site !== was.site && { site }),
+              ...(was.email !== null && email !== was.email && { email }),
+            },
+          ];
+        }),
       ),
     },
   });
@@ -147,7 +148,10 @@ export default function Settings({ loaderData, actionData }: Route.ComponentProp
             />
           </Section>
 
-          <Section {...SECTIONS.notify} description="站内通知在顶栏的铃铛里，邮件发到你的 QQ 邮箱">
+          <Section
+            {...SECTIONS.notify}
+            description="站内通知在顶栏的铃铛里，邮件发到你的 QQ 邮箱。没改过的开关按站点的默认设置，站点改了默认也跟着变"
+          >
             <Check
               name="notify_email"
               label="接收邮件提醒"
@@ -163,23 +167,32 @@ export default function Settings({ loaderData, actionData }: Route.ComponentProp
                 </tr>
               </thead>
               <tbody>
-                {TYPES.map(({ type, label }) => (
+                {NOTIFICATION_TYPES.map(({ type, label }) => (
                   <tr key={type} className="border-t">
                     <td className="py-2">{label}</td>
-                    {(["site", "email"] as const).map((where) => (
-                      <td key={where}>
-                        {/* The whole cell takes the tap, not just the 16px box. */}
-                        <label className="flex h-10 cursor-pointer items-center justify-center">
-                          <Checkbox
-                            name={`${type}.${where}`}
-                            defaultChecked={settings.notify_prefs[type][where]}
-                          />
-                          <span className="sr-only">
-                            {label}：{where === "site" ? "站内" : "邮件"}
-                          </span>
-                        </label>
-                      </td>
-                    ))}
+                    {(["site", "email"] as const).map((where) => {
+                      const checked = settings.notify_prefs[type][where];
+                      return (
+                        <td key={where}>
+                          {checked === null ? (
+                            <span
+                              title="站长关闭了这类邮件"
+                              className="flex h-10 items-center justify-center text-muted-foreground"
+                            >
+                              —<span className="sr-only">{label}：站长关闭了这类邮件</span>
+                            </span>
+                          ) : (
+                            /* The whole cell takes the tap, not just the 16px box. */
+                            <label className="flex h-10 cursor-pointer items-center justify-center">
+                              <Checkbox name={`${type}.${where}`} defaultChecked={checked} />
+                              <span className="sr-only">
+                                {label}：{where === "site" ? "站内" : "邮件"}
+                              </span>
+                            </label>
+                          )}
+                        </td>
+                      );
+                    })}
                   </tr>
                 ))}
               </tbody>

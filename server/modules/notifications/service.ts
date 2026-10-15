@@ -6,6 +6,7 @@ import { env } from "../../platform/env.ts";
 import { AppError } from "../../platform/errors.ts";
 import { queueMail } from "../../platform/mail.ts";
 import { excerpt } from "../../platform/markdown.ts";
+import { getSettings, type EmailPolicy, type Settings } from "../../platform/settings.ts";
 import { levelName, SITE_NAME } from "../../platform/site.ts";
 import { anonymousBrief, userBriefs, writer } from "../users/service.ts";
 
@@ -45,7 +46,8 @@ type Notice = {
   data?: Record<string, string>;
 };
 
-// Unless turned off, every type shows on the site; emails only come for these.
+// Unless turned off, every type shows on the site; emails only come for these, unless the owner
+// says otherwise.
 const EMAIL_BY_DEFAULT = new Set<NotificationType>([
   "reply",
   "mention",
@@ -55,25 +57,45 @@ const EMAIL_BY_DEFAULT = new Set<NotificationType>([
   "lottery",
 ]);
 
+function policyOf(settings: Settings, type: NotificationType): EmailPolicy {
+  return settings.notify.email[type] ?? (EMAIL_BY_DEFAULT.has(type) ? "on" : "off");
+}
+
+// Whether each type may go by email, and whether it does for people who never set it.
+export async function emailPolicies() {
+  const settings = await getSettings();
+  return Object.fromEntries(NOTIFICATION_TYPES.map((type) => [type, policyOf(settings, type)]));
+}
+
 // Whether someone gets a type on the site and by email: what they set, else the default; no
-// email at all with emails turned off.
-function switches(type: NotificationType) {
+// email at all with emails turned off, or with the owner allowing none of this type.
+async function switches(type: NotificationType) {
   const prefs = sql`users.notify_prefs -> ${type}`;
+  const policy = policyOf(await getSettings(), type);
   return [
     sql<boolean>`coalesce((${prefs} ->> 'site')::boolean, true)`.as("site"),
-    sql<boolean>`users.notify_email AND coalesce((${prefs} ->> 'email')::boolean, ${EMAIL_BY_DEFAULT.has(type)})`.as(
-      "email",
-    ),
+    (policy === "never"
+      ? sql<boolean>`false`
+      : sql<boolean>`users.notify_email AND coalesce((${prefs} ->> 'email')::boolean, ${policy === "on"})`
+    ).as("email"),
   ];
 }
 
-// Someone's switches for every type, what they set over the defaults.
-export function notifyPrefs(saved: Record<string, { site?: boolean; email?: boolean }>) {
+// Someone's switches for every type, what they set over the defaults; email is null for types the
+// owner allows no email for.
+export async function notifyPrefs(saved: Record<string, { site?: boolean; email?: boolean }>) {
+  const settings = await getSettings();
   return Object.fromEntries(
-    NOTIFICATION_TYPES.map((type) => [
-      type,
-      { site: saved[type]?.site ?? true, email: saved[type]?.email ?? EMAIL_BY_DEFAULT.has(type) },
-    ]),
+    NOTIFICATION_TYPES.map((type) => {
+      const policy = policyOf(settings, type);
+      return [
+        type,
+        {
+          site: saved[type]?.site ?? true,
+          email: policy === "never" ? null : (saved[type]?.email ?? policy === "on"),
+        },
+      ];
+    }),
   );
 }
 
@@ -123,7 +145,7 @@ async function notify(trx: Transaction<DB>, userIds: number[], notice: Notice) {
         .onRef("thread_users.user_id", "=", "users.id")
         .on("thread_users.thread_id", "=", notice.threadId),
     )
-    .select(["users.id", "users.qq", ...switches(notice.type)])
+    .select(["users.id", "users.qq", ...(await switches(notice.type))])
     .where("users.id", "in", ids)
     .where("users.member_status", "=", "member")
     .where(sql<boolean>`thread_users.notify_level IS DISTINCT FROM 'muted'`)
@@ -200,7 +222,7 @@ export async function notifyLevel(trx: Transaction<DB>, userId: number, level: n
   const type = "level";
   const person = await trx
     .selectFrom("users")
-    .select(["qq", ...switches(type)])
+    .select(["qq", ...(await switches(type))])
     .where("id", "=", userId)
     .where("qq", "is not", null)
     .$narrowType<{ qq: NotNull }>()
@@ -237,7 +259,7 @@ export async function notifyLottery(
   const type = "lottery";
   const people = await trx
     .selectFrom("users")
-    .select(["id", "qq", ...switches(type)])
+    .select(["id", "qq", ...(await switches(type))])
     .where(
       "id",
       "in",

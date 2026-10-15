@@ -407,7 +407,8 @@ export async function getSettings(userId: number) {
     .executeTakeFirstOrThrow();
 }
 
-// Only what is given changes; each notification type given replaces what was saved for it.
+// Only what is given changes, down to each notification switch: one never set follows the
+// owner's default.
 export async function updateSettings(
   actor: Actor,
   change: {
@@ -416,7 +417,7 @@ export async function updateSettings(
     hide_from_guests?: boolean;
     relations_public?: boolean;
     notify_email?: boolean;
-    notify_prefs?: Record<string, { site: boolean; email: boolean }>;
+    notify_prefs?: Record<string, { site?: boolean; email?: boolean }>;
   },
 ) {
   const { notify_prefs, ...rest } = change;
@@ -427,7 +428,9 @@ export async function updateSettings(
       .set({
         ...rest,
         ...(notify_prefs && {
-          notify_prefs: sql`notify_prefs || ${JSON.stringify(notify_prefs)}::jsonb`,
+          notify_prefs: sql`notify_prefs || coalesce((
+            SELECT jsonb_object_agg(key, coalesce(notify_prefs -> key, '{}') || value)
+            FROM jsonb_each(${JSON.stringify(notify_prefs)}::jsonb)), '{}')`,
         }),
       })
       .where("id", "=", actor.userId)

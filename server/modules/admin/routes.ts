@@ -10,6 +10,7 @@ import {
 import { testMailboxes } from "../../platform/mail.ts";
 import { getSettings } from "../../platform/settings.ts";
 import { botListening } from "../events/service.ts";
+import { emailPolicies, NOTIFICATION_TYPES } from "../notifications/service.ts";
 import { countOpenReports } from "../moderation/service.ts";
 import { contentStats } from "../threads/service.ts";
 import { uploadBytes } from "../uploads/service.ts";
@@ -43,6 +44,10 @@ const MAX_MAILBOXES = 10;
 
 const BotSettings = z.object({ require_operator: z.boolean() });
 
+const EmailPolicy = z.enum(["on", "off", "never"]).openapi({
+  description: "on：默认发邮件；off：默认不发，成员可以自己打开；never：不发，成员也不能打开",
+});
+
 const SettingsSchema = z
   .object({
     site: SiteSettings,
@@ -53,6 +58,11 @@ const SettingsSchema = z
         .openapi({ description: "发信邮箱，按顺序用，一个发不出去就换下一个" }),
     }),
     bot: BotSettings,
+    notify: z.object({
+      email: z
+        .record(z.string(), EmailPolicy)
+        .openapi({ description: "每类通知是否发邮件；成员没改过的按这里的默认" }),
+    }),
   })
   .openapi("Settings");
 
@@ -157,7 +167,10 @@ export const adminRoutes = createRouter()
         ...rest,
         password_set: password !== "",
       }));
-      return c.json({ site, login, smtp: { accounts }, bot }, 200);
+      return c.json(
+        { site, login, smtp: { accounts }, bot, notify: { email: await emailPolicies() } },
+        200,
+      );
     },
   )
   .openapi(
@@ -165,7 +178,7 @@ export const adminRoutes = createRouter()
       method: "patch",
       path: "/admin/settings",
       summary:
-        "修改站点设置，立即生效；只改带了的字段。发信邮箱整组替换，某个邮箱不带密码就沿用这个账号原来的",
+        "修改站点设置，立即生效；只改带了的字段，notify.email 只改带了的类型。发信邮箱整组替换，某个邮箱不带密码就沿用这个账号原来的。改了什么记进操作日志，密码只记哪个邮箱改了",
       request: {
         body: {
           required: true,
@@ -182,6 +195,9 @@ export const adminRoutes = createRouter()
                   })
                   .optional(),
                 bot: BotSettings.partial().optional(),
+                notify: z
+                  .object({ email: z.partialRecord(z.enum(NOTIFICATION_TYPES), EmailPolicy) })
+                  .optional(),
               }),
             },
           },
