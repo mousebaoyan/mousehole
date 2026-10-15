@@ -42,7 +42,7 @@ indexMissingPosts().catch((error: unknown) => log("error", "Indexing posts faile
 every(60_000, "Writing view counts", flushViews);
 every(60_000, "Drawing lotteries", drawDue);
 every(60_000, "Sending queued mail", sendQueued);
-every(3600_000, "Refreshing avatars", refreshAvatars);
+every(60_000, "Refreshing avatars", refreshAvatars);
 every(3600_000, "Raising levels", promoteActive);
 const DAY_MS = 24 * 3600_000;
 every(DAY_MS, "Clearing unused uploads", clearUnusedUploads);
