@@ -142,7 +142,8 @@ export function PostCard({
           <CircleCheck className="size-4" /> 已采纳
         </div>
       )}
-      <div className="flex items-center gap-x-2">
+      {/* On phones the time and the rest go on a line of their own, under the name. */}
+      <div className="flex flex-wrap items-center gap-x-2">
         {/* Avatar and name are one control, so either opens the same card in the same place. */}
         <UserCard
           user={author}
@@ -161,80 +162,80 @@ export function PostCard({
               {post.status === "pending" ? "待审核" : "已隐藏"}
             </span>
           )}
-          <span className="ml-auto flex items-center gap-2 text-xs whitespace-nowrap text-muted-foreground">
-            {post.via === "qq" && (
-              <span className="inline-flex items-center gap-1">
-                <MessagesSquare className="size-3.5" />
-                整理自群聊
+        </div>
+        <span className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs whitespace-nowrap text-muted-foreground max-sm:-mt-1.5 max-sm:basis-full max-sm:pl-12">
+          {post.via === "qq" && (
+            <span className="inline-flex items-center gap-1">
+              <MessagesSquare className="size-3.5" />
+              整理自群聊
+            </span>
+          )}
+          {replyTo && (
+            <button
+              type="button"
+              aria-expanded={parentOpen}
+              title={`回复 #${replyTo.floor}，点击查看`}
+              onClick={() => {
+                if (!target && parentFetcher.state === "idle") {
+                  void parentFetcher.load(`/t/${threadId}/p/${replyTo.id}`);
+                }
+                setParentOpen(!parentOpen);
+              }}
+              className={cn(
+                "inline-flex items-center gap-1.5 rounded-full py-0.5 pr-2 pl-1 hover:bg-accent hover:text-foreground",
+                parentOpen && "bg-accent text-foreground",
+              )}
+            >
+              <Forward className="size-3.5" />
+              <UserAvatar
+                user={shown(replyTo.author)}
+                thread={threadId}
+                className="size-5 text-2xs"
+              />
+              {/* Phones have little room on this line for a long group card. */}
+              <span className="max-w-24 truncate sm:max-w-none">
+                {shown(replyTo.author).display_name}
               </span>
-            )}
-            {replyTo && (
+            </button>
+          )}
+          {post.edited_at !== null &&
+            (manage.history ? (
               <button
                 type="button"
-                aria-expanded={parentOpen}
-                title={`回复 #${replyTo.floor}，点击查看`}
+                aria-label="编辑记录"
+                title={`编辑于 ${stamp(post.edited_at, now)}，查看编辑记录`}
                 onClick={() => {
-                  if (!target && parentFetcher.state === "idle") {
-                    void parentFetcher.load(`/t/${threadId}/p/${replyTo.id}`);
+                  if (historyFetcher.state === "idle") {
+                    void historyFetcher.load(`/t/${threadId}/p/${post.id}/revisions`);
                   }
-                  setParentOpen(!parentOpen);
+                  history.current?.showModal();
                 }}
-                className={cn(
-                  "inline-flex items-center gap-1.5 rounded-full py-0.5 pr-2 pl-1 hover:bg-accent hover:text-foreground",
-                  parentOpen && "bg-accent text-foreground",
-                )}
+                className="-m-1 rounded p-1 hover:bg-accent hover:text-foreground"
               >
-                <Forward className="size-3.5" />
-                <UserAvatar
-                  user={shown(replyTo.author)}
-                  thread={threadId}
-                  className="size-5 text-2xs"
-                />
-                {/* Phones have little room on this line for a long group card. */}
-                <span className="max-w-24 truncate sm:max-w-none">
-                  {shown(replyTo.author).display_name}
-                </span>
+                <Pencil className="size-3.5" />
               </button>
-            )}
-            {post.edited_at !== null &&
-              (manage.history ? (
-                <button
-                  type="button"
-                  aria-label="编辑记录"
-                  title={`编辑于 ${stamp(post.edited_at, now)}，查看编辑记录`}
-                  onClick={() => {
-                    if (historyFetcher.state === "idle") {
-                      void historyFetcher.load(`/t/${threadId}/p/${post.id}/revisions`);
-                    }
-                    history.current?.showModal();
-                  }}
-                  className="-m-1 rounded p-1 hover:bg-accent hover:text-foreground"
-                >
-                  <Pencil className="size-3.5" />
-                </button>
-              ) : (
-                <Pencil className="size-3.5" aria-label="已编辑">
-                  <title>{`编辑于 ${stamp(post.edited_at, now)}`}</title>
-                </Pencil>
-              ))}
-            {stamp(post.created_at, now)}
-            <a
-              href={`?floor=${post.floor}`}
-              className="-m-1.5 p-1.5 tabular-nums hover:text-foreground"
-            >
-              #{post.floor}
-            </a>
-            {unread !== undefined && (
-              <span
-                title={unread ? "未读" : undefined}
-                className={cn(
-                  "-ml-1 size-2 rounded-full bg-primary transition-opacity duration-1000",
-                  !unread && "opacity-0",
-                )}
-              />
-            )}
-          </span>
-        </div>
+            ) : (
+              <Pencil className="size-3.5" aria-label="已编辑">
+                <title>{`编辑于 ${stamp(post.edited_at, now)}`}</title>
+              </Pencil>
+            ))}
+          {stamp(post.created_at, now)}
+          <a
+            href={`?floor=${post.floor}`}
+            className="-m-1.5 p-1.5 tabular-nums hover:text-foreground"
+          >
+            #{post.floor}
+          </a>
+          {unread !== undefined && (
+            <span
+              title={unread ? "未读" : undefined}
+              className={cn(
+                "-ml-1 size-2 rounded-full bg-primary transition-opacity duration-1000",
+                !unread && "opacity-0",
+              )}
+            />
+          )}
+        </span>
       </div>
 
       {/* Indented under the name on wider screens; full width on phones. */}

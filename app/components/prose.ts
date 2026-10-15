@@ -1,3 +1,3 @@
 // Rendered post bodies: posts, the previews of the posts they reply to, and the editor's preview.
-export const PROSE =
-  "prose prose-neutral mt-2 max-w-none text-body leading-7 dark:prose-invert prose-p:my-2 prose-a:font-normal prose-a:text-link prose-a:no-underline hover:prose-a:underline prose-blockquote:border-brand/50 prose-blockquote:font-normal prose-blockquote:text-muted-foreground prose-blockquote:not-italic prose-code:before:content-none prose-code:after:content-none prose-pre:bg-secondary prose-pre:text-foreground prose-li:my-0.5 [&_blockquote_p]:before:content-none [&_blockquote_p]:after:content-none";
+// How their elements look is in app.css.
+export const PROSE = "prose prose-neutral mt-2 max-w-none text-body dark:prose-invert";

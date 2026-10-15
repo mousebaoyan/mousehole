@@ -13,6 +13,9 @@ import type { ShownImage } from "../../platform/markdown.ts";
 export const UPLOADS_DIR = "data/uploads";
 
 const DISPLAY_WIDTH = 960;
+// How tall an image appears in a post at most: a phone screenshot at full width would fill a few
+// screens. Pages narrow it further to fit; a tap opens the large one.
+const SHOWN_HEIGHT = 400;
 
 const NAME = /^\/uploads\/[0-9a-f]{2}\/([0-9a-f]{64})\.webp$/;
 
@@ -108,8 +111,8 @@ export async function fetchUpload(userId: number, url: string) {
 }
 
 // How the uploaded images among these addresses appear in a post: still images load their 960px
-// copy and open the large one; animated ones only have the large one. Other addresses are left
-// out.
+// copy and open the large one; animated ones only have the large one. Either is shown at most
+// SHOWN_HEIGHT tall. Other addresses are left out.
 export async function showImages(srcs: string[]) {
   const named = srcs.flatMap((src) => {
     const hex = uploadName(src);
@@ -131,7 +134,8 @@ export async function showImages(srcs: string[]) {
   for (const { src, hex } of named) {
     const size = rows.find((r) => r.hex === hex);
     if (!size) continue;
-    const scale = size.animated ? 1 : Math.min(1, DISPLAY_WIDTH / size.width);
+    const widest = size.animated ? size.width : DISPLAY_WIDTH;
+    const scale = Math.min(1, widest / size.width, SHOWN_HEIGHT / size.height);
     shown.set(src, {
       src: uploadUrl(hex, size.animated ? "large" : "display"),
       href: uploadUrl(hex),
