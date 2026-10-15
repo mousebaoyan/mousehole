@@ -13,7 +13,7 @@ function limitFor(path: string) {
 }
 
 function tooLarge(): never {
-  throw new AppError(413, "payload_too_large", "请求体太大");
+  throw new AppError(413, "payload_too_large", "请求内容过大");
 }
 
 // Reads a stream whole, giving up with `overflow` once it passes `maxSize` bytes.

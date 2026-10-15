@@ -32,7 +32,7 @@ export function ReportDialog({
         <form method="dialog">
           <output className="mt-4 block text-sm">{result.message}</output>
           <div className="mt-4 flex justify-end">
-            <Button>好的</Button>
+            <Button>确定</Button>
           </div>
         </form>
       ) : (

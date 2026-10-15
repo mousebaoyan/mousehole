@@ -13,7 +13,7 @@ import { useMe } from "~/forum";
 import type { Route } from "./+types/settings.ts";
 import { Checkbox } from "~/components/ui/checkbox";
 import { NOTIFICATION_TYPES } from "~/notification-types";
-import { SITE_NAME } from "../../server/platform/site.ts";
+import { BOT_NAME, SITE_NAME } from "../../server/platform/site.ts";
 
 export function meta() {
   return [{ title: `设置 · ${SITE_NAME}` }];
@@ -104,19 +104,22 @@ export default function Settings({ loaderData, actionData }: Route.ComponentProp
           <Section {...SECTIONS.profile}>
             <div className="flex flex-col gap-4">
               <AvatarField custom={settings.avatar_custom} />
-              <Field label="名字" hint="最多 24 个字；留空就跟着 QQ 群名片">
+              <Field label="名字" hint="最多 24 个字；留空则使用 QQ 群名片">
                 <Input
                   name="custom_name"
                   defaultValue={settings.custom_name ?? ""}
-                  placeholder="跟着 QQ 群名片"
+                  placeholder="使用 QQ 群名片"
                   maxLength={24}
                 />
               </Field>
-              <Field label="个性签名" hint="最多 60 个字，显示在资料卡和个人主页上；留空就跟着 QQ">
+              <Field
+                label="个性签名"
+                hint="最多 60 个字，显示在资料卡和个人主页上；留空则使用 QQ 个性签名"
+              >
                 <Textarea
                   name="custom_bio"
                   defaultValue={settings.custom_bio ?? ""}
-                  placeholder={settings.qq_bio || "跟着 QQ 的个性签名"}
+                  placeholder={settings.qq_bio || "使用 QQ 个性签名"}
                   maxLength={60}
                   className="min-h-16"
                 />
@@ -128,13 +131,13 @@ export default function Settings({ loaderData, actionData }: Route.ComponentProp
             <Check
               name="hide_from_guests"
               label="我的内容不给访客看"
-              hint="没登录的人和搜索引擎看不到我发的帖子、回复和短评，我的主页只显示名字和头像；以前发的也算。半分钟内生效"
+              hint="未登录的访客和搜索引擎看不到我发布的帖子、回复和短评（包括以前发布的），我的主页只显示名字和头像。约半分钟后生效"
               checked={settings.hide_from_guests}
             />
             <Check
               name="relations_public"
               label="公开我的赞和关系"
-              hint="其他成员能在我的主页看到我赞过的楼层、我关注和认可的人、我的粉丝，我也会出现在别人主页的这些名单里。关掉后数字照常显示"
+              hint="其他成员可以在我的主页查看我赞过的楼层、我关注和认可的人以及我的粉丝，我也会出现在他人主页的这些名单中。关闭后仍显示数量"
               checked={settings.relations_public}
             />
           </Section>
@@ -143,19 +146,19 @@ export default function Settings({ loaderData, actionData }: Route.ComponentProp
             <Check
               name="allow_proxy"
               label="允许把我在群里的提问和回答整理到论坛"
-              hint="整理好的内容记在我名下，我可以编辑和删除。关掉后，我在群里说的话不会再收录"
+              hint={`由${BOT_NAME} 整理，内容记在我名下，我可以编辑和删除。关闭后不再收录我在群里的发言`}
               checked={settings.allow_proxy}
             />
           </Section>
 
           <Section
             {...SECTIONS.notify}
-            description="站内通知在顶栏的铃铛里，邮件发到你的 QQ 邮箱。没改过的开关按站点的默认设置，站点改了默认也跟着变"
+            description="站内通知显示在顶栏的铃铛中，邮件发送到我的 QQ 邮箱。未修改过的开关使用站点的默认设置，并随站点默认设置变化"
           >
             <Check
               name="notify_email"
               label="接收邮件提醒"
-              hint="关掉后哪类通知都不发邮件，下面各类的设置会保留"
+              hint="关闭后所有通知都不发送邮件，下方各类的设置保留不变"
               checked={settings.notify_email}
             />
             <table className="mt-3 w-full text-sm">
@@ -207,7 +210,7 @@ export default function Settings({ loaderData, actionData }: Route.ComponentProp
           </div>
         </Form>
 
-        <Section {...SECTIONS.devices} description="在别处登录过、又不再用的设备，可以让它下线">
+        <Section {...SECTIONS.devices} description="不再使用的设备可以在这里下线">
           <ul className="divide-y">
             {sessions.map((s) => (
               <Device key={s.id} session={s} />
@@ -217,7 +220,7 @@ export default function Settings({ loaderData, actionData }: Route.ComponentProp
 
         <Section
           {...SECTIONS.export}
-          description="下载自己发过的帖子和回复（Markdown 原文）、短评和收藏，JSON 格式；每小时最多 3 次"
+          description="下载我发布的帖子和回复（Markdown 原文）、短评和收藏，格式为 JSON；每小时最多 3 次"
         >
           <a href="/api/v1/me/export" download className={buttonVariants({ variant: "outline" })}>
             <Download /> 下载我的内容

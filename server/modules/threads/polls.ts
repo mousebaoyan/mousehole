@@ -106,8 +106,8 @@ export async function vote(actor: Actor, thread: Opened, optionIds: number[]) {
       .forUpdate()
       .executeTakeFirst();
     if (!poll) throw pollNotFound();
-    if (isClosed(poll)) throw new AppError(403, "poll_closed", "投票已经结束");
-    if (!poll.multiple && chosen.length > 1) throw invalid("这是单选，只能选一项");
+    if (isClosed(poll)) throw new AppError(403, "poll_closed", "投票已结束");
+    if (!poll.multiple && chosen.length > 1) throw invalid("此投票为单选，只能选择一项");
     if (poll.max_choices !== null && chosen.length > poll.max_choices) {
       throw invalid(`最多选 ${poll.max_choices} 项`);
     }
@@ -118,7 +118,7 @@ export async function vote(actor: Actor, thread: Opened, optionIds: number[]) {
         .where("thread_id", "=", thread.id)
         .where("id", "in", chosen)
         .execute();
-      if (found.length !== chosen.length) throw invalid("选项不在这个投票里");
+      if (found.length !== chosen.length) throw invalid("选项不属于此投票");
     }
 
     const removed = await trx
@@ -198,10 +198,10 @@ export async function closePoll(actor: Actor, moderator: boolean, thread: Opened
 // Who chose an option, for a poll that isn't anonymous, once its counts show to the reader.
 export async function listVoters(poll: Poll | null, optionId: number) {
   if (!poll) throw pollNotFound();
-  if (poll.anonymous) throw new AppError(403, "forbidden", "匿名投票，看不到谁投了什么");
+  if (poll.anonymous) throw new AppError(403, "forbidden", "匿名投票不公开投票人");
   const option = poll.options.find((o) => o.id === optionId);
   if (!option) throw new AppError(404, "option_not_found", "选项不存在");
-  if (option.votes === null) throw new AppError(403, "forbidden", "投票后或投票结束后才能看");
+  if (option.votes === null) throw new AppError(403, "forbidden", "投票后或投票结束后才能查看");
   const rows = await db
     .selectFrom("poll_votes")
     .select("user_id")

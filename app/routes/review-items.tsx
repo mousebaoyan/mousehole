@@ -20,7 +20,7 @@ export function ReviewItems({
     const reason =
       to === "hidden"
         ? await promptDialog(
-            "理由会告诉作者，可以不填。",
+            "理由会通知作者，可不填。",
             "理由",
             status === "pending" ? "不通过" : "隐藏",
           )

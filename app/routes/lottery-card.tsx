@@ -81,7 +81,7 @@ export function LotteryCard({
 
       {won && (
         <p className="mt-3 flex items-center gap-1.5 text-sm font-medium text-primary">
-          <PartyPopper className="size-4" /> 你中了「{won.name}」，楼主会联系你领奖
+          <PartyPopper className="size-4" /> 你抽中了「{won.name}」，楼主将联系你领奖
         </p>
       )}
 
@@ -103,7 +103,7 @@ export function LotteryCard({
           <PeoplePopover
             source={`/t/${threadId}/lottery`}
             label={`${lottery.entry_count} 人参与`}
-            title={`${lottery.entry_count} 人参与，查看是谁`}
+            title={`${lottery.entry_count} 人参与，查看名单`}
             align="left"
           />
         ) : (
@@ -116,7 +116,7 @@ export function LotteryCard({
               ? `${stamp(lottery.drawn_at, now)} 已开奖`
               : open
                 ? `${stamp(lottery.draws_at, now)} 开奖`
-                : "正在开奖，稍后刷新看结果"}
+                : "正在开奖，请稍后刷新查看结果"}
         </span>
         {canCancel && open && (
           <Button
@@ -125,10 +125,7 @@ export function LotteryCard({
             disabled={busy}
             onClick={async () => {
               if (
-                await confirmDialog(
-                  "取消这个抽奖？取消后不再开奖，参与的人会收到通知。",
-                  "取消抽奖",
-                )
+                await confirmDialog("确定取消抽奖？取消后不会开奖，参与者会收到通知。", "取消抽奖")
               )
                 submit("cancel-lottery");
             }}
@@ -139,20 +136,20 @@ export function LotteryCard({
       </div>
 
       <details className="mt-3 text-meta text-muted-foreground">
-        <summary className="cursor-pointer select-none hover:text-foreground">怎么保证公平</summary>
+        <summary className="cursor-pointer select-none hover:text-foreground">公平性说明</summary>
         <div className="mt-2 flex flex-col gap-1.5">
           <p>
-            论坛到点自动开奖，楼主和管理员都插不上手。开奖用的随机种子发帖时就定了，下面是它的
-            SHA-256，开奖后公开种子本身，谁都能核对。
+            到时间后由论坛自动开奖，楼主和管理员都无法干预。开奖所用的随机种子在发帖时已确定，下方是它的
+            SHA-256；开奖后公开种子，任何人都可以核对。
           </p>
           <p className="font-mono break-all">种子的 SHA-256：{lottery.seed_hash}</p>
           {lottery.seed && (
             <>
               <p className="font-mono break-all">种子：{lottery.seed}</p>
               <p>
-                复核：先确认种子算出的 SHA-256 和上面一致；再对每位参与者算"种子:用户 ID"的
-                SHA-256，从小到大排，依次抽满各个奖项。参与名单就是按这个顺序排的，用户 ID
-                写在每个人后面。
+                复核方法：先确认种子的 SHA-256 与上方一致；再对每位参与者计算"种子:用户 ID"的
+                SHA-256，按从小到大排序，依次分配各个奖项。参与名单即按此顺序排列，每人后面标有用户
+                ID。
               </p>
             </>
           )}

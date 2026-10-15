@@ -111,7 +111,7 @@ export default function Content({ loaderData, actionData }: Route.ComponentProps
                   <Input
                     name="reason"
                     maxLength={200}
-                    placeholder="不通过的理由，会告诉作者；可以不填"
+                    placeholder="不通过的理由，会通知作者；可不填"
                     aria-label="理由"
                     className="h-8 min-w-0 basis-full sm:basis-72"
                   />

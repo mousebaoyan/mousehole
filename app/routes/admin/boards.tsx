@@ -104,7 +104,7 @@ export default function Boards({
       <Result result={actionData} />
 
       <Section title="全部版块">
-        {boards.length === 0 && <p className="text-sm text-muted-foreground">还没有版块</p>}
+        {boards.length === 0 && <p className="text-sm text-muted-foreground">暂无版块</p>}
         <ul className="divide-y">
           {boards.map((b, i) =>
             b.slug === edit ? (
@@ -204,7 +204,10 @@ export default function Boards({
 
       <Form method="post" action="/admin/boards" ref={createForm}>
         <Section title="新建版块" description="新版块排在最后">
-          <Field label="地址" hint="链接里的 /b/地址：小写字母、数字和短横线，建好后不能改">
+          <Field
+            label="地址"
+            hint="版块链接 /b/ 后面的部分：小写字母、数字和短横线，创建后不能修改"
+          >
             <Input
               name="slug"
               required
@@ -237,7 +240,7 @@ function BoardFields({ board, review }: { board?: Board; review?: string }) {
       <Field label="简介">
         <Input name="description" defaultValue={board?.description} maxLength={100} />
       </Field>
-      <Field label="谁能看" hint="版主和管理员不受等级限制">
+      <Field label="阅读权限" hint="版主和管理员不受等级限制">
         <Select
           name="read"
           options={READ}
@@ -246,7 +249,7 @@ function BoardFields({ board, review }: { board?: Board; review?: string }) {
           }
         />
       </Field>
-      <Field label="谁能发帖" hint="能看到版块的成员都能回复">
+      <Field label="发帖权限" hint="能查看版块的成员都可以回复">
         <Select
           name="post"
           options={POST}
@@ -258,7 +261,7 @@ function BoardFields({ board, review }: { board?: Board; review?: string }) {
       <Field label="默认类型" hint="问答帖子可以采纳答案">
         <Select name="default_kind" options={KIND} defaultValue={board?.default_kind} />
       </Field>
-      <Field label="审核方式" hint="先审后发：版主以外的人发的内容，通过审核才公开">
+      <Field label="审核方式" hint="先审后发：除版主外，其他人发布的内容审核通过后才公开">
         <Select name="review_mode" options={REVIEW} defaultValue={board?.review_mode ?? review} />
       </Field>
       <Field label="颜色" hint="列表和导航里的圆点">

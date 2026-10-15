@@ -81,15 +81,15 @@ const ICONS: Record<string, typeof Reply> = {
 // How a lottery went, for whom; see design §8.13.
 const LOTTERY: Record<string, string> = {
   won: "你中奖了",
-  lost: "抽奖开奖了，这次没中",
-  drawn: "你发起的抽奖开奖了",
-  cancelled: "你参与的抽奖取消了",
+  lost: "你参与的抽奖已开奖，未中奖",
+  drawn: "你发起的抽奖已开奖",
+  cancelled: "你参与的抽奖已取消",
 };
 
 // What a moderator did; see design §8.4.
 const MODERATED: Record<string, string> = {
   approve: "通过了你的",
-  reject: "没有通过你的",
+  reject: "未通过你的",
   hide: "隐藏了你的",
   unhide: "恢复了你的",
 };
@@ -108,7 +108,7 @@ function headline(n: Item) {
     case "like":
       return many ? `${who} 等 ${n.count} 人赞了你` : `${who} 赞了你`;
     case "boost":
-      return `${many ? `${who} 等 ${n.count} 人` : who} 给你留了短评：${n.data.body}`;
+      return `${many ? `${who} 等 ${n.count} 人` : who} 对你的楼层发表了短评：${n.data.body}`;
     case "watching":
       return many ? `关注的帖子有 ${n.count} 层新回复` : `${who} 回复了你关注的帖子`;
     case "solved":
@@ -116,7 +116,7 @@ function headline(n: Item) {
     case "moderation":
       return `${who} ${MODERATED[n.data.action] ?? "处理了你的"}${n.post?.floor === 1 ? "帖子" : "回复"}${n.data.reason ? `：${n.data.reason}` : ""}`;
     case "level":
-      return `你升到了 ${levelName(Number(n.data.level))}`;
+      return `你已升级到 ${levelName(Number(n.data.level))}`;
     case "lottery":
       return `${LOTTERY[n.data.result]}${n.data.prize ? `：${n.data.prize}` : ""}`;
     default:
@@ -157,7 +157,7 @@ export default function Notifications({ loaderData }: Route.ComponentProps) {
       </div>
       {items.length === 0 ? (
         <p className="py-16 text-center text-sm text-muted-foreground">
-          {unread ? "没有未读的通知" : "还没有通知"}
+          {unread ? "没有未读通知" : "暂无通知"}
         </p>
       ) : (
         <ul>

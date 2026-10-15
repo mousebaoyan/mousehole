@@ -57,7 +57,7 @@ export function ModerationButtons({
           <input type="hidden" name="intent" value="restrict" />
           <h2 className="font-semibold">{admin ? "禁言或封禁" : "禁言"}</h2>
           <p className="mt-1 text-meta text-muted-foreground">
-            禁言后还能浏览，但不能发帖、回复、点赞和短评；封禁后不能登录
+            禁言后仍可浏览，但不能发帖、回复、点赞和发表短评；封禁后无法登录
           </p>
           {admin && (
             <fieldset className="mt-4 grid grid-cols-2 gap-2 text-sm">
@@ -89,7 +89,7 @@ export function ModerationButtons({
               />
             </Field>
             <Field label="理由">
-              <Input name="reason" required maxLength={200} placeholder="记进操作日志" />
+              <Input name="reason" required maxLength={200} placeholder="将记入操作日志" />
             </Field>
           </div>
           <div className="mt-5 flex justify-end gap-2">

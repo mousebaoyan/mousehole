@@ -68,7 +68,7 @@ export default function Tags({ loaderData: { tags, edit }, actionData }: Route.C
     <>
       <h1 className="text-xl font-semibold">标签</h1>
       <p className="mt-1 text-meta text-muted-foreground">
-        发帖时只能选这里的标签；意思重复的标签可以合并
+        发帖时只能选择这里的标签；含义重复的标签可以合并
       </p>
       <Result result={actionData} />
 
@@ -76,7 +76,7 @@ export default function Tags({ loaderData: { tags, edit }, actionData }: Route.C
         const group = tags.filter((t) => t.kind === k.value);
         return (
           <Section key={k.value} title={k.label}>
-            {group.length === 0 && <p className="text-sm text-muted-foreground">还没有标签</p>}
+            {group.length === 0 && <p className="text-sm text-muted-foreground">暂无标签</p>}
             <div className="flex flex-wrap gap-2">
               {group.map((t) => (
                 <Link
@@ -173,12 +173,12 @@ function EditTag({ tag, tags, busy }: { tag: Tag; tags: Tag[]; busy: boolean }) 
           className="ml-auto"
           formNoValidate
           disabled={busy}
-          onClick={confirmSubmit(`删除标签「${tag.name}」？帖子上的这个标签会一并去掉。`, "删除")}
+          onClick={confirmSubmit(`删除标签「${tag.name}」？帖子上的该标签也会一并移除。`, "删除")}
         >
           删除
         </Button>
         <p className="w-full text-meta text-muted-foreground">
-          合并后，「{tag.name}」的帖子都改用选中的标签，「{tag.name}」删除
+          合并后，使用「{tag.name}」的帖子改用所选标签，「{tag.name}」将被删除
         </p>
       </Form>
     </div>

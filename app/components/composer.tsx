@@ -372,8 +372,8 @@ export function ComposerProvider({
       const changed = content.text !== target.post.markdown;
       if (changed && !(await confirmDialog("放弃这次修改？", "放弃"))) return;
     } else if (!isEmpty(content)) {
-      const choice = await chooseDialog("还没发出去，怎么处理？", [
-        { value: "", label: "继续写", variant: "ghost" },
+      const choice = await chooseDialog("内容尚未发布，如何处理？", [
+        { value: "", label: "继续编辑", variant: "ghost" },
         { value: "discard", label: "放弃", variant: "destructive" },
         { value: "save", label: "保存草稿", variant: "default" },
       ]);
@@ -429,7 +429,7 @@ function clampHeight(height: number) {
   return Math.round(Math.min(Math.max(height, MIN_HEIGHT), innerHeight * 0.85));
 }
 
-const SAVE_TEXT = { saving: "正在保存草稿…", saved: "草稿已保存", failed: "草稿没存上" };
+const SAVE_TEXT = { saving: "正在保存草稿…", saved: "草稿已保存", failed: "草稿保存失败" };
 
 const SEND = {
   thread: { label: "发布", Icon: Send, field: "正文" },
@@ -822,7 +822,7 @@ function ThreadFields({
         </span>
         {(content.anonymous || content.anonymousReplies) && (
           <span className="text-meta text-muted-foreground">
-            发出后不能改；除了本人和管理员，没人知道匿名的是谁
+            发布后不能修改；只有本人和管理员能看到匿名者的身份
           </span>
         )}
       </div>
@@ -942,7 +942,7 @@ function PollSettings({
           checked={poll.results === "always"}
           onChange={(e) => onChange({ ...poll, results: e.target.checked ? "always" : "voted" })}
         />
-        <label htmlFor={`${id}-results`}>没投票也能看结果</label>
+        <label htmlFor={`${id}-results`}>未投票也可查看结果</label>
       </span>
     </div>
   );
@@ -967,8 +967,8 @@ function PollOptions({ poll, onChange }: { poll: PollDraft; onChange: (poll: Pol
               <Button
                 variant="ghost"
                 size="icon-sm"
-                aria-label={`删掉选项 ${i + 1}`}
-                title="删掉"
+                aria-label={`删除选项 ${i + 1}`}
+                title="删除"
                 onClick={() => onChange({ ...poll, options: poll.options.toSpliced(i, 1) })}
               >
                 <X />
@@ -983,7 +983,7 @@ function PollOptions({ poll, onChange }: { poll: PollDraft; onChange: (poll: Pol
           size="sm"
           onClick={() => onChange({ ...poll, options: [...poll.options, ""] })}
         >
-          <Plus /> 加一个选项
+          <Plus /> 添加选项
         </Button>
       )}
     </div>
@@ -1023,7 +1023,7 @@ function LotterySettings({
         value={String(lottery.min_level)}
         onValueChange={(v) => onChange({ ...lottery, min_level: Number(v) })}
         options={MIN_LEVELS}
-        aria-label="参与要几级"
+        aria-label="参与等级要求"
         className="w-32"
       />
       <DeadlinePicker
@@ -1087,8 +1087,8 @@ function LotteryPrizes({
               <Button
                 variant="ghost"
                 size="icon-sm"
-                aria-label={`删掉奖项 ${i + 1}`}
-                title="删掉"
+                aria-label={`删除奖项 ${i + 1}`}
+                title="删除"
                 onClick={() => onChange({ ...lottery, prizes: prizes.toSpliced(i, 1) })}
               >
                 <X />
@@ -1103,7 +1103,7 @@ function LotteryPrizes({
           size="sm"
           onClick={() => onChange({ ...lottery, prizes: [...prizes, { name: "", winners: 1 }] })}
         >
-          <Plus /> 加一个奖项
+          <Plus /> 添加奖项
         </Button>
       )}
     </div>

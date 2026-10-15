@@ -50,12 +50,12 @@ export async function loader({ context, request }: Route.LoaderArgs) {
   if (!res.ok) return redirect("/login");
   const { role } = await res.json();
   const rank = RANKS.find((r) => r === role);
-  if (!rank) throw data("管理后台只有版主、管理员和站长能进", { status: 403 });
+  if (!rank) throw data("仅版主、管理员和站长可以进入管理后台", { status: 403 });
   const { pathname } = new URL(request.url);
   if (rank === "moderator" && pathname === "/admin") return redirect("/admin/reports");
   const page = pages.find((p) => p.to === pathname);
   if (page && RANKS.indexOf(page.from) > RANKS.indexOf(rank)) {
-    throw data("没有权限打开这个页面", { status: 403 });
+    throw data("没有权限访问此页面", { status: 403 });
   }
   return { rank };
 }

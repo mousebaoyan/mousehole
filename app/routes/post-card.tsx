@@ -118,7 +118,7 @@ export function PostCard({
         className="relative scroll-mt-20 px-3 py-4 text-meta text-muted-foreground sm:px-4"
       >
         <span className="tabular-nums">#{post.floor}</span>{" "}
-        {post.deleted ? "该楼已删除" : "仅成员可见，登录后查看"}
+        {post.deleted ? "该楼层已删除" : "仅成员可见，登录后查看"}
       </li>
     );
   }
@@ -173,7 +173,7 @@ export function PostCard({
               <button
                 type="button"
                 aria-expanded={parentOpen}
-                title={`回复 #${replyTo.floor}，点开查看`}
+                title={`回复 #${replyTo.floor}，点击查看`}
                 onClick={() => {
                   if (!target && parentFetcher.state === "idle") {
                     void parentFetcher.load(`/t/${threadId}/p/${replyTo.id}`);
@@ -267,7 +267,7 @@ export function PostCard({
               }}
               className={cn("text-muted-foreground", repliesOpen && "bg-accent text-foreground")}
             >
-              {post.reply_count} 个回复 {repliesOpen ? <ChevronUp /> : <ChevronDown />}
+              {post.reply_count} 条回复 {repliesOpen ? <ChevronUp /> : <ChevronDown />}
             </Button>
           )}
           {boosts.shown.length === 0 && <div className="text-muted-foreground">{boostButton}</div>}
@@ -456,7 +456,7 @@ function HistoryDialog({
           <li key={r.rev} className="px-5 py-4">
             <div className="flex items-center gap-2 text-meta text-muted-foreground">
               <UserAvatar user={r.editor} className="size-5 text-2xs" />
-              {r.editor.display_name} · {stamp(r.created_at, now)} 修改，之前是：
+              {r.editor.display_name} · {stamp(r.created_at, now)} 修改，修改前为：
             </div>
             {r.title !== null && <p className="mt-2 font-medium">标题：{r.title}</p>}
             <pre className="mt-2 font-sans text-body leading-7 whitespace-pre-wrap">{r.body}</pre>
@@ -497,12 +497,12 @@ function PostPreview({
             }}
             className="ml-auto inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
           >
-            <Arrow className="size-3.5" /> 跳到 #{post.floor}
+            <Arrow className="size-3.5" /> 跳转到 #{post.floor}
           </a>
         </div>
         {post.deleted || post.members_only ? (
           <p className="mt-1 text-meta text-muted-foreground">
-            {post.deleted ? "该楼已删除" : "仅成员可见"}
+            {post.deleted ? "该楼层已删除" : "仅成员可见"}
           </p>
         ) : (
           <div

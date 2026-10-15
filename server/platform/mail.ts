@@ -73,10 +73,10 @@ async function deliver(to: string, subject: string, text: string) {
 // must not hold database locks.
 export async function sendMail(to: string, subject: string, text: string) {
   if ((await getSettings()).smtp.accounts.length === 0) {
-    throw new AppError(503, "email_not_configured", "邮件服务还没有配置");
+    throw new AppError(503, "email_not_configured", "尚未配置发信邮箱");
   }
   if ((await deliver(to, subject, text)) !== "sent") {
-    throw new AppError(502, "email_failed", "邮件发送失败，请稍后再试");
+    throw new AppError(502, "email_failed", "邮件发送失败，请稍后重试");
   }
 }
 
@@ -84,7 +84,7 @@ export async function sendMail(to: string, subject: string, text: string) {
 export async function testMailboxes(to: string) {
   const { smtp } = await getSettings();
   if (smtp.accounts.length === 0) {
-    throw new AppError(503, "email_not_configured", "邮件服务还没有配置");
+    throw new AppError(503, "email_not_configured", "尚未配置发信邮箱");
   }
   const results = [];
   for (const account of smtp.accounts) {

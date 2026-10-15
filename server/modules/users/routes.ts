@@ -299,7 +299,7 @@ export const usersRoutes = createRouter()
     }),
     async (c) => {
       const viewer = authorize(c, "read");
-      if (!isMember(viewer, c.var.bot)) throw new AppError(403, "forbidden", "成员才能看");
+      if (!isMember(viewer, c.var.bot)) throw new AppError(403, "forbidden", "仅成员可查看");
       const userId = await findUserId(c.req.valid("param").user);
       await assertRelationsShown(viewer.id, userId);
       const { list, cursor } = c.req.valid("query");

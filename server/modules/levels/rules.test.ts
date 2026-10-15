@@ -57,7 +57,7 @@ describe("等级", () => {
     ]);
     expect(requirements(4, l3, { ...busy, clean_days: 3 }).at(-1)).toEqual({
       key: "clean_days",
-      label: "没被禁言或封禁的天数",
+      label: "未被禁言或封禁的天数",
       have: 3,
       need: 30,
     });

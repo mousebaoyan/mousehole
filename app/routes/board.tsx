@@ -66,7 +66,7 @@ export default function Board({ loaderData }: Route.ComponentProps) {
           <p className="text-muted-foreground">{loaderData.locked}</p>
           {me && (
             <Link to={`/u/${me.id}`} className={buttonVariants({ variant: "outline" })}>
-              看看升级进度
+              查看升级进度
             </Link>
           )}
         </div>

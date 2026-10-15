@@ -106,7 +106,7 @@ const SAID: Record<Notice["type"], string> = {
   thread_reply: "回复了你的帖子",
   mention: "提到了你",
   like: "赞了你",
-  boost: "给你留了短评",
+  boost: "对你的楼层发表了短评",
   watching: "回复了你关注的帖子",
   following: "发了新帖",
   solved: "采纳了你的回答",
@@ -116,7 +116,7 @@ const SAID: Record<Notice["type"], string> = {
 // What a moderator did, for moderation notices.
 const MODERATED: Record<string, string> = {
   approve: "通过了你的内容",
-  reject: "没有通过你的内容",
+  reject: "未通过你的内容",
   hide: "隐藏了你的内容",
   unhide: "恢复了你的内容",
 };
@@ -130,7 +130,7 @@ function mailbox(qq: number) {
   return `${qq}@qq.com`;
 }
 
-const MAIL_FOOTER = `\n\n——\n不想收到这类邮件，可以在${SITE_NAME}的设置里关掉：${env.PUBLIC_URL}/settings`;
+const MAIL_FOOTER = `\n\n——\n如不想再收到此类邮件，可在${SITE_NAME}的设置中关闭：${env.PUBLIC_URL}/settings`;
 
 // Written in the transaction that caused it. Nobody hears of their own doing, nor anyone who left
 // the groups or muted the thread, nor the owner, who has no QQ and is in no group. Each type shows on the site and goes by email, as each person
@@ -236,7 +236,7 @@ export async function notifyLevel(trx: Transaction<DB>, userId: number, level: n
     await tellUnread(trx, [userId]);
   }
   if (person.email) {
-    const said = `你在${SITE_NAME}升到了 ${levelName(level)}`;
+    const said = `你在${SITE_NAME}已升级到 ${levelName(level)}`;
     await queueMail(trx, [
       {
         address: mailbox(person.qq),
@@ -293,7 +293,7 @@ export async function notifyLottery(
   for (const t of told) {
     const p = person.get(t.userId);
     if (!p?.email || (t.result !== "won" && t.result !== "drawn")) continue;
-    const said = t.result === "won" ? `你中奖了：${t.prize}` : "你发起的抽奖开奖了";
+    const said = t.result === "won" ? `你中奖了：${t.prize}` : "你发起的抽奖已开奖";
     mails.push({
       address: mailbox(p.qq),
       subject: said,

@@ -126,7 +126,7 @@ export default function Members({ loaderData, actionData }: Route.ComponentProps
               <span className="min-w-0">
                 <span className="block truncate font-medium">{m.display_name}</span>
                 <span className="text-meta text-muted-foreground">
-                  {m.qq ?? "站长账号"} · 最近 <Time value={m.last_seen_at} never="没来过" /> ·{" "}
+                  {m.qq ?? "站长账号"} · 最近 <Time value={m.last_seen_at} never="从未访问" /> ·{" "}
                   {m.thread_count} 帖子 {m.post_count} 回复
                 </span>
               </span>
@@ -167,7 +167,10 @@ export default function Members({ loaderData, actionData }: Route.ComponentProps
                   name="role"
                   defaultValue={m.role_locked ? m.role : ""}
                   options={[
-                    { value: "", label: `按群（${ROLES.find((r) => r.value === m.role)?.label}）` },
+                    {
+                      value: "",
+                      label: `跟随群角色（${ROLES.find((r) => r.value === m.role)?.label}）`,
+                    },
                     ...roles,
                   ]}
                   aria-label={`${m.display_name} 的角色`}
@@ -187,7 +190,9 @@ export default function Members({ loaderData, actionData }: Route.ComponentProps
           </li>
         ))}
         {items.length === 0 && (
-          <li className="px-4 py-12 text-center text-sm text-muted-foreground">没有找到</li>
+          <li className="px-4 py-12 text-center text-sm text-muted-foreground">
+            没有符合条件的成员
+          </li>
         )}
       </ul>
       {next_cursor !== null && (

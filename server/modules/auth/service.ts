@@ -59,7 +59,7 @@ export async function loginMethods() {
 
 async function requireMethod(method: "code" | "link" | "email") {
   if (!(await loginMethods())[method]) {
-    throw new AppError(403, "login_method_disabled", "这种登录方式已关闭，请换一种");
+    throw new AppError(403, "login_method_disabled", "该登录方式已关闭，请使用其他方式");
   }
 }
 
@@ -176,7 +176,7 @@ export async function endSession(actor: Actor, sessionId: number, logout: boolea
       .where("user_id", "=", actor.userId)
       .returning("user_agent")
       .executeTakeFirst();
-    if (!ended) throw new AppError(404, "not_found", "这个设备已经下线了");
+    if (!ended) throw new AppError(404, "not_found", "该设备已下线");
     await recordAudit(trx, actor, {
       action: logout ? "auth.logout" : "auth.session_end",
       target_type: "session",
@@ -241,7 +241,7 @@ export async function resolveBot(
   const member = actAs && (await memberOrThrow(actAs, "X-Act-As 指定的人"));
   const operator = operatorRef && (await memberOrThrow(operatorRef, "X-Operator 指定的人"));
   if (member && operator && operator.id !== member.id && !STAFF.includes(operator.role)) {
-    throw new AppError(403, "operator_not_allowed", "只有版主和管理员能让 bot 代表别人操作");
+    throw new AppError(403, "operator_not_allowed", "只有版主和管理员能让 bot 代表他人操作");
   }
 
   const viewer: Viewer = member
@@ -338,7 +338,7 @@ export async function requestEmailCode(qq: number, ip: string | null) {
   await requireMethod("email");
   rateLimit(`email:ip:${ip}`, 10, 10 * MINUTE);
   const member = await findMember({ qq });
-  if (!member) throw new AppError(403, "not_member", "这个 QQ 号不在群里，或者还没有同步到论坛");
+  if (!member) throw new AppError(403, "not_member", "该 QQ 号不在群内，或尚未同步到论坛");
   rateLimit(`email:qq:${qq}:minute`, 1, MINUTE);
   rateLimit(`email:qq:${qq}:day`, 10, DAY);
 
@@ -373,14 +373,14 @@ export async function loginWithEmailCode(qq: number, code: string, client: Clien
       .returning(["code", "attempts"])
       .executeTakeFirst());
   if (!member || !stored) {
-    throw new AppError(400, "email_code_invalid", "验证码无效、已过期或输错太多次，请重新获取");
+    throw new AppError(400, "email_code_invalid", "验证码无效、已过期或错误次数过多，请重新获取");
   }
   if (stored.code !== code) {
     const left = EMAIL_CODE_ATTEMPTS - stored.attempts;
     throw new AppError(
       400,
       "email_code_invalid",
-      left > 0 ? `验证码不对，还能再试 ${left} 次` : "验证码输错太多次，已作废，请重新获取",
+      left > 0 ? `验证码错误，还可尝试 ${left} 次` : "验证码错误次数过多，已失效，请重新获取",
     );
   }
 

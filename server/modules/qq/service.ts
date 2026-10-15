@@ -10,7 +10,7 @@ export type Source = { chat_type: "group" | "private"; chat_id: number; message_
 type Message = { chat_type: "group" | "private"; chat_id: number; message_id: number };
 
 function sourceExists(link: { thread_id: number; post_id: number }) {
-  return new AppError(409, "source_exists", "这条 QQ 消息已经收录到论坛了", {
+  return new AppError(409, "source_exists", "这条 QQ 消息已收录到论坛", {
     details: { thread_id: link.thread_id, post_id: link.post_id },
   });
 }

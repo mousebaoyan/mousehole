@@ -22,7 +22,7 @@ async function lockGroup(trx: Transaction<DB>, groupId: number) {
     .where("id", "=", groupId)
     .forUpdate()
     .executeTakeFirst();
-  if (!group) throw new AppError(404, "group_not_linked", "这个群还没有在后台关联");
+  if (!group) throw new AppError(404, "group_not_linked", "该群尚未在后台关联");
   return group;
 }
 
@@ -285,7 +285,7 @@ export async function updateGroupInfo(
     .select("id")
     .where("id", "=", groupId)
     .executeTakeFirst();
-  if (!exists) throw new AppError(404, "group_not_linked", "这个群还没有在后台关联");
+  if (!exists) throw new AppError(404, "group_not_linked", "该群尚未在后台关联");
   return { stale: true };
 }
 
@@ -325,7 +325,7 @@ export async function linkGroup(actor: Actor, groupId: number) {
       .onConflict((oc) => oc.column("id").doNothing())
       .returning("id")
       .executeTakeFirst();
-    if (!linked) throw new AppError(409, "group_exists", "这个群已经关联过了");
+    if (!linked) throw new AppError(409, "group_exists", "该群已关联");
     await recordAudit(trx, actor, {
       action: "group.link",
       target_type: "group",

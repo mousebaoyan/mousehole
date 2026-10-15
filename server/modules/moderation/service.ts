@@ -54,7 +54,7 @@ export async function restrict(
 export async function lift(actor: Actor, admin: boolean, ref: UserRef, reason: string | undefined) {
   const user = await ordinaryMember(ref);
   const current = restrictionOf(user.restriction, user.restricted_until);
-  if (!current) throw new AppError(404, "not_restricted", "没有被禁言或封禁");
+  if (!current) throw new AppError(404, "not_restricted", "该成员未被禁言或封禁");
   if (current.type === "ban" && !admin) {
     throw new AppError(403, "forbidden", "只有管理员能解除封禁");
   }
@@ -75,7 +75,7 @@ const PAGE = 30;
 const REPORT_EXCERPT = 120;
 
 function alreadyReported() {
-  return new AppError(409, "already_reported", "你已经举报过了，版主会尽快处理");
+  return new AppError(409, "already_reported", "你已举报过，版主会尽快处理");
 }
 
 async function person(trx: Transaction<DB>, id: number) {

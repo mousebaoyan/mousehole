@@ -87,7 +87,7 @@ export function ReactionSummary({
       <button
         type="button"
         aria-expanded={open}
-        aria-label={`${total} 个表情回应，查看是谁`}
+        aria-label={`${total} 个表情回应，查看名单`}
         onClick={() => {
           if (!open && list.state === "idle") void list.load(source);
           setOpen(!open);
@@ -105,7 +105,7 @@ export function ReactionSummary({
         <div className="absolute top-full left-0 z-30 mt-2 w-[min(18rem,calc(100vw-2rem))] overflow-hidden rounded-xl border bg-popover text-sm text-popover-foreground shadow-lg animate-in fade-in zoom-in-95">
           <div className="flex gap-1 overflow-x-auto border-b p-1.5">
             <button type="button" className={tabClass(tab === null)} onClick={() => setTab(null)}>
-              所有
+              全部
             </button>
             {sorted.map(([key, n]) => (
               <button

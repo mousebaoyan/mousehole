@@ -186,7 +186,7 @@ async function lockOpen(trx: Transaction<DB>, threadId: number) {
   if (!lottery) throw lotteryNotFound();
   if (lottery.cancelled_at !== null) throw new AppError(403, "lottery_closed", "抽奖已取消");
   if (lottery.drawn_at !== null || lottery.draws_at <= new Date()) {
-    throw new AppError(403, "lottery_closed", "已经开奖了");
+    throw new AppError(403, "lottery_closed", "抽奖已开奖");
   }
   return lottery;
 }
@@ -198,7 +198,7 @@ export async function enter(actor: Actor, viewer: Viewer, thread: Opened) {
   if (thread.author_id === viewer.id) throw forbidden("不能参与自己发起的抽奖");
   await db.transaction().execute(async (trx) => {
     const lottery = await lockOpen(trx, thread.id);
-    if (lottery.entry === "reply") throw forbidden("这个抽奖回复帖子就算参与");
+    if (lottery.entry === "reply") throw forbidden("此抽奖通过回复帖子参与");
     if (viewer.level < lottery.min_level && !STAFF.includes(viewer.role)) {
       throw new AppError(403, "level_required", `L${lottery.min_level} 起才能参与这个抽奖`);
     }
@@ -220,7 +220,7 @@ export async function enter(actor: Actor, viewer: Viewer, thread: Opened) {
 export async function leave(actor: Actor, viewer: Viewer, thread: Opened) {
   await db.transaction().execute(async (trx) => {
     const lottery = await lockOpen(trx, thread.id);
-    if (lottery.entry === "reply") throw forbidden("这个抽奖回复帖子就算参与，删掉回复就退出了");
+    if (lottery.entry === "reply") throw forbidden("此抽奖通过回复帖子参与，删除回复即退出");
     const removed = await trx
       .deleteFrom("lottery_entries")
       .where("thread_id", "=", thread.id)

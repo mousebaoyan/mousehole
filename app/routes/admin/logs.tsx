@@ -26,7 +26,7 @@ const ACTIONS: Record<string, string> = {
   "thread.reject": "不通过帖子",
   "thread.hide": "隐藏帖子",
   "thread.unhide": "恢复帖子",
-  "thread.reveal": "查看匿名的人",
+  "thread.reveal": "查看匿名身份",
   "poll.vote": "投票",
   "poll.close": "结束投票",
   "lottery.enter": "参与抽奖",
@@ -39,18 +39,18 @@ const ACTIONS: Record<string, string> = {
   "post.reject": "不通过回复",
   "post.hide": "隐藏回复",
   "post.unhide": "恢复回复",
-  "boost.set": "留短评",
-  "boost.unset": "删掉自己的短评",
+  "boost.set": "发表短评",
+  "boost.unset": "删除自己的短评",
   "boost.delete": "删除短评",
   "report.create": "举报",
   "report.resolve": "处理举报",
   "report.dismiss": "驳回举报",
   "user.restrict": "禁言或封禁",
   "user.unrestrict": "解除禁言或封禁",
-  "user.bootstrap": "初始化管理员",
+  "user.bootstrap": "命令行创建账号",
   "user.settings": "修改设置",
-  "user.rename": "改名字",
-  "user.avatar": "改头像",
+  "user.rename": "修改名字",
+  "user.avatar": "修改头像",
   "user.qq_bio": "推送 QQ 签名",
   "user.level": "设定等级",
   "member.role": "角色变更",
@@ -173,7 +173,7 @@ export default function Logs({ loaderData }: Route.ComponentProps) {
                 <p className="inline-flex items-center gap-1 text-meta text-muted-foreground">
                   <Bot className="size-3.5" />
                   经由 {log.token ?? "bot"}
-                  {log.operator && `，${log.operator.display_name} 让它做的`}
+                  {log.operator && `，发起人：${log.operator.display_name}`}
                 </p>
               )}
               {Object.keys(log.data).length > 0 && (

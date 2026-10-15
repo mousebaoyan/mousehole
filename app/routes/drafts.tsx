@@ -35,7 +35,7 @@ export default function Drafts({ loaderData: { drafts, now } }: Route.ComponentP
     <section>
       <h1 className="mb-4 px-1 text-xl font-semibold">草稿</h1>
       {drafts.length === 0 && (
-        <p className="py-16 text-center text-sm text-muted-foreground">没有草稿</p>
+        <p className="py-16 text-center text-sm text-muted-foreground">暂无草稿</p>
       )}
       <ul className="divide-y rounded-2xl border bg-card">
         {drafts.map(({ thread, title, excerpt, updated_at }) => (
@@ -47,7 +47,7 @@ export default function Drafts({ loaderData: { drafts, now } }: Route.ComponentP
             )}
             <div className="min-w-0 flex-1">
               <p className="truncate font-medium">
-                {thread ? `回复：${thread.title}` : title || "没有标题的新帖"}
+                {thread ? `回复：${thread.title}` : title || "无标题的新帖子"}
               </p>
               {excerpt && (
                 <p className="mt-0.5 line-clamp-2 text-meta text-muted-foreground">{excerpt}</p>
@@ -66,16 +66,16 @@ export default function Drafts({ loaderData: { drafts, now } }: Route.ComponentP
                 );
               }}
             >
-              继续写
+              继续编辑
             </Button>
             <Form method="post">
               <input type="hidden" name="key" value={thread?.id ?? "new"} />
               <Button
                 variant="ghost"
                 size="icon-sm"
-                aria-label="放弃这份草稿"
-                title="放弃"
-                onClick={confirmSubmit("放弃这份草稿？", "放弃")}
+                aria-label="删除这份草稿"
+                title="删除"
+                onClick={confirmSubmit("删除这份草稿？", "删除")}
               >
                 <Trash2 />
               </Button>

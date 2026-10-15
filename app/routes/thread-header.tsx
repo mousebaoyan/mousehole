@@ -116,7 +116,7 @@ export function ThreadHeader({
         {thread.solved_floor !== null && (
           <Link
             to={`?floor=${thread.solved_floor}`}
-            title="看采纳的回答"
+            title="查看采纳的回答"
             className="inline-flex items-center gap-1 rounded-full bg-success/10 px-2 py-0.5 font-medium text-success hover:bg-success/15"
           >
             <CircleCheck className="size-3.5" /> 已解决 · #{thread.solved_floor}
@@ -257,11 +257,11 @@ export function ThreadHeader({
         <p className="mt-3 flex items-center gap-2 rounded-xl bg-warning/10 px-3 py-2 text-meta text-warning">
           {thread.status === "pending" ? (
             <>
-              <Clock className="size-4 shrink-0" /> 等待审核：通过后其他人才能看到和回复
+              <Clock className="size-4 shrink-0" /> 等待审核：审核通过后其他人才能查看和回复
             </>
           ) : (
             <>
-              <EyeOff className="size-4 shrink-0" /> 已隐藏：只有作者和版主能看到
+              <EyeOff className="size-4 shrink-0" /> 已隐藏：仅作者和版主可见
             </>
           )}
         </p>

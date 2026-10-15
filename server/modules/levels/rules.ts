@@ -64,7 +64,7 @@ const LABELS: Record<keyof Totals | keyof Recent, string> = {
   likes: "获赞",
   days_visited: "访问天数",
   read_seconds: "阅读时间",
-  clean_days: "没被禁言或封禁的天数",
+  clean_days: "未被禁言或封禁的天数",
 };
 
 function meets<Key extends keyof Totals | keyof Recent>(

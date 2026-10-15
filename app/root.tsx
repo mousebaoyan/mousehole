@@ -75,7 +75,7 @@ const TITLES: Partial<Record<number, string>> = {
 
 export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
   const response = isRouteErrorResponse(error) ? error : null;
-  const title = (response && TITLES[response.status]) ?? "出错了";
+  const title = (response && TITLES[response.status]) ?? "页面出错";
   const detail =
     typeof response?.data === "string"
       ? response.data

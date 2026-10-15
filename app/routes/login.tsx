@@ -15,7 +15,7 @@ import { Input } from "~/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import type { Route } from "./+types/login.ts";
 import type { action as codeAction } from "./login-code.ts";
-import { SITE_NAME } from "../../server/platform/site.ts";
+import { BOT_NAME, SITE_NAME } from "../../server/platform/site.ts";
 
 export function meta() {
   return [{ title: `登录 · ${SITE_NAME}` }];
@@ -96,7 +96,7 @@ export default function Login({ loaderData, actionData }: Route.ComponentProps) 
               <li className="flex items-center gap-3">
                 <MessageCircle className="size-5 shrink-0 text-brand-strong" />
                 <span>
-                  私聊机器人发送<span className="mx-1 font-medium">登录</span>
+                  私聊{BOT_NAME} 发送<span className="mx-1 font-medium">登录</span>
                 </span>
               </li>
               <li className="flex items-center gap-3">
