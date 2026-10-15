@@ -1,5 +1,5 @@
 import { Award, UserCheck, UserPlus } from "lucide-react";
-import { useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { Link, useFetcher, useNavigate } from "react-router";
 import { cn } from "cn";
 import { useDismiss } from "~/components/disclosure";
@@ -108,9 +108,7 @@ function PersonCard({
 }) {
   const [open, setOpen] = useState(false);
   const root = useRef<HTMLSpanElement>(null);
-  const card = useFetcher<typeof loader>();
   useDismiss(open, () => setOpen(false), root);
-  const profile = card.data;
 
   return (
     <span ref={root} className="relative min-w-0">
@@ -118,31 +116,50 @@ function PersonCard({
         type="button"
         aria-expanded={open}
         aria-label={`${user.display_name} 的资料卡`}
-        onClick={() => {
-          if (profile === undefined && card.state === "idle") void card.load(`/u/${user.id}/card`);
-          setOpen(!open);
-        }}
+        onClick={() => setOpen(!open)}
         className={cn("cursor-pointer", className)}
       >
         {children}
       </button>
       {open && (
-        <div
-          className={cn(
-            "absolute top-full z-50 mt-2 w-72 rounded-2xl border bg-popover p-4 text-left text-sm text-popover-foreground shadow-lg animate-in fade-in zoom-in-95",
-            align === "start" ? "left-0" : "right-0",
-          )}
-        >
-          {profile ? (
-            <CardBody profile={profile} />
-          ) : (
-            <p className="py-6 text-center text-meta animate-pulse text-muted-foreground">
-              加载中…
-            </p>
-          )}
-        </div>
+        <CardPanel
+          id={user.id}
+          className={cn("absolute top-full mt-2", align === "start" ? "left-0" : "right-0")}
+        />
       )}
     </span>
+  );
+}
+
+// The card itself, placed by the caller, loaded as it first opens. Keyed by the person, so it
+// opens with what was loaded before, wherever they are clicked on the page.
+export function CardPanel({
+  id,
+  className,
+  style,
+}: {
+  id: number;
+  className?: string;
+  style?: CSSProperties;
+}) {
+  const { data, load } = useFetcher<typeof loader>({ key: `user-card:${id}` });
+  useEffect(() => {
+    if (data === undefined) void load(`/u/${id}/card`);
+  }, [data, id, load]);
+  return (
+    <div
+      className={cn(
+        "z-50 w-72 rounded-2xl border bg-popover p-4 text-left text-sm text-popover-foreground shadow-lg animate-in fade-in zoom-in-95",
+        className,
+      )}
+      style={style}
+    >
+      {data ? (
+        <CardBody profile={data} />
+      ) : (
+        <p className="py-6 text-center text-meta animate-pulse text-muted-foreground">加载中…</p>
+      )}
+    </div>
   );
 }
 

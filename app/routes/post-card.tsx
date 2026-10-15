@@ -20,6 +20,7 @@ import { CopyLinkButton } from "~/components/copy-link-button";
 import { Dropdown, menuItem } from "~/components/disclosure";
 import { PROSE } from "~/components/prose";
 import { UserAvatar } from "~/components/user-avatar";
+import { PostBody } from "~/components/post-body";
 import { UserCard } from "~/components/user-card";
 import { UserBadges } from "~/components/user-badges";
 import { isMine, WriterName } from "~/components/writer";
@@ -245,7 +246,7 @@ export function PostCard({
             )}
           </div>
         )}
-        <div className={cn(PROSE, "mt-2")} dangerouslySetInnerHTML={{ __html: post.html ?? "" }} />
+        <PostBody html={post.html ?? ""} className={cn(PROSE, "mt-2")} />
         {card}
 
         {/* Relative: the boost input floats from this row when there are no boosts yet. */}
@@ -505,10 +506,7 @@ function PostPreview({
             {post.deleted ? "该楼层已删除" : "仅成员可见"}
           </p>
         ) : (
-          <div
-            className={cn(PROSE, "mt-1")}
-            dangerouslySetInnerHTML={{ __html: post.html ?? "" }}
-          />
+          <PostBody html={post.html ?? ""} className={cn(PROSE, "mt-1")} />
         )}
       </div>
     </div>
