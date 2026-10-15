@@ -549,7 +549,12 @@ bot 把 QQ 群的信息推送给论坛。两种方式都支持，推荐一起用
 ## 12. 部署与运维
 
 - **镜像**：基于 `node:26-slim` 多阶段构建（`Dockerfile`），以 `node` 用户（uid 1000）运行，V8 堆上限 192MB，自带 `/healthz` 健康检查。CI 在每个 PR 上确认镜像能构建；在 `main` 上打 `v1.2.3` 这样的版本标签时，GitHub Actions 构建镜像并推到 `ghcr.io/mousebaoyan/mousehole`（标签是版本号和 `latest`）。这个包设为公开，服务器不用登录就能拉取；镜像里没有密钥，源码本来也是公开的。服务器只拉镜像，不在服务器上编译。
-- **compose**：见 `deploy/compose.yml`，服务器上和 `.env`、`data/` 一起放在 `/opt/1panel/www/sites/mousehole/`。`mousehole` 服务加入 `1panel-network`，通过容器名连接 PostgreSQL；端口只监听 `127.0.0.1:3080`（3000 已被占用）；`data/`（上传的图片和头像）挂载为数据卷；内存上限 384MB，日志轮转。更新就是 `docker compose pull && docker compose up -d`；停止时先写入内存里的浏览数。
+- **compose**：见 `deploy/compose.yml`，服务器上和 `.env`、`data/` 一起放在 `/opt/1panel/www/sites/mousehole/`。`mousehole` 服务加入 `1panel-network`，通过容器名连接 PostgreSQL；端口只监听 `127.0.0.1:3080`（3000 已被占用）；`data/`（上传的图片和头像）挂载为数据卷；内存上限 384MB，日志轮转。停止时先写入内存里的浏览数。
+- **发布**：版本号 `vX.Y.Z`，修复和小改动加末位。
+  1. 先把线上的库导出一份（`docker exec <PostgreSQL 容器> pg_dump -U postgres -Fc mousehole`），存到维护者本机，只留最近 5 份。
+  2. 在 `main` 上打标签并推送，等 release 工作流把镜像推到 GHCR。
+  3. 在服务器的项目目录里运行 `DOCKER_CONFIG=<空目录> docker compose pull && docker compose up -d`。服务器 root 的 Docker 配置里有一个拉不了这个包的 ghcr.io 登录，换成空配置匿名拉取公开镜像，那个登录不动。
+  4. 确认 `kysely_migration` 表里有最新的迁移，`/healthz` 返回 200。
 - **数据库**：1Panel 的 PostgreSQL 里的 `mousehole` 库和同名账号，这个账号只有 `mousehole` 库的权限；连接串通过环境变量传入。
 - **迁移**：启动时自动执行，先取 advisory lock，防止重复执行。
 - **备份**：本机和异地各存一份。异地放在服务器上 AList 挂的 Google Drive 里，通过 AList 的 WebDAV 上传。
@@ -615,7 +620,12 @@ bot 把 QQ 群的信息推送给论坛。两种方式都支持，推荐一起用
 
 每个阶段都带测试，并用 `scripts/mock-bot` 跑通对应的 bot 流程。
 
-进度：M1–M8 已完成。M9 论坛这边已完成（邮件提醒、收录接口），插件写出了第一版；接下来在 AstrBot 上联调、用历史记录回放调好自动收录，然后上线（M10）。
+进度：M1–M9 论坛这边已完成。论坛已部署上线（`bbs.mousebaoyan.cn`），站长账号和第 8.1 节的版块已建好。插件写好了第一版，单元测试齐全，还没在 AstrBot 上跑过。接下来：
+
+1. 把插件装到 AstrBot 上，在测试群里验证成员同步、私聊登录、个性签名和开奖，自动收录先关着（插件仓库的 README 和设计第 12 节）。
+2. 用历史群消息跑回放，调好自动收录的门槛、提示词和查重（插件仓库的[回放实验](https://github.com/mousebaoyan/astrbot_plugin_mousehole/blob/main/docs/replay.md)）。
+3. 按回放跑出的类别建收录用的版块和标签，把调好的数写回插件的默认配置，打开自动收录。
+4. M10 剩下的：备份到 AList，接入 Gatus，在服务器上压测。
 
 ### 二期
 
