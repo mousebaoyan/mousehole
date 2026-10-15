@@ -163,13 +163,10 @@ export async function action({ params, request, context }: Route.ActionArgs) {
     return { ok: false as const, message: (await res.json()).error.message };
   }
   if (text("intent") === "accept" || text("intent") === "unaccept") {
+    const answer = api.threads[":id"].answers[":post"];
+    const param = { ...thread, post: text("post_id") };
     const res =
-      text("intent") === "accept"
-        ? await api.threads[":id"].solution.$put({
-            param: thread,
-            json: { post_id: Number(text("post_id")) },
-          })
-        : await api.threads[":id"].solution.$delete({ param: thread });
+      text("intent") === "accept" ? await answer.$put({ param }) : await answer.$delete({ param });
     if (res.ok) return { ok: true as const, floor };
     return { ok: false as const, message: (await res.json()).error.message };
   }
@@ -360,7 +357,6 @@ function ThreadPage({
     first: stamp(thread.created_at, now),
     last: stamp(thread.last_post_at, now),
     now,
-    solvedPostId: thread.solved_post_id,
   };
 
   return (
@@ -404,7 +400,7 @@ function ThreadPage({
                 post={post}
                 threadId={thread.id}
                 op={sameWriter(post.author, thread.author)}
-                accepted={post.id === thread.solved_post_id}
+                accepted={post.accepted}
                 unread={read === null ? undefined : !read.has(post.floor)}
                 now={now}
                 parent={posts.find((p) => p.id === post.reply_to?.id)}
@@ -440,9 +436,11 @@ function ThreadPage({
                 }
                 onAccept={() =>
                   void changes.submit(
-                    post.id === thread.solved_post_id
-                      ? { intent: "unaccept", floor: post.floor }
-                      : { intent: "accept", post_id: post.id, floor: post.floor },
+                    {
+                      intent: post.accepted ? "unaccept" : "accept",
+                      post_id: post.id,
+                      floor: post.floor,
+                    },
                     { method: "post", defaultShouldRevalidate: false },
                   )
                 }

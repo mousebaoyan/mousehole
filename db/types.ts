@@ -228,6 +228,7 @@ export interface PostRevisions {
 }
 
 export interface Posts {
+  accepted: Generated<boolean>;
   anonymous: Generated<boolean>;
   author_id: number;
   body: string;
@@ -331,6 +332,7 @@ export interface ThreadAliases {
 }
 
 export interface Threads {
+  accepted_count: Generated<number>;
   anonymous_replies: Generated<boolean>;
   author_anonymous: Generated<boolean>;
   author_id: number;
@@ -347,7 +349,6 @@ export interface Threads {
   locked: Generated<boolean>;
   pinned: Generated<number>;
   reply_count: Generated<number>;
-  solved_post_id: number | null;
   status: Generated<string>;
   title: string;
   view_count: Generated<number>;

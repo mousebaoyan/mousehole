@@ -137,11 +137,11 @@ export async function search(reach: number, q: string, filter: SearchFilter, off
       .where("threads.author_anonymous", "=", false);
   }
   if (filter.kind !== undefined) matches = matches.where("threads.kind", "=", filter.kind);
-  if (filter.solved === true) matches = matches.where("threads.solved_post_id", "is not", null);
+  if (filter.solved === true) matches = matches.where("threads.accepted_count", ">", 0);
   if (filter.solved === false) {
     matches = matches
       .where("threads.kind", "=", "question")
-      .where("threads.solved_post_id", "is", null);
+      .where("threads.accepted_count", "=", 0);
   }
   if (filter.since !== undefined) {
     const since = SINCE[filter.since];

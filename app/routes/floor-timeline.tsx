@@ -22,7 +22,6 @@ export type Floors = {
   first: string;
   last: string;
   now: number;
-  solvedPostId: number | null;
 };
 
 // `onJump` lets a popup close once the reader has picked a floor.
@@ -47,9 +46,7 @@ export function FloorNav({ floors, onJump }: { floors: Floors; onJump?: () => vo
             <span className="truncate" title={p.author.display_name}>
               {p.author.display_name}
             </span>
-            {p.id === floors.solvedPostId && (
-              <CircleCheck className="ml-auto size-3.5 text-success" />
-            )}
+            {p.accepted && <CircleCheck className="ml-auto size-3.5 text-success" />}
           </a>
         ))}
       </div>

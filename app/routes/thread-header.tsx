@@ -113,14 +113,20 @@ export function ThreadHeader({
         </>
       )}
       <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-meta text-muted-foreground tabular-nums">
-        {thread.solved_floor !== null && (
-          <Link
-            to={`?floor=${thread.solved_floor}`}
-            title="查看采纳的回答"
-            className="inline-flex items-center gap-1 rounded-full bg-success/10 px-2 py-0.5 font-medium text-success hover:bg-success/15"
-          >
-            <CircleCheck className="size-3.5" /> 已解决 · #{thread.solved_floor}
-          </Link>
+        {thread.accepted_floors.length > 0 && (
+          <span className="inline-flex items-center gap-1 rounded-full bg-success/10 px-2 py-0.5 font-medium text-success">
+            <CircleCheck className="size-3.5" /> 已解决 ·
+            {thread.accepted_floors.map((floor) => (
+              <Link
+                key={floor}
+                to={`?floor=${floor}`}
+                title={`查看采纳的回答 #${floor}`}
+                className="rounded-full px-0.5 hover:underline"
+              >
+                #{floor}
+              </Link>
+            ))}
+          </span>
         )}
         {thread.pinned > 0 && (
           <span className="inline-flex items-center gap-1 text-brand-strong">
