@@ -43,6 +43,7 @@ export async function updateSettings(
     smtp?: { accounts: (Omit<SmtpAccount, "password"> & { password?: string })[] };
     bot?: Partial<Settings["bot"]>;
     notify?: Settings["notify"];
+    weekly?: Partial<Settings["weekly"]>;
   },
 ) {
   const current = await getSettings();
@@ -58,6 +59,7 @@ export async function updateSettings(
     },
     bot: change.bot && { ...current.bot, ...change.bot },
     notify: change.notify && { email: { ...current.notify.email, ...change.notify.email } },
+    weekly: change.weekly && { ...current.weekly, ...change.weekly },
   };
   const passwords = (next.smtp?.accounts ?? [])
     .filter((a) => a.password !== stored.get(a.user))
@@ -68,6 +70,7 @@ export async function updateSettings(
       login: next.login && changes(current.login, next.login),
       bot: next.bot && changes(current.bot, next.bot),
       notify: next.notify && changes(current.notify.email, next.notify.email),
+      weekly: next.weekly && changes(current.weekly, next.weekly),
       smtp: next.smtp && {
         ...changes(
           { accounts: current.smtp.accounts.map(mailbox) },

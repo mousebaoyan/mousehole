@@ -1,5 +1,5 @@
 import { pageTitle } from "~/share-meta";
-import { Award, Heart, Search, Snowflake } from "lucide-react";
+import { Award, Heart, Search, Snowflake, Sparkles } from "lucide-react";
 import { useRef } from "react";
 import { data, Link, useFetcher, useLocation } from "react-router";
 import { cn } from "cn";
@@ -311,6 +311,17 @@ function Profile({
           </div>
         ))}
       </dl>
+
+      {stats.reads > 0 && (
+        <p className="flex flex-wrap items-center gap-x-1.5 gap-y-1 px-1 text-meta text-muted-foreground">
+          <Sparkles className="size-4 text-brand-strong" aria-hidden />
+          {self ? "你" : "TA"}的分享帮到了
+          <span className="font-semibold text-foreground tabular-nums">{stats.people_reached}</span>
+          人，被读
+          <span className="font-semibold text-foreground tabular-nums">{stats.reads}</span>次
+          {stats.reads_week !== undefined && `，最近 7 天 ${stats.reads_week} 次`}
+        </p>
+      )}
 
       {progress && <LevelProgress progress={progress} />}
 

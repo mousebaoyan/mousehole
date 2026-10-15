@@ -64,7 +64,7 @@ async function answers(threadId: number) {
     .selectFrom("posts")
     .select("id")
     .where("thread_id", "=", threadId)
-    .where("accepted", "=", true)
+    .where("accepted_at", "is not", null)
     .orderBy("id")
     .execute();
   return { count: accepted_count, ids: rows.map((r) => r.id) };

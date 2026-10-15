@@ -97,6 +97,9 @@ const UserSchema = UserBriefSchema.extend({
     followers: z.number(),
     following: z.number(),
     endorsements: z.number(),
+    people_reached: z.number().openapi({ description: "帮到的人：读过 TA 至少一层的人数" }),
+    reads: z.number().openapi({ description: "被读次数：别人第一次读到 TA 的一层算一次" }),
+    reads_week: z.number().optional().openapi({ description: "最近 7 天的被读次数，只给本人" }),
   }),
 }).openapi("User");
 
@@ -170,6 +173,7 @@ const SettingsSchema = z
     title_badges: z
       .array(z.object({ id: z.number(), name: z.string(), tier: z.string() }))
       .openapi({ description: "能当头衔的徽章：自己得到的金徽章和银徽章" }),
+    weekly_email: z.boolean().openapi({ description: "收每周影响力邮件" }),
     notify_email: z
       .boolean()
       .openapi({ description: "邮件提醒的总开关；关掉后哪类通知都不发邮件" }),
@@ -284,6 +288,9 @@ export const usersRoutes = createRouter()
             followers: u.followers,
             following: u.following,
             endorsements: u.endorsements,
+            people_reached: u.people_reached,
+            reads: u.reads_received,
+            ...(viewer?.id === u.id && { reads_week: u.reads_week }),
           },
         },
         200,
@@ -480,6 +487,7 @@ export const usersRoutes = createRouter()
                   .nullable()
                   .optional()
                   .openapi({ description: "自己得到的金徽章或银徽章；null 改回 QQ 的专属头衔" }),
+                weekly_email: z.boolean().optional(),
                 notify_email: z.boolean().optional(),
                 notify_prefs: z
                   .partialRecord(

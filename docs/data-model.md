@@ -100,7 +100,7 @@
 
 ## 徽章与影响力
 
-表：`badges`、`user_badges`、`job_runs`。
+表：`badges`、`user_badges`、`job_runs`、`user_reads`。
 
 - 徽章（[总体设计 §8.8](design.md#88-徽章)）：`badges` 每枚一行，`tier` 取 `bronze`、`silver`、`gold`，`grouping` 是徽章页上的组，`multiple` 表示能得多次。自动授予的徽章和规则都写在代码里（`badges/rules.ts`），进程启动时按 `slug` 写入或更新 `badges`；管理员新建的活动徽章 `slug` 为 `NULL`，只能手动授予，每人一次。
 - `user_badges` 每次得到一行：能得多次的记 `post_id`（获赞的那一层、获赞的帖子的主楼、中奖的抽奖帖的主楼），其余为 `NULL`；`UNIQUE NULLS NOT DISTINCT (user_id, badge_id, post_id)`，授予用 `ON CONFLICT DO NOTHING`，当场检查和每小时补查重复了也不会多发。`granted_by` 是手动授予的管理员，自动的为 `NULL`；撤销手动授予的就删掉这一行，记进操作日志。
@@ -108,7 +108,8 @@
 - 头衔：`users.title_badge_id`，只能是自己得到的金徽章或银徽章，为 `NULL` 时显示 QQ 的专属头衔。撤销了这枚徽章时一并清空。
 - 被读（[总体设计 §8.15](design.md#815-影响力每周邮件和周榜)）：阅读上报时已经算出新读的楼层（并入前后区间集合之差），在同一个事务里按作者分组，不算自己的、匿名的、不公开的楼层，给每个作者的 `users.reads_received` 加上次数，并累加到 `user_reads`（每人每天一行，按北京时间）。`user_reads` 用来算最近 7 天和每周邮件，超过 35 天的每天清理。
 - 帮到的人：`users.people_reached` 是读过这个人至少一层的人数，每小时给今天有 `user_reads` 的人重算：按 `thread_users_thread` 取出他发过楼层的帖子的读者，`read_floors @> floor` 的去重计数。
-- 每周邮件和周榜现算，每周各一次：赞看 `reactions.created_at`，采纳看 `posts.accepted_at`，新帖新回复看 `created_at`，被读看 `user_reads`，读帖子的人数看 `thread_users.last_read_at` 落在这一周里的行，徽章看 `user_badges.granted_at`。
+- 每周来信每小时看一次到没到时间（周一 9 点），`job_runs` 的 `weekly_letters` 记这周发过了；`users.weekly_email` 是成员自己的开关。信是 HTML，`mail_queue.html` 存着，`body` 是给不显示 HTML 的邮件客户端的纯文本。
+- 每周来信和周榜现算，每周各一次：赞看 `reactions.created_at`，采纳看 `posts.accepted_at`，新帖新回复看 `created_at`，被读看 `user_reads`，读帖子的人数看 `thread_users.last_read_at` 落在这一周里的行，徽章看 `user_badges.granted_at`。
 
 ## 图片
 

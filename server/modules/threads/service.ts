@@ -25,6 +25,7 @@ import {
   countLikes,
   countPosting,
   countReading,
+  countReadsReceived,
   countUserPosts,
   membersByQq,
   shownToGuests,
@@ -371,7 +372,7 @@ export async function listUserPosts(
     .where("posts.floor", ">", 1)
     .where("posts.status", "=", "visible")
     .where("posts.deleted_at", "is", null)
-    .$if(solved, (qb) => qb.where("posts.accepted", "=", true))
+    .$if(solved, (qb) => qb.where("posts.accepted_at", "is not", null))
     .orderBy("posts.id", "desc")
     .limit(PAGE_SIZE);
   if (cursor !== undefined) query = query.where("posts.id", "<", cursor);
@@ -497,7 +498,7 @@ export async function getThread(id: number, reader: Reader) {
         SELECT coalesce(json_agg(json_build_array(lower(r), upper(r) - 1) ORDER BY lower(r)), '[]')
         FROM unnest(mine.read_floors) r)`.as("read_floors"),
       sql<number[]>`ARRAY(SELECT floor FROM posts
-        WHERE posts.thread_id = threads.id AND posts.accepted ORDER BY floor)`.as(
+        WHERE posts.thread_id = threads.id AND posts.accepted_at IS NOT NULL ORDER BY floor)`.as(
         "accepted_floors",
       ),
       sql<string>`(SELECT html FROM posts WHERE posts.thread_id = threads.id AND posts.floor = 1)`.as(
@@ -575,7 +576,7 @@ function selectPosts(reader: Reader) {
       "posts.reply_count",
       "posts.like_count",
       "posts.boost_count",
-      "posts.accepted",
+      sql<boolean>`posts.accepted_at IS NOT NULL`.as("accepted"),
       sql<Record<string, number>>`posts.reactions`.as("reactions"),
       "posts.edited_at",
       "posts.created_at",
@@ -1319,10 +1320,10 @@ export async function deletePost(
     // A deleted answer is no longer accepted.
     const deleted = await trx
       .updateTable("posts")
-      .set({ deleted_at: sql<Date>`now()`, accepted: false })
+      .set({ deleted_at: sql<Date>`now()`, accepted_at: null })
       .where("id", "=", postId)
       .where("deleted_at", "is", null)
-      .returning(sql<boolean>`old.accepted`.as("accepted"))
+      .returning(sql<boolean>`old.accepted_at IS NOT NULL`.as("accepted"))
       .executeTakeFirst();
     if (!deleted) throw new AppError(404, "post_not_found", "回复不存在");
     if (deleted.accepted) await countAnswers(trx, post.thread_id, -1);
@@ -1757,14 +1758,15 @@ export async function setAnswer(
   await db.transaction().execute(async (trx) => {
     const answer = await trx
       .updateTable("posts")
-      .set({ accepted })
+      // Accepting again keeps when it was first accepted.
+      .set({ accepted_at: accepted ? sql<Date>`coalesce(accepted_at, now())` : null })
       .where("id", "=", postId)
       .where("thread_id", "=", threadId)
       .where("floor", ">", 1)
       .where("deleted_at", "is", null)
       // Taking one back works on a floor hidden since.
       .$if(accepted, (qb) => qb.where("status", "=", "visible"))
-      .returning(["id", "author_id", sql<boolean>`old.accepted`.as("was")])
+      .returning(["id", "author_id", sql<boolean>`old.accepted_at IS NOT NULL`.as("was")])
       .executeTakeFirst();
     if (!answer) throw new AppError(400, "invalid_request", "只能采纳此帖子中公开的回复");
     if (answer.was === accepted) return;
@@ -1942,14 +1944,15 @@ function floorsIn(set: "old" | "new") {
     FROM unnest(${sql.raw(set)}.read_floors) r)`;
 }
 
-// Joins floors to what the reader has read, and returns how many of them they hadn't.
+// Joins floors to what the reader has read, and returns how many of them they hadn't, and which
+// (an int4multirange).
 async function addReadFloors(
   trx: Transaction<DB>,
   userId: number,
   threadId: number,
   ranges: [number, number][],
 ) {
-  const { added } = await trx
+  return trx
     .insertInto("thread_users")
     .values({
       user_id: userId,
@@ -1963,9 +1966,11 @@ async function addReadFloors(
         last_read_at: sql<Date>`now()`,
       }),
     )
-    .returning(sql<number>`${floorsIn("new")} - ${floorsIn("old")}`.as("added"))
+    .returning([
+      sql<number>`${floorsIn("new")} - ${floorsIn("old")}`.as("added"),
+      sql<string>`new.read_floors - coalesce(old.read_floors, '{}')`.as("fresh"),
+    ])
     .executeTakeFirstOrThrow();
-  return added;
 }
 
 // What the browser reports: the floors read since the last report and for how long. Floors past
@@ -2001,8 +2006,9 @@ export async function recordReading(
   const upTo = reached >= lastSeen ? thread.floor_count : reached;
   const skipped = [...unseen].filter((f) => f <= upTo).map((f): [number, number] => [f, f]);
   await db.transaction().execute(async (trx) => {
-    const added = await addReadFloors(trx, viewer.id, threadId, floors);
+    const { added, fresh } = await addReadFloors(trx, viewer.id, threadId, floors);
     if (skipped.length > 0) await addReadFloors(trx, viewer.id, threadId, skipped);
+    await countReadsReceived(trx, viewer.id, threadId, fresh);
     await countReading(trx, viewer.id, {
       posts: added,
       seconds: Math.min(seconds, MAX_READ_SECONDS),

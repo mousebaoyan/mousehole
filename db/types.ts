@@ -190,6 +190,7 @@ export interface MailQueue {
   attempts: Generated<number>;
   body: string;
   created_at: Generated<Timestamp>;
+  html: string | null;
   id: Generated<number>;
   next_at: Generated<Timestamp>;
   subject: string;
@@ -249,7 +250,7 @@ export interface PostRevisions {
 }
 
 export interface Posts {
-  accepted: Generated<boolean>;
+  accepted_at: Timestamp | null;
   anonymous: Generated<boolean>;
   author_id: number;
   body: string;
@@ -425,6 +426,12 @@ export interface UserFollows {
   follower_id: number;
 }
 
+export interface UserReads {
+  day: Timestamp;
+  reads: Generated<number>;
+  user_id: number;
+}
+
 export interface Users {
   activated_at: Timestamp | null;
   allow_proxy: Generated<boolean>;
@@ -445,12 +452,14 @@ export interface Users {
   member_status: Generated<string>;
   notify_email: Generated<boolean>;
   notify_prefs: Generated<Json>;
+  people_reached: Generated<number>;
   post_count: Generated<number>;
   posts_read: Generated<number>;
   qq: number | null;
   qq_bio: Generated<string>;
   qq_nickname: Generated<string>;
   read_seconds: Generated<number>;
+  reads_received: Generated<number>;
   relations_public: Generated<boolean>;
   restricted_through: Timestamp | null;
   restricted_until: Timestamp | null;
@@ -460,6 +469,7 @@ export interface Users {
   thread_count: Generated<number>;
   title_badge_id: number | null;
   visit_streak: Generated<number>;
+  weekly_email: Generated<boolean>;
 }
 
 export interface DB {
@@ -502,5 +512,6 @@ export interface DB {
   user_badges: UserBadges;
   user_days: UserDays;
   user_follows: UserFollows;
+  user_reads: UserReads;
   users: Users;
 }

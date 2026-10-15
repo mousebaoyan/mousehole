@@ -43,7 +43,7 @@ function likedOften(floors: number, likes: number) {
 }
 
 function accepted(answers: number) {
-  return people(sql`SELECT p.author_id AS user_id FROM ${SHOWN} AND p.accepted
+  return people(sql`SELECT p.author_id AS user_id FROM ${SHOWN} AND p.accepted_at IS NOT NULL
     GROUP BY p.author_id HAVING count(*) >= ${answers}`);
 }
 

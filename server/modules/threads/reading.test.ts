@@ -4,6 +4,7 @@ import { beforeAll, describe, expect, test } from "vitest";
 import { as, createUser, login } from "../../../test/fixtures.ts";
 import { app } from "../../app.ts";
 import { db } from "../../platform/db.ts";
+import { recountPeopleReached } from "../users/service.ts";
 
 const api = testClient(app).api.v1;
 
@@ -195,5 +196,62 @@ describe("新、未读和已读", () => {
   test("要登录", async () => {
     expect((await api.threads.$get({ query: { view: "unread" } })).status).toBe(401);
     expect((await api.threads.counts.$get({ query: {} })).status).toBe(401);
+  });
+});
+
+describe("影响力", () => {
+  test("别人第一次读到的楼层记在作者名下，自己读的和匿名的不算；帮到的人每人只算一次", async () => {
+    const writer = await createUser();
+    const writerWho = as(await login(writer.id));
+    const res = await api.threads.$post(
+      { json: { board: "reading", title: "读一读我的帖子", content: { markdown: "主楼" } } },
+      writerWho,
+    );
+    if (!res.ok) throw new Error(`status ${res.status}`);
+    const { id: thread } = await res.json();
+    await api.threads[":id"].posts.$post(
+      { param: { id: String(thread) }, json: { content: { markdown: "我的回复" } } },
+      writerWho,
+    );
+    await api.threads[":id"].posts.$post(
+      { param: { id: String(thread) }, json: { content: { markdown: "别人的回复" } } },
+      admin,
+    );
+    const impact = () =>
+      db
+        .selectFrom("users")
+        .select([
+          "reads_received",
+          "people_reached",
+          sql<number>`(SELECT coalesce(sum(reads), 0)::integer FROM user_reads
+            WHERE user_id = users.id)`.as("days"),
+        ])
+        .where("id", "=", writer.id)
+        .executeTakeFirstOrThrow();
+
+    await report(thread, [[1, 3]], 10);
+    await report(thread, [[1, 3]], 10);
+    await report(thread, [[1, 3]], 10, writerWho);
+    expect(await impact()).toMatchObject({ reads_received: 2, days: 2 });
+
+    const other = as(await login((await createUser()).id));
+    await report(thread, [[2, 2]], 10, other);
+    await recountPeopleReached();
+    expect(await impact()).toMatchObject({ reads_received: 3, people_reached: 2 });
+
+    const hidden = await api.threads.$post(
+      {
+        json: {
+          board: "reading",
+          title: "匿名写的帖子",
+          content: { markdown: "主楼" },
+          anonymous: true,
+        },
+      },
+      writerWho,
+    );
+    if (!hidden.ok) throw new Error(`status ${hidden.status}`);
+    await report((await hidden.json()).id, [[1, 1]], 10);
+    expect(await impact()).toMatchObject({ reads_received: 3 });
   });
 });
