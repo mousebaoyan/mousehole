@@ -376,7 +376,7 @@ function PostRows({ posts, now }: { posts: UserPost[]; now: number }) {
     >
       <Link
         to={`/t/${p.thread.id}?floor=${p.floor}`}
-        className="font-medium after:absolute after:inset-0"
+        className="line-clamp-2 font-medium after:absolute after:inset-0"
       >
         {p.thread.title}
       </Link>

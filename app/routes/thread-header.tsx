@@ -96,7 +96,7 @@ export function ThreadHeader({
               </span>
             )}
           </div>
-          <h1 className="mt-2.5 text-xl leading-snug font-semibold tracking-tight sm:text-2xl">
+          <h1 className="mt-2.5 text-xl leading-snug font-semibold tracking-tight text-pretty sm:text-2xl">
             {thread.title}
             {editable && (
               <button
