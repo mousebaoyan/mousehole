@@ -115,8 +115,11 @@
       font-size: 106.25%;
     }
   }
+  /* Titles, names and posts are written by members: a long link or word breaks rather than
+     running out of its box. */
   body {
     @apply bg-background font-sans text-foreground antialiased;
+    overflow-wrap: break-word;
   }
   /* Hover and press colors ease in rather than snap; utilities on an element still win. */
   a,

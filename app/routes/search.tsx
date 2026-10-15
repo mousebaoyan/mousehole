@@ -268,7 +268,7 @@ function Results({ results, q, now }: { results: Result[]; q: string; now: numbe
     >
       <Link
         to={r.post.floor > 1 ? `/t/${r.thread.id}?floor=${r.post.floor}` : `/t/${r.thread.id}`}
-        className="font-medium after:absolute after:inset-0"
+        className="line-clamp-2 font-medium after:absolute after:inset-0"
       >
         <Marked text={r.thread.title} q={q} />
       </Link>

@@ -101,7 +101,7 @@ function ThreadRow({
         <Link
           to={next === null ? `/t/${thread.id}` : `/t/${thread.id}?floor=${next}`}
           className={cn(
-            "text-body leading-snug font-medium text-foreground after:absolute after:inset-0 lg:text-base",
+            "text-[1.0625rem] leading-snug font-medium text-pretty text-foreground after:absolute after:inset-0 lg:text-base",
             lastRead === undefined
               ? "visited:text-foreground/65"
               : lastRead >= thread.floor_count && "text-foreground/65",
