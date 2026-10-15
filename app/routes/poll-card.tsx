@@ -55,15 +55,26 @@ export function PollCard({
     <section aria-label="投票" className="mt-4 rounded-2xl border bg-secondary/30 p-4">
       <p className="mb-3 flex flex-wrap items-center gap-x-2 text-meta text-muted-foreground">
         <ChartBar className="size-4" />
-        {poll.multiple
-          ? poll.max_choices === null
-            ? "多选"
-            : `多选，最多 ${poll.max_choices} 项`
-          : "单选"}
+        {poll.rows
+          ? "每行选一项，可以只选其中几行"
+          : poll.multiple
+            ? poll.max_choices === null
+              ? "多选"
+              : `多选，最多 ${poll.max_choices} 项`
+            : "单选"}
         {poll.anonymous && <span>· 匿名投票</span>}
       </p>
 
-      {picking ? (
+      {poll.rows ? (
+        <Rows
+          poll={poll}
+          rows={poll.rows}
+          picking={picking}
+          chosen={chosen}
+          setChosen={setChosen}
+          mine={mine}
+        />
+      ) : picking ? (
         <fieldset className="flex flex-col gap-1">
           <legend className="sr-only">选项</legend>
           {poll.options.map((o) => {
@@ -165,6 +176,125 @@ export function PollCard({
         )}
       </div>
     </section>
+  );
+}
+
+// The grades are in order, as the 保研定位 ones run from easy to near impossible (design §8.14):
+// the hue turns from green to red, lightness and chroma kept so no grade stands out.
+function grade(position: number, count: number) {
+  const t = count > 1 ? position / (count - 1) : 0;
+  return `oklch(0.66 0.15 ${145 - t * 120})`;
+}
+
+// A poll of rows (design §8.11): each row its own set of the same options, one choice a row.
+// While voting, a row's options are buttons to press and press again to take back; after, a row
+// is a bar in the grades' colors.
+function Rows({
+  poll,
+  rows,
+  picking,
+  chosen,
+  setChosen,
+  mine,
+}: {
+  poll: Poll;
+  rows: string[];
+  picking: boolean;
+  chosen: number[];
+  setChosen: (chosen: number[]) => void;
+  mine: number[];
+}) {
+  const grades = poll.options.filter((o) => o.row === 0).map((o) => o.label);
+  return (
+    <>
+      {!picking && (
+        <p className="mb-3 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
+          {grades.map((label, i) => (
+            <span key={label} className="inline-flex items-center gap-1">
+              <span
+                className="size-2.5 rounded-sm"
+                style={{ background: grade(i, grades.length) }}
+              />
+              {label}
+            </span>
+          ))}
+        </p>
+      )}
+      <ul className="flex flex-col gap-3">
+        {rows.map((label, row) => {
+          const options = poll.options.filter((o) => o.row === row);
+          const total = options.reduce((sum, o) => sum + (o.votes ?? 0), 0);
+          const voted = options.find((o) => mine.includes(o.id));
+          return (
+            <li key={label} className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+              <span className="basis-full text-sm font-medium break-words sm:basis-36">
+                {label}
+              </span>
+              {picking ? (
+                <span className="flex min-w-0 flex-1 gap-1">
+                  {options.map((o) => {
+                    const on = chosen.includes(o.id);
+                    const others = chosen.filter((c) => !options.some((x) => x.id === c));
+                    return (
+                      <button
+                        key={o.id}
+                        type="button"
+                        aria-pressed={on}
+                        onClick={() => setChosen(on ? others : [...others, o.id])}
+                        className={cn(
+                          "flex-auto rounded-lg border px-1.5 py-1 text-meta whitespace-nowrap sm:text-sm",
+                          on
+                            ? "border-primary bg-primary text-primary-foreground"
+                            : "bg-background hover:bg-accent",
+                        )}
+                      >
+                        {o.label}
+                      </button>
+                    );
+                  })}
+                </span>
+              ) : (
+                <span className="min-w-0 flex-1">
+                  <span className="flex items-center gap-2">
+                    <span className="flex h-2.5 min-w-0 flex-1 gap-px overflow-hidden rounded-full bg-secondary">
+                      {options.map(
+                        (o, i) =>
+                          (o.votes ?? 0) > 0 && (
+                            <span
+                              key={o.id}
+                              title={`${o.label} ${o.votes} 票`}
+                              style={{
+                                width: `${((o.votes ?? 0) / total) * 100}%`,
+                                background: grade(i, options.length),
+                              }}
+                            />
+                          ),
+                      )}
+                    </span>
+                    {options[0]?.votes !== null && (
+                      <span className="shrink-0 text-meta text-muted-foreground tabular-nums">
+                        {total} 票
+                      </span>
+                    )}
+                  </span>
+                  <span className="mt-1 flex flex-wrap gap-x-2.5 text-xs text-muted-foreground tabular-nums">
+                    {options.map(
+                      (o) =>
+                        (o.votes ?? 0) > 0 && (
+                          <span key={o.id}>
+                            {o.label} {o.votes}
+                          </span>
+                        ),
+                    )}
+                    {voted && <span className="text-primary">我：{voted.label}</span>}
+                  </span>
+                </span>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+    </>
   );
 }
 
