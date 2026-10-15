@@ -71,10 +71,11 @@ describe("由群记录推导账号", () => {
     );
   });
 
-  test("群主是管理员、群管理员是版主，取所在群里最高的", () => {
-    expect(deriveAccount(account, [group({ role: "admin" })], undefined).role).toBe("moderator");
-    const both = [group({ role: "admin" }), group({ role: "owner" })];
-    expect(deriveAccount(account, both, undefined).role).toBe("admin");
+  test("群主和群管理员都是管理员，在哪个启用的群里当都算", () => {
+    expect(deriveAccount(account, [group({ role: "owner" })], undefined).role).toBe("admin");
+    const elsewhere = [group({}), group({ role: "admin" })];
+    expect(deriveAccount(account, elsewhere, undefined).role).toBe("admin");
+    expect(deriveAccount(account, [group({})], undefined).role).toBe("user");
   });
 
   test("不在任何启用的群里就冻结，角色变回普通用户，名字保留", () => {

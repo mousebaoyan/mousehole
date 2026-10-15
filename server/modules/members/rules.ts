@@ -103,12 +103,6 @@ export type Membership = {
   is_primary: boolean;
 };
 
-// Group owners run the forum, group admins moderate it.
-const FORUM_ROLES = [
-  ["owner", "admin"],
-  ["admin", "moderator"],
-] as const;
-
 // What an account's standing follows from its group records. `isRobot` is set when this push
 // said whether the account is a QQ bot.
 export function deriveAccount(
@@ -138,11 +132,12 @@ export function deriveAccount(
       )
       .at(0);
   const robot = isRobot ?? account.role === "bot";
-  const groupRole = FORUM_ROLES.find(([group]) => active.some((m) => m.role === group))?.[1];
+  // Whoever runs a group runs the forum; moderators are only ever set by hand.
+  const groupAdmin = active.some((m) => m.role === "owner" || m.role === "admin");
 
   return {
     member_status: active.length > 0 ? "member" : "frozen",
-    role: account.role_locked ? account.role : robot ? "bot" : (groupRole ?? "user"),
+    role: account.role_locked ? account.role : robot ? "bot" : groupAdmin ? "admin" : "user",
     display_name:
       account.custom_name ??
       (chosen ? chosen.card || account.qq_nickname || String(account.qq) : account.display_name),
