@@ -55,10 +55,18 @@ const MeSchema = z
 
 const UserSchema = UserBriefSchema.extend({
   members_only: z.literal(false),
-  card: z.string().nullable().openapi({ description: "主群的群名片；不在主群为 null" }),
   bio: z.string(),
-  joined_at: z.number().nullable().openapi({ description: "加入主群的时间" }),
-  last_sent_at: z.number().nullable().openapi({ description: "最近一次在主群发言，精确到小时" }),
+  card: z
+    .string()
+    .nullable()
+    .optional()
+    .openapi({ description: "主群的群名片，不在主群为 null；这一项和下面两项只给成员和 bot" }),
+  joined_at: z.number().nullable().optional().openapi({ description: "加入主群的时间" }),
+  last_sent_at: z
+    .number()
+    .nullable()
+    .optional()
+    .openapi({ description: "最近一次在主群发言，精确到小时" }),
   qq: z.number().nullable().optional().openapi({
     description:
       "qq 只给成员和 bot，站点设置为公开时也给访客，站长账号为 null；member_status、activated 只给成员和 bot",
@@ -237,14 +245,14 @@ export const usersRoutes = createRouter()
           ...brief,
           members_only: false as const,
           title: u.title,
-          card: u.card,
           bio: u.bio,
-          joined_at: u.joined_at && unix(u.joined_at),
-          last_sent_at: u.last_sent_at && unix(u.last_sent_at),
           // Like a group's member list, which people outside it can't see, unless the site
           // shows QQ numbers to everyone.
           ...((members || site.qq_public) && { qq: u.qq }),
           ...(members && {
+            card: u.card,
+            joined_at: u.joined_at && unix(u.joined_at),
+            last_sent_at: u.last_sent_at && unix(u.last_sent_at),
             member_status: u.member_status,
             activated: u.activated_at !== null,
             relations_public: u.relations_public,

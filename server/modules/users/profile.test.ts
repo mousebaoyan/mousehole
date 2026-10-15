@@ -39,16 +39,22 @@ async function reply(threadId: number, markdown: string) {
 }
 
 describe("资料卡和个人主页", () => {
-  test("资料卡带统计；QQ 号只给成员看；也能按 QQ 号找", async () => {
+  test("资料卡带统计；QQ 号和群里的资料只给成员看；也能按 QQ 号找", async () => {
     await reply(await thread("open", "统计用的帖子"), "统计用的回复");
 
     const byGuest = await api.users[":user"].$get({ param: { user: String(author.id) } }, guest);
     const card = await byGuest.json();
     expect(card).toMatchObject({ id: author.id, stats: { threads: 1, posts: 1, likes: 0 } });
-    expect(card).not.toHaveProperty("qq");
+    for (const key of ["qq", "card", "joined_at", "last_sent_at"]) {
+      expect(card).not.toHaveProperty(key);
+    }
 
     const byQq = await api.users[":user"].$get({ param: { user: `qq:${author.qq}` } }, reader);
-    expect(await byQq.json()).toMatchObject({ id: author.id, qq: author.qq, activated: true });
+    const shown = await byQq.json();
+    expect(shown).toMatchObject({ id: author.id, qq: author.qq, activated: true });
+    expect(Object.keys(shown)).toEqual(
+      expect.arrayContaining(["card", "joined_at", "last_sent_at"]),
+    );
     expect((await api.users[":user"].$get({ param: { user: "999999" } })).status).toBe(404);
   });
 
