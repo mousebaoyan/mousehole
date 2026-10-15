@@ -100,11 +100,11 @@
 
 ## 徽章与影响力
 
-表：`badges`、`user_badges`、`user_reads`。
+表：`badges`、`user_badges`、`job_runs`。
 
-- 徽章（[总体设计 §8.8](design.md#88-徽章)）：`badges` 每枚一行，`tier` 取 `bronze`、`silver`、`gold`，`grouping` 是徽章页上的组，`multiple` 表示能得多次。自动授予的徽章由迁移插入，`slug` 对应代码里的规则（`badges/rules.ts`）；管理员新建的活动徽章 `slug` 为 `NULL`，只能手动授予。
+- 徽章（[总体设计 §8.8](design.md#88-徽章)）：`badges` 每枚一行，`tier` 取 `bronze`、`silver`、`gold`，`grouping` 是徽章页上的组，`multiple` 表示能得多次。自动授予的徽章和规则都写在代码里（`badges/rules.ts`），进程启动时按 `slug` 写入或更新 `badges`；管理员新建的活动徽章 `slug` 为 `NULL`，只能手动授予，每人一次。
 - `user_badges` 每次得到一行：能得多次的记 `post_id`（获赞的那一层、获赞的帖子的主楼、中奖的抽奖帖的主楼），其余为 `NULL`；`UNIQUE NULLS NOT DISTINCT (user_id, badge_id, post_id)`，授予用 `ON CONFLICT DO NOTHING`，当场检查和每小时补查重复了也不会多发。`granted_by` 是手动授予的管理员，自动的为 `NULL`；撤销手动授予的就删掉这一行，记进操作日志。
-- 当场检查和触发它的写入在同一个事务里，授予时一并写通知和 `badge.granted` 事件；每小时补查只看这一小时里有动静的人（`user_days` 今天有记录的，和这一小时里被赞、被读的人）。上线时的补齐在迁移之后跑一次，`notify = false`，不写通知和事件。
+- 每 5 分钟把每条规则跑一遍：`INSERT INTO user_badges … SELECT` 规则查出的人 `… ON CONFLICT DO NOTHING RETURNING`，先用 `NOT EXISTS` 排除已经有的，每条规则一个事务，新授予的在同一个事务里写通知和 `badge.granted` 事件。`job_runs` 记各个定时任务上次跑的时间；没有 `badges` 这一行时是上线后的第一次检查，补齐以前的内容，不写通知和事件。
 - 头衔：`users.title_badge_id`，只能是自己得到的金徽章或银徽章，为 `NULL` 时显示 QQ 的专属头衔。撤销了这枚徽章时一并清空。
 - 被读（[总体设计 §8.15](design.md#815-影响力每周邮件和周榜)）：阅读上报时已经算出新读的楼层（并入前后区间集合之差），在同一个事务里按作者分组，不算自己的、匿名的、不公开的楼层，给每个作者的 `users.reads_received` 加上次数，并累加到 `user_reads`（每人每天一行，按北京时间）。`user_reads` 用来算最近 7 天和每周邮件，超过 35 天的每天清理。
 - 帮到的人：`users.people_reached` 是读过这个人至少一层的人数，每小时给今天有 `user_reads` 的人重算：按 `thread_users_thread` 取出他发过楼层的帖子的读者，`read_floors @> floor` 的去重计数。

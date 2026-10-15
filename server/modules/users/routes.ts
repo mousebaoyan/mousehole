@@ -83,6 +83,9 @@ const UserSchema = UserBriefSchema.extend({
     .boolean()
     .optional()
     .openapi({ description: "TA 是否公开赞和关系；只给成员" }),
+  badges: z
+    .array(z.object({ id: z.number(), name: z.string(), tier: z.string() }))
+    .openapi({ description: "最多 3 枚徽章，金的在前，同档的最近得到的在前" }),
   stats: z.object({
     threads: z.number(),
     posts: z.number(),
@@ -160,6 +163,13 @@ const SettingsSchema = z
     relations_public: z
       .boolean()
       .openapi({ description: "公开我的赞和关系：赞过、概要里的名单、关注和认可的名单" }),
+    title_badge_id: z
+      .number()
+      .nullable()
+      .openapi({ description: "当头衔的徽章；null 是 QQ 的专属头衔" }),
+    title_badges: z
+      .array(z.object({ id: z.number(), name: z.string(), tier: z.string() }))
+      .openapi({ description: "能当头衔的徽章：自己得到的金徽章和银徽章" }),
     notify_email: z
       .boolean()
       .openapi({ description: "邮件提醒的总开关；关掉后哪类通知都不发邮件" }),
@@ -236,7 +246,7 @@ export const usersRoutes = createRouter()
         level: u.level,
       };
       if (u.hide_from_guests && !members) {
-        return c.json({ ...brief, title: "", members_only: true as const }, 200);
+        return c.json({ ...brief, title: "", title_tier: null, members_only: true as const }, 200);
       }
       const { site } = await getSiteSettings();
       return c.json(
@@ -244,7 +254,9 @@ export const usersRoutes = createRouter()
           ...brief,
           members_only: false as const,
           title: u.title,
+          title_tier: u.title_tier,
           bio: u.bio,
+          badges: u.badges,
           // Like a group's member list, which people outside it can't see, unless the site
           // shows QQ numbers to everyone.
           ...((members || site.qq_public) && { qq: u.qq }),
@@ -462,6 +474,12 @@ export const usersRoutes = createRouter()
                 allow_proxy: z.boolean().optional(),
                 hide_from_guests: z.boolean().optional(),
                 relations_public: z.boolean().optional(),
+                title_badge_id: z
+                  .number()
+                  .int()
+                  .nullable()
+                  .optional()
+                  .openapi({ description: "自己得到的金徽章或银徽章；null 改回 QQ 的专属头衔" }),
                 notify_email: z.boolean().optional(),
                 notify_prefs: z
                   .partialRecord(
@@ -479,6 +497,7 @@ export const usersRoutes = createRouter()
           description: "改好的设置",
           content: { "application/json": { schema: SettingsSchema } },
         },
+        400: errorResponse("不是自己的金徽章或银徽章"),
         403: errorResponse("不是成员"),
       },
     }),

@@ -122,7 +122,7 @@ afterAll(() => {
 });
 
 describe("热点查询走索引", () => {
-  test("列表、帖子、楼层、通知、搜索和个人主页，包括赞过、概要和关系", async () => {
+  test("列表、帖子、楼层、通知、搜索和个人主页，包括赞过、概要、关系和徽章", async () => {
     // Passes each query on, keeping its text and parameters.
     const query = vi.spyOn(Client.prototype, "query");
     const id = { id: String(thread) };
@@ -141,6 +141,8 @@ describe("热点查询走索引", () => {
     await api.users[":user"].posts.$get({ param: profile, query: { solved: "true" } });
     await api.users[":user"].likes.$get({ param: profile, query: {} }, member);
     await api.users[":user"].summary.$get({ param: profile }, member);
+    await api.users[":user"].badges.$get({ param: profile });
+    await api.badges.$get({});
     await api.users[":user"].relations.$get(
       { param: profile, query: { list: "endorsing" } },
       member,

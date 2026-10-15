@@ -7,6 +7,7 @@ import { apiContext, createApi } from "../app/api.server.ts";
 import { nonceContext } from "../app/nonce.ts";
 import { app } from "./app.ts";
 import { clearExpiredLogins } from "./modules/auth/service.ts";
+import { checkBadges, syncBadges } from "./modules/badges/service.ts";
 import { clearOldDrafts } from "./modules/drafts/service.ts";
 import { clearOldEvents, EVENTS_CHANNEL, eventsArrived } from "./modules/events/service.ts";
 import {
@@ -33,6 +34,7 @@ import { migrate } from "./platform/migrate.ts";
 import { every } from "./platform/schedule.ts";
 
 await migrate();
+await syncBadges();
 listen({
   [EVENTS_CHANNEL]: eventsArrived,
   [NOTIFICATIONS_CHANNEL]: unreadChanged,
@@ -43,6 +45,7 @@ every(60_000, "Writing view counts", flushViews);
 every(60_000, "Drawing lotteries", drawDue);
 every(60_000, "Sending queued mail", sendQueued);
 every(60_000, "Refreshing avatars", refreshAvatars);
+every(5 * 60_000, "Checking badges", checkBadges);
 every(3600_000, "Raising levels", promoteActive);
 const DAY_MS = 24 * 3600_000;
 every(DAY_MS, "Clearing unused uploads", clearUnusedUploads);

@@ -4,6 +4,7 @@ import { sql } from "kysely";
 import { adminRoutes } from "./modules/admin/routes.ts";
 import { auditRoutes } from "./modules/audit/routes.ts";
 import { authenticate, authRoutes, bearerToken } from "./modules/auth/routes.ts";
+import { badgesRoutes } from "./modules/badges/routes.ts";
 import { tokenRoutes } from "./modules/auth/token-routes.ts";
 import { boardsRoutes } from "./modules/boards/routes.ts";
 import { draftsRoutes } from "./modules/drafts/routes.ts";
@@ -32,6 +33,7 @@ const api = createRouter()
   .route("/", tokenRoutes)
   .route("/", usersRoutes)
   .route("/", levelsRoutes)
+  .route("/", badgesRoutes)
   .route("/", membersRoutes)
   .route("/", boardsRoutes)
   .route("/", threadsRoutes)

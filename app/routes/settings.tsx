@@ -7,7 +7,9 @@ import { browserApi } from "~/browser-api";
 import { Check, Field, readForm, Section, Time } from "~/components/form-parts";
 import { SettingsForm } from "~/components/settings-form";
 import { Button, buttonVariants } from "~/components/ui/button";
+import { TIER_NAMES } from "~/components/badge-chip";
 import { Input } from "~/components/ui/input";
+import { Select } from "~/components/ui/select";
 import { Textarea } from "~/components/ui/textarea";
 import { toast } from "~/components/ui/toast";
 import { UserAvatar } from "~/components/user-avatar";
@@ -63,6 +65,7 @@ export async function action({ request, context }: Route.ActionArgs) {
       allow_proxy: on("allow_proxy"),
       hide_from_guests: on("hide_from_guests"),
       relations_public: on("relations_public"),
+      title_badge_id: field("title_badge_id") ? Number(field("title_badge_id")) : null,
       notify_email: on("notify_email"),
       notify_prefs: Object.fromEntries(
         NOTIFICATION_TYPES.map(({ type }) => {
@@ -123,6 +126,27 @@ export default function Settings({ loaderData, actionData }: Route.ComponentProp
                   placeholder={settings.qq_bio || "使用 QQ 个性签名"}
                   maxLength={60}
                   className="min-h-16"
+                />
+              </Field>
+              <Field
+                label="头衔"
+                hint={
+                  settings.title_badges.length > 0
+                    ? "显示在名字旁边；可以选一枚自己的金徽章或银徽章"
+                    : "得到金徽章或银徽章后，可以选它作为头衔"
+                }
+              >
+                <Select
+                  name="title_badge_id"
+                  aria-label="头衔"
+                  defaultValue={String(settings.title_badge_id ?? "")}
+                  options={[
+                    { value: "", label: "跟随 QQ 专属头衔" },
+                    ...settings.title_badges.map((b) => ({
+                      value: String(b.id),
+                      label: `${b.name}（${TIER_NAMES[b.tier]}）`,
+                    })),
+                  ]}
                 />
               </Field>
             </div>

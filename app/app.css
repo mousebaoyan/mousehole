@@ -37,6 +37,9 @@
   --color-link: var(--link);
   --color-success: var(--success);
   --color-warning: var(--warning);
+  --color-gold: var(--gold);
+  --color-silver: var(--silver);
+  --color-bronze: var(--bronze);
   --text-2xs: 0.6875rem;
   --text-2xs--line-height: 1.4;
   --text-meta: 0.8125rem;
@@ -76,6 +79,10 @@
   --link: #23716a;
   --success: #2d7a4c;
   --warning: #9a5a0c;
+  /* Badge tiers (design §8.8). */
+  --gold: #b07a12;
+  --silver: #64707d;
+  --bronze: #a35a33;
 }
 
 :root[data-theme="dark"] {
@@ -103,6 +110,9 @@
   --link: #7cc4b8;
   --success: #6fcf97;
   --warning: #e9b860;
+  --gold: #e9b860;
+  --silver: #aab4bf;
+  --bronze: #dd9a6e;
 }
 
 @layer base {

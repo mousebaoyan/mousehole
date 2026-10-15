@@ -199,7 +199,7 @@ token 由站长在后台创建，只显示一次。每个 token 绑定一个 bot
 | POST | `/auth/email/verify` | `{ qq, code }`：校验验证码，建立会话，返回 204；不对、过期或输错 5 次作废都返回 `400 email_code_invalid`，`message` 说明是哪种 | 访客 |
 | POST | `/auth/logout` | 退出当前会话；没有登录时也返回成功 | 访客 |
 | GET | `/me` | 当前用户；bot 代表某人时返回这个人。站长账号的 `qq` 为 `null` | 已登录 / `read` |
-| GET | `/me/settings` | 自己的设置：`custom_name`（自己起的名字，`null` 是跟着 QQ）、`custom_bio`（自己写的个性签名，`null` 是跟着 QQ）、`qq_bio`（QQ 的个性签名）、`avatar_custom`（头像是不是自己上传的）、`allow_proxy`、`hide_from_guests`（我的内容不给访客看）、`relations_public`（公开我的赞和关系）、`title_badge_id`（当头衔的徽章，`null` 是 QQ 的专属头衔）、`notify_email`（邮件提醒的总开关）、`notify_prefs`（每类通知的 `{ site, email }` 开关，`weekly` 每周影响力只有 `email`，自己没改过的是站长设的默认值；站长设为不发送的类型 `email` 是 `null`） | 已登录 / `read` |
+| GET | `/me/settings` | 自己的设置：`custom_name`（自己起的名字，`null` 是跟着 QQ）、`custom_bio`（自己写的个性签名，`null` 是跟着 QQ）、`qq_bio`（QQ 的个性签名）、`avatar_custom`（头像是不是自己上传的）、`allow_proxy`、`hide_from_guests`（我的内容不给访客看）、`relations_public`（公开我的赞和关系）、`title_badge_id`（当头衔的徽章，`null` 是 QQ 的专属头衔）、`title_badges`（能当头衔的徽章：自己得到的金徽章和银徽章，每项 `{ id, name, tier }`）、`notify_email`（邮件提醒的总开关）、`notify_prefs`（每类通知的 `{ site, email }` 开关，`weekly` 每周影响力只有 `email`，自己没改过的是站长设的默认值；站长设为不发送的类型 `email` 是 `null`） | 已登录 / `read` |
 | PATCH | `/me` | 修改设置，只改带了的字段，返回改好的设置：`custom_name`（最多 24 个字，`null` 改回跟着 QQ，显示名随即重算）、`custom_bio`（最多 60 个字，`null` 改回跟着 QQ）、`allow_proxy`、`hide_from_guests`、`relations_public`、`title_badge_id`（只能是自己得到的金徽章或银徽章，否则 `400 badge_not_title`；`null` 改回 QQ 的专属头衔）、`notify_email`、`notify_prefs`（每类的 `site`、`email` 都可以只带一个，只改带了的开关；没改过的开关跟着站长设的默认值） | 成员 / `act` |
 | PUT | `/me/avatar` | 上传头像：multipart 的 `file` 字段，最大 20MB，格式同图片上传，裁成 96px 的方图；之后不再跟着 QQ 刷新。返回 `{ avatar_url }` | 没被禁言的成员 / `act` |
 | DELETE | `/me/avatar` | 头像改回跟着 QQ，立刻拉一次 QQ 头像，返回 `{ avatar_url }`；拉取失败返回 `502 fetch_failed`，头像不变 | 成员 / `act` |
@@ -225,7 +225,7 @@ token 由站长在后台创建，只显示一次。每个 token 绑定一个 bot
 | GET | `/users/{user}/posts` | 发过的回复（不含主楼），最新的在前，每页 30 个，`cursor` 是上一页最后一条的 ID；`solved=true` 只要被采纳的回答。每条带所在的帖子和正文前 140 个字的纯文本，不含匿名内容 | 访客 |
 | GET | `/users/{user}/likes` | 留过表情回应的楼层，最新的在前，每页 30 个，`cursor` 是已经列出的条数；每条同上，另带 `emoji` 和 `liked_at`。TA 关掉了公开时只给本人，别人得到 `403 relations_hidden`（总体设计 §9） | 成员 / `read` |
 | GET | `/users/{user}/badges` | 得到的全部徽章，按组和档排：每项是徽章，加 `count`（得到几次）、`granted_at`（最近一次）；能得多次的带 `posts`（最近 10 次的 `{ thread_id, title, post_id, floor, granted_at }`） | 访客 |
-| GET | `/badges` | 全部徽章，按组排；活动徽章只列有人得到的 | 访客 |
+| GET | `/badges` | 全部徽章，按组排 | 访客 |
 | GET | `/badges/{id}` | 一枚徽章和得到的人，最近的在前，每页 50 个，`cursor` 是已经列出的人数：`{ badge, items: [{ user, granted_at }], next }`；设了不给访客看的人，访客看不到 | 访客 |
 | GET | `/users/{user}/summary` | 概要：`top_posts` 获赞最多的 5 层（含主楼）；`likers` 最常赞 TA 的人、`liked` TA 最常赞的人，各 10 个，每项是 `{ user, count }`。匿名楼层不算，关掉公开的人不出现；两份名单只给成员，TA 关掉公开时只给本人，其余为 `null` | 访客 |
 | GET | `/users/{user}/relations` | 名单：`list` 为 `following`（TA 关注的人）、`followers`（粉丝）、`endorsing`（TA 认可的人）或 `endorsers`（认可 TA 的人），最新的在前，每页 50 个，`cursor` 是已经列出的人数；每项是 `{ user, created_at }`，关掉公开的人不在里面。可见范围同 `likes` | 成员 / `read` |
@@ -337,10 +337,10 @@ token 由站长在后台创建，只显示一次。每个 token 绑定一个 bot
 | GET | `/admin/overview` | 概览：`members`（`total`、`activated`、`frozen`，不算 bot 和站长）、`content`（`threads_today`、`posts_today`：今天公开的帖子和回复，按北京时间；`pending`：待审核；`reports`：待处理的举报）、`events`（`streams`：现在连着的事件流；`polled_at`：最近一次按游标拉取的时间，进程重启后为 `null`）、`storage`（`database`、`uploads`：数据库和上传图片占用的字节数）；群的同步状态见 `/admin/groups` | 管理员 / `admin` |
 | GET | `/admin/settings` | 站点设置，按分组返回：`site`（`banner` 公告横幅，`qq_public` 访客能否看到 QQ 号）、`login`（三种登录方式的开关和口令提示）、`smtp`（`accounts`：发信邮箱，按使用的顺序，每个是 `host`、`port`、`secure`、`user`，密码只返回 `password_set`）、`bot`（`require_operator`）、`notify`（`email`：每类通知的邮件规则，`on` 默认发送、`off` 默认不发、`never` 不发送，成员也不能打开） | 站长，只能在网页上操作 |
 | PATCH | `/admin/settings` | 修改站点设置，立即生效：只改带了的分组和字段。`smtp.accounts` 整组替换，最多 10 个；某个邮箱不带 `password` 就沿用这个账号原来的密码；`notify.email` 只改带了的类型。改了的字段连同改前改后的值记进操作日志，密码只记哪个邮箱的改了 | 站长，只能在网页上操作 |
-| POST | `/admin/badges` | 新建活动徽章：`{ name, description, tier, multiple }`；重名返回 `409 badge_exists` | 管理员 / `admin` |
+| POST | `/admin/badges` | 新建活动徽章：`{ name, description, tier }`，名字最多 12 个字，说明最多 60 个字；重名返回 `409 badge_exists` | 管理员 / `admin` |
 | PATCH | `/admin/badges/{id}` | 改活动徽章的名字、说明；自动授予的徽章不能改（`403`） | 管理员 / `admin` |
-| POST | `/admin/badges/{id}/grants` | 手动授予活动徽章：`{ user, reason }`；不能多次得到的已经有了返回 `409 badge_granted`。本人收到通知；记操作日志 | 管理员 / `admin` |
-| DELETE | `/admin/badges/{id}/grants/{user}` | 撤销手动授予的徽章，能得多次的撤销最近的一次：可附 `{ reason }`；记操作日志 | 管理员 / `admin` |
+| POST | `/admin/badges/{id}/grants` | 手动授予活动徽章：`{ user, reason }`，理由必填；已经有了返回 `409 badge_granted`。本人收到通知；记操作日志 | 管理员 / `admin` |
+| DELETE | `/admin/badges/{id}/grants/{user}` | 撤销手动授予的徽章，可附 `{ reason }`；TA 没有这枚返回 `404 badge_not_granted`；当头衔的一并去掉；记操作日志 | 管理员 / `admin` |
 | POST | `/admin/settings/test-email` | `{ qq }`：每个发信邮箱各发一封测试邮件，返回 `results`，每项是 `user` 和失败的原因 `error`（成功为 `null`）；发出去的邮箱不再歇着 | 站长，只能在网页上操作 |
 | GET | `/admin/groups` | 已关联的群和同步状态：最近一次增量、全量、群资料的时间，被拦下的全量 | 管理员 / `admin` |
 | POST | `/admin/groups` | 关联群：`{ group_id }`；第一个关联的群自动成为主群；已关联返回 `409 group_exists` | 站长，只能在网页上操作 |

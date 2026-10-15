@@ -17,7 +17,13 @@ export const UserBriefSchema = z
     avatar_url: z.string().nullable().openapi({ description: "QQ 头像的副本；还没拉到时为 null" }),
     role: z.string(),
     level: z.number().openapi({ description: "论坛等级 0–5" }),
-    title: z.string().openapi({ description: "专属头衔，和群名片取自同一个群，没有为空字符串" }),
+    title: z.string().openapi({
+      description: "头衔：选了徽章当头衔时是徽章名，否则是 QQ 的专属头衔；没有为空字符串",
+    }),
+    title_tier: z
+      .string()
+      .nullable()
+      .openapi({ description: "当头衔的徽章的档，gold 或 silver；QQ 的专属头衔为 null" }),
   })
   .openapi("UserBrief");
 

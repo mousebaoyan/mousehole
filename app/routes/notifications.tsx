@@ -1,5 +1,6 @@
 import { pageTitle } from "~/share-meta";
 import {
+  Award,
   AtSign,
   BellRing,
   CheckCheck,
@@ -60,7 +61,9 @@ export async function action({ request, context }: Route.ActionArgs) {
   await read.$post({ json: { ids: [Number(form.get("id"))] } });
   const to = form.get("to");
   return redirect(
-    typeof to === "string" && /^\/(t\/\d+(\?floor=\d+)?|u\/\d+)$/.test(to) ? to : "/notifications",
+    typeof to === "string" && /^\/(t\/\d+(\?floor=\d+)?|u\/\d+|badges\/\d+)$/.test(to)
+      ? to
+      : "/notifications",
   );
 }
 
@@ -77,6 +80,7 @@ const ICONS: Record<string, typeof Reply> = {
   moderation: ShieldCheck,
   level: TrendingUp,
   lottery: Gift,
+  badge: Award,
 };
 
 // How a lottery went, for whom; see design §8.13.
@@ -120,6 +124,8 @@ function headline(n: Item) {
       return `你已升级到 ${levelName(Number(n.data.level))}`;
     case "lottery":
       return `${LOTTERY[n.data.result]}${n.data.prize ? `：${n.data.prize}` : ""}`;
+    case "badge":
+      return `你得到了徽章「${n.data.name}」`;
     default:
       return `${who} 发了新帖`;
   }
@@ -179,10 +185,13 @@ function Row({ item: n, now }: { item: Item; now: number }) {
   const submit = useSubmit();
   const me = useMe();
   const Icon = ICONS[n.type] ?? Reply;
-  // A lottery goes to its thread; a level to one's profile, where the next one's progress is.
+  // A lottery goes to its thread, and a badge earned for a floor to that floor; other badges to
+  // the badge's page; a level to one's profile, where the next one's progress is.
   const to = n.thread
     ? `/t/${n.thread.id}${n.post ? `?floor=${n.post.floor}` : ""}`
-    : `/u/${me?.id}`;
+    : n.type === "badge"
+      ? `/badges/${n.data.badge_id}`
+      : `/u/${me?.id}`;
   return (
     <li
       className={cn(
