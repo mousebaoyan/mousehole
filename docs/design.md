@@ -570,7 +570,8 @@ bot 把 QQ 群的信息推送给论坛。两种方式都支持，推荐一起用
 - **日志**：论坛只往 stdout 写 JSON 日志，Docker 按 10MB 一个文件轮转，留 5 个（`deploy/compose.yml`）。OpenResty 的访问日志用 1Panel 的"切割网站日志"计划任务（`bbs-log-cut`）每天 3:50 切割，留 30 份。操作日志（`audit_logs`，第 10 节）在库里永久保留，随数据库一起备份，每年预计几万到十几万行，占用很小。
 - **反代**：1Panel 里的反向代理网站，证书、HTTP/3 和关闭 HSTS 用 1Panel 的站点设置，其余配置见 `deploy/openresty.conf`。SSE 路径关闭缓冲（`proxy_buffering off`）并延长超时；上传大小上限 20MB。开启 HTTP/2 和 HTTP/3，跨境链路丢包时 HTTP/3 更稳。站点关闭 gzip，压缩交给应用：服务器上的 OpenResty 没有 Brotli 模块，默认配置也不压缩 JSON。转发时设置 `X-Real-IP`，并按 IP 限制连接数和请求速率。
 - **域名**：Cloudflare 上设为仅 DNS（灰云），直连服务器。开代理反而会让大陆访问绕路，变慢。
-- **监控**：`/healthz` 接入服务器上已有的 Gatus（`deploy/gatus-endpoints.json`：容器内和经过公网各一条）。服务器上 Gatus 的配置由 `/opt/1panel/www/sites/netwatch/configure.py` 生成，这两条也写在那里，Gatus 因此加入了 `1panel-network`；页面可以配置 Umami 统计；日志以 JSON 格式输出到 stdout。
+- **监控**：`/healthz` 接入服务器上已有的 Gatus（`deploy/gatus-endpoints.json`：容器内和经过公网各一条）。服务器上 Gatus 的配置由 `/opt/1panel/www/sites/netwatch/configure.py` 生成，这两条也写在那里，Gatus 因此加入了 `1panel-network`；日志以 JSON 格式输出到 stdout。
+- **访问统计**：用服务器上的 Umami（`umami.juniexd.cn`），地址和 website ID 是 `server/platform/site.ts` 里的常量。只有正式站点的页面加载它的脚本，本地、CI 和预发都不加载；脚本 gzip 后约 2KB，浏览器缓存一天。
 - **定时任务**：在进程里运行（`platform/schedule.ts`），失败只记日志，下一轮再试；上一轮还没跑完时跳过这一轮。每分钟写入浏览数，发出待发的邮件，拉新成员和满一天的头像（新成员不用等，每人仍是一天拉一次）；每小时检查升级；每天复查 L4 的等级，清理过期的会话、登录口令和链接、邮件验证码，7 天前的幂等记录，上传后一天没用上的图片，7 天前的事件，半年前读过的通知，以及 180 天没动过的草稿。
 - **本地开发**：用 docker compose 起一个本地 PostgreSQL；`scripts/mock-bot` 模拟插件，推送成员、代发内容、消费事件，不用真 QQ 号也能测完整流程。
 
@@ -589,10 +590,11 @@ bot 把 QQ 群的信息推送给论坛。两种方式都支持，推荐一起用
 - **客户端 IP**：只认 OpenResty 设置的 `X-Real-IP`，不信任请求自带的 `X-Forwarded-For`。限流和登录记录都依赖它。
 - **限流**：分两层。OpenResty 按 IP 限制连接数和请求速率，先挡掉刷接口和采集；应用里再细分：申请口令和邮件验证码按 IP 和 QQ 号；发帖和回复按用户（每人每小时 20 个帖子、每 10 分钟 60 条回复），bot 按 token（每个 token 代所有人合计每分钟 120 次），挡住刷屏和失控的插件。
 - **请求大小**：JSON 请求体默认不超过 1MB，成员全量同步不超过 4MB，图片不超过 20MB；gzip 请求体按解压后的大小计算，防止压缩炸弹。慢速连接由 OpenResty 和 Node 的超时一起断开。
-- **响应头**（`platform/security-headers.ts`）：HSTS；CSP 只允许本站脚本，内联脚本带 nonce，样式允许内联（组件会设 `style` 属性），图片只能来自本站；`X-Content-Type-Options: nosniff`；`Referrer-Policy: strict-origin-when-cross-origin`；`frame-ancestors 'none'` 防止页面被嵌入别的网站做点击劫持。本地开发走 HTTP，不发 CSP 和 HSTS，免得挡住 Vite 热更新的内联脚本。
+- **响应头**（`platform/security-headers.ts`）：HSTS；CSP 只允许本站和 Umami（访问统计）的脚本，内联脚本带 nonce，样式允许内联（组件会设 `style` 属性），图片只能来自本站；`X-Content-Type-Options: nosniff`；`Referrer-Policy: strict-origin-when-cross-origin`；`frame-ancestors 'none'` 防止页面被嵌入别的网站做点击劫持。本地开发走 HTTP，不发 CSP 和 HSTS，免得挡住 Vite 热更新的内联脚本。
 - **容器**：用非 root 用户运行，根文件系统只读，只有图片目录和临时目录可写；开启 `no-new-privileges`，去掉不需要的 capabilities。
 - **依赖和 CI**：pnpm 只安装发布满 1 天的版本，避开刚被投毒的包；只有白名单里的依赖能执行安装脚本。CI 按锁文件安装。GitHub Actions 按最小权限运行，第三方 Action 固定到具体的提交。仓库开启了 secret 扫描、推送拦截、依赖漏洞提醒和 Dependabot 安全更新：依赖出了已知漏洞，Dependabot 自动提升级的 PR，照常过 CI、审核后合并。
 - **大流量攻击**：攻击流量很容易占满 25Mbps。应急办法是把域名临时切到 Cloudflare 代理，防火墙只放行 Cloudflare 的 IP 段，攻击过去后再切回仅 DNS。
+- **访问统计**：Umami 不用 Cookie，不存 IP 原文。统计的网址和来源都去掉查询串和 `#` 后面的部分，登录链接里的 token 和搜索词不会进统计。
 - **导出**：用户可以导出自己的全部内容，冻结的账号也可以。账号永久保留，暂不提供注销（第 6.1 节）。
 - **访客能看到的范围**：版块门槛和个人开关，见第 8.10 节。
 - **匿名内容**：页面、接口、事件和通知里都只有匿名名字，只有本人和管理员知道是谁，管理员查看要留操作日志（第 8.12 节）。

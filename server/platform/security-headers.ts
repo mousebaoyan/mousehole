@@ -1,5 +1,6 @@
 import { NONCE, secureHeaders } from "hono/secure-headers";
 import { env } from "./env.ts";
+import { UMAMI } from "./site.ts";
 
 const https = new URL(env.PUBLIC_URL).protocol === "https:";
 
@@ -10,7 +11,8 @@ export const securityHeaders = secureHeaders({
   contentSecurityPolicy: https
     ? {
         defaultSrc: ["'self'"],
-        scriptSrc: ["'self'", NONCE],
+        scriptSrc: ["'self'", NONCE, UMAMI.origin],
+        connectSrc: ["'self'", UMAMI.origin],
         styleSrc: ["'self'", "'unsafe-inline'"],
         imgSrc: ["'self'", "data:", "blob:"],
         objectSrc: ["'none'"],

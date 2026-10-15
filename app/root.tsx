@@ -18,7 +18,7 @@ import { DialogHost } from "~/components/ui/dialog";
 import { Toaster } from "~/components/ui/toast";
 import { pageTitle } from "~/share-meta";
 import "./app.css";
-import { SITE_NAME } from "../server/platform/site.ts";
+import { SITE_NAME, UMAMI } from "../server/platform/site.ts";
 
 // Runs before first paint so the page never flashes the wrong theme. Same key as the main site.
 const themeScript = `try{document.documentElement.dataset.theme=localStorage.getItem("theme")||(matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light")}catch{}`;
@@ -51,6 +51,16 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <meta property="og:site_name" content={SITE_NAME} />
         {site && <meta property="og:image" content={`${site}/logo.png`} />}
         <script nonce={nonce} dangerouslySetInnerHTML={{ __html: themeScript }} />
+        {site === UMAMI.site && (
+          // Without the query and hash: login links carry their token there, searches their words.
+          <script
+            defer
+            src={`${UMAMI.origin}/script.js`}
+            data-website-id={UMAMI.websiteId}
+            data-exclude-search="true"
+            data-exclude-hash="true"
+          />
+        )}
         <Meta />
         <Links />
       </head>
