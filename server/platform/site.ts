@@ -14,3 +14,11 @@ export function levelName(level: number) {
 
 // Moderators and up (design §6.4). The owner runs the system and may do whatever admins do.
 export const STAFF = ["moderator", "admin", "owner"];
+
+// Visits are counted by the Umami on the forum's server (design §12), on the real site only, so
+// local, CI and staging pages never call it.
+export const UMAMI = {
+  site: "https://bbs.mousebaoyan.cn",
+  origin: "https://umami.juniexd.cn",
+  websiteId: "ebf04406-ab5c-4f96-9e38-584911473bb7",
+};
