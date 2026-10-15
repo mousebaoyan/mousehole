@@ -1,16 +1,4 @@
 import {
-  ChevronDown,
-  ChevronUp,
-  Maximize2,
-  Minimize2,
-  PenSquare,
-  Pencil,
-  Plus,
-  Reply,
-  Send,
-  X,
-} from "lucide-react";
-import {
   createContext,
   use,
   useEffect,
@@ -23,6 +11,18 @@ import {
 } from "react";
 import { Link, useFetcher, useLocation, useNavigate } from "react-router";
 import { cn } from "cn";
+import {
+  ChevronDown,
+  ChevronUp,
+  Maximize2,
+  Minimize2,
+  PenSquare,
+  Pencil,
+  Plus,
+  Reply,
+  Send,
+  X,
+} from "~/components/icons";
 import { browserApi } from "~/browser-api";
 import { MarkdownEditor } from "~/components/markdown-editor";
 import { TagPicker } from "~/components/tag-picker";

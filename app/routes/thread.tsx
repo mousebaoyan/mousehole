@@ -1,6 +1,6 @@
-import { ArrowDown, Reply } from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { data, redirect, useFetcher, useNavigate } from "react-router";
+import { ArrowDown, Reply } from "~/components/icons";
 import { apiContext } from "../api.server.ts";
 import type { PostItem, UserBrief } from "~/api-types";
 import { useComposer } from "~/components/composer";

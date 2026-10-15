@@ -1,5 +1,5 @@
-import { Lock } from "lucide-react";
 import { data, Link, redirect } from "react-router";
+import { Lock } from "~/components/icons";
 import { apiContext } from "../api.server.ts";
 import { feedTitle, readCounts, readFilter, ThreadFeed } from "~/components/thread-feed";
 import { buttonVariants } from "~/components/ui/button";

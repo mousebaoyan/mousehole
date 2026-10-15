@@ -1,4 +1,3 @@
-import { pageTitle } from "~/share-meta";
 import {
   Link2,
   LoaderCircle,
@@ -6,7 +5,8 @@ import {
   MessageSquareCode,
   MessageCircle,
   Smartphone,
-} from "lucide-react";
+} from "~/components/icons";
+import { pageTitle } from "~/share-meta";
 import { useEffect, useState } from "react";
 import { data, Form, redirect, useFetcher, useNavigation, useRevalidator } from "react-router";
 import { apiContext, cookiesFrom } from "../api.server.ts";

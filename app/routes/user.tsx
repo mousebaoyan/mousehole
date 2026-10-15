@@ -1,5 +1,5 @@
+import { Award, Heart, Search, Snowflake, Sparkles } from "~/components/icons";
 import { pageTitle } from "~/share-meta";
-import { Award, Heart, Search, Snowflake, Sparkles } from "lucide-react";
 import { useRef } from "react";
 import { data, Link, useFetcher, useLocation } from "react-router";
 import { cn } from "cn";

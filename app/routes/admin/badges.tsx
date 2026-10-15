@@ -1,5 +1,5 @@
+import { Award, X } from "~/components/icons";
 import { pageTitle } from "~/share-meta";
-import { Award, X } from "lucide-react";
 import { useEffect, useRef } from "react";
 import { Form, Link, useNavigation } from "react-router";
 import { apiContext } from "../../api.server.ts";

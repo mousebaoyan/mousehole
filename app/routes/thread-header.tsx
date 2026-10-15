@@ -1,3 +1,5 @@
+import { useEffect, useRef, useState, type Ref } from "react";
+import { Link, useFetcher, useNavigate } from "react-router";
 import {
   ArrowRightLeft,
   CircleCheck,
@@ -13,9 +15,7 @@ import {
   Shield,
   Sparkles,
   VenetianMask,
-} from "lucide-react";
-import { useEffect, useRef, useState, type Ref } from "react";
-import { Link, useFetcher, useNavigate } from "react-router";
+} from "~/components/icons";
 import { BoardBadge } from "~/components/board-badge";
 import { Dropdown, menuItem } from "~/components/disclosure";
 import { TagPicker } from "~/components/tag-picker";

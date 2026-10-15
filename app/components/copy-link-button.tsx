@@ -1,4 +1,4 @@
-import { Link2 } from "lucide-react";
+import { Link2 } from "~/components/icons";
 import { Button } from "~/components/ui/button";
 import { toast } from "~/components/ui/toast";
 

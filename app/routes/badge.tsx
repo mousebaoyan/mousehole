@@ -1,5 +1,5 @@
+import { Award } from "~/components/icons";
 import { pageTitle } from "~/share-meta";
-import { Award } from "lucide-react";
 import { useRef } from "react";
 import { data, Link, useFetcher, useLocation } from "react-router";
 import { cn } from "cn";

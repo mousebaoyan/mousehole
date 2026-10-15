@@ -1,5 +1,5 @@
+import { Check, X } from "~/components/icons";
 import { pageTitle } from "~/share-meta";
-import { Check, X } from "lucide-react";
 import { Form, Link, useNavigation } from "react-router";
 import { cn } from "cn";
 import { apiContext } from "../../api.server.ts";

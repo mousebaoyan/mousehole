@@ -1,5 +1,5 @@
-import { CircleCheck } from "lucide-react";
 import { useLayoutEffect, useRef, useState } from "react";
+import { CircleCheck } from "~/components/icons";
 import type { PostItem } from "~/api-types";
 import { useDismiss } from "~/components/disclosure";
 import { UserAvatar } from "~/components/user-avatar";

@@ -152,6 +152,16 @@
   [role="button"]:not([aria-disabled="true"]) {
     cursor: pointer;
   }
+  /* Lucide's look for the icons of components/icons.tsx; size-* and stroke-* classes win. */
+  .lucide {
+    width: 24px;
+    height: 24px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
 }
 
 /* Buttons, here rather than spelled out in utilities on each: a thread page has up to a hundred,

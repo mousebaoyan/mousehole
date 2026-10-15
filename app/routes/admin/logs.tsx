@@ -1,5 +1,5 @@
+import { Bot, Search } from "~/components/icons";
 import { pageTitle } from "~/share-meta";
-import { Bot, Search } from "lucide-react";
 import { Form, Link } from "react-router";
 import { apiContext } from "../../api.server.ts";
 import { Time } from "~/components/form-parts";

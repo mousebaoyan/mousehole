@@ -1,6 +1,6 @@
-import { Bell, BellOff, BellRing, Bookmark, Check } from "lucide-react";
 import { useNavigate } from "react-router";
 import { cn } from "cn";
+import { Bell, BellOff, BellRing, Bookmark, Check } from "~/components/icons";
 import { Dropdown, menuItem } from "~/components/disclosure";
 import { Button, buttonVariants } from "~/components/ui/button";
 import { useMe } from "~/forum";

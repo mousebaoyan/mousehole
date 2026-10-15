@@ -1,5 +1,5 @@
+import { Download, LogOut, Monitor } from "~/components/icons";
 import { pageTitle } from "~/share-meta";
-import { Download, LogOut, Monitor } from "lucide-react";
 import { useEffect, useState } from "react";
 import { redirect, useFetcher, useRevalidator } from "react-router";
 import { apiContext } from "../api.server.ts";

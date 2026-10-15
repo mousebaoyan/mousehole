@@ -1,6 +1,6 @@
-import { Award } from "lucide-react";
 import { Link } from "react-router";
 import { cn } from "cn";
+import { Award } from "~/components/icons";
 
 // Badge tiers by colour (design §8.8).
 export const TIER_STYLES: Record<string, string> = {

@@ -1,5 +1,5 @@
+import { Award, Check } from "~/components/icons";
 import { pageTitle } from "~/share-meta";
-import { Award, Check } from "lucide-react";
 import { Link } from "react-router";
 import { cn } from "cn";
 import { apiContext } from "../api.server.ts";

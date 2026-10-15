@@ -1,5 +1,5 @@
+import { Check, Eye, EyeOff } from "~/components/icons";
 import { pageTitle } from "~/share-meta";
-import { Check, Eye, EyeOff } from "lucide-react";
 import { Form, Link, useNavigation } from "react-router";
 import { cn } from "cn";
 import { apiContext } from "../../api.server.ts";

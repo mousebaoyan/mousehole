@@ -1,5 +1,5 @@
+import { PenSquare, Reply, Trash2 } from "~/components/icons";
 import { pageTitle } from "~/share-meta";
-import { PenSquare, Reply, Trash2 } from "lucide-react";
 import { Form, redirect, useNavigate } from "react-router";
 import { apiContext } from "../api.server.ts";
 import { useComposer } from "~/components/composer";

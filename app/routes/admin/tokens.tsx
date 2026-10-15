@@ -1,5 +1,5 @@
+import { Copy } from "~/components/icons";
 import { pageTitle } from "~/share-meta";
-import { Copy } from "lucide-react";
 import { useEffect, useRef } from "react";
 import { Form, useNavigation } from "react-router";
 import { apiContext } from "../../api.server.ts";

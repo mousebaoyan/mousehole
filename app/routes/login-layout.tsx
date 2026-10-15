@@ -1,5 +1,5 @@
-import { ArrowLeft } from "lucide-react";
 import { Link, Outlet } from "react-router";
+import { ArrowLeft } from "~/components/icons";
 
 export default function LoginLayout() {
   return (
