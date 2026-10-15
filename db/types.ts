@@ -83,6 +83,7 @@ export interface Drafts {
   kind: string | null;
   lottery: Json | null;
   poll: Json | null;
+  positioning: Json | null;
   reply_to_id: number | null;
   tags: Generated<string[]>;
   thread_id: number | null;

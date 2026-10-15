@@ -24,7 +24,7 @@ export type PollSpec =
       closes_at: number | null;
     }
   // 保研定位 (design §8.14): the poster names the schools, the forum sets the rest.
-  | { preset: "positioning"; rows: string[]; closes_at: number | null };
+  | { preset: "positioning"; rows: string[] };
 
 // How hard each school would be, easiest first.
 const POSITIONING_GRADES = ["随便去", "努把力", "看运气", "有点难", "几乎不可能"];
@@ -39,6 +39,7 @@ export async function createPoll(trx: Transaction<DB>, threadId: number, spec: P
           max_choices: null,
           anonymous: true,
           results: "voted" as const,
+          closes_at: null,
         }
       : { ...spec, preset: null };
   await trx

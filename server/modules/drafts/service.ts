@@ -16,16 +16,20 @@ type DraftLottery = Omit<LotterySpec, "draws_at"> & {
   draws_at: number | null;
 };
 
+// The background a 保研定位 thread asks for (design §8.14), and the schools to rate.
+type DraftPositioning = { fields: Record<string, string>; schools: string[] };
+
 export type DraftContent = {
   body: string;
   title?: string;
   board?: string | null;
-  kind?: "discussion" | "question" | "poll" | "lottery" | null;
+  kind?: "discussion" | "question" | "poll" | "positioning" | "lottery" | null;
   // As far as it has been written: options may still be blank, and the end may be a number of
   // days still to count from posting.
   poll?: DraftPoll | null;
   // Likewise: prizes may still be unnamed, and the time a number of days.
   lottery?: DraftLottery | null;
+  positioning?: DraftPositioning | null;
   tags?: string[];
   author_anonymous?: boolean;
   anonymous_replies?: boolean;
@@ -78,6 +82,7 @@ export async function getDraft(userId: number, threadId: number | null) {
       "drafts.kind",
       sql<DraftPoll | null>`drafts.poll`.as("poll"),
       sql<DraftLottery | null>`drafts.lottery`.as("lottery"),
+      sql<DraftPositioning | null>`drafts.positioning`.as("positioning"),
       "drafts.tags",
       "drafts.author_anonymous",
       "drafts.anonymous_replies",
@@ -123,6 +128,7 @@ export async function saveDraft(userId: number, threadId: number | null, content
     kind: content.kind ?? null,
     poll: content.poll ?? null,
     lottery: content.lottery ?? null,
+    positioning: content.positioning ?? null,
     tags: content.tags ?? [],
     author_anonymous: content.author_anonymous ?? false,
     anonymous_replies: content.anonymous_replies ?? false,

@@ -374,7 +374,6 @@ const PositioningPoll = z
   .strictObject({
     preset: z.literal("positioning"),
     rows: PollRows.openapi({ description: "目标院校，每所一行" }),
-    closes_at: PollCloses,
   })
   .openapi({ description: "保研定位" });
 
