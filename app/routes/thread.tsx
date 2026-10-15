@@ -295,11 +295,13 @@ function ThreadPage({
   const first = posts.at(0)?.floor ?? 1;
   const last = posts.at(-1)?.floor ?? 0;
 
-  // Before the current floor is measured, so it is measured from here.
+  // Before the current floor is measured, so it is measured from here. In a microtask: on a
+  // navigation, <ScrollRestoration> scrolls to the top in a layout effect that runs after this
+  // one, and the microtask comes after the whole commit but still before the page is painted.
   useLayoutEffect(() => {
     const element = start > 1 && document.getElementById(`floor-${start}`);
     if (element) {
-      element.scrollIntoView();
+      queueMicrotask(() => element.scrollIntoView());
       flash(element);
     }
   }, [start]);
