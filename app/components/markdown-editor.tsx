@@ -347,7 +347,7 @@ export function MarkdownEditor({
           <ul
             aria-label="提及"
             className={cn(
-              "absolute inset-x-2 z-10 max-h-48 overflow-y-auto rounded-xl border bg-popover p-1 text-sm text-popover-foreground shadow-lg",
+              "absolute inset-x-2 z-10 max-h-48 space-y-0.5 overflow-y-auto rounded-xl border bg-popover p-1 text-sm text-popover-foreground shadow-lg",
               mention?.above && "-translate-y-full",
             )}
             style={{ top: mention?.y }}
