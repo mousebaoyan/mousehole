@@ -271,7 +271,7 @@ export function MarkdownEditor({
               e.target.value = "";
             }}
           />
-          <EmojiButton target={textarea} onChange={onChange} side="top" />
+          <EmojiButton target={textarea} onChange={onChange} />
           <Button
             type="button"
             variant="ghost"
