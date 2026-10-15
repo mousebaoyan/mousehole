@@ -2,6 +2,7 @@ import { testClient } from "hono/testing";
 import { beforeAll, describe, expect, test } from "vitest";
 import { as, createUser, login, ownerSession } from "../../../test/fixtures.ts";
 import { app } from "../../app.ts";
+import { db } from "../../platform/db.ts";
 
 const api = testClient(app).api.v1;
 
@@ -49,5 +50,36 @@ describe("站点设置", () => {
     const res = await api.boards.$post({ json: { slug: "held", name: "先审" } }, admin);
     expect(await res.json()).toMatchObject({ review_mode: "before" });
     await save({ review_mode: "after" });
+  });
+
+  test("改了什么记进操作日志，带改前改后的值；邮箱密码只记哪个改了", async () => {
+    await save({ banner: "旧公告" });
+    await save({ banner: "新公告", qq_public: false });
+    const mailbox = { host: "smtp.qq.com", port: 465, secure: true, user: "a@qq.com" };
+    await api.admin.settings.$patch(
+      { json: { smtp: { accounts: [{ ...mailbox, password: "secret-1" }] } } },
+      owner,
+    );
+    await api.admin.settings.$patch(
+      { json: { smtp: { accounts: [{ ...mailbox, port: 587 }] } } },
+      owner,
+    );
+    const logs = await db
+      .selectFrom("audit_logs")
+      .select("data")
+      .where("action", "=", "settings.update")
+      .orderBy("id", "desc")
+      .limit(3)
+      .execute();
+    expect(logs.map((l) => l.data)).toEqual([
+      {
+        smtp: {
+          accounts: { from: [mailbox], to: [{ ...mailbox, port: 587 }] },
+        },
+      },
+      { smtp: { accounts: { from: [], to: [mailbox] }, passwords_changed: ["a@qq.com"] } },
+      { site: { banner: { from: "旧公告", to: "新公告" } } },
+    ]);
+    expect(JSON.stringify(logs)).not.toContain("secret-1");
   });
 });

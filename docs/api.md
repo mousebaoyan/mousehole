@@ -189,8 +189,8 @@ token 由站长在后台创建，只显示一次。每个 token 绑定一个 bot
 | POST | `/auth/email/verify` | `{ qq, code }`：校验验证码，建立会话，返回 204；不对、过期或输错 5 次作废都返回 `400 email_code_invalid`，`message` 说明是哪种 | 访客 |
 | POST | `/auth/logout` | 退出当前会话；没有登录时也返回成功 | 访客 |
 | GET | `/me` | 当前用户；bot 代表某人时返回这个人。站长账号的 `qq` 为 `null` | 已登录 / `read` |
-| GET | `/me/settings` | 自己的设置：`custom_name`（自己起的名字，`null` 是跟着 QQ）、`custom_bio`（自己写的个性签名，`null` 是跟着 QQ）、`qq_bio`（QQ 的个性签名）、`avatar_custom`（头像是不是自己上传的）、`allow_proxy`、`hide_from_guests`（我的内容不给访客看）、`relations_public`（公开我的赞和关系）、`notify_email`（邮件提醒的总开关）、`notify_prefs`（每类通知的 `{ site, email }` 开关，含默认值） | 已登录 / `read` |
-| PATCH | `/me` | 修改设置，只改带了的字段，返回改好的设置：`custom_name`（最多 24 个字，`null` 改回跟着 QQ，显示名随即重算）、`custom_bio`（最多 60 个字，`null` 改回跟着 QQ）、`allow_proxy`、`hide_from_guests`、`relations_public`、`notify_email`、`notify_prefs`（带了的类型整体替换） | 成员 / `act` |
+| GET | `/me/settings` | 自己的设置：`custom_name`（自己起的名字，`null` 是跟着 QQ）、`custom_bio`（自己写的个性签名，`null` 是跟着 QQ）、`qq_bio`（QQ 的个性签名）、`avatar_custom`（头像是不是自己上传的）、`allow_proxy`、`hide_from_guests`（我的内容不给访客看）、`relations_public`（公开我的赞和关系）、`notify_email`（邮件提醒的总开关）、`notify_prefs`（每类通知的 `{ site, email }` 开关，自己没改过的是站长设的默认值；站长设为不发送的类型 `email` 是 `null`） | 已登录 / `read` |
+| PATCH | `/me` | 修改设置，只改带了的字段，返回改好的设置：`custom_name`（最多 24 个字，`null` 改回跟着 QQ，显示名随即重算）、`custom_bio`（最多 60 个字，`null` 改回跟着 QQ）、`allow_proxy`、`hide_from_guests`、`relations_public`、`notify_email`、`notify_prefs`（每类的 `site`、`email` 都可以只带一个，只改带了的开关；没改过的开关跟着站长设的默认值） | 成员 / `act` |
 | PUT | `/me/avatar` | 上传头像：multipart 的 `file` 字段，最大 20MB，格式同图片上传，裁成 96px 的方图；之后不再跟着 QQ 刷新。返回 `{ avatar_url }` | 没被禁言的成员 / `act` |
 | DELETE | `/me/avatar` | 头像改回跟着 QQ，立刻拉一次 QQ 头像，返回 `{ avatar_url }`；拉取失败返回 `502 fetch_failed`，头像不变 | 成员 / `act` |
 | GET | `/me/export` | 导出自己的全部内容，作为附件 `mousehole-{id}.json` 下载：`user`（`id`、`qq`、`display_name`、`bio`）、`posts`（发过的主楼和回复，Markdown 原文，含待审核和已隐藏的，不含删掉的；`floor` 为 1 的就是自己发的帖子）、`boosts`、`bookmarks`；每小时最多 3 次 | 已登录，只能在网页上 |
@@ -322,8 +322,8 @@ token 由站长在后台创建，只显示一次。每个 token 绑定一个 bot
 | 方法 | 路径 | 说明 | 权限 |
 | --- | --- | --- | --- |
 | GET | `/admin/overview` | 概览：`members`（`total`、`activated`、`frozen`，不算 bot 和站长）、`content`（`threads_today`、`posts_today`：今天公开的帖子和回复，按北京时间；`pending`：待审核；`reports`：待处理的举报）、`events`（`streams`：现在连着的事件流；`polled_at`：最近一次按游标拉取的时间，进程重启后为 `null`）、`storage`（`database`、`uploads`：数据库和上传图片占用的字节数）；群的同步状态见 `/admin/groups` | 管理员 / `admin` |
-| GET | `/admin/settings` | 站点设置，按分组返回：`site`（`banner` 公告横幅，`qq_public` 访客能否看到 QQ 号，`review_mode` 新建版块不指定时的审核方式）、`login`（三种登录方式的开关和口令提示）、`smtp`（`accounts`：发信邮箱，按使用的顺序，每个是 `host`、`port`、`secure`、`user`，密码只返回 `password_set`）、`bot`（`require_operator`） | 站长，只能在网页上操作 |
-| PATCH | `/admin/settings` | 修改站点设置，立即生效：只改带了的分组和字段。`smtp.accounts` 整组替换，最多 10 个；某个邮箱不带 `password` 就沿用这个账号原来的密码 | 站长，只能在网页上操作 |
+| GET | `/admin/settings` | 站点设置，按分组返回：`site`（`banner` 公告横幅，`qq_public` 访客能否看到 QQ 号，`review_mode` 新建版块不指定时的审核方式）、`login`（三种登录方式的开关和口令提示）、`smtp`（`accounts`：发信邮箱，按使用的顺序，每个是 `host`、`port`、`secure`、`user`，密码只返回 `password_set`）、`bot`（`require_operator`）、`notify`（`email`：每类通知的邮件规则，`on` 默认发送、`off` 默认不发、`never` 不发送，成员也不能打开） | 站长，只能在网页上操作 |
+| PATCH | `/admin/settings` | 修改站点设置，立即生效：只改带了的分组和字段。`smtp.accounts` 整组替换，最多 10 个；某个邮箱不带 `password` 就沿用这个账号原来的密码；`notify.email` 只改带了的类型。改了的字段连同改前改后的值记进操作日志，密码只记哪个邮箱的改了 | 站长，只能在网页上操作 |
 | POST | `/admin/settings/test-email` | `{ qq }`：每个发信邮箱各发一封测试邮件，返回 `results`，每项是 `user` 和失败的原因 `error`（成功为 `null`）；发出去的邮箱不再歇着 | 站长，只能在网页上操作 |
 | GET | `/admin/groups` | 已关联的群和同步状态：最近一次增量、全量、群资料的时间，被拦下的全量 | 管理员 / `admin` |
 | POST | `/admin/groups` | 关联群：`{ group_id }`；第一个关联的群自动成为主群；已关联返回 `409 group_exists` | 站长，只能在网页上操作 |

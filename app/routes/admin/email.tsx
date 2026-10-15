@@ -6,6 +6,8 @@ import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import type { Route } from "./+types/email.ts";
 import { Check, Field, readForm, Result, Section } from "~/components/form-parts";
+import { Select } from "~/components/ui/select";
+import { NOTIFICATION_TYPES } from "~/notification-types";
 
 export function meta() {
   return [{ title: "邮件 · 管理后台" }];
@@ -14,8 +16,15 @@ export function meta() {
 export async function loader({ context }: Route.LoaderArgs) {
   const res = await context.get(apiContext).admin.settings.$get();
   if (!res.ok) throw new Error("Admin settings failed");
-  return { accounts: (await res.json()).smtp.accounts };
+  const { smtp, notify } = await res.json();
+  return { accounts: smtp.accounts, policies: notify.email };
 }
+
+const POLICIES = [
+  { value: "on", label: "默认发送" },
+  { value: "off", label: "默认不发" },
+  { value: "never", label: "不发送" },
+] as const;
 
 export async function action({ request, context }: Route.ActionArgs) {
   const field = await readForm(request);
@@ -30,6 +39,17 @@ export async function action({ request, context }: Route.ActionArgs) {
         .map((r) => (r.error === null ? `${r.user} 已发送` : `${r.user} 发送失败：${r.error}`))
         .join("；"),
     };
+  }
+  if (field("intent") === "notify") {
+    const email = Object.fromEntries(
+      NOTIFICATION_TYPES.map(({ type }) => [
+        type,
+        POLICIES.find((p) => p.value === field(`email.${type}`))?.value,
+      ]),
+    );
+    const res = await api.admin.settings.$patch({ json: { notify: { email } } });
+    if (!res.ok) return { ok: false, message: (await res.json()).error.message };
+    return { ok: true, message: "已保存" };
   }
   const accounts = Array.from({ length: Number(field("count")) }, (_, i) => {
     const password = field(`password.${i}`);
@@ -69,6 +89,31 @@ export default function Email({ loaderData, actionData }: Route.ComponentProps) 
       <Result result={actionData} />
 
       <Mailboxes key={shown.at} accounts={shown.accounts} busy={busy} />
+
+      <Form method="post">
+        <Section
+          title="邮件通知"
+          description="每类通知是否发邮件。成员没改过的按这里的默认；选「不发送」后，成员也不能自己打开"
+        >
+          <ul className="divide-y text-sm">
+            {NOTIFICATION_TYPES.map(({ type, label }) => (
+              <li key={type} className="flex items-center gap-3 py-1.5">
+                <span className="flex-1">{label}</span>
+                <Select
+                  name={`email.${type}`}
+                  defaultValue={loaderData.policies[type]}
+                  options={POLICIES}
+                  aria-label={`${label}的邮件`}
+                  className="w-32"
+                />
+              </li>
+            ))}
+          </ul>
+          <Button type="submit" name="intent" value="notify" disabled={busy} className="mt-4">
+            保存
+          </Button>
+        </Section>
+      </Form>
 
       <Form method="post">
         <Section title="发送测试邮件" description="上面保存的每个邮箱各发一封">

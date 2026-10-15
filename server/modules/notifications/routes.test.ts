@@ -1,6 +1,6 @@
 import { testClient } from "hono/testing";
 import { beforeAll, beforeEach, describe, expect, test } from "vitest";
-import { as, createUser, login, nextQq } from "../../../test/fixtures.ts";
+import { as, createUser, login, nextQq, ownerSession } from "../../../test/fixtures.ts";
 import { app } from "../../app.ts";
 import { db } from "../../platform/db.ts";
 import { createBotToken } from "../auth/service.ts";
@@ -233,6 +233,41 @@ describe("邮件", () => {
       `thread_reply:${replier.id}x1`,
     ]);
     await api.me.$patch({ json: { notify_email: true } }, author.who);
+  });
+
+  test("站长设的邮件默认值管着没改过的人；设为不发送后谁都不发，设置里也没有这个开关", async () => {
+    const owner = await ownerSession();
+    const policy = (email: Record<string, "on" | "off" | "never">) =>
+      api.admin.settings.$patch({ json: { notify: { email } } }, owner);
+    const t = await thread(author.who);
+    const { qq } = await db
+      .selectFrom("users")
+      .select("qq")
+      .where("id", "=", author.id)
+      .executeTakeFirstOrThrow();
+
+    // The author turns the site switch off, which leaves the email switch following the default.
+    await api.me.$patch({ json: { notify_prefs: { thread_reply: { site: false } } } }, author.who);
+    expect((await policy({ thread_reply: "on" })).status).toBe(204);
+    await reply(replier.who, t.id, "顶一下");
+    expect(await mails()).toEqual([`${qq}@qq.com 鼠鼠 回复了你的帖子：等通知的帖子`]);
+
+    // Someone who turned it on keeps it on when the default goes off, and loses it at never.
+    await api.me.$patch({ json: { notify_prefs: { reply: { email: true } } } }, author.who);
+    await policy({ thread_reply: "off", reply: "off" });
+    await reply(replier.who, t.id, "回复主楼", t.opening);
+    expect(await mails()).toEqual([`${qq}@qq.com 鼠鼠 回复了你：等通知的帖子`]);
+    await policy({ reply: "never" });
+    await reply(replier.who, t.id, "再回复主楼", t.opening);
+    expect(await mails()).toEqual([]);
+
+    const res = await api.me.settings.$get({}, author.who);
+    if (!res.ok) throw new Error(`status ${res.status}`);
+    expect((await res.json()).notify_prefs).toMatchObject({
+      reply: { site: true, email: null },
+      thread_reply: { site: false, email: false },
+    });
+    await policy({ reply: "on" });
   });
 
   test("从群里收录来的帖子和回复不产生通知", async () => {

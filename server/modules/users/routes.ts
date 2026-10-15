@@ -135,7 +135,10 @@ const ExportSchema = z.object({
   ),
 });
 
-const Switches = z.object({ site: z.boolean(), email: z.boolean() });
+const Switches = z.object({
+  site: z.boolean(),
+  email: z.boolean().nullable().openapi({ description: "null：站长不允许这类通知发邮件" }),
+});
 
 const AvatarSchema = z.object({ avatar_url: z.string().nullable() });
 
@@ -153,15 +156,15 @@ const SettingsSchema = z
     notify_email: z
       .boolean()
       .openapi({ description: "邮件提醒的总开关；关掉后哪类通知都不发邮件" }),
-    notify_prefs: z
-      .record(z.string(), Switches)
-      .openapi({ description: "每类通知的站内（site）和邮件（email）开关，含默认值" }),
+    notify_prefs: z.record(z.string(), Switches).openapi({
+      description: "每类通知的站内（site）和邮件（email）开关；自己没改过的跟着站长设的默认值",
+    }),
   })
   .openapi("MySettings");
 
 async function settingsJson(userId: number) {
   const settings = await getSettings(userId);
-  return { ...settings, notify_prefs: notifyPrefs(settings.notify_prefs) };
+  return { ...settings, notify_prefs: await notifyPrefs(settings.notify_prefs) };
 }
 
 const changed = {
@@ -422,7 +425,8 @@ export const usersRoutes = createRouter()
     createRoute({
       method: "patch",
       path: "/me",
-      summary: "修改自己的设置，只改带了的字段；notify_prefs 里带了的类型整体替换",
+      summary:
+        "修改自己的设置，只改带了的字段；notify_prefs 里也只改带了的开关，没改过的开关跟着站长设的默认值",
       request: {
         body: {
           required: true,
@@ -449,7 +453,12 @@ export const usersRoutes = createRouter()
                 hide_from_guests: z.boolean().optional(),
                 relations_public: z.boolean().optional(),
                 notify_email: z.boolean().optional(),
-                notify_prefs: z.partialRecord(z.enum(NOTIFICATION_TYPES), Switches).optional(),
+                notify_prefs: z
+                  .partialRecord(
+                    z.enum(NOTIFICATION_TYPES),
+                    z.object({ site: z.boolean().optional(), email: z.boolean().optional() }),
+                  )
+                  .optional(),
               }),
             },
           },
