@@ -275,7 +275,7 @@ function Results({ results, q, now }: { results: Result[]; q: string; now: numbe
       <p className="mt-1 line-clamp-2 text-meta text-foreground/80">
         <Marked text={r.snippet} q={q} />
       </p>
-      <p className="relative mt-1.5 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-xs text-muted-foreground">
+      <p className="mt-1.5 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-xs text-muted-foreground">
         <BoardBadge board={r.thread.board} />
         {r.post.floor > 1 && <span>#{r.post.floor}</span>}
         <span>{r.thread.reply_count} 条回复</span>
