@@ -22,7 +22,7 @@ import { PROSE } from "~/components/prose";
 import { UserAvatar } from "~/components/user-avatar";
 import { UserCard } from "~/components/user-card";
 import { UserBadges } from "~/components/user-badges";
-import { isMine, WriterName } from "~/components/writer";
+import { isMine, useShown } from "~/components/writer";
 import { Button, buttonVariants } from "~/components/ui/button";
 import type { PostItem, UserBrief } from "~/api-types";
 import { useMe } from "~/forum";
@@ -105,6 +105,8 @@ export function PostCard({
   const reaction = useReaction(post, threadId);
   const boosts = useBoosts(post, threadId, self);
   const own = isMine(post.author, me, self.alias);
+  const shown = useShown();
+  const author = shown(post.author);
   const boostButton = <BoostButton mine={boosts.mine} onSave={boosts.save} />;
   const replyTo = post.reply_to;
   const target = parent ?? parentFetcher.data;
@@ -142,20 +144,16 @@ export function PostCard({
       <div className="flex items-center gap-x-2">
         {/* Avatar and name are one control, so either opens the same card in the same place. */}
         <UserCard
-          user={post.author}
+          user={author}
           className="group flex max-w-full min-w-0 items-center gap-3 rounded-lg text-left"
         >
-          <UserAvatar
-            user={post.author}
-            thread={threadId}
-            className="size-10 shrink-0 max-sm:size-9"
-          />
+          <UserAvatar user={author} thread={threadId} className="size-10 shrink-0 max-sm:size-9" />
           <span className="truncate text-body font-semibold group-hover:underline">
-            <WriterName writer={post.author} />
+            {author.display_name}
           </span>
         </UserCard>
         <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-1.5 gap-y-1">
-          <UserBadges user={post.author} op={op} mine={own} />
+          <UserBadges user={author} op={op} mine={own} />
           {/* The opening post's state is the thread's, shown above it. */}
           {post.floor > 1 && post.status !== "visible" && (
             <span className="rounded bg-warning/10 px-1.5 py-px text-2xs font-medium text-warning">
@@ -186,10 +184,14 @@ export function PostCard({
                 )}
               >
                 <Forward className="size-3.5" />
-                <UserAvatar user={replyTo.author} thread={threadId} className="size-5 text-2xs" />
+                <UserAvatar
+                  user={shown(replyTo.author)}
+                  thread={threadId}
+                  className="size-5 text-2xs"
+                />
                 {/* Phones have little room on this line for a long group card. */}
                 <span className="max-w-24 truncate sm:max-w-none">
-                  <WriterName writer={replyTo.author} />
+                  {shown(replyTo.author).display_name}
                 </span>
               </button>
             )}
@@ -478,17 +480,14 @@ function PostPreview({
   onJump: (floor: number) => void;
 }) {
   const Arrow = jump === "up" ? ArrowUp : ArrowDown;
+  const author = useShown()(post.author);
   return (
     <div className="relative flex gap-3 py-3">
-      <UserAvatar
-        user={post.author}
-        thread={post.thread_id}
-        className="size-9 ring-4 ring-background"
-      />
+      <UserAvatar user={author} thread={post.thread_id} className="size-9 ring-4 ring-background" />
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1">
-          <span className="text-sm font-semibold">{post.author.display_name}</span>
-          <UserBadges user={post.author} />
+          <span className="text-sm font-semibold">{author.display_name}</span>
+          <UserBadges user={author} />
           <a
             href={`?floor=${post.floor}`}
             onClick={(e) => {

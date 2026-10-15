@@ -7,7 +7,7 @@ import { Dropdown, menuItem, useDismiss } from "~/components/disclosure";
 import { EmojiButton } from "~/components/emoji-button";
 import { Button } from "~/components/ui/button";
 import { UserAvatar } from "~/components/user-avatar";
-import { isMine } from "~/components/writer";
+import { isMine, useShown } from "~/components/writer";
 import { useMe } from "~/forum";
 import { useSavedValue } from "~/saved-value";
 import { confirmDialog } from "~/components/ui/dialog";
@@ -96,26 +96,27 @@ export function BoostChip({
   useEffect(() => {
     if (removing.state === "idle" && removing.data?.ok === false) toast(removing.data.message);
   }, [removing.state, removing.data]);
+  const user = useShown()(boost.user);
   if (removing.state !== "idle" || removing.data?.ok) return null;
 
   const content = (
     <>
-      <UserAvatar user={boost.user} thread={threadId} className="size-5 text-2xs" />
+      <UserAvatar user={user} thread={threadId} className="size-5 text-2xs" />
       {boost.body}
     </>
   );
   const id = boost.id;
   if (id === null || (!removable && !onReport)) {
     return (
-      <li title={boost.user.display_name} className={chip}>
+      <li title={user.display_name} className={chip}>
         {content}
       </li>
     );
   }
   return (
-    <li title={boost.user.display_name}>
+    <li title={user.display_name}>
       <Dropdown
-        label={`${boost.user.display_name} 的短评：${boost.body}`}
+        label={`${user.display_name} 的短评：${boost.body}`}
         align="start"
         triggerClassName={cn(chip, "hover:bg-accent")}
         trigger={content}
