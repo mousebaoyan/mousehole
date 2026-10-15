@@ -62,7 +62,7 @@ import {
   setBookmark,
   setNotifyLevel,
   setPostStatus,
-  setSolution,
+  setAnswer,
   setThreadStatus,
   topPosts,
   VIEWS,
@@ -102,7 +102,7 @@ const PersonCountSchema = z.object({ user: UserBriefSchema, count: z.number() })
 
 const ThreadDetailSchema = ThreadSchema.extend({
   url: z.string(),
-  solved_floor: z.number().nullable().openapi({ description: "采纳的回答在第几楼" }),
+  accepted_floors: z.array(z.number()).openapi({ description: "被采纳的回答在第几楼，从小到大" }),
   excerpt: z.string().openapi({ description: "主楼正文的前 100 个字，分享卡片用" }),
   status: z.string().openapi({
     description: "visible 公开；pending 待审核、hidden 已隐藏，这两种只有作者和版主打得开",
@@ -153,6 +153,7 @@ const PostSchema = z
     status: z.string().openapi({
       description: "visible 公开；pending 待审核、hidden 已隐藏，这两种只有作者和版主看得到",
     }),
+    accepted: z.boolean().openapi({ description: "问答帖里被采纳为答案" }),
     edited_at: z.number().nullable(),
     created_at: z.number(),
   })
@@ -206,7 +207,7 @@ function threadDetailJson(t: Thread, signedIn: boolean) {
   return {
     ...threadJson(t, signedIn),
     url: `${env.PUBLIC_URL}/t/${t.id}`,
-    solved_floor: t.solved_floor,
+    accepted_floors: t.accepted_floors,
     excerpt: excerpt(t.opening_html, SHARE_EXCERPT),
     status: t.status,
     author_anonymous: t.author_anonymous,
@@ -245,12 +246,14 @@ function postJson(p: Post, form: "html" | "markdown", extras: Extras) {
     deleted,
     members_only: p.members_only,
     status: p.status,
+    accepted: p.accepted,
     edited_at: p.edited_at && unix(p.edited_at),
     created_at: unix(p.created_at),
   };
 }
 
 const IdParam = z.object({ id: z.coerce.number().int() });
+const AnswerParams = z.object({ id: z.coerce.number().int(), post: z.coerce.number().int() });
 
 const FLOOR_EVENTS = new Set(["post.created", "post.updated", "post.deleted"]);
 
@@ -1144,9 +1147,10 @@ export const threadsRoutes = createRouter()
   .openapi(
     createRoute({
       method: "put",
-      path: "/threads/{id}/solution",
-      summary: "采纳答案：问答帖子里没删的一层回复；再采纳别的就换掉",
-      request: { params: IdParam, body: json(z.object({ post_id: z.number().int() })) },
+      path: "/threads/{id}/answers/{post}",
+      summary:
+        "采纳一层回答：问答帖子里公开、没删的回复，可以采纳几层；已经采纳的不变。回答的人收到通知，产生 thread.solved 事件",
+      request: { params: AnswerParams },
       responses: {
         200: threadResponse,
         400: errorResponse("不是问答帖子，或者这一层不能采纳"),
@@ -1156,13 +1160,15 @@ export const threadsRoutes = createRouter()
     }),
     async (c) => {
       const viewer = authorize(c, "act");
-      const thread = await setSolution(
+      const { id, post } = c.req.valid("param");
+      const thread = await setAnswer(
         actorOf(c, viewer),
         viewer,
         can(c, "moderate"),
         reachOf(viewer, c.var.bot),
-        c.req.valid("param").id,
-        c.req.valid("json").post_id,
+        id,
+        post,
+        true,
       );
       return c.json(threadDetailJson(thread, true), 200);
     },
@@ -1170,25 +1176,27 @@ export const threadsRoutes = createRouter()
   .openapi(
     createRoute({
       method: "delete",
-      path: "/threads/{id}/solution",
-      summary: "取消采纳",
-      request: { params: IdParam },
+      path: "/threads/{id}/answers/{post}",
+      summary: "取消采纳这一层；没采纳的不变",
+      request: { params: AnswerParams },
       responses: {
         200: threadResponse,
-        400: errorResponse("不是问答帖子"),
+        400: errorResponse("不是问答帖子，或者这一层不在帖子里"),
         403: errorResponse("不是楼主或版主，或者帖子已锁定"),
         404: errorResponse("帖子不存在"),
       },
     }),
     async (c) => {
       const viewer = authorize(c, "act");
-      const thread = await setSolution(
+      const { id, post } = c.req.valid("param");
+      const thread = await setAnswer(
         actorOf(c, viewer),
         viewer,
         can(c, "moderate"),
         reachOf(viewer, c.var.bot),
-        c.req.valid("param").id,
-        null,
+        id,
+        post,
+        false,
       );
       return c.json(threadDetailJson(thread, true), 200);
     },

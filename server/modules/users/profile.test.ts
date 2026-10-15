@@ -236,7 +236,10 @@ describe("赞过、概要和关系", () => {
     };
     const accepted = await answer("这样办");
     await answer("补充一句");
-    await api.threads[":id"].solution.$put({ param, json: { post_id: accepted } }, asker.who);
+    await api.threads[":id"].answers[":post"].$put(
+      { param: { ...param, post: String(accepted) } },
+      asker.who,
+    );
     const solved = await api.users[":user"].posts.$get(
       { param: { user: String(helper.id) }, query: { solved: "true" } },
       guest,

@@ -106,7 +106,7 @@ function selectThreads(from: ReturnType<typeof openableThreads>, userId: number 
       "threads.featured",
       "threads.locked",
       "threads.status",
-      "threads.solved_post_id",
+      "threads.accepted_count",
       "threads.reply_count",
       "threads.floor_count",
       "threads.view_count",
@@ -288,9 +288,7 @@ export async function listThreads(
     next = () => String(offset + limit);
   } else {
     if (view === "unsolved") {
-      query = query
-        .where("threads.kind", "=", "question")
-        .where("threads.solved_post_id", "is", null);
+      query = query.where("threads.kind", "=", "question").where("threads.accepted_count", "=", 0);
     }
     if (view === "new") query = query.where(NEW);
     if (view === "unread") query = query.where(UNREAD);
@@ -373,7 +371,7 @@ export async function listUserPosts(
     .where("posts.floor", ">", 1)
     .where("posts.status", "=", "visible")
     .where("posts.deleted_at", "is", null)
-    .$if(solved, (qb) => qb.whereRef("threads.solved_post_id", "=", "posts.id"))
+    .$if(solved, (qb) => qb.where("posts.accepted", "=", true))
     .orderBy("posts.id", "desc")
     .limit(PAGE_SIZE);
   if (cursor !== undefined) query = query.where("posts.id", "<", cursor);
@@ -498,8 +496,9 @@ export async function getThread(id: number, reader: Reader) {
       sql<[number, number][]>`(
         SELECT coalesce(json_agg(json_build_array(lower(r), upper(r) - 1) ORDER BY lower(r)), '[]')
         FROM unnest(mine.read_floors) r)`.as("read_floors"),
-      sql<number | null>`(SELECT floor FROM posts WHERE posts.id = threads.solved_post_id)`.as(
-        "solved_floor",
+      sql<number[]>`ARRAY(SELECT floor FROM posts
+        WHERE posts.thread_id = threads.id AND posts.accepted ORDER BY floor)`.as(
+        "accepted_floors",
       ),
       sql<string>`(SELECT html FROM posts WHERE posts.thread_id = threads.id AND posts.floor = 1)`.as(
         "opening_html",
@@ -576,6 +575,7 @@ function selectPosts(reader: Reader) {
       "posts.reply_count",
       "posts.like_count",
       "posts.boost_count",
+      "posts.accepted",
       sql<Record<string, number>>`posts.reactions`.as("reactions"),
       "posts.edited_at",
       "posts.created_at",
@@ -1314,20 +1314,16 @@ export async function deletePost(
   assertMayChange(staff, viewer, post.author_id, thread.locked);
 
   await db.transaction().execute(async (trx) => {
+    // A deleted answer is no longer accepted.
     const deleted = await trx
       .updateTable("posts")
-      .set({ deleted_at: sql<Date>`now()` })
+      .set({ deleted_at: sql<Date>`now()`, accepted: false })
       .where("id", "=", postId)
       .where("deleted_at", "is", null)
-      .returning("id")
+      .returning(sql<boolean>`old.accepted`.as("accepted"))
       .executeTakeFirst();
     if (!deleted) throw new AppError(404, "post_not_found", "回复不存在");
-    // A deleted answer is no longer the accepted one.
-    await trx
-      .updateTable("threads")
-      .set({ solved_post_id: sql<number | null>`nullif(solved_post_id, ${postId}::integer)` })
-      .where("id", "=", post.thread_id)
-      .execute();
+    if (deleted.accepted) await countAnswers(trx, post.thread_id, -1);
     await unindexPost(trx, postId);
     if (post.status === "visible") await withdrawPost(trx, postId, viewer.id, null);
     await recordAudit(trx, actor, {
@@ -1738,15 +1734,16 @@ export async function contentStats() {
 
 // ---- Accepted answers
 
-// The asker, or a moderator, picks the floor that answered a question; another pick replaces it,
-// null takes it back. The answerer hears of it.
-export async function setSolution(
+// The asker, or a moderator, accepts the floors that answered a question, as many as answered
+// it (design §8.1), or takes one back. Each writer accepted hears of it.
+export async function setAnswer(
   actor: Actor,
   viewer: Viewer,
   staff: boolean,
   reach: number,
   threadId: number,
-  postId: number | null,
+  postId: number,
+  accepted: boolean,
 ) {
   const reader: Reader = { reach, id: viewer.id, staff };
   const thread = await getThread(threadId, reader);
@@ -1755,28 +1752,22 @@ export async function setSolution(
   if (thread.kind !== "question") {
     throw new AppError(400, "invalid_request", "只有问答帖子能采纳答案");
   }
-  const answer =
-    postId === null
-      ? null
-      : await db
-          .selectFrom("posts")
-          .select(["id", "author_id"])
-          .where("id", "=", postId)
-          .where("thread_id", "=", threadId)
-          .where("floor", ">", 1)
-          .where("status", "=", "visible")
-          .where("deleted_at", "is", null)
-          .executeTakeFirst();
-  if (answer === undefined) {
-    throw new AppError(400, "invalid_request", "只能采纳此帖子中公开的回复");
-  }
   await db.transaction().execute(async (trx) => {
-    await trx
-      .updateTable("threads")
-      .set({ solved_post_id: answer?.id ?? null })
-      .where("id", "=", threadId)
-      .execute();
-    if (answer) {
+    const answer = await trx
+      .updateTable("posts")
+      .set({ accepted })
+      .where("id", "=", postId)
+      .where("thread_id", "=", threadId)
+      .where("floor", ">", 1)
+      .where("deleted_at", "is", null)
+      // Taking one back works on a floor hidden since.
+      .$if(accepted, (qb) => qb.where("status", "=", "visible"))
+      .returning(["id", "author_id", sql<boolean>`old.accepted`.as("was")])
+      .executeTakeFirst();
+    if (!answer) throw new AppError(400, "invalid_request", "只能采纳此帖子中公开的回复");
+    if (answer.was === accepted) return;
+    await countAnswers(trx, threadId, accepted ? 1 : -1);
+    if (accepted) {
       await threadSolved(trx, answer.id);
       await notifyOnPost(
         trx,
@@ -1789,13 +1780,21 @@ export async function setSolution(
       );
     }
     await recordAudit(trx, actor, {
-      action: answer ? "thread.solve" : "thread.unsolve",
+      action: accepted ? "thread.solve" : "thread.unsolve",
       target_type: "thread",
       target_id: threadId,
-      data: { post_id: answer?.id ?? null },
+      data: { post_id: answer.id },
     });
   });
   return getThread(threadId, reader);
+}
+
+async function countAnswers(trx: Transaction<DB>, threadId: number, delta: 1 | -1) {
+  await trx
+    .updateTable("threads")
+    .set((eb) => ({ accepted_count: eb("accepted_count", "+", delta) }))
+    .where("id", "=", threadId)
+    .execute();
 }
 
 // ---- Reactions

@@ -126,7 +126,7 @@ function ThreadRow({
               className="ml-1.5 -mt-0.5 inline size-4 text-muted-foreground"
             />
           )}
-          {thread.solved_post_id !== null && (
+          {thread.solved && (
             <CircleCheck
               aria-label="已解决"
               className="ml-1.5 -mt-0.5 inline size-4 text-success"

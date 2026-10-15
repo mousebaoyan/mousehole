@@ -28,53 +28,81 @@ async function question(kind?: "discussion") {
   );
   if (!res.ok) throw new Error(`status ${res.status}`);
   const { id } = await res.json();
-  const answer = await api.threads[":id"].posts.$post(
-    { param: { id: String(id) }, json: { content: { markdown: "能冲" } } },
-    answerer.who,
-  );
-  if (!answer.ok) throw new Error(`status ${answer.status}`);
+  for (const markdown of ["能冲", "也能冲"]) {
+    const answer = await api.threads[":id"].posts.$post(
+      { param: { id: String(id) }, json: { content: { markdown } } },
+      answerer.who,
+    );
+    if (!answer.ok) throw new Error(`status ${answer.status}`);
+  }
   const posts = await api.threads[":id"].posts.$get({ param: { id: String(id) }, query: {} });
   if (!posts.ok) throw new Error(`status ${posts.status}`);
-  const [opening, reply] = (await posts.json()).items;
-  return { id, opening: opening.id, answer: reply.id };
+  const [opening, first, second] = (await posts.json()).items;
+  return { id, opening: opening.id, answer: first.id, another: second.id };
+}
+
+function param(threadId: number, postId: number) {
+  return { param: { id: String(threadId), post: String(postId) } };
 }
 
 function accept(threadId: number, postId: number, who: Who) {
-  return api.threads[":id"].solution.$put(
-    { param: { id: String(threadId) }, json: { post_id: postId } },
-    who,
-  );
+  return api.threads[":id"].answers[":post"].$put(param(threadId, postId), who);
 }
 
-async function solved(threadId: number) {
-  const { solved_post_id } = await db
+function unaccept(threadId: number, postId: number, who: Who) {
+  return api.threads[":id"].answers[":post"].$delete(param(threadId, postId), who);
+}
+
+// The thread's count, and the floors accepted, from the database.
+async function answers(threadId: number) {
+  const { accepted_count } = await db
     .selectFrom("threads")
-    .select("solved_post_id")
+    .select("accepted_count")
     .where("id", "=", threadId)
     .executeTakeFirstOrThrow();
-  return solved_post_id;
+  const rows = await db
+    .selectFrom("posts")
+    .select("id")
+    .where("thread_id", "=", threadId)
+    .where("accepted", "=", true)
+    .orderBy("id")
+    .execute();
+  return { count: accepted_count, ids: rows.map((r) => r.id) };
 }
 
 describe("采纳答案", () => {
-  test("提问的人采纳一层回答：帖子标为已解决，回答的人收到通知，插件收到事件", async () => {
+  test("可以采纳几层：每层的回答者收到通知，插件收到事件；都取消了才回到待解答", async () => {
     const q = await question();
     const res = await accept(q.id, q.answer, asker);
     expect(res.status).toBe(200);
-    expect(await res.json()).toMatchObject({ solved_post_id: q.answer });
+    expect(await res.json()).toMatchObject({ solved: true, accepted_floors: [2] });
+    const both = await accept(q.id, q.another, asker);
+    expect(await both.json()).toMatchObject({ accepted_floors: [2, 3] });
+    // Accepting again changes nothing and tells nobody twice.
+    await accept(q.id, q.another, asker);
+    expect(await answers(q.id)).toEqual({ count: 2, ids: [q.answer, q.another] });
 
     const inbox = await api.notifications.$get({ query: {} }, answerer.who);
     if (!inbox.ok) throw new Error(`status ${inbox.status}`);
-    expect((await inbox.json()).items[0]).toMatchObject({ type: "solved", post: { id: q.answer } });
-    const event = await db
+    const told = (await inbox.json()).items.filter((n) => n.type === "solved");
+    expect(told.map((n) => n.post?.id)).toEqual([q.another, q.answer]);
+    const events = await db
       .selectFrom("events")
       .select("data")
       .where("type", "=", "thread.solved")
       .orderBy("id", "desc")
-      .executeTakeFirstOrThrow();
-    expect(event.data).toMatchObject({ post: { id: q.answer }, answerer: { id: answerer.id } });
+      .limit(2)
+      .execute();
+    expect(events.map((e) => e.data)).toMatchObject([
+      { post: { id: q.another }, answerer: { id: answerer.id } },
+      { post: { id: q.answer } },
+    ]);
 
-    await api.threads[":id"].solution.$delete({ param: { id: String(q.id) } }, asker);
-    expect(await solved(q.id)).toBeNull();
+    const one = await unaccept(q.id, q.answer, asker);
+    expect(await one.json()).toMatchObject({ solved: true, accepted_floors: [3] });
+    const none = await unaccept(q.id, q.another, asker);
+    expect(await none.json()).toMatchObject({ solved: false, accepted_floors: [] });
+    expect(await answers(q.id)).toEqual({ count: 0, ids: [] });
   });
 
   test("只有提问的人和版主能采纳；只能采纳问答帖子里没删的回复", async () => {
@@ -87,10 +115,13 @@ describe("采纳答案", () => {
     expect((await accept(talk.id, talk.answer, asker)).status).toBe(400);
   });
 
-  test("采纳的回答被删掉，帖子回到待解答", async () => {
+  test("采纳的回答被删掉就不再算采纳，另一层还在时帖子仍是已解决", async () => {
     const q = await question();
     await accept(q.id, q.answer, asker);
+    await accept(q.id, q.another, asker);
     await api.posts[":id"].$delete({ param: { id: String(q.answer) } }, answerer.who);
-    expect(await solved(q.id)).toBeNull();
+    expect(await answers(q.id)).toEqual({ count: 1, ids: [q.another] });
+    await api.posts[":id"].$delete({ param: { id: String(q.another) } }, answerer.who);
+    expect(await answers(q.id)).toEqual({ count: 0, ids: [] });
   });
 });
