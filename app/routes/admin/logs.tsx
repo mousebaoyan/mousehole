@@ -54,6 +54,7 @@ const ACTIONS: Record<string, string> = {
   "user.qq_bio": "推送 QQ 签名",
   "user.level": "设定等级",
   "member.role": "角色变更",
+  "member.role_unlock": "角色改回跟随群",
   "member.freeze": "冻结",
   "member.restore": "恢复",
   "board.create": "新建版块",

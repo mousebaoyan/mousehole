@@ -220,7 +220,7 @@ token 由站长在后台创建，只显示一次。每个 token 绑定一个 bot
 | DELETE | `/users/{user}/follow` | 取消关注 | 成员 / `act` |
 | PUT | `/users/{user}/endorsement` | 认可 TA 的帮助，每人对每人一次；不能认可自己（`400`） | 成员 / `act` |
 | DELETE | `/users/{user}/endorsement` | 撤回认可 | 成员 / `act` |
-| PATCH | `/users/{user}` | 设置角色：`{ role }`，`user`、`moderator`、`admin` 会锁定，同步不再覆盖；`null` 解锁，按群里的角色重算。bot 账号和自己的不能改（`403`）；记操作日志 | 管理员 / `admin` |
+| PATCH | `/users/{user}` | 设置角色：`{ role }`，`user`、`moderator`、`admin` 会锁定，同步不再覆盖；`null` 解锁，按群里的角色重算。bot 账号和自己的不能改（`403`）；把人设为管理员、改管理员的角色、解锁后会变成管理员的，只有站长能做（`403`）；记操作日志 | 管理员 / `admin` |
 | GET | `/users/{user}/level` | 等级和升级进度：`{ level, locked, next }`。`locked` 是管理员定下的、不再自动升降；`next` 是下一级（L4 是保级）的 `{ level, items }`，每项 `{ key, label, have, need }`，阅读时间以秒计；L5 和锁定的为 `null` | 本人、管理员 / `read` |
 | PUT | `/users/{user}/level` | 设定等级：`{ level, locked }`，`level` 为 0–5，L5 只能这样授予；`locked` 为 `false` 时之后照常自动升降。升级时本人收到通知；记操作日志 | 管理员 / `admin` |
 | PUT | `/users/{user}/restriction` | 禁言或封禁：`{ type, until, reason }`，`type` 为 `mute` 或 `ban`，`until` 是到期的 Unix 秒、`null` 为永久，已有的就换掉；只能对普通成员（版主和管理员返回 `403`）。封禁同时让他所有设备下线。理由记进操作日志 | 禁言：版主 / `moderate`；封禁：管理员 / `admin` |

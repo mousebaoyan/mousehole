@@ -73,8 +73,10 @@ export async function action({ request, context }: Route.ActionArgs) {
 
 export default function Members({ loaderData, actionData }: Route.ComponentProps) {
   const { q, status, level, items, next_cursor } = loaderData;
-  // From the admin layout: whether this is an admin or the owner, who may set roles.
-  const admin = useRouteLoaderData<typeof adminLoader>("routes/admin/layout")?.rank !== "moderator";
+  // From the admin layout: admins set roles, and only the owner makes or unmakes admins.
+  const rank = useRouteLoaderData<typeof adminLoader>("routes/admin/layout")?.rank;
+  const admin = rank !== "moderator";
+  const roles = rank === "owner" ? ROLES : ROLES.filter((r) => r.value !== "admin");
   return (
     <>
       <h1 className="text-xl font-semibold">成员</h1>
@@ -154,7 +156,7 @@ export default function Members({ loaderData, actionData }: Route.ComponentProps
             ) : (
               <LevelBadge level={m.level} />
             )}
-            {admin && m.role !== "bot" && m.role !== "owner" ? (
+            {admin && roles.some((r) => r.value === m.role) ? (
               <Form method="post" className="flex items-center gap-1">
                 <input type="hidden" name="intent" value="role" />
                 <input type="hidden" name="id" value={m.id} />
@@ -166,7 +168,7 @@ export default function Members({ loaderData, actionData }: Route.ComponentProps
                   defaultValue={m.role_locked ? m.role : ""}
                   options={[
                     { value: "", label: `按群（${ROLES.find((r) => r.value === m.role)?.label}）` },
-                    ...ROLES,
+                    ...roles,
                   ]}
                   aria-label={`${m.display_name} 的角色`}
                   submitOnChange

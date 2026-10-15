@@ -497,15 +497,14 @@ export async function saveLevel(
 }
 
 // Written by members: a role set by hand is locked, so syncing leaves it; none unlocks it, and
-// the groups decide again. Returns the role before.
+// the groups decide again. Returns the role before and whether it was locked.
 export async function saveRole(trx: Transaction<DB>, userId: number, role: string | null) {
-  const { from } = await trx
+  return trx
     .updateTable("users")
     .set(role === null ? { role_locked: false } : { role, role_locked: true })
     .where("id", "=", userId)
-    .returning(sql<string>`old.role`.as("from"))
+    .returning([sql<string>`old.role`.as("from"), sql<boolean>`old.role_locked`.as("locked")])
     .executeTakeFirstOrThrow();
-  return from;
 }
 
 const MEMBERS_PAGE = 50;

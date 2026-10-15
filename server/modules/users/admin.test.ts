@@ -25,6 +25,18 @@ async function named(display_name: string) {
   return user;
 }
 
+function patch(user: number, role: "user" | "admin" | null, who: Who) {
+  return api.users[":user"].$patch({ param: { user: String(user) }, json: { role } }, who);
+}
+
+function roleOf(id: number) {
+  return db
+    .selectFrom("users")
+    .select(["role", "role_locked"])
+    .where("id", "=", id)
+    .executeTakeFirstOrThrow();
+}
+
 async function members(query: Record<string, string>, who: Who = moderator) {
   const res = await api.admin.members.$get({ query }, who);
   if (!res.ok) throw new Error(`status ${res.status}`);
@@ -73,5 +85,45 @@ describe("后台的成员页", () => {
       (await api.users[":user"].$patch({ param, json: { role: null } }, moderator)).status,
     ).toBe(403);
     expect((await api.admin["audit-logs"].$get({ query: {} }, moderator)).status).toBe(403);
+  });
+
+  test("任免管理员只有站长能做：设为管理员、改管理员、解锁后会变成管理员的", async () => {
+    const plain = await named("普通成员");
+    const other = await createUser("admin");
+    const groupOwner = await named("群主");
+    // The group owner, kept a moderator by hand: unlocking would make them an admin.
+    const groupId = 900_000 + groupOwner.id;
+    await db.insertInto("qq_groups").values({ id: groupId, name: "测试群" }).execute();
+    await db
+      .insertInto("group_members")
+      .values({ group_id: groupId, user_id: groupOwner.id, role: "owner", observed_at: new Date() })
+      .execute();
+    await db
+      .updateTable("users")
+      .set({ role: "moderator", role_locked: true })
+      .where("id", "=", groupOwner.id)
+      .execute();
+
+    expect((await patch(plain.id, "admin", admin)).status).toBe(403);
+    expect((await patch(other.id, "user", admin)).status).toBe(403);
+    expect((await patch(groupOwner.id, null, admin)).status).toBe(403);
+    expect(await roleOf(groupOwner.id)).toEqual({ role: "moderator", role_locked: true });
+
+    const owner = await ownerSession();
+    expect((await patch(plain.id, "admin", owner)).status).toBe(204);
+    expect((await patch(other.id, "user", owner)).status).toBe(204);
+    expect((await patch(groupOwner.id, null, owner)).status).toBe(204);
+    expect(await roleOf(groupOwner.id)).toEqual({ role: "admin", role_locked: false });
+    const logs = await db
+      .selectFrom("audit_logs")
+      .select(["action", "data"])
+      .where("target_type", "=", "user")
+      .where("target_id", "=", groupOwner.id)
+      .orderBy("id")
+      .execute();
+    expect(logs).toEqual([
+      { action: "member.role_unlock", data: {} },
+      { action: "member.role", data: { from: "moderator", to: "admin" } },
+    ]);
   });
 });

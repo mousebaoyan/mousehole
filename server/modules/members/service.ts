@@ -71,29 +71,51 @@ async function refreshAccounts(
   await applyStanding(trx, actor, standings);
 }
 
+function ownerOnly() {
+  return new AppError(403, "forbidden", "只有站长能任免管理员");
+}
+
 // Admins set a role by hand, which syncing then leaves alone; null hands it back to the groups.
-// Bot accounts keep theirs, and nobody changes their own.
+// Bot accounts keep theirs, nobody changes their own, and only the owner makes or unmakes admins,
+// including by handing a group owner's role back to the groups.
 export async function setRole(
   actor: Actor,
+  byOwner: boolean,
   ref: UserRef,
   role: "user" | "moderator" | "admin" | null,
 ) {
   const user = await findMember(ref);
   if (!user) throw new AppError(404, "user_not_found", "用户不存在");
-  if (user.role === "bot") throw new AppError(403, "forbidden", "bot 账号的角色不能改");
-  if (user.id === actor.userId) throw new AppError(403, "forbidden", "不能改自己的角色");
+  if (user.role === "bot") throw new AppError(403, "forbidden", "bot 账号的角色不能修改");
+  if (user.id === actor.userId) throw new AppError(403, "forbidden", "不能修改自己的角色");
+  if (!byOwner && (user.role === "admin" || role === "admin")) throw ownerOnly();
   await db.transaction().execute(async (trx) => {
-    const from = await saveRole(trx, user.id, role);
-    if (role === null) {
-      await refreshAccounts(trx, actor, [user.id]);
-    } else if (from !== role) {
-      await recordAudit(trx, actor, {
-        action: "member.role",
-        target_type: "user",
-        target_id: user.id,
-        data: { from, to: role },
-      });
+    const { from, locked } = await saveRole(trx, user.id, role);
+    if (role !== null) {
+      if (from !== role || !locked) {
+        await recordAudit(trx, actor, {
+          action: "member.role",
+          target_type: "user",
+          target_id: user.id,
+          data: { from, to: role },
+        });
+      }
+      return;
     }
+    if (!locked) return;
+    await recordAudit(trx, actor, {
+      action: "member.role_unlock",
+      target_type: "user",
+      target_id: user.id,
+    });
+    // Logs the role the groups give, when it differs.
+    await refreshAccounts(trx, actor, [user.id]);
+    const after = await trx
+      .selectFrom("users")
+      .select("role")
+      .where("id", "=", user.id)
+      .executeTakeFirstOrThrow();
+    if (!byOwner && after.role === "admin") throw ownerOnly();
   });
 }
 
