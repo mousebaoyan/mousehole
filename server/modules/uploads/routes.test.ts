@@ -103,7 +103,7 @@ describe("上传图片", () => {
     });
     if (!posts.ok) throw new Error(`status ${posts.status}`);
     expect((await posts.json()).items[0].html).toContain(
-      `<img src="${used.url.replace(".webp", "-960.webp")}" alt="图" width="960" height="480"`,
+      `<img src="${used.url.replace(".webp", "-960.webp")}" alt="图" width="800" height="400"`,
     );
 
     await db

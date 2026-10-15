@@ -283,7 +283,162 @@
   }
 }
 
-/* Post bodies, rendered when they were written. */
+/* Post bodies, rendered when they were written. The typography plugin's defaults are for
+   articles; posts are shorter, mostly Chinese and often read on phones. */
+
+.prose {
+  line-height: 1.75;
+}
+.prose :where(p) {
+  margin-block: 0.6em;
+}
+/* Headings rank within a post, below the thread's title. */
+.prose :where(h1, h2, h3, h4, h5, h6) {
+  margin: 1.4em 0 0.5em;
+  font-weight: 600;
+  line-height: 1.45;
+}
+.prose :where(h1) {
+  font-size: 1.35em;
+}
+.prose :where(h2) {
+  font-size: 1.2em;
+}
+.prose :where(h3) {
+  font-size: 1.08em;
+}
+.prose :where(h4, h5, h6) {
+  font-size: 1em;
+}
+.prose :where(a) {
+  font-weight: inherit;
+  color: var(--link);
+  text-decoration: none;
+  &:hover {
+    text-decoration: underline;
+  }
+}
+.prose :where(ul, ol) {
+  margin-block: 0.6em;
+  padding-left: 1.4em;
+}
+.prose :where(li) {
+  margin-block: 0.2em;
+  padding-left: 0.2em;
+}
+.prose :where(li > ul, li > ol) {
+  margin-block: 0.2em;
+}
+.prose :where(blockquote) {
+  margin: 0.8em 0;
+  border-left: 3px solid color-mix(in oklab, var(--brand) 55%, transparent);
+  border-radius: 0 0.5rem 0.5rem 0;
+  background: color-mix(in oklab, var(--secondary) 60%, transparent);
+  padding: 0.4em 0.9em;
+  font-style: normal;
+  font-weight: inherit;
+  color: var(--muted-foreground);
+  & p::before,
+  & p::after {
+    content: none;
+  }
+  & :where(p) {
+    margin-block: 0.3em;
+  }
+  & :where(blockquote) {
+    background: none;
+  }
+}
+.prose :where(code):not(pre code) {
+  border-radius: 0.3rem;
+  background: var(--secondary);
+  padding: 0.1em 0.35em;
+  font-size: 0.875em;
+  font-weight: inherit;
+  &::before,
+  &::after {
+    content: none;
+  }
+}
+/* Long lines scroll inside the block rather than widening the page. */
+.prose :where(pre) {
+  margin: 0.8em 0;
+  border: 1px solid var(--border);
+  border-radius: 0.6rem;
+  background: var(--secondary);
+  padding: 0.7em 0.9em;
+  font-size: 0.8125rem;
+  line-height: 1.6;
+  color: var(--foreground);
+}
+.prose :where(hr) {
+  margin-block: 1.5em;
+}
+/* Images sit in the line, so a paragraph of them shows side by side; their size on the page was
+   worked out when the post was written. */
+.prose :where(img) {
+  display: inline-block;
+  margin: 0.15em 0;
+  border-radius: 0.4rem;
+  vertical-align: bottom;
+}
+/* A table too wide for the column scrolls sideways. Cells keep a few characters' width, since
+   Chinese may break after any one of them and a squeezed column runs one character a line. */
+.prose :where(table) {
+  display: block;
+  width: max-content;
+  max-width: 100%;
+  overflow-x: auto;
+  margin: 0.8em 0;
+  border: 1px solid var(--border);
+  border-radius: 0.6rem;
+  font-size: 0.875em;
+  line-height: 1.6;
+  /* A shadow at an edge with more to scroll to: the covers move with the content and hide the
+     shadows, which stay put, once an end is reached. */
+  background:
+    linear-gradient(to right, var(--background) 40%, transparent) left / 2.5em 100% no-repeat local,
+    linear-gradient(to left, var(--background) 40%, transparent) right / 2.5em 100% no-repeat local,
+    radial-gradient(
+        farthest-side at 0 50%,
+        color-mix(in oklab, var(--foreground) 22%, transparent),
+        transparent
+      )
+      left / 0.7em 100% no-repeat scroll,
+    radial-gradient(
+        farthest-side at 100% 50%,
+        color-mix(in oklab, var(--foreground) 22%, transparent),
+        transparent
+      )
+      right / 0.7em 100% no-repeat scroll;
+}
+.prose :where(thead) {
+  border-bottom: 1px solid var(--border);
+  background: var(--secondary);
+}
+.prose :where(th) {
+  font-weight: 600;
+  white-space: nowrap;
+}
+.prose :where(th, td) {
+  min-width: 4.5em;
+  max-width: 24em;
+  padding: 0.45em 0.8em;
+  vertical-align: top;
+}
+/* Tables of five columns or more scroll on a phone anyway, so their cells may as well be wide
+   enough to read. */
+@media (width < 40rem) {
+  .prose :where(table:has(tr > :nth-child(5))) :where(td) {
+    min-width: 8em;
+  }
+}
+.prose :where(tbody tr) {
+  border-bottom-color: var(--border);
+  &:last-child {
+    border-bottom: 0;
+  }
+}
 
 .prose a.mention {
   @apply rounded-md bg-secondary px-1 py-px font-medium text-foreground no-underline hover:bg-accent;
