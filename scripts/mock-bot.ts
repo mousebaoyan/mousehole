@@ -590,6 +590,13 @@ async function demo() {
     `HTTP ${ad.status}`,
   );
 
+  const week = await call("/bot/stats/weekly");
+  check(
+    "周榜的统计：这一周发的帖子算进概况",
+    week.status === 200 && Number(field(field(week.data, "overview"), "threads")) > 0,
+    field(week.data, "overview"),
+  );
+
   const hidden = await call(`/threads/${threadId}`, { token: null });
   check("访客打不开仅成员版块里的帖子", hidden.status === 404, `HTTP ${hidden.status}`);
   const removed = await call(`/boards/${slug}`, { method: "DELETE" });

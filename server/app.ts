@@ -21,6 +21,7 @@ import { pollRoutes } from "./modules/threads/poll-routes.ts";
 import { serveSitemap, threadsRoutes } from "./modules/threads/routes.ts";
 import { serveUpload, uploadsRoutes } from "./modules/uploads/routes.ts";
 import { serveAvatar, usersRoutes } from "./modules/users/routes.ts";
+import { weeklyRoutes } from "./modules/weekly/routes.ts";
 import { db } from "./platform/db.ts";
 import { env } from "./platform/env.ts";
 import { createRouter, handleError, type AppEnv } from "./platform/http.ts";
@@ -42,6 +43,7 @@ const api = createRouter()
   .route("/", draftsRoutes)
   .route("/", uploadsRoutes)
   .route("/", qqRoutes)
+  .route("/", weeklyRoutes)
   .route("/", reactionsRoutes)
   .route("/", notificationsRoutes)
   .route("/", eventsRoutes)

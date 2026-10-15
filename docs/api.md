@@ -366,7 +366,7 @@ token 由站长在后台创建，只显示一次。每个 token 绑定一个 bot
 | PATCH | `/bot/groups/{group_id}/members` | 增量同步成员，见第 4 节 | `sync` |
 | PUT | `/bot/users/{user}/bio` | 推送 QQ 的个性签名：`{ bio }`，超过 60 个字的截掉；本人没写过自己的签名时显示它。插件在收到 `member.activated` 时查询后推送 | `sync` |
 | GET | `/bot/messages/{chat_type}/{chat_id}/{message_id}` | 某条 QQ 消息收录在哪一层：`{ thread_id, post_id }`；没有收录时返回 `404 message_not_linked` | `read` |
-| GET | `/bot/stats/weekly` | 一周的统计，给插件排周榜图片（总体设计 §8.15）：`until`（Unix 秒，统计 `[until - 7 天, until)`，默认现在）。返回 `overview`（`threads`、`posts`（含收录的）、`archived`（收录了几层）、`active`（发过内容的人数）、`activated`（第一次登录的人数）、`badges`（发出的徽章数））；`threads`：`most_liked`、`most_replied`、`most_read`，各前 5，每项 `{ thread: { id, title, url }, board, author, count }`；`people`：`most_liked`、`most_accepted`、`most_replies`，各前 5，每项 `{ user, count }`；`gold_badges`：`[{ user, badge }]`。用户对象是 `{ id, display_name, qq, avatar_url }`，匿名的楼主是匿名用户对象。只算阅读门槛为访客或成员的版块，人的榜单不算匿名的内容，bot 和站长不上榜 | `read` |
+| GET | `/bot/stats/weekly` | 一周的统计，给插件排周榜图片（总体设计 §8.15）：`until`（Unix 秒，统计 `[until - 7 天, until)`，默认现在）。返回 `since`、`until`（统计的起止，Unix 秒），`overview`（`threads`、`posts`（含收录的）、`archived`（收录了几层）、`active`（发过内容的人数）、`activated`（第一次登录的人数）、`badges`（发出的徽章数））；`threads`：`most_liked`、`most_replied`、`most_read`，各前 5，每项 `{ thread: { id, title, url }, board, author, count }`；`people`：`most_liked`、`most_accepted`、`most_replies`，各前 5，每项 `{ user, count }`；`gold_badges`：`[{ user, badge }]`。用户对象是 `{ id, display_name, qq, avatar_url }`，匿名的楼主是匿名用户对象。只算阅读门槛为访客或成员的版块，人的榜单不算匿名的内容，bot 和站长不上榜 | `read` |
 | GET | `/bot/events` | SSE 事件流，见第 5 节 | `events` |
 | GET | `/bot/events/batch` | 按游标拉取事件：`after`、`limit`（1–500，默认 100）、`types`，返回 `{ items: [{ id, type, data, created_at }], next_after }`，`next_after` 是下次的 `after` | `events` |
 
