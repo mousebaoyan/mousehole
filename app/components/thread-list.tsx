@@ -53,7 +53,7 @@ export function ThreadList({
         <span className="text-center">浏览</span>
         <span className="text-center">活动</span>
       </div>
-      <ul>
+      <ul className="stagger">
         <ThreadRows threads={threads} now={now} showBoard={showBoard} />
         {children}
       </ul>

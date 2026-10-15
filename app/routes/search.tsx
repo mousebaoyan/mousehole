@@ -162,7 +162,7 @@ export default function Search({ loaderData }: Route.ComponentProps) {
       {q !== "" && results.length === 0 && (
         <p className="py-16 text-center text-sm text-muted-foreground">没有找到相关的内容</p>
       )}
-      <ul>
+      <ul className="stagger">
         <Results results={results} q={q} now={now} />
         {next_cursor !== null && <More cursor={next_cursor} />}
       </ul>

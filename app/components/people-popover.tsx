@@ -45,7 +45,7 @@ export function PeoplePopover({
             align === "left" ? "left-0" : "right-0",
           )}
         >
-          {!list.data && <li className="px-3 py-2 text-muted-foreground">加载中…</li>}
+          {!list.data && <li className="px-3 py-2 animate-pulse text-muted-foreground">加载中…</li>}
           {list.data?.items.map(({ user, note }) => (
             <li key={user.id}>
               <Link

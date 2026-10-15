@@ -136,7 +136,9 @@ function PersonCard({
           {profile ? (
             <CardBody profile={profile} />
           ) : (
-            <p className="py-6 text-center text-meta text-muted-foreground">加载中…</p>
+            <p className="py-6 text-center text-meta animate-pulse text-muted-foreground">
+              加载中…
+            </p>
           )}
         </div>
       )}

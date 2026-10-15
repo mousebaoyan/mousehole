@@ -2,6 +2,7 @@ import { Outlet, type ShouldRevalidateFunctionArgs } from "react-router";
 import { apiContext } from "../api.server.ts";
 import { ComposerProvider } from "~/components/composer";
 import { ForumNav } from "~/components/forum-nav";
+import { PageTransition } from "~/components/page-transition";
 import { SiteHeader } from "~/components/site-header";
 import type { Route } from "./+types/forum-layout.ts";
 
@@ -51,7 +52,9 @@ export default function ForumLayout({
           <ForumNav />
         </aside>
         <div className="min-w-0 flex-1 pt-4 pb-16 sm:pt-6">
-          <Outlet />
+          <PageTransition>
+            <Outlet />
+          </PageTransition>
         </div>
       </div>
     </ComposerProvider>

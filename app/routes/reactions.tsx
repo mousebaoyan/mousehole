@@ -119,7 +119,9 @@ export function ReactionSummary({
             ))}
           </div>
           <ul className="max-h-72 overflow-y-auto py-1">
-            {!list.data && <li className="px-3 py-2 text-muted-foreground">加载中…</li>}
+            {!list.data && (
+              <li className="px-3 py-2 animate-pulse text-muted-foreground">加载中…</li>
+            )}
             {reactors.map((r) => (
               <li key={r.user.id}>
                 <Link

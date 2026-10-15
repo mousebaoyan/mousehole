@@ -328,7 +328,7 @@ function Profile({
           (posts.length === 0 ? (
             <Empty />
           ) : (
-            <ul>
+            <ul className="stagger">
               <PostRows posts={posts} now={now} />
               {next_cursor !== null && <MoreRows cursor={next_cursor} />}
             </ul>
@@ -351,7 +351,7 @@ function Profile({
             {people.length === 0 ? (
               <Empty />
             ) : (
-              <ul>
+              <ul className="stagger">
                 <PeopleRows people={people} now={now} />
                 {next_cursor !== null && <MoreRows cursor={next_cursor} />}
               </ul>
