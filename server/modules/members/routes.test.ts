@@ -73,7 +73,7 @@ function people(count: number) {
 }
 
 describe("成员同步", () => {
-  test("全量同步为新成员建号：群主是管理员，群管理员是版主，显示名取群名片", async () => {
+  test("全量同步为新成员建号：群主和群管理员是管理员，显示名取群名片", async () => {
     const groupId = await newGroup();
     const [owner, admin, member] = [++lastQq, ++lastQq, ++lastQq];
 
@@ -85,7 +85,7 @@ describe("成员同步", () => {
 
     expect(counts).toMatchObject({ joined: 3, left: 0, held: false });
     expect(await account(owner)).toMatchObject({ role: "admin", display_name: "群主" });
-    expect(await account(admin)).toMatchObject({ role: "moderator", display_name: "管理昵称" });
+    expect(await account(admin)).toMatchObject({ role: "admin", display_name: "管理昵称" });
     expect(await account(member)).toMatchObject({
       role: "user",
       member_status: "member",
@@ -106,7 +106,7 @@ describe("成员同步", () => {
 
     await sync(false, groupId, T + 20, [{ user_id: qq, in_group: true, role: "admin" }]);
     const restored = await account(qq);
-    expect(restored).toMatchObject({ member_status: "member", role: "moderator" });
+    expect(restored).toMatchObject({ member_status: "member", role: "admin" });
 
     const actions = await db
       .selectFrom("audit_logs")
