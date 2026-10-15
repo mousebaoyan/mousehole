@@ -241,7 +241,7 @@ export function PostCard({
             {target ? (
               <PostPreview post={target} jump="up" onJump={onJump} />
             ) : (
-              <p className="py-3 text-meta text-muted-foreground">加载中…</p>
+              <p className="py-3 text-meta animate-pulse text-muted-foreground">加载中…</p>
             )}
           </div>
         )}
@@ -391,7 +391,7 @@ export function PostCard({
 
         {repliesOpen && (
           // A rule down the avatars ties the replies to this floor.
-          <ol className="relative mt-3 before:absolute before:top-4 before:bottom-8 before:left-[1.125rem] before:w-0.5 before:rounded-full before:bg-border">
+          <ol className="relative mt-3 animate-in fade-in slide-in-from-top-2 duration-300 before:absolute before:top-4 before:bottom-8 before:left-[1.125rem] before:w-0.5 before:rounded-full before:bg-border">
             {repliesFetcher.data ? (
               repliesFetcher.data.map((r) => (
                 <li key={r.id}>
@@ -399,7 +399,7 @@ export function PostCard({
                 </li>
               ))
             ) : (
-              <li className="py-3 pl-12 text-meta text-muted-foreground">加载中…</li>
+              <li className="py-3 pl-12 text-meta animate-pulse text-muted-foreground">加载中…</li>
             )}
           </ol>
         )}
@@ -450,7 +450,7 @@ function HistoryDialog({
       </div>
       <ol className="divide-y overflow-y-auto">
         {revisions === undefined && (
-          <li className="px-5 py-4 text-meta text-muted-foreground">加载中…</li>
+          <li className="px-5 py-4 text-meta animate-pulse text-muted-foreground">加载中…</li>
         )}
         {revisions?.map((r) => (
           <li key={r.rev} className="px-5 py-4">

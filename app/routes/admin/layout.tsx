@@ -18,6 +18,7 @@ import { data, Link, NavLink, Outlet, redirect, useLocation } from "react-router
 import { apiContext } from "../../api.server.ts";
 import { cn } from "cn";
 import { Logo } from "~/components/logo";
+import { PageTransition } from "~/components/page-transition";
 import { ThemeToggle } from "~/components/theme-toggle";
 import type { Route } from "./+types/layout.ts";
 import { SITE_NAME } from "../../../server/platform/site.ts";
@@ -107,7 +108,9 @@ export default function AdminLayout({ loaderData: { rank } }: Route.ComponentPro
 
       <main className="min-w-0 flex-1 px-4 py-6 sm:px-8">
         <div className="mx-auto max-w-4xl">
-          <Outlet />
+          <PageTransition>
+            <Outlet />
+          </PageTransition>
         </div>
       </main>
     </div>

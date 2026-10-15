@@ -300,7 +300,11 @@ function ThreadPage({
 
   // Before the current floor is measured, so it is measured from here.
   useLayoutEffect(() => {
-    if (start > 1) document.getElementById(`floor-${start}`)?.scrollIntoView();
+    const element = start > 1 && document.getElementById(`floor-${start}`);
+    if (element) {
+      element.scrollIntoView();
+      flash(element);
+    }
   }, [start]);
   const [current, setCurrent] = useCurrentFloor(start);
   const newest = useNewestFloor(thread.id, thread.floor_count);
@@ -338,6 +342,7 @@ function ThreadPage({
     const element = document.getElementById(`floor-${floor}`);
     if (element) {
       element.scrollIntoView();
+      flash(element);
       setCurrent(floor);
     } else {
       void navigate(`?floor=${floor}`, { preventScrollReset: true });
@@ -562,6 +567,13 @@ function useNewestFloor(threadId: number, loaded: number) {
     return () => stream.close();
   }, [threadId]);
   return newest;
+}
+
+// Plays the glow again even when the same floor is jumped to twice.
+function flash(element: HTMLElement) {
+  element.classList.remove("floor-flash");
+  void element.offsetWidth;
+  element.classList.add("floor-flash");
 }
 
 function documentTop(element: HTMLElement) {

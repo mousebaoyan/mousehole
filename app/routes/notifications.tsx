@@ -160,7 +160,7 @@ export default function Notifications({ loaderData }: Route.ComponentProps) {
           {unread ? "没有未读通知" : "暂无通知"}
         </p>
       ) : (
-        <ul>
+        <ul className="stagger">
           <Rows items={items} now={now} />
           {next_cursor !== null && <More cursor={next_cursor} />}
         </ul>
