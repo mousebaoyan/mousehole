@@ -64,7 +64,7 @@
 - 删除只设 `deleted_at`，楼层号保留，页面显示"该楼已删除"，指向某一楼的链接不会错位。删除回复时帖子的回复数、被回复那层的 `reply_count`、版块和作者的回复数都减一；删除帖子时版块、标签和作者的帖子数减一，版块的回复数减去这个帖子的回复数。
 - 编辑：`UPDATE posts ... RETURNING edit_count, old.body` 一步拿到新的版本号和旧正文，再插入 `post_revisions`，并发编辑不会撞号。改标题也算主楼的一次编辑，旧标题存在 `post_revisions.title`。
 - "最新发布"排序直接按 `id DESC` 走主键，不用单独建索引。热门和"新"从最近 7 天的帖子开始找，走部分索引 `threads_recent`。
-- 采纳（[总体设计 §8.1](design.md#81-版块帖子与楼层)）：`posts.accepted` 标出被采纳的回答，一个问答帖可以有几层；`threads.accepted_count` 是其中没删的层数，采纳、取消和删除时在同一个事务里加减，为 0 的问答帖是待解答，走部分索引 `threads_unsolved`。
+- 采纳（[总体设计 §8.1](design.md#81-版块帖子与楼层)）：`posts.accepted_at` 是被采纳的时间，不为空的就是被采纳的回答（周榜按它数本周被采纳的），一个问答帖可以有几层；`threads.accepted_count` 是其中没删的层数，采纳、取消和删除时在同一个事务里加减，为 0 的问答帖是待解答，走部分索引 `threads_unsolved`。
 - 计数：`threads.reply_count` 和 `boards.post_count`、`users.post_count` 只算公开的回复（不含主楼），`users.thread_count` 算发过的帖子；`users` 的两个数不算匿名的内容；都和发帖在同一个事务里更新。
 - 列表翻页的游标是最后一个帖子的 `last_post_at`（微秒，JavaScript 的 Date 只到毫秒）和 ID，"最新发布"是 ID，收藏列表是 `thread_users.bookmarked_at`（微秒）和 ID。
 - 热门：最近 7 天发布的帖子按 `(回复数 × 2 + 赞数 + 浏览数 / 20 + 1) / (发布至今的小时数 + 2)^1.5` 排序，取前 500 个，在内存里存 10 分钟；读列表时再按可见范围和筛选条件过滤。
@@ -86,7 +86,7 @@
 - 收藏是 `thread_users.bookmarked_at`，重复收藏保留第一次的时间。帖子的查询都 left join 读者自己的那行（访客没有），详情里的收藏和关注级别、收藏列表都从这里来。
 - 关注用户（`user_follows`）和认可（`endorsements`）每对人一行，不能对自己。关注数、粉丝数、认可数不冗余存，资料卡里直接数，各是一段索引范围。
 - 个人主页的名单（[总体设计 §9](design.md#9-页面)）：赞过按 `reactions_user`（`user_id, created_at`）倒序取；关系名单分别走 `user_follows` 的主键和 `user_follows_followee`、`endorsements` 的主键和 `endorsements_endorser`，都按 `created_at` 倒序、用偏移翻页。`users.relations_public` 关掉时，别人看不到这几项，这个人也不出现在别人的名单和概要里。概要的两份名单现算：按楼层作者或回应的人分组数表情回应，不算匿名楼层。
-- 通知的 `type`：`reply`、`thread_reply`、`mention`、`like`、`boost`、`watching`、`following`、`solved`、`moderation`、`level`、`lottery`，含义见[接口](api.md)的通知对象。都和触发它的写入在同一个事务里插入。
+- 通知的 `type`：`reply`、`thread_reply`、`mention`、`like`、`boost`、`watching`、`following`、`solved`、`moderation`、`level`、`lottery`、`badge`，含义见[接口](api.md)的通知对象。都和触发它的写入在同一个事务里插入。
 - 一条新楼层只给每人一条通知，按先后取第一个适用的：被回复的那一层的作者（`reply`）；@到的人（`mention`）；没指定楼层时是楼主（`thread_reply`）；关注这个帖子的人（`watching`）。新帖通知 @到的人和作者的粉丝（`following`）。从群里收录来的帖子和楼层（`via` 为 `qq`）不产生通知。
 - 合并通知：`like:{楼层 ID}`、`boost:{楼层 ID}`、`thread_reply:{帖子 ID}`、`watching:{帖子 ID}` 是 `group_key`，未读期间再次触发只更新触发者、次数、`data` 和时间，不新增行；`post_id` 留着第一次的，点进去从最早没看的那层开始。
 - 不通知：自己做的事、冻结的账号、把这个帖子设为 `muted` 的人、在 `users.notify_prefs` 里关掉了这类站内通知的人。`notify_prefs` 形如 `{ "like": { "site": false, "email": true } }`，站内通知没写的按开着算，邮件没写的按站长设的默认值（`settings` 的 `notify`，形如 `{ "email": { "thread_reply": "on", "like": "never" } }`，没写的类型用代码里的默认）；站长设为 `never` 的类型不管怎么写都不发邮件。`users.notify_email` 是邮件提醒的总开关，关掉时哪类都不发邮件，`notify_prefs` 里的设置留着。
@@ -96,7 +96,19 @@
 - 阅读记录（[总体设计 §8.9](design.md#89-阅读记录)）存在 `thread_users`：`read_floors` 是读过的楼层（`int4multirange`），上报时 `read_floors + 新区间` 并进去，相邻的区间自动合并；`last_read_at` 是最后一次上报的时间。列表里的 `last_read_floor` 取 `upper(read_floors) - 1`。
 - 发帖和回复时，自己的楼层在同一个事务里并进 `read_floors`，也更新 `last_read_at`，但不计入 `posts_read`。
 - 同一个事务里更新 `users` 的阅读统计：`posts_read` 加上这次新读的楼层数（并入前后区间集合的大小之差），`read_seconds` 加上阅读秒数。读过的帖子数直接数 `thread_users` 里 `last_read_at` 不为空的行，走 `thread_users_read`。
-- `days_visited`：每次更新 `last_seen_at` 时，如果按北京时间已经是新的一天就加一。会话续期和阅读上报都会更新 `last_seen_at`。
+- `days_visited`：每次更新 `last_seen_at` 时，如果按北京时间已经是新的一天就加一。会话续期和阅读上报都会更新 `last_seen_at`。同时更新连续访问的天数 `visit_streak`：上次是昨天就加一，否则从 1 重新算（`user_days` 只留 35 天，算不了 100 天的连续访问）。
+
+## 徽章与影响力
+
+表：`badges`、`user_badges`、`user_reads`。
+
+- 徽章（[总体设计 §8.8](design.md#88-徽章)）：`badges` 每枚一行，`tier` 取 `bronze`、`silver`、`gold`，`grouping` 是徽章页上的组，`multiple` 表示能得多次。自动授予的徽章由迁移插入，`slug` 对应代码里的规则（`badges/rules.ts`）；管理员新建的活动徽章 `slug` 为 `NULL`，只能手动授予。
+- `user_badges` 每次得到一行：能得多次的记 `post_id`（获赞的那一层、获赞的帖子的主楼、中奖的抽奖帖的主楼），其余为 `NULL`；`UNIQUE NULLS NOT DISTINCT (user_id, badge_id, post_id)`，授予用 `ON CONFLICT DO NOTHING`，当场检查和每小时补查重复了也不会多发。`granted_by` 是手动授予的管理员，自动的为 `NULL`；撤销手动授予的就删掉这一行，记进操作日志。
+- 当场检查和触发它的写入在同一个事务里，授予时一并写通知和 `badge.granted` 事件；每小时补查只看这一小时里有动静的人（`user_days` 今天有记录的，和这一小时里被赞、被读的人）。上线时的补齐在迁移之后跑一次，`notify = false`，不写通知和事件。
+- 头衔：`users.title_badge_id`，只能是自己得到的金徽章或银徽章，为 `NULL` 时显示 QQ 的专属头衔。撤销了这枚徽章时一并清空。
+- 被读（[总体设计 §8.15](design.md#815-影响力每周邮件和周榜)）：阅读上报时已经算出新读的楼层（并入前后区间集合之差），在同一个事务里按作者分组，不算自己的、匿名的、不公开的楼层，给每个作者的 `users.reads_received` 加上次数，并累加到 `user_reads`（每人每天一行，按北京时间）。`user_reads` 用来算最近 7 天和每周邮件，超过 35 天的每天清理。
+- 帮到的人：`users.people_reached` 是读过这个人至少一层的人数，每小时给今天有 `user_reads` 的人重算：按 `thread_users_thread` 取出他发过楼层的帖子的读者，`read_floors @> floor` 的去重计数。
+- 每周邮件和周榜现算，每周各一次：赞看 `reactions.created_at`，采纳看 `posts.accepted_at`，新帖新回复看 `created_at`，被读看 `user_reads`，读帖子的人数看 `thread_users.last_read_at` 落在这一周里的行，徽章看 `user_badges.granted_at`。
 
 ## 图片
 
@@ -152,7 +164,6 @@
 | 表 | 用途 |
 | --- | --- |
 | `points_ledger`、`check_ins` | 鼠币流水、签到 |
-| `badges`、`user_badges` | 徽章，包括由群荣誉同步来的徽章 |
 | `conversations`、`conversation_members`、`messages` | 私信：会话、双方各自的已读位置和屏蔽状态、消息 |
 | `group_notices`、`group_essences`、`group_files` | 同步来的群公告、精华消息、群文件目录 |
 
@@ -175,6 +186,8 @@
 | 资料卡的关注数、粉丝数、认可数 | `user_follows` 主键、`user_follows_followee`、`endorsements` 主键 |
 | 收藏列表 | `thread_users_bookmarks` |
 | 已读列表、未读列表、读过的帖子数 | `thread_users_read` |
+| 重算帮到的人 | `thread_users_thread` |
+| 某枚徽章得到的人、资料卡上的徽章 | `user_badges_badge`（`badge_id, granted_at DESC`）、`user_badges` 的唯一索引 |
 | 新帖（最近 7 天发布、没打开过） | 主键倒序取最近 7 天的，再排除 `thread_users` 里读过的 |
 | 由 QQ 消息找论坛内容 | `qq_message_links` 主键 |
 | 由楼层找来源消息 | `qq_message_links_post` |
