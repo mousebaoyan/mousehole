@@ -1,3 +1,4 @@
+import { pageTitle } from "~/share-meta";
 import { Check, Eye, EyeOff } from "lucide-react";
 import { Form, Link, useNavigation } from "react-router";
 import { cn } from "cn";
@@ -9,7 +10,7 @@ import { UserAvatar } from "~/components/user-avatar";
 import type { Route } from "./+types/content.ts";
 
 export function meta() {
-  return [{ title: "内容 · 管理后台" }];
+  return [{ title: pageTitle("内容", "管理后台") }];
 }
 
 const TABS = [

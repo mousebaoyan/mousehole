@@ -1,3 +1,4 @@
+import { pageTitle } from "~/share-meta";
 import { Form, useNavigation } from "react-router";
 import { apiContext } from "../../api.server.ts";
 import { Button } from "~/components/ui/button";
@@ -6,7 +7,7 @@ import type { Route } from "./+types/groups.ts";
 import { Badge, Field, readForm, Result, Section, Time } from "~/components/form-parts";
 
 export function meta() {
-  return [{ title: "QQ 群 · 管理后台" }];
+  return [{ title: pageTitle("QQ 群", "管理后台") }];
 }
 
 export async function loader({ context }: Route.LoaderArgs) {

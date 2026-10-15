@@ -1,3 +1,4 @@
+import { pageTitle } from "~/share-meta";
 import {
   ArrowLeft,
   Bot,
@@ -21,10 +22,9 @@ import { Logo } from "~/components/logo";
 import { PageTransition } from "~/components/page-transition";
 import { ThemeToggle } from "~/components/theme-toggle";
 import type { Route } from "./+types/layout.ts";
-import { SITE_NAME } from "../../../server/platform/site.ts";
 
 export function meta() {
-  return [{ title: `管理后台 · ${SITE_NAME}` }];
+  return [{ title: pageTitle("管理后台") }];
 }
 
 // Who sees which pages (design §10): moderators those for their work, starting at reports;

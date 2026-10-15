@@ -1,8 +1,13 @@
+import { pageTitle } from "~/share-meta";
 import { Link } from "react-router";
 import { cn } from "cn";
 import { apiContext } from "../../api.server.ts";
 import type { Route } from "./+types/overview.ts";
 import { Section, Time } from "~/components/form-parts";
+
+export function meta() {
+  return [{ title: pageTitle("概览", "管理后台") }];
+}
 
 export async function loader({ context }: Route.LoaderArgs) {
   const api = context.get(apiContext);

@@ -1,3 +1,4 @@
+import { pageTitle } from "~/share-meta";
 import { data, Form, redirect } from "react-router";
 import { apiContext, cookiesFrom } from "../api.server.ts";
 import { LogoMark } from "~/components/logo";
@@ -6,7 +7,7 @@ import type { Route } from "./+types/login-link.ts";
 import { SITE_NAME } from "../../server/platform/site.ts";
 
 export function meta() {
-  return [{ title: `确认登录 · ${SITE_NAME}` }];
+  return [{ title: pageTitle("确认登录") }];
 }
 
 // Opening the link only shows this page. QQ fetches links in chats for previews,

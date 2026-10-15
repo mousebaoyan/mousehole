@@ -1,3 +1,4 @@
+import { pageTitle } from "~/share-meta";
 import { Search as SearchIcon, X } from "lucide-react";
 import { Fragment, useRef } from "react";
 import { data, Form, Link, useFetcher, useLocation } from "react-router";
@@ -11,14 +12,11 @@ import { useBoards, useTags } from "~/forum";
 import { useNearView } from "~/near-view";
 import { ago, unixNow } from "~/time";
 import type { Route } from "./+types/search.ts";
-import { SITE_NAME } from "../../server/platform/site.ts";
 
 export function meta({ loaderData }: Route.MetaArgs) {
   return [
     {
-      title: loaderData.filters.q
-        ? `${loaderData.filters.q} · 搜索 · ${SITE_NAME}`
-        : `搜索 · ${SITE_NAME}`,
+      title: loaderData.filters.q ? pageTitle(loaderData.filters.q, "搜索") : pageTitle("搜索"),
     },
   ];
 }

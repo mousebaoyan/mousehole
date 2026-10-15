@@ -32,7 +32,7 @@ const BATCH = 20;
 export function meta({ loaderData }: Route.MetaArgs) {
   const { thread } = loaderData;
   return [
-    ...shareMeta(thread.title, thread.excerpt),
+    ...shareMeta([thread.title, thread.board.name], thread.excerpt),
     { property: "og:type", content: "article" },
     { property: "og:url", content: thread.url },
   ];

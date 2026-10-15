@@ -1,3 +1,4 @@
+import { pageTitle } from "~/share-meta";
 import { Lock, Search } from "lucide-react";
 import { Form, Link, useRouteLoaderData } from "react-router";
 import { apiContext } from "../../api.server.ts";
@@ -12,7 +13,7 @@ import type { Route } from "./+types/members.ts";
 import type { loader as adminLoader } from "./layout.tsx";
 
 export function meta() {
-  return [{ title: "成员 · 管理后台" }];
+  return [{ title: pageTitle("成员", "管理后台") }];
 }
 
 const STATUSES = [

@@ -16,6 +16,7 @@ import { SITE_URL } from "./site.server.ts";
 import { buttonVariants } from "~/components/ui/button";
 import { DialogHost } from "~/components/ui/dialog";
 import { Toaster } from "~/components/ui/toast";
+import { pageTitle } from "~/share-meta";
 import "./app.css";
 import { SITE_NAME } from "../server/platform/site.ts";
 
@@ -91,6 +92,8 @@ export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
         : "请稍后重试。";
   return (
     <main className="mx-auto max-w-3xl p-6">
+      {/* The failed route has no title of its own; React puts this one in the head. */}
+      <title>{pageTitle(title)}</title>
       <h1 className="text-2xl font-semibold">{title}</h1>
       <p className="mt-2 text-muted-foreground">{detail}</p>
       {response?.status === 401 && (

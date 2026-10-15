@@ -1,3 +1,4 @@
+import { pageTitle } from "~/share-meta";
 import { Check, X } from "lucide-react";
 import { Form, Link, useNavigation } from "react-router";
 import { cn } from "cn";
@@ -8,7 +9,7 @@ import { UserAvatar } from "~/components/user-avatar";
 import type { Route } from "./+types/reports.ts";
 
 export function meta() {
-  return [{ title: "举报 · 管理后台" }];
+  return [{ title: pageTitle("举报", "管理后台") }];
 }
 
 const TABS = [

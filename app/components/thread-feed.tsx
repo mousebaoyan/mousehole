@@ -29,6 +29,14 @@ export function readFilter(url: string) {
   };
 }
 
+// What a list's filters add to the tab's title, before the board or 全部帖子 (design §9).
+export function feedTitle(view: ThreadView, tag: string | null) {
+  return [
+    ...(view === "latest" ? [] : [VIEWS.find((v) => v.view === view)?.label ?? view]),
+    ...(tag === null ? [] : [`#${tag}`]),
+  ];
+}
+
 // For the first page of a list: the counts beside new and unread, null for guests.
 export async function readCounts(
   api: Api,

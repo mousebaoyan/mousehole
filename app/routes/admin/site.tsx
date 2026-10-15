@@ -1,3 +1,4 @@
+import { pageTitle } from "~/share-meta";
 import { apiContext } from "../../api.server.ts";
 import { Input } from "~/components/ui/input";
 import { Select } from "~/components/ui/select";
@@ -7,7 +8,7 @@ import { SettingsForm } from "~/components/settings-form";
 import { BOT_NAME } from "../../../server/platform/site.ts";
 
 export function meta() {
-  return [{ title: "站点 · 管理后台" }];
+  return [{ title: pageTitle("站点", "管理后台") }];
 }
 
 export async function loader({ context }: Route.LoaderArgs) {

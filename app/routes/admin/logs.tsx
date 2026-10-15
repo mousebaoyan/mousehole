@@ -1,3 +1,4 @@
+import { pageTitle } from "~/share-meta";
 import { Bot, Search } from "lucide-react";
 import { Form, Link } from "react-router";
 import { apiContext } from "../../api.server.ts";
@@ -7,7 +8,7 @@ import { UserAvatar } from "~/components/user-avatar";
 import type { Route } from "./+types/logs.ts";
 
 export function meta() {
-  return [{ title: "操作日志 · 管理后台" }];
+  return [{ title: pageTitle("操作日志", "管理后台") }];
 }
 
 // What each action is called here; others show as they are written.

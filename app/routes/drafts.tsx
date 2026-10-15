@@ -1,3 +1,4 @@
+import { pageTitle } from "~/share-meta";
 import { PenSquare, Reply, Trash2 } from "lucide-react";
 import { Form, redirect, useNavigate } from "react-router";
 import { apiContext } from "../api.server.ts";
@@ -6,10 +7,9 @@ import { Button } from "~/components/ui/button";
 import { confirmSubmit } from "~/components/ui/dialog";
 import { ago, unixNow } from "~/time";
 import type { Route } from "./+types/drafts.ts";
-import { SITE_NAME } from "../../server/platform/site.ts";
 
 export function meta() {
-  return [{ title: `草稿 · ${SITE_NAME}` }];
+  return [{ title: pageTitle("草稿") }];
 }
 
 export async function loader({ context }: Route.LoaderArgs) {
