@@ -1,7 +1,7 @@
-import { ChartBar, CircleCheck, Gift, MessageSquare, Pin, Sparkles } from "lucide-react";
 import type { ReactNode } from "react";
 import { Link } from "react-router";
 import { cn } from "cn";
+import { ChartBar, CircleCheck, Gift, MessageSquare, Pin, Sparkles } from "~/components/icons";
 import type { ThreadItem } from "~/api-types";
 import { BoardBadge } from "~/components/board-badge";
 import { UserAvatar } from "~/components/user-avatar";
@@ -14,9 +14,9 @@ const COLUMNS =
 
 const COUNT = new Intl.NumberFormat("en", { notation: "compact", maximumFractionDigits: 1 });
 
-// 1.5k rather than 1,520.
+// 1.5k rather than 1,520. Most counts are small, and a list has dozens: Intl is skipped for them.
 function count(n: number) {
-  return COUNT.format(n).toLowerCase();
+  return n < 1000 ? String(n) : COUNT.format(n).toLowerCase();
 }
 
 // Threads published this recently and never opened are new; see design §8.9.

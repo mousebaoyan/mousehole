@@ -1,4 +1,3 @@
-import { pageTitle } from "~/share-meta";
 import {
   ArrowLeft,
   Award,
@@ -14,7 +13,8 @@ import {
   Users,
   UsersRound,
   type LucideIcon,
-} from "lucide-react";
+} from "~/components/icons";
+import { pageTitle } from "~/share-meta";
 import { useEffect, useRef } from "react";
 import { data, Link, NavLink, Outlet, redirect, useLocation } from "react-router";
 import { apiContext } from "../../api.server.ts";

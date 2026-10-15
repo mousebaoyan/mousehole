@@ -1,6 +1,6 @@
-import { AtSign, Bold, Code, Eye, ImagePlus, Link2, PenLine, Quote } from "lucide-react";
 import { useEffect, useRef, useState, type RefObject } from "react";
 import { useFetcher } from "react-router";
+import { AtSign, Bold, Code, Eye, ImagePlus, Link2, PenLine, Quote } from "~/components/icons";
 import type { loader as mentionLoader } from "~/routes/mention";
 import { cn } from "cn";
 import type { UserBrief } from "~/api-types";

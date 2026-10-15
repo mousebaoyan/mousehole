@@ -1,7 +1,7 @@
-import { Heart } from "lucide-react";
 import { useRef, useState } from "react";
 import { Link, useFetcher } from "react-router";
 import { cn } from "cn";
+import { Heart } from "~/components/icons";
 import type { UserBrief } from "~/api-types";
 import { useDismiss } from "~/components/disclosure";
 import { UserAvatar } from "~/components/user-avatar";

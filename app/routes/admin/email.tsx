@@ -1,5 +1,5 @@
+import { ArrowDown, ArrowUp, Plus, X } from "~/components/icons";
 import { pageTitle } from "~/share-meta";
-import { ArrowDown, ArrowUp, Plus, X } from "lucide-react";
 import { useState } from "react";
 import { Form, useNavigation } from "react-router";
 import { apiContext } from "../../api.server.ts";

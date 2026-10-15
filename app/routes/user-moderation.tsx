@@ -1,6 +1,6 @@
-import { Ban, MicOff, ShieldCheck } from "lucide-react";
 import { useRef } from "react";
 import { Form } from "react-router";
+import { Ban, MicOff, ShieldCheck } from "~/components/icons";
 import { Field } from "~/components/form-parts";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";

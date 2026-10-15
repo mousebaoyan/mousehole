@@ -35,7 +35,7 @@
     "hono": "^4.13.13",
     "isbot": "^5.2.2",
     "kysely": "^0.29.6",
-    "lucide-react": "^1.55.0",
+    "lucide": "^1.57.0",
     "markdown-it": "^15.0.2",
     "nodemailer": "^10.1.0",
     "pg": "^8.23.1",

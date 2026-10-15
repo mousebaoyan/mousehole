@@ -1,6 +1,6 @@
-import { Gift, PartyPopper } from "lucide-react";
 import { useEffect } from "react";
 import { Link, useFetcher } from "react-router";
+import { Gift, PartyPopper } from "~/components/icons";
 import type { ThreadDetail } from "~/api-types";
 import { PeoplePopover } from "~/components/people-popover";
 import { Button } from "~/components/ui/button";

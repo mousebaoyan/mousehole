@@ -1,7 +1,7 @@
-import { Check, ChevronDown } from "lucide-react";
 import { Fragment, useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { flushSync } from "react-dom";
 import { cn } from "cn";
+import { Check, ChevronDown } from "~/components/icons";
 import { matching, menuItem, SEARCH_FROM, SearchBox, useDismiss } from "~/components/disclosure";
 
 export type SelectOption = { value: string; label: string; group?: string };

@@ -1,3 +1,5 @@
+import { Link, NavLink } from "react-router";
+import { cn } from "cn";
 import {
   Award,
   Bookmark,
@@ -7,9 +9,7 @@ import {
   Home,
   Lock,
   MessagesSquare,
-} from "lucide-react";
-import { Link, NavLink } from "react-router";
-import { cn } from "cn";
+} from "~/components/icons";
 import { useDrafts } from "~/components/composer";
 import { useBoards, useMe, useTags } from "~/forum";
 import { STAFF } from "../../server/platform/site.ts";

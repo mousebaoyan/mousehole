@@ -1,6 +1,6 @@
-import { Bell, LogOut, Menu, Search, Settings, User, Wrench, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Form, Link, useLocation, useParams } from "react-router";
+import { Bell, LogOut, Menu, Search, Settings, User, Wrench, X } from "~/components/icons";
 import { NewThreadButton } from "~/components/composer";
 import { Drawer, Dropdown, menuItem } from "~/components/disclosure";
 import { ForumNav } from "~/components/forum-nav";

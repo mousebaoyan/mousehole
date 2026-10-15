@@ -1,7 +1,7 @@
-import { Check, Flag, Rocket, Trash2, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useFetcher, useNavigate } from "react-router";
 import { cn } from "cn";
+import { Check, Flag, Rocket, Trash2, X } from "~/components/icons";
 import type { PostItem, Writer } from "~/api-types";
 import { Dropdown, menuItem, useDismiss } from "~/components/disclosure";
 import { EmojiButton } from "~/components/emoji-button";
@@ -176,7 +176,8 @@ export function BoostButton({
   const navigate = useNavigate();
   useDismiss(open, () => setOpen(false), root);
   const body = text.trim();
-  const length = [...graphemes.segment(body)].length;
+  // Counted only while it's being written: every floor has this button.
+  const length = open ? [...graphemes.segment(body)].length : 0;
 
   useEffect(() => {
     if (open) input.current?.focus();

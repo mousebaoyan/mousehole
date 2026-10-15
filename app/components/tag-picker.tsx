@@ -1,5 +1,5 @@
-import { Plus, X } from "lucide-react";
 import { useRef, useState } from "react";
+import { Plus, X } from "~/components/icons";
 import { SearchBox, useDismiss } from "~/components/disclosure";
 import { Button } from "~/components/ui/button";
 import { useTags } from "~/forum";

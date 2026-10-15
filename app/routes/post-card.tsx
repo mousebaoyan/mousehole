@@ -1,3 +1,6 @@
+import { useEffect, useRef, useState, type ReactNode, type Ref } from "react";
+import { useFetcher, useNavigate } from "react-router";
+import { cn } from "cn";
 import {
   ArrowDown,
   ArrowUp,
@@ -12,10 +15,7 @@ import {
   Reply,
   Trash2,
   X,
-} from "lucide-react";
-import { useEffect, useRef, useState, type ReactNode, type Ref } from "react";
-import { useFetcher, useNavigate } from "react-router";
-import { cn } from "cn";
+} from "~/components/icons";
 import { CopyLinkButton } from "~/components/copy-link-button";
 import { Dropdown, menuItem } from "~/components/disclosure";
 import { PROSE } from "~/components/prose";
@@ -215,9 +215,9 @@ export function PostCard({
                 <Pencil className="size-3.5" />
               </button>
             ) : (
-              <Pencil className="size-3.5" aria-label="已编辑">
-                <title>{`编辑于 ${stamp(post.edited_at, now)}`}</title>
-              </Pencil>
+              <span title={`编辑于 ${stamp(post.edited_at, now)}`}>
+                <Pencil className="size-3.5" aria-label="已编辑" />
+              </span>
             ))}
           {stamp(post.created_at, now)}
           <a

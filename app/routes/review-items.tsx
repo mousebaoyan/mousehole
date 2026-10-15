@@ -1,4 +1,4 @@
-import { Check, Eye, EyeOff } from "lucide-react";
+import { Check, Eye, EyeOff } from "~/components/icons";
 import { menuItem } from "~/components/disclosure";
 import { promptDialog } from "~/components/ui/dialog";
 

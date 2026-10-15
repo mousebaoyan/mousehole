@@ -1,22 +1,8 @@
 // Times in Beijing time, against a `now` from the loader, so the server and the browser render
-// the same text.
+// the same text. Written out by hand rather than with Intl, which costs far more per call, and a
+// thread page shows dozens.
 
-const ZONE = "Asia/Shanghai";
 const OFFSET_S = 8 * 3600;
-
-const monthDay = new Intl.DateTimeFormat("zh-CN", {
-  timeZone: ZONE,
-  month: "long",
-  day: "numeric",
-});
-const fullDate = new Intl.DateTimeFormat("zh-CN", { timeZone: ZONE, dateStyle: "long" });
-const clock = new Intl.DateTimeFormat("zh-CN", {
-  timeZone: ZONE,
-  hour: "2-digit",
-  minute: "2-digit",
-  hourCycle: "h23",
-});
-const year = new Intl.DateTimeFormat("zh-CN", { timeZone: ZONE, year: "numeric" });
 
 export function unixNow() {
   return Math.floor(Date.now() / 1000);
@@ -27,11 +13,16 @@ function day(unix: number) {
   return Math.floor((unix + OFFSET_S) / 86_400);
 }
 
+// Beijing's wall clock as a UTC date, to read with getUTC*().
+function beijing(unix: number) {
+  return new Date((unix + OFFSET_S) * 1000);
+}
+
 function date(unix: number, now: number) {
-  const d = new Date(unix * 1000);
-  return year.format(d) === year.format(new Date(now * 1000))
-    ? monthDay.format(d)
-    : fullDate.format(d);
+  const d = beijing(unix);
+  const monthDay = `${d.getUTCMonth() + 1}月${d.getUTCDate()}日`;
+  const year = d.getUTCFullYear();
+  return year === beijing(now).getUTCFullYear() ? monthDay : `${year}年${monthDay}`;
 }
 
 // For lists: "12 分钟前", "昨天", "10月3日".
@@ -49,7 +40,7 @@ export function ago(unix: number, now: number) {
 // For posts: "今天 09:12", "昨天 21:40", "10月3日 08:00"; for deadlines also "明天 22:00".
 export function stamp(unix: number, now: number) {
   const days = day(now) - day(unix);
-  const time = clock.format(new Date(unix * 1000));
+  const time = beijing(unix).toISOString().slice(11, 16);
   if (days === 0) return `今天 ${time}`;
   if (days === 1) return `昨天 ${time}`;
   if (days === -1) return `明天 ${time}`;
@@ -59,7 +50,7 @@ export function stamp(unix: number, now: number) {
 // What <input type="datetime-local">, which knows no time zone, shows and takes: Beijing's wall
 // clock, to the minute.
 export function wallClock(unix: number) {
-  return new Date((unix + OFFSET_S) * 1000).toISOString().slice(0, 16);
+  return beijing(unix).toISOString().slice(0, 16);
 }
 
 export function fromWallClock(value: string) {

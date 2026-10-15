@@ -1,5 +1,5 @@
+import { Lock, Search } from "~/components/icons";
 import { pageTitle } from "~/share-meta";
-import { Lock, Search } from "lucide-react";
 import { Form, Link, useRouteLoaderData } from "react-router";
 import { apiContext } from "../../api.server.ts";
 import { Badge, readForm, Time } from "~/components/form-parts";

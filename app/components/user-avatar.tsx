@@ -1,5 +1,5 @@
-import { Rat } from "lucide-react";
 import { cn } from "cn";
+import { Rat } from "~/components/icons";
 import type { Writer } from "~/api-types";
 
 const tints = [

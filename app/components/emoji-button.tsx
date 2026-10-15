@@ -1,4 +1,3 @@
-import { Smile } from "lucide-react";
 import {
   lazy,
   Suspense,
@@ -8,6 +7,7 @@ import {
   type CSSProperties,
   type RefObject,
 } from "react";
+import { Smile } from "~/components/icons";
 import { useDismiss } from "~/components/disclosure";
 import { Button } from "~/components/ui/button";
 

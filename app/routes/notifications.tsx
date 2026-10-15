@@ -1,4 +1,3 @@
-import { pageTitle } from "~/share-meta";
 import {
   Award,
   AtSign,
@@ -12,7 +11,8 @@ import {
   ShieldCheck,
   TrendingUp,
   UserPlus,
-} from "lucide-react";
+} from "~/components/icons";
+import { pageTitle } from "~/share-meta";
 import { useRef } from "react";
 import {
   Form,

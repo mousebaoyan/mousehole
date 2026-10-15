@@ -1,5 +1,5 @@
+import { Search as SearchIcon, X } from "~/components/icons";
 import { pageTitle } from "~/share-meta";
-import { Search as SearchIcon, X } from "lucide-react";
 import { Fragment, useRef } from "react";
 import { data, Form, Link, useFetcher, useLocation } from "react-router";
 import { apiContext } from "../api.server.ts";

@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState, type PointerEvent, type ReactNode } from "react";
 import {
   ChevronLeft,
   ChevronRight,
@@ -6,8 +7,7 @@ import {
   X,
   ZoomIn,
   ZoomOut,
-} from "lucide-react";
-import { useEffect, useRef, useState, type PointerEvent, type ReactNode } from "react";
+} from "~/components/icons";
 import { Button } from "~/components/ui/button";
 
 // An image of a post: what it shows on the page, the large copy, and its description.
