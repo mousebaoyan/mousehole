@@ -715,21 +715,34 @@ export async function userBriefs(ids: number[]) {
 
 // For @ in the editor: members whose name contains the text, names starting with it first, then
 // the recently active.
+// Members by name, and by QQ number when the text is digits: the numbers starting with them,
+// that very number first. Each comes with the number, which tells namesakes apart.
 export async function searchUsers(text: string) {
   const pattern = text.replaceAll(/[\\%_]/g, "\\$&");
+  const digits = /^\d+$/.test(text);
   const rows = await db
     .selectFrom("users")
-    .select("id")
-    .where("display_name", "ilike", `%${pattern}%`)
+    .select(["id", "qq"])
+    .where((eb) =>
+      digits
+        ? eb.or([
+            eb("display_name", "ilike", `%${pattern}%`),
+            eb(sql<string>`qq::text`, "like", `${text}%`),
+          ])
+        : eb("display_name", "ilike", `%${pattern}%`),
+    )
     .where("role", "<>", "bot")
     .where("member_status", "=", "member")
+    .where("qq", "is not", null)
+    .$narrowType<{ qq: NotNull }>()
+    .orderBy(sql`qq::text = ${text}`, "desc")
     .orderBy(sql`display_name ILIKE ${`${pattern}%`}`, "desc")
     .orderBy(sql`last_seen_at DESC NULLS LAST`)
     .orderBy("id")
     .limit(8)
     .execute();
   const user = await userBriefs(rows.map((r) => r.id));
-  return rows.map((r) => user(r.id));
+  return rows.map((r) => ({ ...user(r.id), qq: r.qq }));
 }
 
 // Forum members by QQ number, for @ in messages from QQ.

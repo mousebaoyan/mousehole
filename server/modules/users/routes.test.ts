@@ -37,6 +37,14 @@ describe("找成员", () => {
     expect(await search("%_")).toEqual(["100%_夜猫"]);
   });
 
+  test("全是数字时也按 QQ 号找，正好是这个号的在前", async () => {
+    const qq = nextQq();
+    await db.insertInto("users").values({ qq, display_name: "按号找的人" }).execute();
+    await named(`名字里有${qq}`);
+    expect(await search(String(qq))).toEqual(["按号找的人", `名字里有${qq}`]);
+    expect(await search(String(qq).slice(0, -1))).toContain("按号找的人");
+  });
+
   test("要登录", async () => {
     expect((await api.users.$get({ query: { q: "夜猫" } })).status).toBe(401);
   });

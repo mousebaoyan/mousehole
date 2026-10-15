@@ -179,13 +179,16 @@ export const usersRoutes = createRouter()
     createRoute({
       method: "get",
       path: "/users",
-      summary: "按名字找成员，最多 8 个：名字以它开头的在前，再按最近活跃；编辑器的 @ 补全用",
+      summary:
+        "按名字或 QQ 号找成员，最多 8 个：QQ 号正好是它的在前，再是名字以它开头的，再按最近活跃；编辑器的 @ 补全用",
       request: { query: z.object({ q: z.string().trim().min(1).max(20) }) },
       responses: {
         200: {
           description: "找到的成员",
           content: {
-            "application/json": { schema: z.object({ items: z.array(UserBriefSchema) }) },
+            "application/json": {
+              schema: z.object({ items: z.array(UserBriefSchema.extend({ qq: z.number() })) }),
+            },
           },
         },
         401: errorResponse("没有登录"),
