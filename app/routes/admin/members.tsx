@@ -93,6 +93,11 @@ export default function Members({ loaderData, actionData }: Route.ComponentProps
             className="w-full bg-transparent outline-none"
           />
         </label>
+        {/* Enter in the box sends the form only through a submit button: the dropdowns' value
+            inputs count as text fields, and with several of those the browser won't. */}
+        <button type="submit" className="sr-only">
+          搜索
+        </button>
         <Select
           name="status"
           defaultValue={status}
