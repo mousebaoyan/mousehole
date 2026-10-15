@@ -33,8 +33,15 @@
 // 标签。kind：topic 话题、school 院校、major 方向
 { "id": 1, "name": "夏令营", "kind": "topic", "thread_count": 42 }
 
-// 帖子和楼层里的用户只带这几项；level 是论坛等级 0–5（总体设计 §6.6）；title 是专属头衔，和名字取自同一个群（总体设计 §6.1），没有为空字符串
-{ "id": 7, "display_name": "鼠鼠", "role": "user", "level": 3, "title": "26届" }
+// 帖子和楼层里的用户只带这几项；level 是论坛等级 0–5（总体设计 §6.6）；title 是头衔，没有为空字符串：
+// 本人选了徽章当头衔时是徽章名，title_tier 是它的档（gold、silver），否则是 QQ 的专属头衔（和名字取自同一个群，总体设计 §6.1），title_tier 为 null
+{ "id": 7, "display_name": "鼠鼠", "role": "user", "level": 3, "title": "指导顾问", "title_tier": "silver" }
+
+// 徽章（总体设计 §8.8）。tier：bronze 铜、silver 银、gold 金；grouping：start 入门、likes 获赞、answers 回答、
+// persistence 坚持、limited 绝版；multiple 能不能得多次；manual 是不是管理员手动授予的活动徽章；
+// granted_count 有几个人得到；列表和详情里登录用户还带 granted（自己得到了几次，没有为 0）
+{ "id": 12, "name": "指导顾问", "description": "回复被采纳 10 次", "tier": "silver", "grouping": "answers",
+  "multiple": false, "manual": false, "granted_count": 8, "granted": 1 }
 
 // 匿名写的人（总体设计 §8.12）：帖子、楼层、短评、通知和事件里的 author、user、actor 都可能是这个样子，
 // number 是这个人在这个帖子里的编号，楼主匿名时是 1 号；没有 id、头像和 QQ 号
@@ -86,7 +93,8 @@
 // watching 关注的帖子有新楼层，following 关注的人发了新帖，solved 我的回答被采纳，
 // moderation 版主审核或隐藏了我的内容（data 带 action：approve 通过、reject 不通过、hide 隐藏、unhide 恢复，以及 reason），
 // level 我升级了（data 带 level，没有 actor、thread、post，都为 null），
-// lottery 抽奖开奖或取消了（data 带 result：won 中奖、lost 没中、drawn 自己发起的开奖了、cancelled 取消了；中奖的还带 prize，奖项名；没有 actor、post）。
+// lottery 抽奖开奖或取消了（data 带 result：won 中奖、lost 没中、drawn 自己发起的开奖了、cancelled 取消了；中奖的还带 prize，奖项名；没有 actor、post），
+// badge 得到了徽章（data 带 badge：id、name、tier；能得多次的带上那一层的 thread、post，其余没有 actor、thread、post）。
 // like、boost 按楼层，thread_reply、watching 按帖子，
 // 未读期间合并成一条：actor 是最近的人，count 是次数。post 是新的那一层，点赞和短评是被赞的那一层；
 // excerpt 是它正文的前 80 个字，待审核和已隐藏的只给作者看，别人为空字符串；data 里点赞带最近的 emoji，短评带最近的 body
@@ -191,8 +199,8 @@ token 由站长在后台创建，只显示一次。每个 token 绑定一个 bot
 | POST | `/auth/email/verify` | `{ qq, code }`：校验验证码，建立会话，返回 204；不对、过期或输错 5 次作废都返回 `400 email_code_invalid`，`message` 说明是哪种 | 访客 |
 | POST | `/auth/logout` | 退出当前会话；没有登录时也返回成功 | 访客 |
 | GET | `/me` | 当前用户；bot 代表某人时返回这个人。站长账号的 `qq` 为 `null` | 已登录 / `read` |
-| GET | `/me/settings` | 自己的设置：`custom_name`（自己起的名字，`null` 是跟着 QQ）、`custom_bio`（自己写的个性签名，`null` 是跟着 QQ）、`qq_bio`（QQ 的个性签名）、`avatar_custom`（头像是不是自己上传的）、`allow_proxy`、`hide_from_guests`（我的内容不给访客看）、`relations_public`（公开我的赞和关系）、`notify_email`（邮件提醒的总开关）、`notify_prefs`（每类通知的 `{ site, email }` 开关，自己没改过的是站长设的默认值；站长设为不发送的类型 `email` 是 `null`） | 已登录 / `read` |
-| PATCH | `/me` | 修改设置，只改带了的字段，返回改好的设置：`custom_name`（最多 24 个字，`null` 改回跟着 QQ，显示名随即重算）、`custom_bio`（最多 60 个字，`null` 改回跟着 QQ）、`allow_proxy`、`hide_from_guests`、`relations_public`、`notify_email`、`notify_prefs`（每类的 `site`、`email` 都可以只带一个，只改带了的开关；没改过的开关跟着站长设的默认值） | 成员 / `act` |
+| GET | `/me/settings` | 自己的设置：`custom_name`（自己起的名字，`null` 是跟着 QQ）、`custom_bio`（自己写的个性签名，`null` 是跟着 QQ）、`qq_bio`（QQ 的个性签名）、`avatar_custom`（头像是不是自己上传的）、`allow_proxy`、`hide_from_guests`（我的内容不给访客看）、`relations_public`（公开我的赞和关系）、`title_badge_id`（当头衔的徽章，`null` 是 QQ 的专属头衔）、`notify_email`（邮件提醒的总开关）、`notify_prefs`（每类通知的 `{ site, email }` 开关，`weekly` 每周影响力只有 `email`，自己没改过的是站长设的默认值；站长设为不发送的类型 `email` 是 `null`） | 已登录 / `read` |
+| PATCH | `/me` | 修改设置，只改带了的字段，返回改好的设置：`custom_name`（最多 24 个字，`null` 改回跟着 QQ，显示名随即重算）、`custom_bio`（最多 60 个字，`null` 改回跟着 QQ）、`allow_proxy`、`hide_from_guests`、`relations_public`、`title_badge_id`（只能是自己得到的金徽章或银徽章，否则 `400 badge_not_title`；`null` 改回 QQ 的专属头衔）、`notify_email`、`notify_prefs`（每类的 `site`、`email` 都可以只带一个，只改带了的开关；没改过的开关跟着站长设的默认值） | 成员 / `act` |
 | PUT | `/me/avatar` | 上传头像：multipart 的 `file` 字段，最大 20MB，格式同图片上传，裁成 96px 的方图；之后不再跟着 QQ 刷新。返回 `{ avatar_url }` | 没被禁言的成员 / `act` |
 | DELETE | `/me/avatar` | 头像改回跟着 QQ，立刻拉一次 QQ 头像，返回 `{ avatar_url }`；拉取失败返回 `502 fetch_failed`，头像不变 | 成员 / `act` |
 | GET | `/me/export` | 导出自己的全部内容，作为附件 `mousehole-{id}.json` 下载：`user`（`id`、`qq`、`display_name`、`bio`）、`posts`（发过的主楼和回复，Markdown 原文，含待审核和已隐藏的，不含删掉的；`floor` 为 1 的就是自己发的帖子）、`boosts`、`bookmarks`；每小时最多 3 次 | 已登录，只能在网页上 |
@@ -212,10 +220,13 @@ token 由站长在后台创建，只显示一次。每个 token 绑定一个 bot
 | 方法 | 路径 | 说明 | 权限 |
 | --- | --- | --- | --- |
 | GET | `/users` | `q`：按名字找成员，全是数字时也按 QQ 号找（QQ 号以它开头），最多 8 个：QQ 号正好是它的在前，再是名字以它开头的，再按最近活跃；不含 bot、冻结的账号和站长。每项比用户简要信息多一个 `qq`。编辑器的 @ 补全用 | 已登录 / `read` |
-| GET | `/users/{user}` | 资料卡，`members_only` 为 `false`：显示名、头像、角色、专属头衔、个性签名，以及统计（帖子数、回复数、获赞数、认可数、访问天数、阅读时间、读过的帖子和回复数）；QQ 号，群名片、入群时间和最近发言时间（和名字取自同一个群），是否冻结、是否激活、是否公开赞和关系（`relations_public`）只给成员和 bot。统计里还有关注数、粉丝数和认可数；登录时带 `followed`、`endorsed`，表示自己是否关注、认可了 TA。本人设置了不给访客看时，访客只拿到 `id`、显示名、头像、角色和等级，`members_only` 为 `true` | 访客 |
+| GET | `/users/{user}` | 资料卡，`members_only` 为 `false`：显示名、头像、角色、专属头衔、个性签名，以及统计（帖子数、回复数、获赞数、认可数、访问天数、阅读时间、读过的帖子和回复数、帮到的人 `people_reached`、被读次数 `reads`；本人另有最近 7 天的 `reads_week`），`badges`（最多 3 枚，金的在前，同档的最近得到的在前）；QQ 号，群名片、入群时间和最近发言时间（和名字取自同一个群），是否冻结、是否激活、是否公开赞和关系（`relations_public`）只给成员和 bot。统计里还有关注数、粉丝数和认可数；登录时带 `followed`、`endorsed`，表示自己是否关注、认可了 TA。本人设置了不给访客看时，访客只拿到 `id`、显示名、头像、角色和等级，`members_only` 为 `true` | 访客 |
 | GET | `/users/{user}/threads` | 发过的帖子，最新的在前，每页 30 个，不含匿名内容 | 访客 |
 | GET | `/users/{user}/posts` | 发过的回复（不含主楼），最新的在前，每页 30 个，`cursor` 是上一页最后一条的 ID；`solved=true` 只要被采纳的回答。每条带所在的帖子和正文前 140 个字的纯文本，不含匿名内容 | 访客 |
 | GET | `/users/{user}/likes` | 留过表情回应的楼层，最新的在前，每页 30 个，`cursor` 是已经列出的条数；每条同上，另带 `emoji` 和 `liked_at`。TA 关掉了公开时只给本人，别人得到 `403 relations_hidden`（总体设计 §9） | 成员 / `read` |
+| GET | `/users/{user}/badges` | 得到的全部徽章，按组和档排：每项是徽章，加 `count`（得到几次）、`granted_at`（最近一次）；能得多次的带 `posts`（最近 10 次的 `{ thread_id, title, post_id, floor, granted_at }`） | 访客 |
+| GET | `/badges` | 全部徽章，按组排；活动徽章只列有人得到的 | 访客 |
+| GET | `/badges/{id}` | 一枚徽章和得到的人，最近的在前，每页 50 个，`cursor` 是已经列出的人数：`{ badge, items: [{ user, granted_at }], next }`；设了不给访客看的人，访客看不到 | 访客 |
 | GET | `/users/{user}/summary` | 概要：`top_posts` 获赞最多的 5 层（含主楼）；`likers` 最常赞 TA 的人、`liked` TA 最常赞的人，各 10 个，每项是 `{ user, count }`。匿名楼层不算，关掉公开的人不出现；两份名单只给成员，TA 关掉公开时只给本人，其余为 `null` | 访客 |
 | GET | `/users/{user}/relations` | 名单：`list` 为 `following`（TA 关注的人）、`followers`（粉丝）、`endorsing`（TA 认可的人）或 `endorsers`（认可 TA 的人），最新的在前，每页 50 个，`cursor` 是已经列出的人数；每项是 `{ user, created_at }`，关掉公开的人不在里面。可见范围同 `likes` | 成员 / `read` |
 | PUT | `/users/{user}/follow` | 关注：TA 发新帖时通知我；不能关注自己（`400`） | 成员 / `act` |
@@ -326,6 +337,10 @@ token 由站长在后台创建，只显示一次。每个 token 绑定一个 bot
 | GET | `/admin/overview` | 概览：`members`（`total`、`activated`、`frozen`，不算 bot 和站长）、`content`（`threads_today`、`posts_today`：今天公开的帖子和回复，按北京时间；`pending`：待审核；`reports`：待处理的举报）、`events`（`streams`：现在连着的事件流；`polled_at`：最近一次按游标拉取的时间，进程重启后为 `null`）、`storage`（`database`、`uploads`：数据库和上传图片占用的字节数）；群的同步状态见 `/admin/groups` | 管理员 / `admin` |
 | GET | `/admin/settings` | 站点设置，按分组返回：`site`（`banner` 公告横幅，`qq_public` 访客能否看到 QQ 号）、`login`（三种登录方式的开关和口令提示）、`smtp`（`accounts`：发信邮箱，按使用的顺序，每个是 `host`、`port`、`secure`、`user`，密码只返回 `password_set`）、`bot`（`require_operator`）、`notify`（`email`：每类通知的邮件规则，`on` 默认发送、`off` 默认不发、`never` 不发送，成员也不能打开） | 站长，只能在网页上操作 |
 | PATCH | `/admin/settings` | 修改站点设置，立即生效：只改带了的分组和字段。`smtp.accounts` 整组替换，最多 10 个；某个邮箱不带 `password` 就沿用这个账号原来的密码；`notify.email` 只改带了的类型。改了的字段连同改前改后的值记进操作日志，密码只记哪个邮箱的改了 | 站长，只能在网页上操作 |
+| POST | `/admin/badges` | 新建活动徽章：`{ name, description, tier, multiple }`；重名返回 `409 badge_exists` | 管理员 / `admin` |
+| PATCH | `/admin/badges/{id}` | 改活动徽章的名字、说明；自动授予的徽章不能改（`403`） | 管理员 / `admin` |
+| POST | `/admin/badges/{id}/grants` | 手动授予活动徽章：`{ user, reason }`；不能多次得到的已经有了返回 `409 badge_granted`。本人收到通知；记操作日志 | 管理员 / `admin` |
+| DELETE | `/admin/badges/{id}/grants/{user}` | 撤销手动授予的徽章，能得多次的撤销最近的一次：可附 `{ reason }`；记操作日志 | 管理员 / `admin` |
 | POST | `/admin/settings/test-email` | `{ qq }`：每个发信邮箱各发一封测试邮件，返回 `results`，每项是 `user` 和失败的原因 `error`（成功为 `null`）；发出去的邮箱不再歇着 | 站长，只能在网页上操作 |
 | GET | `/admin/groups` | 已关联的群和同步状态：最近一次增量、全量、群资料的时间，被拦下的全量 | 管理员 / `admin` |
 | POST | `/admin/groups` | 关联群：`{ group_id }`；第一个关联的群自动成为主群；已关联返回 `409 group_exists` | 站长，只能在网页上操作 |
@@ -351,6 +366,7 @@ token 由站长在后台创建，只显示一次。每个 token 绑定一个 bot
 | PATCH | `/bot/groups/{group_id}/members` | 增量同步成员，见第 4 节 | `sync` |
 | PUT | `/bot/users/{user}/bio` | 推送 QQ 的个性签名：`{ bio }`，超过 60 个字的截掉；本人没写过自己的签名时显示它。插件在收到 `member.activated` 时查询后推送 | `sync` |
 | GET | `/bot/messages/{chat_type}/{chat_id}/{message_id}` | 某条 QQ 消息收录在哪一层：`{ thread_id, post_id }`；没有收录时返回 `404 message_not_linked` | `read` |
+| GET | `/bot/stats/weekly` | 一周的统计，给插件排周榜图片（总体设计 §8.15）：`until`（Unix 秒，统计 `[until - 7 天, until)`，默认现在）。返回 `overview`（`threads`、`posts`（含收录的）、`archived`（收录了几层）、`active`（发过内容的人数）、`activated`（第一次登录的人数）、`badges`（发出的徽章数））；`threads`：`most_liked`、`most_replied`、`most_read`，各前 5，每项 `{ thread: { id, title, url }, board, author, count }`；`people`：`most_liked`、`most_accepted`、`most_replies`，各前 5，每项 `{ user, count }`；`gold_badges`：`[{ user, badge }]`。用户对象是 `{ id, display_name, qq, avatar_url }`，匿名的楼主是匿名用户对象。只算阅读门槛为访客或成员的版块，人的榜单不算匿名的内容，bot 和站长不上榜 | `read` |
 | GET | `/bot/events` | SSE 事件流，见第 5 节 | `events` |
 | GET | `/bot/events/batch` | 按游标拉取事件：`after`、`limit`（1–500，默认 100）、`types`，返回 `{ items: [{ id, type, data, created_at }], next_after }`，`next_after` 是下次的 `after` | `events` |
 
@@ -451,6 +467,7 @@ data: {"post":{…},"thread":{…},"author":{…},"url":"https://bbs.mousebaoyan
 | `content.pending` | 先审后发的版块有新内容等待审核；帖子是它的主楼 | `thread`（`id`、`title`）、`board`、`post`（`id`、`floor`、`body`）、`author`、`url` |
 | `member.activated` | 成员第一次登录；插件收到后查这个人的 QQ 个性签名，推给 `/bot/users/{user}/bio` | `user` |
 | `lottery.drawn` | 抽奖开奖 | `thread`（`id`、`title`）、`author`、`prizes`（每项 `name` 和 `winners`，按抽中的先后）、`entry_count`、`url` |
+| `badge.granted` | 有人得到徽章；上线时补齐的那批没有 | `user`、`badge`（`id`、`name`、`description`、`tier`）、`post`（能得多次的是哪一层：`id`、`floor`、`thread_id`，其余为 `null`）、`url`（这枚徽章的页面） |
 | `report.created` | 有新举报 | `report`（`id`、`reason`、`held`：这一层是否因 L4 的举报先隐藏了）、`post`（`id`、`floor`、`thread_id`）、`boost`（举报的是短评时：`id`、`body`、`author`，否则为 `null`）、`reporter`、`url` |
 
 - 事件里的用户对象是 `{ id, display_name, qq }`，插件发开奖结果时用它 @ 本人。匿名写的人是 `{ anonymous: true, number, display_name }`，没有 `id` 和 `qq`；本人编辑、删除自己的匿名内容时，`editor`、`by` 也是这样。
