@@ -771,7 +771,8 @@ export async function countLikes(trx: Transaction<DB>, userId: number, likes: nu
 // pictures people uploaded instead. See design §6.1.
 
 export const AVATARS_DIR = "data/avatars";
-// Each copy is fetched again once it is this old. The job runs hourly, so new members don't wait.
+// Each copy is fetched again once it is this old. The job runs every minute, so new members get
+// theirs within one.
 const AVATAR_TTL_MS = 23 * 3600_000;
 const MAX_AVATAR = 1024 * 1024;
 
