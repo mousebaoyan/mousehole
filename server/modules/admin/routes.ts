@@ -20,9 +20,6 @@ import { databaseBytes, updateSettings } from "./service.ts";
 const SiteSettings = z.object({
   banner: z.string().trim().max(200).openapi({ description: "公告横幅，空字符串不显示" }),
   qq_public: z.boolean().openapi({ description: "访客也能看到 QQ 号" }),
-  review_mode: z
-    .enum(["after", "before"])
-    .openapi({ description: "新建版块时不指定审核方式就用这个" }),
 });
 
 const LoginSettings = z.object({
