@@ -18,8 +18,8 @@ export function meta() {
 export async function loader({ context }: Route.LoaderArgs) {
   const res = await context.get(apiContext).admin.settings.$get();
   if (!res.ok) throw new Error("Admin settings failed");
-  const { smtp, notify } = await res.json();
-  return { accounts: smtp.accounts, policies: notify.email };
+  const { smtp, notify, weekly } = await res.json();
+  return { accounts: smtp.accounts, policies: notify.email, weekly };
 }
 
 const POLICIES = [
@@ -52,6 +52,20 @@ export async function action({ request, context }: Route.ActionArgs) {
     const res = await api.admin.settings.$patch({ json: { notify: { email } } });
     if (!res.ok) return { ok: false, message: (await res.json()).error.message, notify: true };
     return { ok: true, message: "已保存", notify: true };
+  }
+  if (field("intent") === "weekly") {
+    const res = await api.admin.settings.$patch({
+      json: {
+        weekly: {
+          enabled: field("enabled") === "on",
+          min_reads: Number(field("min_reads")),
+          min_likes: Number(field("min_likes")),
+          top_likes: Number(field("top_likes")),
+        },
+      },
+    });
+    if (!res.ok) return { ok: false, message: (await res.json()).error.message, weekly: true };
+    return { ok: true, message: "已保存", weekly: true };
   }
   const accounts = Array.from({ length: Number(field("count")) }, (_, i) => {
     const password = field(`password.${i}`);
@@ -89,7 +103,13 @@ export default function Email({ loaderData, actionData }: Route.ComponentProps) 
         通知邮件和登录验证码都从这里的邮箱发出。建议使用 QQ 邮箱，发往 qq.com
         的邮件不易被判为垃圾邮件
       </p>
-      <Result result={actionData && !("notify" in actionData) ? actionData : undefined} />
+      <Result
+        result={
+          actionData && !("notify" in actionData) && !("weekly" in actionData)
+            ? actionData
+            : undefined
+        }
+      />
 
       <Mailboxes key={shown.at} accounts={shown.accounts} busy={busy} />
 
@@ -113,6 +133,48 @@ export default function Email({ loaderData, actionData }: Route.ComponentProps) 
               </li>
             ))}
           </ul>
+        </Section>
+      </SettingsForm>
+
+      <SettingsForm result={actionData && "weekly" in actionData ? actionData : undefined}>
+        <input type="hidden" name="intent" value="weekly" />
+        <Section
+          title="每周来信"
+          description="每周一 9 点起，给上周被读和获赞都达到门槛、或有回答被采纳的成员发一封信，告诉他们自己的分享帮到了多少人。成员可以在设置中关闭"
+        >
+          <Check name="enabled" label="发送每周来信" checked={loaderData.weekly.enabled} />
+          <div className="mt-3 flex flex-wrap gap-4">
+            <Field label="被读至少（次）">
+              <Input
+                name="min_reads"
+                type="number"
+                min={0}
+                defaultValue={loaderData.weekly.min_reads}
+                required
+                className="w-28"
+              />
+            </Field>
+            <Field label="同时获赞至少（次）">
+              <Input
+                name="min_likes"
+                type="number"
+                min={0}
+                defaultValue={loaderData.weekly.min_likes}
+                required
+                className="w-28"
+              />
+            </Field>
+            <Field label="写进信里的楼层获赞至少（次）">
+              <Input
+                name="top_likes"
+                type="number"
+                min={1}
+                defaultValue={loaderData.weekly.top_likes}
+                required
+                className="w-28"
+              />
+            </Field>
+          </div>
         </Section>
       </SettingsForm>
 

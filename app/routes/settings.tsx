@@ -67,6 +67,7 @@ export async function action({ request, context }: Route.ActionArgs) {
       relations_public: on("relations_public"),
       title_badge_id: field("title_badge_id") ? Number(field("title_badge_id")) : null,
       notify_email: on("notify_email"),
+      weekly_email: on("weekly_email"),
       notify_prefs: Object.fromEntries(
         NOTIFICATION_TYPES.map(({ type }) => {
           const was = notify_prefs[type];
@@ -185,6 +186,12 @@ export default function Settings({ loaderData, actionData }: Route.ComponentProp
               label="接收邮件提醒"
               hint="关闭后所有通知都不发送邮件，下方各类的设置保留不变"
               checked={settings.notify_email}
+            />
+            <Check
+              name="weekly_email"
+              label="每周来信"
+              hint="每周一告诉我上周我的分享被读了多少次、获得了多少赞；上周收获较少时不发"
+              checked={settings.weekly_email}
             />
             <table className="mt-3 w-full text-sm">
               <thead className="text-meta text-muted-foreground">

@@ -45,6 +45,20 @@ const EmailPolicy = z.enum(["on", "off", "never"]).openapi({
   description: "on：默认发邮件；off：默认不发，成员可以自己打开；never：不发，成员也不能打开",
 });
 
+const WeeklySettings = z
+  .object({
+    enabled: z.boolean().openapi({ description: "是否发每周影响力邮件" }),
+    min_reads: z.number().int().min(0).max(10000).openapi({ description: "一周被读至少几次" }),
+    min_likes: z.number().int().min(0).max(10000).openapi({ description: "同时获赞至少几次" }),
+    top_likes: z
+      .number()
+      .int()
+      .min(1)
+      .max(10000)
+      .openapi({ description: "一层一周获赞至少几次才写进邮件" }),
+  })
+  .openapi({ description: "每周影响力邮件：被读和获赞都达到门槛，或者有回答被采纳，才发" });
+
 const SettingsSchema = z
   .object({
     site: SiteSettings,
@@ -60,6 +74,7 @@ const SettingsSchema = z
         .record(z.string(), EmailPolicy)
         .openapi({ description: "每类通知是否发邮件；成员没改过的按这里的默认" }),
     }),
+    weekly: WeeklySettings,
   })
   .openapi("Settings");
 
@@ -159,13 +174,13 @@ export const adminRoutes = createRouter()
     }),
     async (c) => {
       authorizeOwner(c);
-      const { site, login, smtp, bot } = await getSettings();
+      const { site, login, smtp, bot, weekly } = await getSettings();
       const accounts = smtp.accounts.map(({ password, ...rest }) => ({
         ...rest,
         password_set: password !== "",
       }));
       return c.json(
-        { site, login, smtp: { accounts }, bot, notify: { email: await emailPolicies() } },
+        { site, login, smtp: { accounts }, bot, notify: { email: await emailPolicies() }, weekly },
         200,
       );
     },
@@ -195,6 +210,7 @@ export const adminRoutes = createRouter()
                 notify: z
                   .object({ email: z.partialRecord(z.enum(NOTIFICATION_TYPES), EmailPolicy) })
                   .optional(),
+                weekly: WeeklySettings.partial().optional(),
               }),
             },
           },

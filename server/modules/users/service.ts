@@ -261,12 +261,75 @@ export async function countReading(
     .execute();
 }
 
-// Levels look back 30 days; a few more are kept so a day is never cut short.
+// Levels look back 30 days and the weekly mail one week; a few more are kept so a day is never
+// cut short.
 export async function clearOldDays() {
-  await db
-    .deleteFrom("user_days")
-    .where("day", "<", sql<Date>`(now() AT TIME ZONE 'Asia/Shanghai')::date - 35`)
+  const before = sql<Date>`(now() AT TIME ZONE 'Asia/Shanghai')::date - 35`;
+  await db.deleteFrom("user_days").where("day", "<", before).execute();
+  await db.deleteFrom("user_reads").where("day", "<", before).execute();
+}
+
+// ---- Impact (design §8.15)
+
+// Floors someone just read for the first time count as read for their authors: public ones, not
+// anonymous, not the reader's own. `floors` is an int4multirange.
+export async function countReadsReceived(
+  trx: Transaction<DB>,
+  readerId: number,
+  threadId: number,
+  floors: string,
+) {
+  const authors = await trx
+    .selectFrom("posts")
+    .select(["author_id", sql<number>`count(*)::integer`.as("reads")])
+    .where("thread_id", "=", threadId)
+    .where(sql<boolean>`${floors}::int4multirange @> floor`)
+    .where("status", "=", "visible")
+    .where("deleted_at", "is", null)
+    .where("anonymous", "=", false)
+    .where("author_id", "<>", readerId)
+    .groupBy("author_id")
     .execute();
+  if (authors.length === 0) return;
+  await trx
+    .insertInto("user_reads")
+    .values(
+      authors.map((a) => ({
+        user_id: a.author_id,
+        day: sql<Date>`(now() AT TIME ZONE 'Asia/Shanghai')::date`,
+        reads: a.reads,
+      })),
+    )
+    .onConflict((oc) =>
+      oc.columns(["user_id", "day"]).doUpdateSet({
+        reads: sql<number>`user_reads.reads + excluded.reads`,
+      }),
+    )
+    .execute();
+  for (const a of authors) {
+    await trx
+      .updateTable("users")
+      .set((eb) => ({ reads_received: eb("reads_received", "+", a.reads) }))
+      .where("id", "=", a.author_id)
+      .execute();
+  }
+}
+
+// Hourly: how many people have read the floors of those read today, each reader once.
+export async function recountPeopleReached() {
+  await sql`
+    UPDATE users SET people_reached = reached.people
+    FROM (
+      SELECT posts.author_id, count(DISTINCT thread_users.user_id)::integer AS people
+      FROM posts
+      JOIN thread_users ON thread_users.thread_id = posts.thread_id
+        AND thread_users.read_floors @> posts.floor AND thread_users.user_id <> posts.author_id
+      WHERE posts.author_id IN (SELECT user_id FROM user_reads
+          WHERE day = (now() AT TIME ZONE 'Asia/Shanghai')::date)
+        AND posts.status = 'visible' AND posts.deleted_at IS NULL AND NOT posts.anonymous
+      GROUP BY posts.author_id
+    ) reached
+    WHERE users.id = reached.author_id AND users.people_reached <> reached.people`.execute(db);
 }
 
 // Posting is being active that day, also when the post comes from the groups or a bot.
@@ -373,6 +436,11 @@ export async function getUser(ref: UserRef, viewerId: number | null) {
       "users.days_visited",
       "users.read_seconds",
       "users.posts_read",
+      "users.reads_received",
+      "users.people_reached",
+      sql<number>`(SELECT coalesce(sum(reads), 0)::integer FROM user_reads
+        WHERE user_reads.user_id = users.id
+          AND day > (now() AT TIME ZONE 'Asia/Shanghai')::date - 7)`.as("reads_week"),
       sql<number>`(SELECT count(*)::integer FROM thread_users
         WHERE thread_users.user_id = users.id AND last_read_at IS NOT NULL)`.as("threads_read"),
       sql<number>`(SELECT count(*)::integer FROM user_follows
@@ -426,6 +494,7 @@ export async function getSettings(userId: number) {
       "hide_from_guests",
       "relations_public",
       "title_badge_id",
+      "weekly_email",
       sql<
         { id: number; name: string; tier: string }[]
       >`(SELECT coalesce(json_agg(b ORDER BY b.tier DESC, b.name), '[]')
@@ -451,6 +520,7 @@ export async function updateSettings(
     hide_from_guests?: boolean;
     relations_public?: boolean;
     title_badge_id?: number | null;
+    weekly_email?: boolean;
     notify_email?: boolean;
     notify_prefs?: Record<string, { site?: boolean; email?: boolean }>;
   },

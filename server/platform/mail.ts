@@ -15,7 +15,10 @@ const FIRST_REST_MS = 10 * 60_000;
 const MAX_REST_MS = 8 * 60 * 60_000;
 const resting = new Map<string, { until: number; failures: number }>();
 
-function send(account: SmtpAccount, to: string, subject: string, text: string) {
+// A mail: plain text, and for letters an HTML version mail apps show instead.
+type Mail = { to: string; subject: string; text: string; html?: string | null };
+
+function send(account: SmtpAccount, { to, subject, text, html }: Mail) {
   const transport = createTransport({
     host: account.host,
     port: account.port,
@@ -29,6 +32,7 @@ function send(account: SmtpAccount, to: string, subject: string, text: string) {
     to,
     subject,
     text,
+    ...(html && { html }),
   });
 }
 
@@ -45,7 +49,7 @@ function refused(error: unknown) {
 
 // "refused" when every mailbox tried turned the address down: sending again won't help.
 // "resting" when no mailbox could try.
-async function deliver(to: string, subject: string, text: string) {
+async function deliver(mail: Mail) {
   const { smtp } = await getSettings();
   let tried = 0;
   let refusals = 0;
@@ -54,7 +58,7 @@ async function deliver(to: string, subject: string, text: string) {
     if (rest && rest.until > Date.now()) continue;
     tried += 1;
     try {
-      await send(account, to, subject, text);
+      await send(account, mail);
       resting.delete(account.user);
       return "sent";
     } catch (error) {
@@ -75,7 +79,7 @@ export async function sendMail(to: string, subject: string, text: string) {
   if ((await getSettings()).smtp.accounts.length === 0) {
     throw new AppError(503, "email_not_configured", "尚未配置发信邮箱");
   }
-  if ((await deliver(to, subject, text)) !== "sent") {
+  if ((await deliver({ to, subject, text })) !== "sent") {
     throw new AppError(502, "email_failed", "邮件发送失败，请稍后重试");
   }
 }
@@ -89,7 +93,11 @@ export async function testMailboxes(to: string) {
   const results = [];
   for (const account of smtp.accounts) {
     try {
-      await send(account, to, `${SITE_NAME}测试邮件`, `${account.user} 可以正常发信。`);
+      await send(account, {
+        to,
+        subject: `${SITE_NAME}测试邮件`,
+        text: `${account.user} 可以正常发信。`,
+      });
       resting.delete(account.user);
       results.push({ user: account.user, error: null });
     } catch (error) {
@@ -109,7 +117,7 @@ export const MAIL_CHANNEL = "mousehole_mail";
 // The NOTIFY reaches sendQueued only once the transaction commits.
 export async function queueMail(
   trx: Transaction<DB>,
-  mails: { address: string; subject: string; body: string }[],
+  mails: { address: string; subject: string; body: string; html?: string }[],
 ) {
   if (mails.length === 0) return;
   await trx.insertInto("mail_queue").values(mails).execute();
@@ -144,13 +152,18 @@ async function drain() {
   for (;;) {
     const mail = await db
       .selectFrom("mail_queue")
-      .select(["id", "address", "subject", "body", "attempts"])
+      .select(["id", "address", "subject", "body", "html", "attempts"])
       .where("next_at", "<=", sql<Date>`now()`)
       .orderBy("id")
       .limit(1)
       .executeTakeFirst();
     if (!mail) return;
-    const outcome = await deliver(mail.address, mail.subject, mail.body);
+    const outcome = await deliver({
+      to: mail.address,
+      subject: mail.subject,
+      text: mail.body,
+      html: mail.html,
+    });
     if (outcome === "resting") return;
     const attempts = mail.attempts + 1;
     if (outcome === "failed" && attempts < MAX_ATTEMPTS) {

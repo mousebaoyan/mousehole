@@ -51,12 +51,22 @@ const NotifySchema = z.object({
   email: z.partialRecord(z.string(), z.enum(EMAIL_POLICIES)).default({}),
 });
 
+// The weekly mail on what people's floors did for others (design §8.15): who gets one, and from
+// what likes a floor of theirs is shown in it.
+const WeeklySchema = z.object({
+  enabled: z.boolean().default(true),
+  min_reads: z.number().int().default(20),
+  min_likes: z.number().int().default(3),
+  top_likes: z.number().int().default(5),
+});
+
 export type Settings = {
   site: z.infer<typeof SiteSchema>;
   login: z.infer<typeof LoginSchema>;
   smtp: z.infer<typeof SmtpSchema>;
   bot: z.infer<typeof BotSchema>;
   notify: z.infer<typeof NotifySchema>;
+  weekly: z.infer<typeof WeeklySchema>;
 };
 
 let cache: Promise<Settings> | null = null;
@@ -86,6 +96,7 @@ async function load(): Promise<Settings> {
     smtp: { accounts: smtp.accounts.map((a) => ({ ...a, password: decrypt(a.password) })) },
     bot: BotSchema.parse(stored.get("bot") ?? {}),
     notify: NotifySchema.parse(stored.get("notify") ?? {}),
+    weekly: WeeklySchema.parse(stored.get("weekly") ?? {}),
   };
 }
 
@@ -104,6 +115,7 @@ export async function saveSettings(trx: Transaction<DB>, change: Partial<Setting
   if (change.login) rows.push({ key: "login", value: JSON.stringify(change.login) });
   if (change.bot) rows.push({ key: "bot", value: JSON.stringify(change.bot) });
   if (change.notify) rows.push({ key: "notify", value: JSON.stringify(change.notify) });
+  if (change.weekly) rows.push({ key: "weekly", value: JSON.stringify(change.weekly) });
   if (change.smtp) {
     const accounts = change.smtp.accounts.map((a) => ({ ...a, password: encrypt(a.password) }));
     rows.push({ key: "smtp", value: JSON.stringify({ accounts }) });
