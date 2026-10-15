@@ -853,7 +853,9 @@ export async function createThread(
   const board = await getBoard(input.board, reach);
   const anonymous = input.anonymous ?? false;
   assertMayPost(viewer, board);
-  if ((input.poll || input.lottery) && viewer.level < KIND_LEVEL && !STAFF.includes(viewer.role)) {
+  // 保研定位 is for newcomers above all (design §8.14).
+  const leveled = input.lottery || (input.poll && input.poll.preset !== "positioning");
+  if (leveled && viewer.level < KIND_LEVEL && !STAFF.includes(viewer.role)) {
     throw levelRequired(`L${KIND_LEVEL} 起才能发${input.poll ? "投票帖" : "抽奖帖"}`);
   }
   const tagIds = await findTags(input.tags);

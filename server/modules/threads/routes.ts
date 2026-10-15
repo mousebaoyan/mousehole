@@ -319,13 +319,33 @@ function deadline(what: string) {
     .refine((t) => t <= Date.now() / 1000 + YEAR_S, `${what}不能晚于一年后`);
 }
 
-const PollInput = z
+function distinct(items: string[]) {
+  return new Set(items).size === items.length;
+}
+
+const PollRows = z
+  .array(z.string().trim().min(1).max(30))
+  .min(1)
+  .max(10)
+  .refine(distinct, "行不能重复");
+
+const PollCloses = deadline("截止时间")
+  .nullable()
+  .default(null)
+  .openapi({ description: "截止时间，Unix 秒，10 分钟以后、一年以内；null 不限" });
+
+const CustomPoll = z
   .object({
+    // A preset with the fields of a custom poll is refused, rather than taken for a custom one.
+    preset: z.undefined().optional(),
     options: z
       .array(z.string().trim().min(1).max(50))
       .min(2)
       .max(20)
-      .refine((o) => new Set(o).size === o.length, "选项不能重复"),
+      .refine(distinct, "选项不能重复"),
+    rows: PollRows.nullable().default(null).openapi({
+      description: "分行投票的各行，每行用同一组选项各投一票，只能单选；null 是普通投票",
+    }),
     multiple: z.boolean().default(false),
     max_choices: z
       .number()
@@ -338,16 +358,29 @@ const PollInput = z
     results: z.enum(["voted", "always"]).default("voted").openapi({
       description: "voted 投过票或结束后才看得到结果，always 随时公开",
     }),
-    closes_at: deadline("截止时间")
-      .nullable()
-      .default(null)
-      .openapi({ description: "截止时间，Unix 秒，10 分钟以后、一年以内；null 不限" }),
+    closes_at: PollCloses,
   })
   .refine((p) => p.max_choices === null || p.max_choices < p.options.length, {
     message: "最多可选项数应少于选项总数",
     path: ["max_choices"],
   })
-  .openapi("PollInput", { description: "选项、单选还是多选、是否匿名发出后都不能改" });
+  .refine((p) => p.rows === null || !p.multiple, {
+    message: "分行投票只能单选",
+    path: ["multiple"],
+  });
+
+// The forum sets the options and the rest (design §8.14), so anything else is a mistake.
+const PositioningPoll = z
+  .strictObject({
+    preset: z.literal("positioning"),
+    rows: PollRows.openapi({ description: "目标院校，每所一行" }),
+    closes_at: PollCloses,
+  })
+  .openapi({ description: "保研定位" });
+
+const PollInput = z
+  .union([CustomPoll, PositioningPoll])
+  .openapi("PollInput", { description: "选项、行、单选还是多选、是否匿名发出后都不能改" });
 
 const LotteryInput = z
   .object({

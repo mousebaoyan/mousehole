@@ -70,12 +70,21 @@ export const PollSchema = z
     results: z.string().openapi({
       description: "voted 投过票或结束后才看得到结果，always 随时公开",
     }),
+    rows: z
+      .array(z.string())
+      .nullable()
+      .openapi({ description: "分行投票的各行，每行各有一组选项；普通投票为 null" }),
+    preset: z
+      .string()
+      .nullable()
+      .openapi({ description: "生成它的预设：positioning 保研定位；普通投票为 null" }),
     closes_at: z.number().nullable().openapi({ description: "截止时间；null 不限" }),
     closed: z.boolean(),
     voter_count: z.number().openapi({ description: "一共多少人投了票" }),
     options: z.array(
       z.object({
         id: z.number(),
+        row: z.number().openapi({ description: "第几行，从 0 起；普通投票都是 0" }),
         label: z.string(),
         votes: z.number().nullable().openapi({ description: "票数；还看不到结果时为 null" }),
       }),

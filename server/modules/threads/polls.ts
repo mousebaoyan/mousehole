@@ -9,32 +9,58 @@ import { userBriefs } from "../users/service.ts";
 // The poll under a poll thread's opening post; see design §8.11. Written with the thread, and
 // fixed from then on but for votes and closing.
 
-export type PollSpec = {
-  options: string[];
-  multiple: boolean;
-  // For a multiple choice, at most this many; null for any.
-  max_choices: number | null;
-  anonymous: boolean;
-  results: "voted" | "always";
-  // Unix seconds; null for never.
-  closes_at: number | null;
-};
+export type PollSpec =
+  | {
+      preset?: undefined;
+      options: string[];
+      // Rows each rated with the options, one choice a row; null for a plain poll.
+      rows: string[] | null;
+      multiple: boolean;
+      // For a multiple choice, at most this many; null for any.
+      max_choices: number | null;
+      anonymous: boolean;
+      results: "voted" | "always";
+      // Unix seconds; null for never.
+      closes_at: number | null;
+    }
+  // 保研定位 (design §8.14): the poster names the schools, the forum sets the rest.
+  | { preset: "positioning"; rows: string[]; closes_at: number | null };
+
+// How hard each school would be, easiest first.
+const POSITIONING_GRADES = ["随便去", "努把力", "看运气", "有点难", "几乎不可能"];
 
 export async function createPoll(trx: Transaction<DB>, threadId: number, spec: PollSpec) {
+  const poll =
+    spec.preset === "positioning"
+      ? {
+          ...spec,
+          options: POSITIONING_GRADES,
+          multiple: false,
+          max_choices: null,
+          anonymous: true,
+          results: "voted" as const,
+        }
+      : { ...spec, preset: null };
   await trx
     .insertInto("polls")
     .values({
       thread_id: threadId,
-      multiple: spec.multiple,
-      max_choices: spec.multiple ? spec.max_choices : null,
-      anonymous: spec.anonymous,
-      results: spec.results,
-      closes_at: spec.closes_at === null ? null : new Date(spec.closes_at * 1000),
+      multiple: poll.multiple,
+      max_choices: poll.multiple ? poll.max_choices : null,
+      anonymous: poll.anonymous,
+      results: poll.results,
+      closes_at: poll.closes_at === null ? null : new Date(poll.closes_at * 1000),
+      rows: poll.rows,
+      preset: poll.preset,
     })
     .execute();
   await trx
     .insertInto("poll_options")
-    .values(spec.options.map((label, position) => ({ thread_id: threadId, position, label })))
+    .values(
+      (poll.rows ?? [""]).flatMap((_, row) =>
+        poll.options.map((label, position) => ({ thread_id: threadId, row, position, label })),
+      ),
+    )
     .execute();
 }
 
@@ -49,8 +75,9 @@ export async function getPoll(threadId: number, viewerId: number | null) {
     db.selectFrom("polls").selectAll().where("thread_id", "=", threadId).executeTakeFirstOrThrow(),
     db
       .selectFrom("poll_options")
-      .select(["id", "label", "vote_count"])
+      .select(["id", "row", "label", "vote_count"])
       .where("thread_id", "=", threadId)
+      .orderBy("row")
       .orderBy("position")
       .execute(),
     viewerId === null
@@ -69,10 +96,17 @@ export async function getPoll(threadId: number, viewerId: number | null) {
     max_choices: poll.max_choices,
     anonymous: poll.anonymous,
     results: poll.results,
+    rows: poll.rows,
+    preset: poll.preset,
     closes_at: poll.closes_at,
     closed,
     voter_count: poll.voter_count,
-    options: options.map((o) => ({ id: o.id, label: o.label, votes: shown ? o.vote_count : null })),
+    options: options.map((o) => ({
+      id: o.id,
+      row: o.row,
+      label: o.label,
+      votes: shown ? o.vote_count : null,
+    })),
     my_votes: viewerId === null ? null : mine.map((v) => v.option_id),
   };
 }
@@ -107,18 +141,23 @@ export async function vote(actor: Actor, thread: Opened, optionIds: number[]) {
       .executeTakeFirst();
     if (!poll) throw pollNotFound();
     if (isClosed(poll)) throw new AppError(403, "poll_closed", "投票已结束");
-    if (!poll.multiple && chosen.length > 1) throw invalid("此投票为单选，只能选择一项");
+    if (!poll.multiple && poll.rows === null && chosen.length > 1) {
+      throw invalid("此投票为单选，只能选择一项");
+    }
     if (poll.max_choices !== null && chosen.length > poll.max_choices) {
       throw invalid(`最多选 ${poll.max_choices} 项`);
     }
     if (chosen.length > 0) {
       const found = await trx
         .selectFrom("poll_options")
-        .select("id")
+        .select("row")
         .where("thread_id", "=", thread.id)
         .where("id", "in", chosen)
         .execute();
       if (found.length !== chosen.length) throw invalid("选项不属于此投票");
+      if (poll.rows !== null && new Set(found.map((o) => o.row)).size !== found.length) {
+        throw invalid("每行只能选择一项");
+      }
     }
 
     const removed = await trx

@@ -27,6 +27,7 @@ beforeAll(async () => {
 
 type PollInput = {
   options: string[];
+  rows?: string[] | null;
   multiple?: boolean;
   max_choices?: number | null;
   anonymous?: boolean;
@@ -34,7 +35,10 @@ type PollInput = {
   closes_at?: number | null;
 };
 
-function postPoll(poll: PollInput) {
+function postPoll(
+  poll: PollInput | { preset: "positioning"; rows: string[] },
+  who: Who = people.author,
+) {
   return api.threads.$post(
     {
       json: {
@@ -45,7 +49,7 @@ function postPoll(poll: PollInput) {
         poll,
       },
     },
-    people.author,
+    who,
   );
 }
 
@@ -159,6 +163,62 @@ describe("投票", () => {
       .where("thread_id", "=", timed.id)
       .execute();
     expect((await vote(timed.id, [timed.options[0]], people.first)).status).toBe(403);
+  });
+
+  test("分行投票：每行用同一组选项，每行最多选一项，可以只投几行，票按行统计", async () => {
+    expect(
+      (await postPoll({ options: ["能", "不能"], rows: ["浙大", "南大"], multiple: true })).status,
+    ).toBe(400);
+    expect((await postPoll({ options: ["能", "不能"], rows: ["浙大", "浙大"] })).status).toBe(400);
+    const { id, poll } = await newPoll({ options: ["能", "不能"], rows: ["浙大", "南大"] });
+    expect(poll).toMatchObject({
+      rows: ["浙大", "南大"],
+      preset: null,
+      options: [
+        { row: 0, label: "能" },
+        { row: 0, label: "不能" },
+        { row: 1, label: "能" },
+        { row: 1, label: "不能" },
+      ],
+    });
+    const [zjuYes, zjuNo, njuYes] = poll.options.map((o) => o.id);
+    expect((await vote(id, [zjuYes, zjuNo], people.first)).status).toBe(400);
+    expect(await voted(id, [zjuNo], people.first)).toMatchObject({ voter_count: 1 });
+    expect(votes(await voted(id, [zjuYes, njuYes], people.second))).toEqual([1, 1, 1, 0]);
+  });
+
+  test("保研定位：L2 以下也能发，选项和匿名由论坛定，不能自己带选项", async () => {
+    expect((await postPoll({ options: ["能", "不能"] }, people.first)).status).toBe(403);
+    // Past the client's types, as a hand-written request may be.
+    const options = await app.request("/api/v1/threads", {
+      method: "POST",
+      headers: { ...people.first.headers, "content-type": "application/json" },
+      body: JSON.stringify({
+        board: "polls",
+        title: "求定位：浙大等",
+        content: { markdown: "背景" },
+        kind: "poll",
+        poll: { preset: "positioning", rows: ["浙大"], options: ["能", "不能"] },
+      }),
+    });
+    expect(options.status).toBe(400);
+    const res = await postPoll({ preset: "positioning", rows: ["浙大", "南大"] }, people.first);
+    if (!res.ok) throw new Error(`status ${res.status}`);
+    const { poll } = await res.json();
+    expect(poll).toMatchObject({
+      preset: "positioning",
+      rows: ["浙大", "南大"],
+      multiple: false,
+      anonymous: true,
+      results: "voted",
+    });
+    expect(poll?.options.filter((o) => o.row === 1).map((o) => o.label)).toEqual([
+      "随便去",
+      "努把力",
+      "看运气",
+      "有点难",
+      "几乎不可能",
+    ]);
   });
 
   test("实名投票投过的人能看谁投了哪一项；匿名投票和访客看不到", async () => {
