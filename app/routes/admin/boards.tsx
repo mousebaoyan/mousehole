@@ -46,14 +46,11 @@ const REVIEW = [
 ] as const;
 
 export async function loader({ request, context }: Route.LoaderArgs) {
-  const api = context.get(apiContext);
-  const [boards, settings] = await Promise.all([api.boards.$get(), api.admin.settings.$get()]);
-  if (!settings.ok) throw new Error("Admin settings failed");
+  const res = await context.get(apiContext).boards.$get();
   return {
-    boards: (await boards.json()).items,
+    boards: (await res.json()).items,
     // The board being edited, if any: ?edit=slug.
     edit: new URL(request.url).searchParams.get("edit"),
-    review: (await settings.json()).site.review_mode,
   };
 }
 
@@ -87,10 +84,7 @@ export async function action({ request, context }: Route.ActionArgs) {
   return { ok: false, message: (await res.json()).error.message, created: false };
 }
 
-export default function Boards({
-  loaderData: { boards, edit, review },
-  actionData,
-}: Route.ComponentProps) {
+export default function Boards({ loaderData: { boards, edit }, actionData }: Route.ComponentProps) {
   const busy = useNavigation().state !== "idle";
   const createForm = useRef<HTMLFormElement>(null);
   useEffect(() => {
@@ -218,7 +212,7 @@ export default function Boards({
             />
           </Field>
           <div className="mt-4">
-            <BoardFields review={review} />
+            <BoardFields />
           </div>
           <Button type="submit" name="intent" value="create" className="mt-5" disabled={busy}>
             创建
@@ -231,8 +225,7 @@ export default function Boards({
 
 type Board = Route.ComponentProps["loaderData"]["boards"][number];
 
-// `review` is the site's default for a new board.
-function BoardFields({ board, review }: { board?: Board; review?: string }) {
+function BoardFields({ board }: { board?: Board }) {
   return (
     <div className="grid gap-4 sm:grid-cols-2">
       <Field label="名称">
@@ -263,7 +256,7 @@ function BoardFields({ board, review }: { board?: Board; review?: string }) {
         <Select name="default_kind" options={KIND} defaultValue={board?.default_kind} />
       </Field>
       <Field label="审核方式" hint="先审后发：除版主外，其他人发布的内容审核通过后才公开">
-        <Select name="review_mode" options={REVIEW} defaultValue={board?.review_mode ?? review} />
+        <Select name="review_mode" options={REVIEW} defaultValue={board?.review_mode} />
       </Field>
       <Field label="颜色" hint="列表和导航里的圆点">
         <input

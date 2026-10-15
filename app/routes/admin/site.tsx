@@ -1,7 +1,6 @@
 import { pageTitle } from "~/share-meta";
 import { apiContext } from "../../api.server.ts";
 import { Input } from "~/components/ui/input";
-import { Select } from "~/components/ui/select";
 import type { Route } from "./+types/site.ts";
 import { Check, Field, readForm, Section } from "~/components/form-parts";
 import { SettingsForm } from "~/components/settings-form";
@@ -26,7 +25,6 @@ export async function action({ request, context }: Route.ActionArgs) {
       site: {
         banner: field("banner"),
         qq_public: on("qq_public"),
-        review_mode: field("review_mode") === "before" ? "before" : "after",
       },
       login: {
         code: on("code"),
@@ -53,16 +51,6 @@ export default function Site({
         <div className="flex flex-col gap-4">
           <Field label="公告横幅" hint="显示在每个论坛页面的顶部，最多 200 个字；留空不显示">
             <Input name="banner" defaultValue={site.banner} maxLength={200} />
-          </Field>
-          <Field label="新版块的审核方式" hint="新建版块时的默认值，创建后每个版块可以单独修改">
-            <Select
-              name="review_mode"
-              defaultValue={site.review_mode}
-              options={[
-                { value: "after", label: "先发后审" },
-                { value: "before", label: "先审后发" },
-              ]}
-            />
           </Field>
           <Check
             name="qq_public"

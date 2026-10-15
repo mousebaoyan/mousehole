@@ -15,9 +15,14 @@ async function signIn(page: Page, args: string[]) {
   await page.waitForURL((url) => !url.pathname.startsWith("/login"));
 }
 
-test("站长建版块、设公告，管理员发帖再回复", async ({ page }) => {
+test("站长设公告，管理员建版块、发帖再回复", async ({ page }) => {
   await signIn(page, ["--owner"]);
+  await page.goto("/admin/site");
+  await page.getByLabel("公告横幅").fill("端到端测试的公告");
+  await page.getByRole("button", { name: "保存" }).click();
+  await expect(page.getByText("已保存，立即生效")).toBeVisible();
 
+  await signIn(page, ["--qq", "10001"]);
   await page.goto("/admin/boards");
   const create = page.locator("form", { has: page.getByRole("button", { name: "创建" }) });
   await create.getByLabel("地址").fill("e2e");
@@ -25,12 +30,6 @@ test("站长建版块、设公告，管理员发帖再回复", async ({ page }) 
   await create.getByRole("button", { name: "创建" }).click();
   await expect(page.getByText("已创建")).toBeVisible();
 
-  await page.goto("/admin/site");
-  await page.getByLabel("公告横幅").fill("端到端测试的公告");
-  await page.getByRole("button", { name: "保存" }).click();
-  await expect(page.getByText("已保存，立即生效")).toBeVisible();
-
-  await signIn(page, ["--qq", "10001"]);
   await page.goto("/");
   await page.getByRole("button", { name: "发帖" }).click();
   const composer = page.getByRole("region", { name: "发帖" });

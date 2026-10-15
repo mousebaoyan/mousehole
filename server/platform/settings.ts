@@ -35,8 +35,6 @@ const SiteSchema = z.object({
   banner: z.string().default(""),
   // QQ numbers show to members and bots; this shows them to guests as well.
   qq_public: z.boolean().default(false),
-  // For boards created without saying.
-  review_mode: z.enum(["after", "before"]).default("after"),
 });
 
 const BotSchema = z.object({

@@ -14,7 +14,7 @@ beforeAll(async () => {
   owner = await ownerSession();
 });
 
-function save(site: { banner?: string; qq_public?: boolean; review_mode?: "after" | "before" }) {
+function save(site: { banner?: string; qq_public?: boolean }) {
   return api.admin.settings.$patch({ json: { site } }, owner);
 }
 
@@ -43,13 +43,6 @@ describe("站点设置", () => {
     expect(shown).toMatchObject({ qq: user.qq });
     expect(shown).not.toHaveProperty("member_status");
     await save({ qq_public: false });
-  });
-
-  test("新建版块不指定审核方式时用站点的默认值", async () => {
-    await save({ review_mode: "before" });
-    const res = await api.boards.$post({ json: { slug: "held", name: "先审" } }, admin);
-    expect(await res.json()).toMatchObject({ review_mode: "before" });
-    await save({ review_mode: "after" });
   });
 
   test("改了什么记进操作日志，带改前改后的值；邮箱密码只记哪个改了", async () => {
