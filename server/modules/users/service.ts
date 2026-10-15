@@ -333,17 +333,17 @@ export async function listPeople(userId: number, list: RelationList, offset: num
 // What the profile card and the user's page show; see design §6.1 and §9. `viewerId` is for
 // whether the reader follows and has endorsed them.
 export async function getUser(ref: UserRef, viewerId: number | null) {
-  const row = await withPrimaryGroup()
+  const row = await withHomeGroup()
     .select((eb) => [
       "users.id",
       "users.display_name",
       "users.avatar_version",
       "users.role",
       "users.level",
-      eb.fn.coalesce("group_members.title", eb.val("")).as("title"),
-      "group_members.card",
-      "group_members.joined_at",
-      "group_members.last_sent_at",
+      eb.fn.coalesce("home.title", eb.val("")).as("title"),
+      "home.card",
+      "home.joined_at",
+      "home.last_sent_at",
       eb.fn.coalesce("users.custom_bio", "users.qq_bio").as("bio"),
       "users.hide_from_guests",
       "users.relations_public",
@@ -662,17 +662,25 @@ export async function countUserPosts(
     .execute();
 }
 
-// Users with their membership of the primary group, which their title and card come from.
-function withPrimaryGroup() {
-  return db
-    .selectFrom("users")
-    .leftJoin("qq_groups", (join) => join.on("qq_groups.is_primary", "=", true))
-    .leftJoin("group_members", (join) =>
-      join
-        .onRef("group_members.group_id", "=", "qq_groups.id")
-        .onRef("group_members.user_id", "=", "users.id")
-        .on("group_members.left_at", "is", null),
-    );
+// Users with their membership of the group that speaks for them, which their title and card come
+// from: the primary group, otherwise the one they joined first, as with their name (members/rules).
+function withHomeGroup() {
+  return db.selectFrom("users").leftJoinLateral(
+    (eb) =>
+      eb
+        .selectFrom("group_members")
+        .innerJoin("qq_groups", "qq_groups.id", "group_members.group_id")
+        .select(["title", "card", "joined_at", "last_sent_at"])
+        .whereRef("group_members.user_id", "=", "users.id")
+        .where("group_members.left_at", "is", null)
+        .where("qq_groups.enabled", "=", true)
+        .orderBy("qq_groups.is_primary", "desc")
+        .orderBy(sql`joined_at ASC NULLS LAST`)
+        .orderBy("group_members.group_id")
+        .limit(1)
+        .as("home"),
+    (join) => join.onTrue(),
+  );
 }
 
 export function anonymousBrief(number: number) {
@@ -686,17 +694,17 @@ export function writer(user: (id: number) => UserBrief, id: number, alias: numbe
   return alias === null ? user(id) : anonymousBrief(alias);
 }
 
-// How people appear next to their posts: the title is their custom one in the primary group.
+// How people appear next to their posts: the title is their custom one in their home group.
 // Returns a lookup for the IDs asked for.
 export async function userBriefs(ids: number[]) {
-  const rows = await withPrimaryGroup()
+  const rows = await withHomeGroup()
     .select((eb) => [
       "users.id",
       "users.display_name",
       "users.avatar_version",
       "users.role",
       "users.level",
-      eb.fn.coalesce("group_members.title", eb.val("")).as("title"),
+      eb.fn.coalesce("home.title", eb.val("")).as("title"),
     ])
     .where("users.id", "=", sql<number>`any(${[...new Set(ids)]}::integer[])`)
     .execute();

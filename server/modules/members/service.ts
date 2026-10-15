@@ -61,6 +61,7 @@ async function refreshAccounts(
       "g.is_primary",
     ])
     .where("m.user_id", "in", userIds)
+    .orderBy("m.group_id")
     .execute();
 
   const byUser = Map.groupBy(memberships, (m) => m.user_id);
