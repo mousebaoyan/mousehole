@@ -196,6 +196,7 @@ export interface PollOptions {
   id: Generated<number>;
   label: string;
   position: number;
+  row: Generated<number>;
   thread_id: number;
   vote_count: Generated<number>;
 }
@@ -206,7 +207,9 @@ export interface Polls {
   closes_at: Timestamp | null;
   max_choices: number | null;
   multiple: Generated<boolean>;
+  preset: string | null;
   results: Generated<string>;
+  rows: string[] | null;
   thread_id: number;
   voter_count: Generated<number>;
 }

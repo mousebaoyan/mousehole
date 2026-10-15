@@ -8,7 +8,9 @@ import type { PollSpec } from "../threads/polls.ts";
 // What people are still writing, saved by the composer as they type; see design §8.2. A null
 // thread is the one new thread each person may have in progress.
 
-type DraftPoll = PollSpec & { days: number | null };
+type DraftPoll = Omit<Extract<PollSpec, { options: string[] }>, "preset" | "rows"> & {
+  days: number | null;
+};
 type DraftLottery = Omit<LotterySpec, "draws_at"> & {
   days: number | null;
   draws_at: number | null;
