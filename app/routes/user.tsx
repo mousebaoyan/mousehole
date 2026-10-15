@@ -195,12 +195,15 @@ function Profile({
   const relationsShown = user.relations_public === true || self;
   const { stats } = user;
   const relations = useRelations(user);
-  // What the group shows about them; the QQ number only to members.
+  // What the group shows about them, only to members; the QQ number to guests too if the site
+  // says so.
   const facts: string[] = [];
   if (typeof user.qq === "number") facts.push(`QQ ${user.qq}`);
   if (user.card && user.card !== user.display_name) facts.push(`群名片 ${user.card}`);
-  if (user.joined_at !== null) facts.push(`群龄 ${age(user.joined_at, now)}`);
-  if (user.last_sent_at !== null) facts.push(`${ago(user.last_sent_at, now)}在群里发言`);
+  if (typeof user.joined_at === "number") facts.push(`群龄 ${age(user.joined_at, now)}`);
+  if (typeof user.last_sent_at === "number") {
+    facts.push(`${ago(user.last_sent_at, now)}在群里发言`);
+  }
   const numbers = [
     { label: "帖子", value: stats.threads },
     { label: "回复", value: stats.posts },
