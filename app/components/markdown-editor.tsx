@@ -1,6 +1,7 @@
 import { AtSign, Bold, Code, Eye, ImagePlus, Link2, PenLine, Quote } from "lucide-react";
 import { useEffect, useRef, useState, type RefObject } from "react";
 import { useFetcher } from "react-router";
+import type { loader as mentionLoader } from "~/routes/mention";
 import { cn } from "cn";
 import type { UserBrief } from "~/api-types";
 import { browserApi } from "~/browser-api";
@@ -143,7 +144,7 @@ export function MarkdownEditor({
   const { submit, data } = useFetcher<{ html: string | null }>();
   const [mention, setMention] = useState<Mention | null>(null);
   const [chosen, setChosen] = useState(0);
-  const people = useFetcher<UserBrief[]>();
+  const people = useFetcher<typeof mentionLoader>();
   const suggestions = mention?.query ? (people.data ?? []) : [];
   const fileInput = useRef<HTMLInputElement>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
@@ -334,7 +335,7 @@ export function MarkdownEditor({
             }
           }}
           aria-label={label}
-          placeholder="支持 Markdown，可用 @ 提及成员，可粘贴或拖入图片"
+          placeholder="支持 Markdown；输入 @ 加名字或 QQ 号提及成员；可粘贴或拖入图片"
           className="min-h-0 flex-1 resize-none bg-transparent px-4 py-3 text-body leading-7 outline-none placeholder:text-muted-foreground"
         />
         {uploadError !== null && (
@@ -365,6 +366,9 @@ export function MarkdownEditor({
                 >
                   <UserAvatar user={user} className="size-6 text-2xs" />
                   <span className="truncate">{user.display_name}</span>
+                  <span className="ml-auto shrink-0 text-xs text-muted-foreground tabular-nums">
+                    {user.qq}
+                  </span>
                 </button>
               </li>
             ))}
