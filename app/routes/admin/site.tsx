@@ -1,10 +1,9 @@
-import { Form, useNavigation } from "react-router";
 import { apiContext } from "../../api.server.ts";
-import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Select } from "~/components/ui/select";
 import type { Route } from "./+types/site.ts";
-import { Check, Field, readForm, Result, Section } from "~/components/form-parts";
+import { Check, Field, readForm, Section } from "~/components/form-parts";
+import { SettingsForm } from "~/components/settings-form";
 import { BOT_NAME } from "../../../server/platform/site.ts";
 
 export function meta() {
@@ -45,9 +44,8 @@ export default function Site({
   loaderData: { site, login, bot },
   actionData,
 }: Route.ComponentProps) {
-  const busy = useNavigation().state !== "idle";
   return (
-    <Form method="post">
+    <SettingsForm result={actionData}>
       <h1 className="text-xl font-semibold">站点</h1>
 
       <Section title="通用">
@@ -108,13 +106,6 @@ export default function Site({
           checked={bot.require_operator}
         />
       </Section>
-
-      <div className="mt-6 flex items-center gap-3">
-        <Button type="submit" disabled={busy}>
-          保存
-        </Button>
-        <Result result={actionData} />
-      </div>
-    </Form>
+    </SettingsForm>
   );
 }

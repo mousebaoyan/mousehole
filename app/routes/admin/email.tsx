@@ -7,6 +7,7 @@ import { Input } from "~/components/ui/input";
 import type { Route } from "./+types/email.ts";
 import { Check, Field, readForm, Result, Section } from "~/components/form-parts";
 import { Select } from "~/components/ui/select";
+import { SettingsForm } from "~/components/settings-form";
 import { NOTIFICATION_TYPES } from "~/notification-types";
 
 export function meta() {
@@ -48,8 +49,8 @@ export async function action({ request, context }: Route.ActionArgs) {
       ]),
     );
     const res = await api.admin.settings.$patch({ json: { notify: { email } } });
-    if (!res.ok) return { ok: false, message: (await res.json()).error.message };
-    return { ok: true, message: "已保存" };
+    if (!res.ok) return { ok: false, message: (await res.json()).error.message, notify: true };
+    return { ok: true, message: "已保存", notify: true };
   }
   const accounts = Array.from({ length: Number(field("count")) }, (_, i) => {
     const password = field(`password.${i}`);
@@ -87,11 +88,12 @@ export default function Email({ loaderData, actionData }: Route.ComponentProps) 
         通知邮件和登录验证码都从这里的邮箱发出。建议使用 QQ 邮箱，发往 qq.com
         的邮件不易被判为垃圾邮件
       </p>
-      <Result result={actionData} />
+      <Result result={actionData && !("notify" in actionData) ? actionData : undefined} />
 
       <Mailboxes key={shown.at} accounts={shown.accounts} busy={busy} />
 
-      <Form method="post">
+      <SettingsForm result={actionData && "notify" in actionData ? actionData : undefined}>
+        <input type="hidden" name="intent" value="notify" />
         <Section
           title="邮件通知"
           description="设置每类通知是否发送邮件。成员未修改过的开关使用这里的默认值；选择「不发送」后，成员也不能自行开启"
@@ -110,11 +112,8 @@ export default function Email({ loaderData, actionData }: Route.ComponentProps) 
               </li>
             ))}
           </ul>
-          <Button type="submit" name="intent" value="notify" disabled={busy} className="mt-4">
-            保存
-          </Button>
         </Section>
-      </Form>
+      </SettingsForm>
 
       <Form method="post">
         <Section title="发送测试邮件" description="用每个已保存的邮箱各发送一封">

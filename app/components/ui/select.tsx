@@ -48,6 +48,15 @@ export function Select({
   const searchable = options.length >= SEARCH_FROM;
   const shown = matching(options, query);
 
+  // Like a native field, it goes back to where it started when its form is reset.
+  useEffect(() => {
+    const form = input.current?.form;
+    if (!form) return undefined;
+    const reset = () => setOwn(defaultValue);
+    form.addEventListener("reset", reset);
+    return () => form.removeEventListener("reset", reset);
+  }, [defaultValue]);
+
   // Like a menu: opening puts the focus on the chosen item, or in the search box.
   useEffect(() => {
     if (!open || searchable) return;
@@ -74,6 +83,8 @@ export function Select({
     if (next === current) return;
     // The hidden input has to hold the new value before the form is sent.
     flushSync(() => setOwn(next));
+    // Tells the form, as a native field would.
+    input.current?.dispatchEvent(new Event("input", { bubbles: true }));
     onValueChange?.(next);
     if (submitOnChange) input.current?.form?.requestSubmit();
   }
