@@ -567,10 +567,10 @@ bot 把 QQ 群的信息推送给论坛。两种方式都支持，推荐一起用
   - 上传占服务器的出口带宽，所以放在凌晨。数据库压缩后很小；`data/` 整个打包最简单，到了几百 MB 再改成只传新增的文件。
   - 数据库备份是 gzip 压缩的 `pg_dump` 自定义格式，用 `zcat <文件> | pg_restore --no-owner -d <库>` 恢复。
   - 每季度把备份恢复到本地试一次，确认能用。服务器快照照常做，作为整机的兜底。
-- **日志**：论坛只往 stdout 写 JSON 日志，Docker 按 10MB 一个文件轮转，留 5 个（`deploy/compose.yml`）。OpenResty 的访问日志用 1Panel 的"切割网站日志"计划任务每天切割，留 30 份。操作日志（`audit_logs`，第 10 节）在库里永久保留，随数据库一起备份，每年预计几万到十几万行，占用很小。
+- **日志**：论坛只往 stdout 写 JSON 日志，Docker 按 10MB 一个文件轮转，留 5 个（`deploy/compose.yml`）。OpenResty 的访问日志用 1Panel 的"切割网站日志"计划任务（`bbs-log-cut`）每天 3:50 切割，留 30 份。操作日志（`audit_logs`，第 10 节）在库里永久保留，随数据库一起备份，每年预计几万到十几万行，占用很小。
 - **反代**：1Panel 里的反向代理网站，证书、HTTP/3 和关闭 HSTS 用 1Panel 的站点设置，其余配置见 `deploy/openresty.conf`。SSE 路径关闭缓冲（`proxy_buffering off`）并延长超时；上传大小上限 20MB。开启 HTTP/2 和 HTTP/3，跨境链路丢包时 HTTP/3 更稳。站点关闭 gzip，压缩交给应用：服务器上的 OpenResty 没有 Brotli 模块，默认配置也不压缩 JSON。转发时设置 `X-Real-IP`，并按 IP 限制连接数和请求速率。
 - **域名**：Cloudflare 上设为仅 DNS（灰云），直连服务器。开代理反而会让大陆访问绕路，变慢。
-- **监控**：`/healthz` 接入服务器上已有的 Gatus（`deploy/gatus-endpoints.json`：容器内和经过公网各一条）；页面可以配置 Umami 统计；日志以 JSON 格式输出到 stdout。
+- **监控**：`/healthz` 接入服务器上已有的 Gatus（`deploy/gatus-endpoints.json`：容器内和经过公网各一条）。服务器上 Gatus 的配置由 `/opt/1panel/www/sites/netwatch/configure.py` 生成，这两条也写在那里，Gatus 因此加入了 `1panel-network`；页面可以配置 Umami 统计；日志以 JSON 格式输出到 stdout。
 - **定时任务**：在进程里运行（`platform/schedule.ts`），失败只记日志，下一轮再试；上一轮还没跑完时跳过这一轮。每分钟写入浏览数，发出待发的邮件，拉新成员和满一天的头像（新成员不用等，每人仍是一天拉一次）；每小时检查升级；每天复查 L4 的等级，清理过期的会话、登录口令和链接、邮件验证码，7 天前的幂等记录，上传后一天没用上的图片，7 天前的事件，半年前读过的通知，以及 180 天没动过的草稿。
 - **本地开发**：用 docker compose 起一个本地 PostgreSQL；`scripts/mock-bot` 模拟插件，推送成员、代发内容、消费事件，不用真 QQ 号也能测完整流程。
 
@@ -620,12 +620,11 @@ bot 把 QQ 群的信息推送给论坛。两种方式都支持，推荐一起用
 
 每个阶段都带测试，并用 `scripts/mock-bot` 跑通对应的 bot 流程。
 
-进度：M1–M9 论坛这边已完成。论坛已部署上线（`bbs.mousebaoyan.cn`），站长账号和第 8.1 节的版块已建好。插件已装到 AstrBot 上并接上论坛，关联了主群和测试群，自动收录关着；成员同步、私聊登录（链接和口令）和个性签名已在测试群验证过。数据库和 `data/` 每天备份（第 12 节）。接下来：
+进度：M1–M9 论坛这边已完成。论坛已部署上线（`bbs.mousebaoyan.cn`），站长账号和第 8.1 节的版块已建好。插件已装到 AstrBot 上并接上论坛，关联了主群和测试群，自动收录关着；成员同步、私聊登录（链接和口令）、个性签名和开奖结果发到群里已在测试群验证过。数据库和 `data/` 每天备份，`/healthz` 接入了 Gatus，网站日志每天切割（第 12 节）。接下来：
 
-1. 在测试群里验证开奖结果发到群里。
-2. 用历史群消息跑回放，调好自动收录的门槛、提示词和查重（插件仓库的[回放实验](https://github.com/mousebaoyan/astrbot_plugin_mousehole/blob/main/docs/replay.md)）。
-3. 按回放跑出的类别建收录用的版块和标签，把调好的数写回插件的默认配置，打开自动收录。
-4. M10 剩下的：接入 Gatus，在服务器上压测。
+1. 用历史群消息跑回放，调好自动收录的门槛、提示词和查重（插件仓库的[回放实验](https://github.com/mousebaoyan/astrbot_plugin_mousehole/blob/main/docs/replay.md)）。
+2. 按回放跑出的类别建收录用的版块和标签，把调好的数写回插件的默认配置，打开自动收录。
+3. 让压测达标：在服务器上的预发环境里（同一个镜像和内存上限，独立的库）跑 `pnpm load-test`，访客的 p95 在 80ms 以内，成员的在 1–1.6 秒，没过第 11.4 节的 100ms；瓶颈是论坛进程的 CPU，10 个读者时成员帖子页单次也要 40ms 左右，先剖析成员页的服务端渲染。
 
 ### 二期
 
