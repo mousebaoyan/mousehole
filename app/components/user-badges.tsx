@@ -1,5 +1,6 @@
 import { cn } from "cn";
 import type { Writer } from "~/api-types";
+import { TIER_STYLES } from "~/components/badge-chip";
 import { levelName } from "../../server/platform/site.ts";
 
 // The higher the level, the more it stands out (design §6.6).
@@ -20,7 +21,8 @@ export function LevelBadge({ level }: { level: number }) {
   );
 }
 
-// The level and the custom title, the same as what members see in the QQ group; someone
+// The level and the title: a badge they chose, coloured by its tier, or the custom one members
+// see in the QQ group (design §8.8); someone
 // anonymous has neither. `mine` marks the reader's own anonymous floors, which only they see as
 // theirs.
 export function UserBadges({ user, op, mine }: { user: Writer; op?: boolean; mine?: boolean }) {
@@ -36,7 +38,14 @@ export function UserBadges({ user, op, mine }: { user: Writer; op?: boolean; min
         <>
           <LevelBadge level={user.level} />
           {user.title && (
-            <span className="rounded border px-1.5 py-px text-2xs text-muted-foreground">
+            <span
+              className={cn(
+                "rounded px-1.5 py-px text-2xs whitespace-nowrap",
+                user.title_tier === null
+                  ? "border text-muted-foreground"
+                  : TIER_STYLES[user.title_tier],
+              )}
+            >
               {user.title}
             </span>
           )}

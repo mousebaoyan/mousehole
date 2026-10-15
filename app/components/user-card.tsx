@@ -5,6 +5,7 @@ import { cn } from "cn";
 import { useDismiss } from "~/components/disclosure";
 import { Button, buttonVariants } from "~/components/ui/button";
 import { UserAvatar } from "~/components/user-avatar";
+import { BadgeChip } from "~/components/badge-chip";
 import { UserBadges } from "~/components/user-badges";
 import { useMe } from "~/forum";
 import type { Writer } from "~/api-types";
@@ -199,6 +200,13 @@ function FullCard({ profile }: { profile: Extract<Profile, { members_only: false
         </div>
       </div>
       {profile.bio && <p className="mt-3 line-clamp-3 text-meta">{profile.bio}</p>}
+      {profile.badges.length > 0 && (
+        <div className="mt-3 flex flex-wrap gap-1">
+          {profile.badges.map((b) => (
+            <BadgeChip key={b.id} badge={b} />
+          ))}
+        </div>
+      )}
       <dl className="mt-3 flex gap-4 text-meta">
         {numbers.map((n) => (
           <div key={n.label} className="flex items-baseline gap-1">

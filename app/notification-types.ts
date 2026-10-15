@@ -11,4 +11,5 @@ export const NOTIFICATION_TYPES = [
   { type: "moderation", label: "内容被审核或隐藏" },
   { type: "level", label: "升级" },
   { type: "lottery", label: "抽奖开奖或取消" },
+  { type: "badge", label: "得到徽章" },
 ] as const;

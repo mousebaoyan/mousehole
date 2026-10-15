@@ -48,6 +48,18 @@ export interface AuditLogs {
   user_agent: string | null;
 }
 
+export interface Badges {
+  created_at: Generated<Timestamp>;
+  description: string;
+  grouping: string;
+  id: Generated<number>;
+  multiple: Generated<boolean>;
+  name: string;
+  position: Generated<number>;
+  slug: string | null;
+  tier: string;
+}
+
 export interface Boards {
   color: Generated<string>;
   created_at: Generated<Timestamp>;
@@ -135,6 +147,11 @@ export interface IdempotencyKeys {
   response: Json | null;
   status: number | null;
   token_id: number;
+}
+
+export interface JobRuns {
+  name: string;
+  ran_at: Timestamp;
 }
 
 export interface LoginTickets {
@@ -385,6 +402,16 @@ export interface Uploads {
   width: number;
 }
 
+export interface UserBadges {
+  badge_id: number;
+  granted_at: Generated<Timestamp>;
+  granted_by: number | null;
+  id: Generated<number>;
+  post_id: number | null;
+  reason: string | null;
+  user_id: number;
+}
+
 export interface UserDays {
   day: Timestamp;
   posts_read: Generated<number>;
@@ -431,11 +458,14 @@ export interface Users {
   role: Generated<string>;
   role_locked: Generated<boolean>;
   thread_count: Generated<number>;
+  title_badge_id: number | null;
+  visit_streak: Generated<number>;
 }
 
 export interface DB {
   api_tokens: ApiTokens;
   audit_logs: AuditLogs;
+  badges: Badges;
   boards: Boards;
   boosts: Boosts;
   drafts: Drafts;
@@ -444,6 +474,7 @@ export interface DB {
   events: Events;
   group_members: GroupMembers;
   idempotency_keys: IdempotencyKeys;
+  job_runs: JobRuns;
   login_tickets: LoginTickets;
   lotteries: Lotteries;
   lottery_entries: LotteryEntries;
@@ -468,6 +499,7 @@ export interface DB {
   thread_users: ThreadUsers;
   threads: Threads;
   uploads: Uploads;
+  user_badges: UserBadges;
   user_days: UserDays;
   user_follows: UserFollows;
   users: Users;

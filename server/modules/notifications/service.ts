@@ -14,7 +14,8 @@ import { anonymousBrief, userBriefs, writer } from "../users/service.ts";
 // my thread without naming a floor; mention: @ me; like and boost: on my floor; watching: a new
 // floor in a thread I watch; following: a new thread by someone I follow; solved: my answer was
 // accepted; moderation: something of mine was approved, rejected, hidden or shown again; level: I
-// went up a level; lottery: one I entered or started was drawn or called off.
+// went up a level; lottery: one I entered or started was drawn or called off; badge: I earned a
+// badge.
 export const NOTIFICATION_TYPES = [
   "reply",
   "thread_reply",
@@ -27,6 +28,7 @@ export const NOTIFICATION_TYPES = [
   "moderation",
   "level",
   "lottery",
+  "badge",
 ] as const;
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
 
@@ -35,9 +37,9 @@ export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
 const MERGED = new Set<NotificationType>(["like", "boost", "thread_reply", "watching"]);
 const PER_THREAD = new Set<NotificationType>(["thread_reply", "watching"]);
 
-// About something done to a floor; levels and lotteries are told by their own.
+// About something done to a floor; levels, lotteries and badges are told by their own.
 type Notice = {
-  type: Exclude<NotificationType, "level" | "lottery">;
+  type: Exclude<NotificationType, "level" | "lottery" | "badge">;
   actorId: number;
   // Their number in the thread when they did it anonymously (design §8.12).
   actorAlias: number | null;
@@ -301,6 +303,75 @@ export async function notifyLottery(
     });
   }
   await queueMail(trx, mails);
+}
+
+// Badges earned (design §8.8), several people at once when a check finds them. One earned for a
+// floor points there.
+export async function notifyBadges(
+  trx: Transaction<DB>,
+  badge: { id: number; name: string; description: string },
+  granted: { user_id: number; post_id: number | null }[],
+) {
+  const type = "badge";
+  const people = await trx
+    .selectFrom("users")
+    .select(["id", "qq", ...(await switches(type))])
+    .where(
+      "id",
+      "in",
+      granted.map((g) => g.user_id),
+    )
+    .where("member_status", "=", "member")
+    .where("qq", "is not", null)
+    .$narrowType<{ qq: NotNull }>()
+    .execute();
+  const person = new Map(people.map((p) => [p.id, p]));
+  const postIds = granted.flatMap((g) => (g.post_id === null ? [] : [g.post_id]));
+  const threadOf = new Map(
+    postIds.length === 0
+      ? []
+      : (
+          await trx
+            .selectFrom("posts")
+            .select(["id", "thread_id"])
+            .where("id", "in", postIds)
+            .execute()
+        ).map((p) => [p.id, p.thread_id]),
+  );
+  const onSite = granted.filter((g) => person.get(g.user_id)?.site);
+  if (onSite.length > 0) {
+    await trx
+      .insertInto("notifications")
+      .values(
+        onSite.map((g) => ({
+          user_id: g.user_id,
+          type,
+          thread_id: g.post_id === null ? null : threadOf.get(g.post_id),
+          post_id: g.post_id,
+          data: { badge_id: String(badge.id), name: badge.name },
+        })),
+      )
+      .execute();
+    await tellUnread(
+      trx,
+      onSite.map((g) => g.user_id),
+    );
+  }
+  const said = `你在${SITE_NAME}得到了徽章「${badge.name}」`;
+  await queueMail(
+    trx,
+    granted.flatMap((g) => {
+      const p = person.get(g.user_id);
+      if (!p?.email) return [];
+      return [
+        {
+          address: mailbox(p.qq),
+          subject: said,
+          body: `${said}：${badge.description}\n${env.PUBLIC_URL}/badges/${badge.id}${MAIL_FOOTER}`,
+        },
+      ];
+    }),
+  );
 }
 
 // A new floor: the author of the floor it replies to, then those @-ed in it, then the thread's

@@ -1,4 +1,13 @@
-import { Bookmark, ExternalLink, FilePen, History, Home, Lock, MessagesSquare } from "lucide-react";
+import {
+  Award,
+  Bookmark,
+  ExternalLink,
+  FilePen,
+  History,
+  Home,
+  Lock,
+  MessagesSquare,
+} from "lucide-react";
 import { Link, NavLink } from "react-router";
 import { cn } from "cn";
 import { useDrafts } from "~/components/composer";
@@ -37,6 +46,9 @@ export function ForumNav() {
               <m.icon className="size-4" /> {m.label}
             </NavLink>
           ))}
+        <NavLink to="/badges" className={item}>
+          <Award className="size-4" /> 徽章
+        </NavLink>
         {drafts.size > 0 && (
           <NavLink to="/drafts" className={item}>
             <FilePen className="size-4" /> 草稿

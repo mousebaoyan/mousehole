@@ -16,6 +16,7 @@ export const EVENT_TYPES = [
   "member.activated",
   "report.created",
   "lottery.drawn",
+  "badge.granted",
 ] as const;
 export type EventType = (typeof EVENT_TYPES)[number];
 

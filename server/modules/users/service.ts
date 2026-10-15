@@ -183,7 +183,18 @@ async function recordDay(
     .onConflict((oc) => oc.doNothing())
     .returning("user_id")
     .executeTakeFirst();
-  if (first) return 1;
+  if (first) {
+    // Days in a row, for the badges: user_days keeps only 35 days.
+    await trx
+      .updateTable("users")
+      .set({
+        visit_streak: sql<number>`CASE WHEN EXISTS (SELECT 1 FROM user_days
+          WHERE user_id = ${userId} AND day = ${day} - 1) THEN visit_streak + 1 ELSE 1 END`,
+      })
+      .where("id", "=", userId)
+      .execute();
+    return 1;
+  }
   if (read.posts > 0 || read.seconds > 0) {
     await trx
       .updateTable("user_days")
@@ -330,6 +341,9 @@ export async function listPeople(userId: number, list: RelationList, offset: num
   };
 }
 
+// Badges on the profile card, the best first (design §8.8).
+const CARD_BADGES = 3;
+
 // What the profile card and the user's page show; see design §6.1 and §9. `viewerId` is for
 // whether the reader follows and has endorsed them.
 export async function getUser(ref: UserRef, viewerId: number | null) {
@@ -340,7 +354,8 @@ export async function getUser(ref: UserRef, viewerId: number | null) {
       "users.avatar_version",
       "users.role",
       "users.level",
-      eb.fn.coalesce("home.title", eb.val("")).as("title"),
+      eb.fn.coalesce("title_badge.name", "home.title", eb.val("")).as("title"),
+      "title_badge.tier as title_tier",
       "home.card",
       "home.joined_at",
       "home.last_sent_at",
@@ -370,6 +385,14 @@ export async function getUser(ref: UserRef, viewerId: number | null) {
         WHERE followee_id = users.id AND follower_id = ${viewerId})`.as("followed"),
       sql<boolean>`EXISTS (SELECT 1 FROM endorsements
         WHERE endorsements.user_id = users.id AND endorser_id = ${viewerId})`.as("endorsed"),
+      sql<{ id: number; name: string; tier: string }[]>`(SELECT coalesce(json_agg(b), '[]')
+        FROM (SELECT badges.id, badges.name, badges.tier FROM user_badges
+          JOIN badges ON badges.id = user_badges.badge_id
+          WHERE user_badges.user_id = users.id
+          GROUP BY badges.id
+          ORDER BY array_position('{gold,silver,bronze}'::text[], badges.tier),
+            max(user_badges.granted_at) DESC
+          LIMIT ${CARD_BADGES}) b)`.as("badges"),
     ])
     .where((eb) => ("id" in ref ? eb("users.id", "=", ref.id) : eb("users.qq", "=", ref.qq)))
     .executeTakeFirst();
@@ -380,7 +403,9 @@ export async function getUser(ref: UserRef, viewerId: number | null) {
 
 // For what guests get: leaves out what people who keep their content from guests wrote, given the
 // column holding the writer's user ID (design §8.10).
-export function shownToGuests(column: "threads.author_id" | "posts.author_id" | "boosts.user_id") {
+export function shownToGuests(
+  column: "threads.author_id" | "posts.author_id" | "boosts.user_id" | "user_badges.user_id",
+) {
   return sql<boolean>`NOT EXISTS (SELECT 1 FROM users
     WHERE users.id = ${sql.ref(column)} AND users.hide_from_guests)`;
 }
@@ -400,6 +425,15 @@ export async function getSettings(userId: number) {
       "allow_proxy",
       "hide_from_guests",
       "relations_public",
+      "title_badge_id",
+      sql<
+        { id: number; name: string; tier: string }[]
+      >`(SELECT coalesce(json_agg(b ORDER BY b.tier DESC, b.name), '[]')
+        FROM (SELECT DISTINCT badges.id, badges.name, badges.tier FROM user_badges
+          JOIN badges ON badges.id = user_badges.badge_id
+          WHERE user_badges.user_id = users.id AND badges.tier IN ('gold', 'silver')) b)`.as(
+        "title_badges",
+      ),
       "notify_email",
       sql<Record<string, { site?: boolean; email?: boolean }>>`notify_prefs`.as("notify_prefs"),
     ])
@@ -416,6 +450,7 @@ export async function updateSettings(
     allow_proxy?: boolean;
     hide_from_guests?: boolean;
     relations_public?: boolean;
+    title_badge_id?: number | null;
     notify_email?: boolean;
     notify_prefs?: Record<string, { site?: boolean; email?: boolean }>;
   },
@@ -423,6 +458,8 @@ export async function updateSettings(
   const { notify_prefs, ...rest } = change;
   if (Object.keys(change).length === 0) return;
   await db.transaction().execute(async (trx) => {
+    if (change.title_badge_id != null)
+      await assertTitleBadge(trx, actor.userId, change.title_badge_id);
     await trx
       .updateTable("users")
       .set({
@@ -437,6 +474,29 @@ export async function updateSettings(
       .execute();
     await recordAudit(trx, actor, { action: "user.settings", data: change });
   });
+}
+
+// Only a gold or silver badge of one's own makes a title (design §8.8).
+async function assertTitleBadge(trx: Transaction<DB>, userId: number, badgeId: number) {
+  const own = await trx
+    .selectFrom("user_badges")
+    .innerJoin("badges", "badges.id", "user_badges.badge_id")
+    .select("badges.id")
+    .where("user_badges.user_id", "=", userId)
+    .where("user_badges.badge_id", "=", badgeId)
+    .where("badges.tier", "in", ["gold", "silver"])
+    .executeTakeFirst();
+  if (!own) throw new AppError(400, "badge_not_title", "只能选自己得到的金徽章或银徽章作为头衔");
+}
+
+// When the badge someone wears as their title is taken back.
+export async function clearTitleBadge(trx: Transaction<DB>, userId: number, badgeId: number) {
+  await trx
+    .updateTable("users")
+    .set({ title_badge_id: null })
+    .where("id", "=", userId)
+    .where("title_badge_id", "=", badgeId)
+    .execute();
 }
 
 // The QQ signature, which the bot looks up when someone first logs in. Shown until they write
@@ -662,25 +722,29 @@ export async function countUserPosts(
     .execute();
 }
 
-// Users with their membership of the group that speaks for them, which their title and card come
-// from: the primary group, otherwise the one they joined first, as with their name (members/rules).
+// Users with their membership of the group that speaks for them, which their card and QQ title
+// come from: the primary group, otherwise the one they joined first, as with their name
+// (members/rules). A badge they chose as their title goes before the QQ one (design §8.8).
 function withHomeGroup() {
-  return db.selectFrom("users").leftJoinLateral(
-    (eb) =>
-      eb
-        .selectFrom("group_members")
-        .innerJoin("qq_groups", "qq_groups.id", "group_members.group_id")
-        .select(["title", "card", "joined_at", "last_sent_at"])
-        .whereRef("group_members.user_id", "=", "users.id")
-        .where("group_members.left_at", "is", null)
-        .where("qq_groups.enabled", "=", true)
-        .orderBy("qq_groups.is_primary", "desc")
-        .orderBy(sql`joined_at ASC NULLS LAST`)
-        .orderBy("group_members.group_id")
-        .limit(1)
-        .as("home"),
-    (join) => join.onTrue(),
-  );
+  return db
+    .selectFrom("users")
+    .leftJoin("badges as title_badge", "title_badge.id", "users.title_badge_id")
+    .leftJoinLateral(
+      (eb) =>
+        eb
+          .selectFrom("group_members")
+          .innerJoin("qq_groups", "qq_groups.id", "group_members.group_id")
+          .select(["title", "card", "joined_at", "last_sent_at"])
+          .whereRef("group_members.user_id", "=", "users.id")
+          .where("group_members.left_at", "is", null)
+          .where("qq_groups.enabled", "=", true)
+          .orderBy("qq_groups.is_primary", "desc")
+          .orderBy(sql`joined_at ASC NULLS LAST`)
+          .orderBy("group_members.group_id")
+          .limit(1)
+          .as("home"),
+      (join) => join.onTrue(),
+    );
 }
 
 export function anonymousBrief(number: number) {
@@ -694,7 +758,8 @@ export function writer(user: (id: number) => UserBrief, id: number, alias: numbe
   return alias === null ? user(id) : anonymousBrief(alias);
 }
 
-// How people appear next to their posts: the title is their custom one in their home group.
+// How people appear next to their posts: the title is the badge they chose, else their custom
+// one in their home group.
 // Returns a lookup for the IDs asked for.
 export async function userBriefs(ids: number[]) {
   const rows = await withHomeGroup()
@@ -704,7 +769,8 @@ export async function userBriefs(ids: number[]) {
       "users.avatar_version",
       "users.role",
       "users.level",
-      eb.fn.coalesce("home.title", eb.val("")).as("title"),
+      eb.fn.coalesce("title_badge.name", "home.title", eb.val("")).as("title"),
+      "title_badge.tier as title_tier",
     ])
     .where("users.id", "=", sql<number>`any(${[...new Set(ids)]}::integer[])`)
     .execute();

@@ -1,9 +1,10 @@
 import { pageTitle } from "~/share-meta";
-import { Heart, Search, Snowflake } from "lucide-react";
+import { Award, Heart, Search, Snowflake } from "lucide-react";
 import { useRef } from "react";
 import { data, Link, useFetcher, useLocation } from "react-router";
 import { cn } from "cn";
 import { apiContext } from "../api.server.ts";
+import { BadgeChip, TIER_NAMES, TIER_STYLES } from "~/components/badge-chip";
 import { More } from "~/components/thread-feed";
 import { ThreadList } from "~/components/thread-list";
 import { UserAvatar } from "~/components/user-avatar";
@@ -37,6 +38,7 @@ const TABS = [
   { tab: "threads", label: "帖子", relations: false },
   { tab: "posts", label: "回复", relations: false },
   { tab: "solved", label: "被采纳", relations: false },
+  { tab: "badges", label: "徽章", relations: false },
   { tab: "likes", label: "赞过", relations: true },
   { tab: "summary", label: "概要", relations: false },
   { tab: "people", label: "关系", relations: true },
@@ -58,7 +60,7 @@ export async function loader({ params, request, context }: Route.LoaderArgs) {
   const list: PeopleList = PEOPLE.find((p) => p.list === search.get("list"))?.list ?? "following";
   const cursor = search.get("cursor") ?? undefined;
   const param = { user: params.id };
-  const [userRes, levelRes, threadsRes, postsRes, likesRes, summaryRes, peopleRes] =
+  const [userRes, levelRes, threadsRes, postsRes, likesRes, summaryRes, peopleRes, badgesRes] =
     await Promise.all([
       api.$get({ param }),
       // Only for themselves and admins.
@@ -73,6 +75,7 @@ export async function loader({ params, request, context }: Route.LoaderArgs) {
       tab === "likes" ? api.likes.$get({ param, query: { cursor } }) : null,
       tab === "summary" ? api.summary.$get({ param }) : null,
       tab === "people" ? api.relations.$get({ param, query: { list, cursor } }) : null,
+      tab === "badges" ? api.badges.$get({ param }) : null,
     ]);
   if (!userRes.ok) throw data("用户不存在", { status: 404 });
   const threads = threadsRes?.ok ? await threadsRes.json() : null;
@@ -89,6 +92,7 @@ export async function loader({ params, request, context }: Route.LoaderArgs) {
     posts: posts?.items ?? likes?.items ?? null,
     summary: summaryRes?.ok ? await summaryRes.json() : null,
     people: people?.items ?? null,
+    badges: badgesRes?.ok ? (await badgesRes.json()).items : null,
     next_cursor: (threads ?? posts ?? likes ?? people)?.next_cursor ?? null,
     now: unixNow(),
   };
@@ -181,6 +185,7 @@ function Profile({
   posts,
   summary,
   people,
+  badges,
   next_cursor,
   now,
   actionData,
@@ -234,6 +239,13 @@ function Profile({
             )}
           </div>
           {user.bio && <p className="mt-2 text-body">{user.bio}</p>}
+          {user.badges.length > 0 && (
+            <div className="mt-2 flex flex-wrap gap-1">
+              {user.badges.map((b) => (
+                <BadgeChip key={b.id} badge={b} />
+              ))}
+            </div>
+          )}
           {facts.length > 0 && (
             <p className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-meta text-muted-foreground">
               {facts.map((f) => (
@@ -345,6 +357,7 @@ function Profile({
             </ul>
           ))}
         {summary && <Summary summary={summary} now={now} />}
+        {badges && (badges.length === 0 ? <Empty /> : <BadgeList badges={badges} now={now} />)}
         {people && (
           <>
             <nav aria-label="名单" className="mb-2 flex flex-wrap gap-1 px-1">
@@ -371,6 +384,54 @@ function Profile({
         )}
       </section>
     </div>
+  );
+}
+
+// Every badge they have, gold first; those earned per floor list the latest floors.
+function BadgeList({ badges, now }: { badges: NonNullable<LoaderData["badges"]>; now: number }) {
+  return (
+    <ul className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+      {badges.map((b) => (
+        <li key={b.id} className="min-w-0 rounded-2xl border bg-card px-4 py-3">
+          <div className="flex items-start gap-3">
+            <span
+              className={cn(
+                "mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-full",
+                TIER_STYLES[b.tier],
+              )}
+            >
+              <Award className="size-5" aria-label={`${TIER_NAMES[b.tier]}徽章`} />
+            </span>
+            <div className="min-w-0 flex-1">
+              <Link to={`/badges/${b.id}`} className="font-medium hover:underline">
+                {b.name}
+                {b.count > 1 && (
+                  <span className="ml-1 text-meta font-normal text-muted-foreground">
+                    ×{b.count}
+                  </span>
+                )}
+              </Link>
+              <p className="text-meta text-muted-foreground">{b.description}</p>
+              <p className="mt-0.5 text-xs text-muted-foreground">{ago(b.granted_at, now)}获得</p>
+              {b.posts.length > 0 && (
+                <ul className="mt-1.5 flex flex-col gap-0.5">
+                  {b.posts.map((p) => (
+                    <li key={p.post_id} className="truncate text-meta">
+                      <Link
+                        to={`/t/${p.thread_id}?floor=${p.floor}`}
+                        className="text-link hover:underline"
+                      >
+                        {p.title} #{p.floor}
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+        </li>
+      ))}
+    </ul>
   );
 }
 
