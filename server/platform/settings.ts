@@ -4,6 +4,7 @@ import { z } from "zod";
 import type { DB } from "../../db/types.ts";
 import { db } from "./db.ts";
 import { env } from "./env.ts";
+import { BOT_NAME } from "./site.ts";
 
 // Admin-editable settings, one row per key. Fields default here, so new fields need no
 // migration. Cached in the process: there is one process, and every change goes through here.
@@ -13,7 +14,7 @@ const LoginSchema = z.object({
   link: z.boolean().default(true),
   email: z.boolean().default(true),
   // Shown with the code on the login page; {code} is replaced.
-  code_hint: z.string().default("私聊机器人发送：登录 {code}"),
+  code_hint: z.string().default(`私聊${BOT_NAME}，发送下方的 6 位口令`),
 });
 
 const SmtpAccountSchema = z.object({

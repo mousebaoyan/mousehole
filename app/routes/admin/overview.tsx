@@ -80,11 +80,11 @@ export default function Overview({ loaderData }: Route.ComponentProps) {
             )}
           >
             <span className="size-1.5 rounded-full bg-current" />
-            {events.streams > 0 ? `已连接（${events.streams} 个）` : "没有连接"}
+            {events.streams > 0 ? `已连接（${events.streams} 个）` : "未连接"}
           </dd>
           <dt className="text-muted-foreground">按游标拉取</dt>
           <dd>
-            <Time value={events.polled_at} never="启动以来没有" />
+            <Time value={events.polled_at} never="启动以来未拉取" />
           </dd>
           <dt className="text-muted-foreground">数据库</dt>
           <dd className="tabular-nums">{size(storage.database)}</dd>
@@ -95,7 +95,7 @@ export default function Overview({ loaderData }: Route.ComponentProps) {
 
       <Section title="群同步">
         {groups.length === 0 ? (
-          <p className="text-sm text-muted-foreground">还没有关联 QQ 群</p>
+          <p className="text-sm text-muted-foreground">暂未关联 QQ 群</p>
         ) : (
           <div className="-mx-5 overflow-x-auto">
             <table className="w-full text-sm whitespace-nowrap">

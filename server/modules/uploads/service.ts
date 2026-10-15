@@ -81,7 +81,7 @@ export const MAX_UPLOAD = 20 * 1024 * 1024;
 const QQ_IMAGE_HOSTS = new Set(["multimedia.nt.qq.com.cn", "gchat.qpic.cn", "gxh.vip.qq.com"]);
 
 function fetchFailed(cause?: unknown) {
-  return new AppError(502, "fetch_failed", "图片下载失败，链接可能已经过期", { cause });
+  return new AppError(502, "fetch_failed", "图片下载失败，链接可能已过期", { cause });
 }
 
 // Only QQ's image hosts, no redirects elsewhere, a time limit and a size limit: the address comes

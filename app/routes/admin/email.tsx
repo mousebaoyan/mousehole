@@ -84,7 +84,8 @@ export default function Email({ loaderData, actionData }: Route.ComponentProps) 
     <>
       <h1 className="text-xl font-semibold">邮件</h1>
       <p className="mt-1 text-meta text-muted-foreground">
-        通知邮件和 QQ 邮箱验证码都从这里发。建议用 QQ 邮箱，发往 qq.com 不容易进垃圾箱
+        通知邮件和登录验证码都从这里的邮箱发出。建议使用 QQ 邮箱，发往 qq.com
+        的邮件不易被判为垃圾邮件
       </p>
       <Result result={actionData} />
 
@@ -93,7 +94,7 @@ export default function Email({ loaderData, actionData }: Route.ComponentProps) 
       <Form method="post">
         <Section
           title="邮件通知"
-          description="每类通知是否发邮件。成员没改过的按这里的默认；选「不发送」后，成员也不能自己打开"
+          description="设置每类通知是否发送邮件。成员未修改过的开关使用这里的默认值；选择「不发送」后，成员也不能自行开启"
         >
           <ul className="divide-y text-sm">
             {NOTIFICATION_TYPES.map(({ type, label }) => (
@@ -116,7 +117,7 @@ export default function Email({ loaderData, actionData }: Route.ComponentProps) 
       </Form>
 
       <Form method="post">
-        <Section title="发送测试邮件" description="上面保存的每个邮箱各发一封">
+        <Section title="发送测试邮件" description="用每个已保存的邮箱各发送一封">
           <div className="flex items-end gap-2">
             <Field label="收件 QQ 号">
               <Input name="qq" inputMode="numeric" required className="w-56" />
@@ -150,10 +151,10 @@ function Mailboxes({ accounts, busy }: { accounts: Mailbox[]; busy: boolean }) {
     <Form method="post">
       <Section
         title="发信邮箱"
-        description="按顺序用，一个发不出去就自动换下一个。出错的先歇 10 分钟，接连出错歇得越来越久"
+        description="按顺序使用，一个发送失败时自动换用下一个。出错的邮箱暂停 10 分钟，连续出错时暂停时间逐次加倍"
       >
         <input type="hidden" name="count" value={rows.length} />
-        {rows.length === 0 && <p className="text-sm text-muted-foreground">还没有发信邮箱</p>}
+        {rows.length === 0 && <p className="text-sm text-muted-foreground">暂无发信邮箱</p>}
         <ol className="flex flex-col gap-3">
           {rows.map((r, i) => (
             <li key={r.key} className="rounded-xl border p-4">
@@ -201,7 +202,7 @@ function Mailboxes({ accounts, busy }: { accounts: Mailbox[]; busy: boolean }) {
                 </Field>
                 <Field
                   label="密码（授权码）"
-                  hint={r.password_set ? "已设置，不改就留空" : "还没有设置"}
+                  hint={r.password_set ? "已设置；不修改请留空" : "未设置"}
                 >
                   <Input name={`password.${i}`} type="password" autoComplete="new-password" />
                 </Field>

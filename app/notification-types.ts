@@ -1,7 +1,7 @@
 // The notification types, in the order settings list them (design §8.6).
 export const NOTIFICATION_TYPES = [
   { type: "reply", label: "回复我的楼层" },
-  { type: "thread_reply", label: "回复我的帖子（没指定回复哪一层）" },
+  { type: "thread_reply", label: "回复我的帖子（未指定楼层）" },
   { type: "mention", label: "@我" },
   { type: "like", label: "点赞" },
   { type: "boost", label: "短评" },

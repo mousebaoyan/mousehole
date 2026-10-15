@@ -5,6 +5,7 @@ import { Input } from "~/components/ui/input";
 import { Select } from "~/components/ui/select";
 import type { Route } from "./+types/site.ts";
 import { Check, Field, readForm, Result, Section } from "~/components/form-parts";
+import { BOT_NAME } from "../../../server/platform/site.ts";
 
 export function meta() {
   return [{ title: "站点 · 管理后台" }];
@@ -54,7 +55,7 @@ export default function Site({
           <Field label="公告横幅" hint="显示在每个论坛页面的顶部，最多 200 个字；留空不显示">
             <Input name="banner" defaultValue={site.banner} maxLength={200} />
           </Field>
-          <Field label="新版块的审核方式" hint="新建版块时默认选这个，建好后每个版块可以单独改">
+          <Field label="新版块的审核方式" hint="新建版块时的默认值，创建后每个版块可以单独修改">
             <Select
               name="review_mode"
               defaultValue={site.review_mode}
@@ -67,24 +68,29 @@ export default function Site({
           <Check
             name="qq_public"
             label="访客也能看到 QQ 号"
-            hint="默认只有群成员和 bot 能看到；打开后个人资料里的 QQ 号对所有人公开"
+            hint="默认只有成员和 bot 能看到；开启后，个人资料中的 QQ 号对所有人公开"
             checked={site.qq_public}
           />
         </div>
       </Section>
 
-      <Section title="登录方式" description="关掉的方式不在登录页显示，对应接口也会拒绝">
-        <Check name="code" label="口令登录" hint="私聊 bot 发送网页上的口令" checked={login.code} />
+      <Section title="登录方式" description="关闭的方式不在登录页显示，对应接口也会拒绝请求">
+        <Check
+          name="code"
+          label="口令登录"
+          hint={`私聊${BOT_NAME} 发送网页上显示的口令`}
+          checked={login.code}
+        />
         <Check
           name="link"
           label="链接登录"
-          hint="bot 私聊发送一次性登录链接"
+          hint={`私聊${BOT_NAME} 发送「登录」，获取一次性登录链接`}
           checked={login.link}
         />
         <Check
           name="email"
           label="QQ 邮箱验证码"
-          hint="需要先在「邮件」里配置 SMTP，否则不会显示"
+          hint="需先在「邮件」中配置发信邮箱，否则不显示"
           checked={login.email}
         />
         <div className="mt-3">
@@ -98,7 +104,7 @@ export default function Site({
         <Check
           name="require_operator"
           label="代表成员操作时必须带 X-Operator"
-          hint="开启后，bot 以群友身份操作的请求都要指明是谁让它做的；成员同步等 bot 自己的操作不受影响"
+          hint="开启后，bot 代表成员操作的请求必须指明发起人；成员同步等 bot 自身的操作不受影响"
           checked={bot.require_operator}
         />
       </Section>

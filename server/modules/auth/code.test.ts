@@ -50,8 +50,7 @@ function confirm(code: string, actAs?: number) {
 describe("口令登录", () => {
   test("浏览器拿到口令，bot 代成员确认后，浏览器下一次查询就登录了", async () => {
     const member = await createUser();
-    const { code, hint, cookie } = await browserCode();
-    expect(hint).toContain(code);
+    const { code, cookie } = await browserCode();
     expect(await (await poll(cookie)).json()).toMatchObject({ status: "pending", code });
 
     const confirmed = await confirm(code, member.id);

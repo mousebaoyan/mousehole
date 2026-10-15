@@ -364,7 +364,7 @@ function Profile({
 }
 
 function Empty() {
-  return <p className="py-16 text-center text-sm text-muted-foreground">还没有内容</p>;
+  return <p className="py-16 text-center text-sm text-muted-foreground">暂无内容</p>;
 }
 
 // Liked floors say with what, and when rather than when they were written.
@@ -473,7 +473,7 @@ function Tally({
     <div>
       <h2 className="px-1 text-sm font-medium">{title}</h2>
       {people.length === 0 ? (
-        <p className="px-1 py-6 text-meta text-muted-foreground">还没有</p>
+        <p className="px-1 py-6 text-meta text-muted-foreground">暂无</p>
       ) : (
         <ul className="mt-1">
           {people.map((p) => (
@@ -502,7 +502,7 @@ function LevelProgress({ progress }: { progress: NonNullable<LoaderData["progres
   if (!next) {
     return locked ? (
       <p className="px-1 text-meta text-muted-foreground">
-        等级由管理员定为 {levelName(level)}，不再自动升降
+        等级已由管理员设为 {levelName(level)}，不再自动调整
       </p>
     ) : null;
   }
@@ -512,7 +512,7 @@ function LevelProgress({ progress }: { progress: NonNullable<LoaderData["progres
       <h2 className="text-sm font-medium">
         {keep ? `保持 ${levelName(level)}` : `升到 ${levelName(next.level)}`}
         <span className="ml-2 text-meta font-normal text-muted-foreground">
-          {next.level === 4 ? "看最近 30 天" : "累计"}
+          {next.level === 4 ? "按最近 30 天计算" : "累计"}
         </span>
       </h2>
       <ul className="mt-3 grid gap-x-6 gap-y-3 sm:grid-cols-2">

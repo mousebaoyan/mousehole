@@ -59,7 +59,7 @@ export async function ensureBotUser(trx: Transaction<DB>, qq: number, name: stri
     )
     .returning("id")
     .executeTakeFirst();
-  if (!row) throw new AppError(409, "bot_qq_taken", "这个 QQ 号是登录过的群友，不能用作 bot");
+  if (!row) throw new AppError(409, "bot_qq_taken", "该 QQ 号属于已登录过的成员，不能用作 bot");
   return row.id;
 }
 
@@ -822,7 +822,7 @@ export async function restoreQqAvatar(actor: Actor) {
     .$narrowType<{ qq: number }>()
     .executeTakeFirstOrThrow();
   const avatar = await fetchAvatar(qq).catch((error: unknown) => {
-    throw new AppError(502, "fetch_failed", "QQ 头像获取失败，请稍后再试", { cause: error });
+    throw new AppError(502, "fetch_failed", "QQ 头像获取失败，请稍后重试", { cause: error });
   });
   return saveAvatar(actor.userId, avatar, false, actor);
 }

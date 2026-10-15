@@ -15,7 +15,7 @@ export function meta() {
 
 const SCOPES = [
   { scope: "read", hint: "读取全部内容，包括仅成员版块和 QQ 号" },
-  { scope: "act", hint: "以群友身份发帖、回复、点赞等" },
+  { scope: "act", hint: "以成员身份发帖、回复、点赞等" },
   { scope: "moderate", hint: "版主操作：审核、置顶、锁定、禁言等" },
   { scope: "admin", hint: "管理员操作：封禁、设置角色、管理版块等" },
   { scope: "sync", hint: "推送 QQ 群资料和成员名单" },
@@ -63,7 +63,7 @@ export default function Tokens({ loaderData: { tokens }, actionData }: Route.Com
       {actionData?.token ? <NewToken token={actionData.token} /> : <Result result={actionData} />}
 
       <Section title="token">
-        {tokens.length === 0 && <p className="text-sm text-muted-foreground">还没有创建 token</p>}
+        {tokens.length === 0 && <p className="text-sm text-muted-foreground">暂无 token</p>}
         <ul className="divide-y">
           {tokens.map((t) => (
             <li key={t.id} className="flex flex-wrap items-center gap-x-6 gap-y-2 py-3">
@@ -91,7 +91,7 @@ export default function Tokens({ loaderData: { tokens }, actionData }: Route.Com
                     size="sm"
                     disabled={busy}
                     onClick={confirmSubmit(
-                      `吊销「${t.name}」后，用它的插件会立刻无法调用接口。确定吗？`,
+                      `确定吊销「${t.name}」？吊销后，使用它的插件将立即无法调用接口。`,
                       "吊销",
                     )}
                   >
@@ -105,7 +105,10 @@ export default function Tokens({ loaderData: { tokens }, actionData }: Route.Com
       </Section>
 
       <Form method="post" ref={createForm}>
-        <Section title="新建 token" description="bot 的 QQ 号还没同步过也可以，会先建一个 bot 账号">
+        <Section
+          title="新建 token"
+          description="bot 的 QQ 号尚未同步时也可以创建，系统会先建立对应的 bot 账号"
+        >
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="名称" hint="例如 AstrBot 主插件">
               <Input name="name" required maxLength={40} />
@@ -117,7 +120,7 @@ export default function Tokens({ loaderData: { tokens }, actionData }: Route.Com
           <fieldset className="mt-4">
             <legend className="text-sm font-medium">范围</legend>
             <p className="mt-1 text-meta text-muted-foreground">
-              鼠洞插件要 read、act、sync、auth、events
+              鼠洞插件需要 read、act、sync、auth、events
             </p>
             <div className="mt-2 grid gap-x-6 sm:grid-cols-2">
               {SCOPES.map((s) => (
@@ -145,7 +148,7 @@ export default function Tokens({ loaderData: { tokens }, actionData }: Route.Com
 function NewToken({ token }: { token: string }) {
   return (
     <output className="mt-4 block rounded-2xl border border-success/40 bg-success/5 p-4 text-sm">
-      <p className="font-medium text-success">已创建。token 只显示这一次，请现在复制到插件里</p>
+      <p className="font-medium text-success">已创建。token 只显示这一次，请立即复制到插件配置中</p>
       <div className="mt-2 flex items-center gap-2">
         <code className="min-w-0 flex-1 truncate rounded-lg bg-card px-3 py-2 font-mono">
           {token}

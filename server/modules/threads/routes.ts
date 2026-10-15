@@ -312,8 +312,8 @@ function deadline(what: string) {
   return z
     .number()
     .int()
-    .refine((t) => t >= Date.now() / 1000 + SOON_S, `${what}最早是 10 分钟以后`)
-    .refine((t) => t <= Date.now() / 1000 + YEAR_S, `${what}最晚是一年以内`);
+    .refine((t) => t >= Date.now() / 1000 + SOON_S, `${what}不能早于 10 分钟后`)
+    .refine((t) => t <= Date.now() / 1000 + YEAR_S, `${what}不能晚于一年后`);
 }
 
 const PollInput = z
@@ -341,7 +341,7 @@ const PollInput = z
       .openapi({ description: "截止时间，Unix 秒，10 分钟以后、一年以内；null 不限" }),
   })
   .refine((p) => p.max_choices === null || p.max_choices < p.options.length, {
-    message: "最多选几项要少于选项数",
+    message: "最多可选项数应少于选项总数",
     path: ["max_choices"],
   })
   .openapi("PollInput", { description: "选项、单选还是多选、是否匿名发出后都不能改" });
@@ -552,7 +552,7 @@ export const threadsRoutes = createRouter()
     }),
     async (c) => {
       const viewer = authorize(c, "read");
-      if (!isMember(viewer, c.var.bot)) throw new AppError(403, "forbidden", "成员才能看");
+      if (!isMember(viewer, c.var.bot)) throw new AppError(403, "forbidden", "仅成员可查看");
       const userId = await findUserId(c.req.valid("param").user);
       await assertRelationsShown(viewer.id, userId);
       const reach = reachOf(viewer, c.var.bot);

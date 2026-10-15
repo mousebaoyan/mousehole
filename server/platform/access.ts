@@ -1,5 +1,5 @@
 import { AppError } from "./errors.ts";
-import { STAFF } from "./site.ts";
+import { BOT_NAME, STAFF } from "./site.ts";
 
 // A mute or ban in force; see design §6.4. One whose time is up no longer counts.
 export type Restriction = { type: "mute" | "ban"; until: Date | null } | null;
@@ -66,12 +66,16 @@ export function checkPermission(viewer: Viewer | null, bot: Bot | null, need: Sc
       throw new AppError(403, "banned", "账号已被封禁");
     }
     if (bot && !bot.proxyAllowed) {
-      throw new AppError(403, "proxy_disabled", "这位成员关闭了代发，只有本人能让 bot 操作");
+      throw new AppError(
+        403,
+        "proxy_disabled",
+        `这位成员已关闭代发，只有本人能让${BOT_NAME} 代为操作`,
+      );
     }
   }
   // Not anyone in the groups, so it neither writes nor joins in.
   if (need === "act" && viewer.role === "owner") {
-    throw new AppError(403, "forbidden", "站长账号只用来管理，不能发帖、回复和互动");
+    throw new AppError(403, "forbidden", "站长账号仅用于管理，不能发帖、回复或互动");
   }
 
   const roles = ROLES[need];

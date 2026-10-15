@@ -202,7 +202,7 @@ async function scopeOf(reach: number, filter: { board?: string; tag?: string }) 
 }
 
 function needsLevelToRead(level: number) {
-  return levelRequired(`这个版块 L${level} 起才能看`);
+  return levelRequired(`此版块 L${level} 起才能查看`);
 }
 
 function inScope({ board, tagId }: Awaited<ReturnType<typeof scopeOf>>) {
@@ -975,7 +975,7 @@ export async function createPost(
         .where("deleted_at", "is", null)
         .executeTakeFirst();
       if (!target) {
-        throw new AppError(400, "invalid_request", "回复的那一层不在这个帖子里，或者已删除");
+        throw new AppError(400, "invalid_request", "所回复的楼层不在此帖子中，或已被删除");
       }
     }
     // Locks the thread row, so concurrent replies take floor numbers one after another.
@@ -1278,7 +1278,7 @@ export async function deleteThread(
   const thread = await getThread(threadId, reader);
   assertMayChange(staff, viewer, thread.author_id, thread.locked);
   if (!staff && thread.reply_count > 0) {
-    throw forbidden("已经有人回复了，不能删除；需要的话请联系版主");
+    throw forbidden("帖子已有回复，不能删除；如需删除请联系版主");
   }
   await db.transaction().execute(async (trx) => {
     await trx
@@ -1557,7 +1557,7 @@ export async function reportHolds(viewer: Viewer, post: Awaited<ReturnType<typeo
 
 export async function holdReported(trx: Transaction<DB>, postId: number, reporterId: number) {
   await trx.updateTable("posts").set({ status: "hidden" }).where("id", "=", postId).execute();
-  await withdrawPost(trx, postId, reporterId, "被举报，等版主处理");
+  await withdrawPost(trx, postId, reporterId, "被举报，等待版主处理");
 }
 
 // A held floor comes back when its report is dismissed, unless a moderator dealt with it since.
@@ -1575,7 +1575,7 @@ export async function releaseReported(trx: Transaction<DB>, postId: number) {
 
 // Replying, accepting an answer and reviewing a reply wait until the thread itself is public.
 function assertPublic(thread: { status: string }) {
-  if (thread.status !== "visible") throw forbidden("帖子待审核或已隐藏，暂时不能这样做");
+  if (thread.status !== "visible") throw forbidden("帖子待审核或已隐藏，暂不能进行此操作");
 }
 
 // What the audit log and the author's notice call a change of status.
@@ -1639,7 +1639,7 @@ export async function setPostStatus(
   const post = await getPost(postId, reader);
   if (post.deleted_at !== null) throw new AppError(404, "post_not_found", "回复不存在");
   if (post.floor === 1) {
-    throw new AppError(400, "invalid_request", "主楼随帖子，请修改帖子的状态");
+    throw new AppError(400, "invalid_request", "主楼的状态随帖子变化，请修改帖子的状态");
   }
   assertPublic(await assertVisible(post.thread_id, reader));
   if (post.status === status) return;
@@ -1768,7 +1768,7 @@ export async function setSolution(
           .where("deleted_at", "is", null)
           .executeTakeFirst();
   if (answer === undefined) {
-    throw new AppError(400, "invalid_request", "只能采纳这个帖子里公开的回复");
+    throw new AppError(400, "invalid_request", "只能采纳此帖子中公开的回复");
   }
   await db.transaction().execute(async (trx) => {
     await trx

@@ -29,7 +29,7 @@ export async function action({ request, context }: Route.ActionArgs) {
         });
   if (res.ok) {
     const message =
-      intent === "link" ? "已关联，等 bot 推送成员名单" : "已修改，相关成员的身份已重算";
+      intent === "link" ? "已关联，等待 bot 推送成员名单" : "已修改，相关成员的身份已重算";
     return { ok: true, message };
   }
   return { ok: false, message: (await res.json()).error.message };
@@ -41,12 +41,12 @@ export default function Groups({ loaderData: { groups }, actionData }: Route.Com
     <>
       <h1 className="text-xl font-semibold">QQ 群</h1>
       <p className="mt-1 text-meta text-muted-foreground">
-        在任意一个启用的群里就是成员；主群决定显示名和等级
+        在任一启用的群中即为成员；显示名以主群为准
       </p>
       <Result result={actionData} />
 
       <Section title="已关联的群">
-        {groups.length === 0 && <p className="text-sm text-muted-foreground">还没有关联 QQ 群</p>}
+        {groups.length === 0 && <p className="text-sm text-muted-foreground">暂未关联 QQ 群</p>}
         <ul className="divide-y">
           {groups.map((g) => (
             <li key={g.group_id} className="flex flex-wrap items-center gap-x-6 gap-y-2 py-3">

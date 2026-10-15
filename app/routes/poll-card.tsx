@@ -144,7 +144,7 @@ export function PollCard({
               ? "不限时间"
               : `${stamp(poll.closes_at, now)} 截止`}
         </span>
-        {!picking && poll.options[0]?.votes === null && <span>投票后看结果</span>}
+        {!picking && poll.options[0]?.votes === null && <span>投票后可查看结果</span>}
         {canVote && !poll.closed && mine.length > 0 && !changing && (
           <Button size="sm" variant="ghost" onClick={() => setChangingAt({ answer: sending.data })}>
             改票
@@ -156,7 +156,7 @@ export function PollCard({
             variant="ghost"
             disabled={busy}
             onClick={async () => {
-              if (await confirmDialog("现在结束投票？结束后不能再投。", "结束"))
+              if (await confirmDialog("确定现在结束投票？结束后无法再投票。", "结束"))
                 submit("close-poll");
             }}
           >
@@ -199,7 +199,7 @@ function Result({
               <PeoplePopover
                 source={voters}
                 label={`${option.votes} 票`}
-                title={`${option.votes} 票，查看是谁`}
+                title={`${option.votes} 票，查看名单`}
               />
             ) : (
               `${option.votes} 票`

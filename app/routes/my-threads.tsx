@@ -8,14 +8,14 @@ import { SITE_NAME } from "../../server/platform/site.ts";
 
 // The reader's own lists in the sidebar, by the path after /my/.
 const LISTS = [
-  { name: "posts", view: "posted", title: "我的帖子", empty: "还没有发过帖子或回复" },
+  { name: "posts", view: "posted", title: "我的帖子", empty: "暂无帖子或回复" },
   {
     name: "bookmarks",
     view: "bookmarked",
     title: "收藏",
-    empty: "还没有收藏的帖子，在帖子底部点「收藏」就会出现在这里",
+    empty: "暂无收藏。在帖子底部点击「收藏」后会显示在这里",
   },
-  { name: "read", view: "read", title: "已读", empty: "还没有读过的帖子" },
+  { name: "read", view: "read", title: "已读", empty: "暂无已读的帖子" },
 ] as const;
 
 function listOf(name: string) {

@@ -17,7 +17,7 @@ export function rateLimit(key: string, limit: number, windowMs: number) {
   }
   if (window.count >= limit) {
     const retryAfter = Math.ceil((window.resetAt - now) / 1000);
-    throw new AppError(429, "rate_limited", `操作太频繁，请 ${retryAfter} 秒后再试`, {
+    throw new AppError(429, "rate_limited", `操作过于频繁，请 ${retryAfter} 秒后重试`, {
       retryAfter,
     });
   }

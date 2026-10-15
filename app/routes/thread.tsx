@@ -148,7 +148,7 @@ export async function action({ params, request, context }: Route.ActionArgs) {
   }
   if (text("intent") === "notify") {
     const level = NOTIFY_LEVELS.find((l) => l.level === text("level"))?.level;
-    if (!level) throw data("关注级别不对", { status: 400 });
+    if (!level) throw data("关注级别无效", { status: 400 });
     const res = await api.threads[":id"].subscription.$put({ param: thread, json: { level } });
     if (res.ok) return { ok: true as const, saved: level };
     return { ok: false as const, message: (await res.json()).error.message };
@@ -159,7 +159,7 @@ export async function action({ params, request, context }: Route.ActionArgs) {
     const res = form.has("boost_id")
       ? await api.boosts[":id"].report.$post({ param: { id: text("boost_id") }, json })
       : await api.posts[":id"].report.$post({ param: post, json });
-    if (res.ok) return { ok: true as const, message: "已举报，版主会尽快处理" };
+    if (res.ok) return { ok: true as const, message: "举报已提交，版主会尽快处理" };
     return { ok: false as const, message: (await res.json()).error.message };
   }
   if (text("intent") === "accept" || text("intent") === "unaccept") {
@@ -387,7 +387,9 @@ function ThreadPage({
                   href={`?floor=${Math.max(1, first - BATCH)}`}
                   className="text-muted-foreground hover:text-foreground"
                 >
-                  {earlier.state === "loading" ? "加载中…" : `前 ${Math.min(first - 1, BATCH)} 层`}
+                  {earlier.state === "loading"
+                    ? "加载中…"
+                    : `加载前 ${Math.min(first - 1, BATCH)} 层`}
                 </a>
               </li>
             )}
@@ -497,7 +499,7 @@ function ThreadPage({
                   href={`?floor=${last + 1}`}
                   className="text-muted-foreground hover:text-foreground"
                 >
-                  {later.state === "loading" ? "加载中…" : "后 20 层"}
+                  {later.state === "loading" ? "加载中…" : "加载后 20 层"}
                 </a>
               </li>
             )}

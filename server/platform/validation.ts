@@ -67,19 +67,19 @@ export const describeIssue: z.core.$ZodErrorMap = (issue) => {
       if (issue.origin === "string") {
         return issue.minimum === 1 ? `请填写${label}` : `${label}至少 ${issue.minimum} 个字`;
       }
-      if (issue.origin === "array") return `${label}至少要有 ${issue.minimum} 个`;
+      if (issue.origin === "array") return `${label}至少需要 ${issue.minimum} 个`;
       return `${label}不能小于 ${issue.minimum}`;
     case "too_big":
       if (issue.origin === "string") return `${label}最多 ${issue.maximum} 个字`;
       if (issue.origin === "array") return `${label}最多 ${issue.maximum} 个`;
       return `${label}不能大于 ${issue.maximum}`;
     case "invalid_type":
-      return issue.input === undefined ? `缺少${label}` : `${label}的格式不对`;
+      return issue.input === undefined ? `缺少${label}` : `${label}的格式不正确`;
     case "invalid_value":
-      return `${label}不在可选的范围里`;
+      return `${label}不在可选范围内`;
     case "invalid_format":
     case "invalid_union":
-      return `${label}的格式不对`;
+      return `${label}的格式不正确`;
     case "custom":
     case "invalid_element":
     case "invalid_key":

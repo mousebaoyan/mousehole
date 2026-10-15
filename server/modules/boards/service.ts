@@ -101,7 +101,7 @@ export async function createBoard(
       .onConflict((oc) => oc.column("slug").doNothing())
       .returning(BOARD)
       .executeTakeFirst();
-    if (!created) throw new AppError(409, "board_exists", "这个地址已经有版块在用了");
+    if (!created) throw new AppError(409, "board_exists", "该地址已被其他版块使用");
     await recordAudit(trx, actor, {
       action: "board.create",
       target_type: "board",
@@ -167,7 +167,7 @@ export async function deleteBoard(actor: Actor, slug: string) {
         // Threads keep their board even when deleted, so the foreign key refuses any board
         // that ever had one.
         if (error instanceof DatabaseError && error.code === "23503") {
-          throw new AppError(409, "board_not_empty", "版块里有过帖子，不能删除");
+          throw new AppError(409, "board_not_empty", "版块中有过帖子，不能删除");
         }
         throw error;
       });
@@ -200,7 +200,7 @@ export async function createTag(actor: Actor, tag: TagFields & { name: string })
       .onConflict((oc) => oc.column("name").doNothing())
       .returning(TAG)
       .executeTakeFirst();
-    if (!created) throw new AppError(409, "tag_exists", "已经有这个标签了");
+    if (!created) throw new AppError(409, "tag_exists", "标签已存在");
     await recordAudit(trx, actor, {
       action: "tag.create",
       target_type: "tag",
@@ -221,7 +221,7 @@ export async function updateTag(actor: Actor, id: number, change: TagFields) {
       .executeTakeFirst()
       .catch((error: unknown) => {
         if (error instanceof DatabaseError && error.code === "23505") {
-          throw new AppError(409, "tag_exists", "已经有这个标签了，可以合并过去");
+          throw new AppError(409, "tag_exists", "标签已存在，可以合并到该标签");
         }
         throw error;
       });

@@ -45,7 +45,7 @@ export const levelsRoutes = createRouter()
       const viewer = authorize(c, "read");
       const id = await findUserId(c.req.valid("param").user);
       if (id !== viewer.id && !can(c, "admin")) {
-        throw new AppError(403, "forbidden", "只能看自己的升级进度");
+        throw new AppError(403, "forbidden", "只能查看自己的升级进度");
       }
       return c.json(await levelProgress(id), 200);
     },

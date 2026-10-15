@@ -148,7 +148,7 @@ export function ThreadFeed({
         </nav>
       </div>
       {threads.length === 0 ? (
-        <p className="py-16 text-center text-sm text-muted-foreground">还没有帖子</p>
+        <p className="py-16 text-center text-sm text-muted-foreground">暂无帖子</p>
       ) : (
         <ThreadList threads={threads} now={now} showBoard={board === null}>
           {next_cursor !== null && <More cursor={next_cursor} showBoard={board === null} />}
