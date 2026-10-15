@@ -21,7 +21,13 @@ export async function action({ request, context }: Route.ActionArgs) {
     json: {
       board: text("board"),
       title: text("title"),
-      kind: kind === "question" || kind === "poll" || kind === "lottery" ? kind : "discussion",
+      // A 保研定位 thread is a poll the forum sets up (design §8.14).
+      kind:
+        kind === "question" || kind === "poll" || kind === "lottery"
+          ? kind
+          : kind === "positioning"
+            ? "poll"
+            : "discussion",
       poll:
         kind === "poll"
           ? {
@@ -32,7 +38,12 @@ export async function action({ request, context }: Route.ActionArgs) {
               results: text("results") === "always" ? "always" : "voted",
               closes_at: number("closes_at"),
             }
-          : undefined,
+          : kind === "positioning"
+            ? {
+                preset: "positioning",
+                rows: form.getAll("schools").filter((s) => typeof s === "string"),
+              }
+            : undefined,
       lottery:
         kind === "lottery"
           ? {

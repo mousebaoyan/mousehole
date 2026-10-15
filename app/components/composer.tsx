@@ -31,14 +31,14 @@ import { Checkbox } from "~/components/ui/checkbox";
 import { chooseDialog, confirmDialog } from "~/components/ui/dialog";
 import { Input } from "~/components/ui/input";
 import { Select } from "~/components/ui/select";
-import { useMe, usePostableBoards } from "~/forum";
+import { useMe, usePostableBoards, useTags } from "~/forum";
 import { useHydrated } from "~/hydrated";
 import { fromWallClock, unixNow, wallClock } from "~/time";
 import { levelName, STAFF } from "../../server/platform/site.ts";
 
 type ThreadRef = { id: number; title: string };
 type ReplyRef = { id: number; floor: number; name: string };
-type Kind = "discussion" | "question" | "poll" | "lottery";
+type Kind = "discussion" | "question" | "poll" | "positioning" | "lottery";
 
 // A poll being set up, as the API takes it (design §8.11); blank options are left out on posting.
 // It closes some days after posting or at a time of the author's; neither is never.
@@ -62,6 +62,10 @@ type LotteryDraft = {
   draws_at: number | null;
 };
 
+// A 保研定位 thread being filled in (design §8.14): the background it asks for, by BACKGROUND's
+// keys, and the schools to rate, blank ones left out on posting.
+type PositioningDraft = { fields: Record<string, string>; schools: string[] };
+
 // A new thread, a reply to one, or a change to a floor already posted.
 export type ComposerTarget =
   | { mode: "thread"; board: string | null }
@@ -76,6 +80,7 @@ type Content = {
   kind: Kind;
   poll: PollDraft;
   lottery: LotteryDraft;
+  positioning: PositioningDraft;
   tags: string[];
   // Design §8.12: the author, and everyone else replying.
   anonymous: boolean;
@@ -110,6 +115,7 @@ const EMPTY: Content = {
     days: 3,
     draws_at: null,
   },
+  positioning: { fields: {}, schools: [""] },
   tags: [],
   anonymous: false,
   anonymousReplies: false,
@@ -121,6 +127,51 @@ function filledOptions(poll: PollDraft) {
 
 function filledPrizes(lottery: LotteryDraft) {
   return lottery.prizes.filter((p) => p.name.trim());
+}
+
+// What a 保研定位 thread asks of its author, in the order of the table its body opens with. Every
+// one is filled in, "无" where there is nothing to say; the schools go between the last two.
+const BACKGROUND = [
+  { key: "level", label: "本科层次与专业", hint: "只写层次，例如：双非 计算机科学与技术" },
+  { key: "rank", label: "专业排名", hint: "例如：3/120（2.5%），写明是综合还是绩点排名" },
+  { key: "english", label: "英语", hint: "例如：六级 520" },
+  { key: "awards", label: "竞赛奖项", hint: "没有就写「无」" },
+  { key: "research", label: "科研与论文", hint: "没有就写「无」" },
+  { key: "notes", label: "补充信息", hint: "没有就写「无」" },
+] as const;
+
+const MAX_SCHOOLS = 10;
+
+function filledSchools(positioning: PositioningDraft) {
+  return positioning.schools.map((s) => s.trim()).filter(Boolean);
+}
+
+function positioningReady(positioning: PositioningDraft) {
+  return (
+    BACKGROUND.every((f) => positioning.fields[f.key]?.trim()) &&
+    filledSchools(positioning).length > 0
+  );
+}
+
+// What a 保研定位 thread is called unless its author names it.
+function positioningTitle(positioning: PositioningDraft) {
+  const schools = filledSchools(positioning);
+  return `求定位：${schools[0] ?? ""}${schools.length > 1 ? "等" : ""}`;
+}
+
+// A line of a two-column Markdown table; a "|" typed in would end its cell.
+function tableRow(label: string, value: string) {
+  return `| ${label} | ${value.trim().replaceAll("|", "\\|")} |`;
+}
+
+// The body a 保研定位 thread is posted with: its background as a table, then whatever else the
+// author wrote.
+function positioningBody(positioning: PositioningDraft, text: string) {
+  const rows = BACKGROUND.map((f) => tableRow(f.label, positioning.fields[f.key] ?? ""));
+  rows.splice(-1, 0, tableRow("目标院校", filledSchools(positioning).join("、")));
+  return [["| 项目 | 内容 |", "| --- | --- |", ...rows].join("\n"), text.trim()]
+    .filter(Boolean)
+    .join("\n\n");
 }
 
 function lotteryReady(lottery: LotteryDraft) {
@@ -140,12 +191,18 @@ function draftKey(target: ComposerTarget) {
 }
 
 function isEmpty(content: Content) {
-  return !content.text.trim() && !content.title.trim();
+  const { fields, schools } = content.positioning;
+  return (
+    !content.text.trim() &&
+    !content.title.trim() &&
+    (content.kind !== "positioning" ||
+      (Object.values(fields).every((v) => !v.trim()) && schools.every((s) => !s.trim())))
+  );
 }
 
 function draftBody({ target, content }: Writing) {
   if (target.mode === "thread") {
-    const { text, title, board, kind, poll, lottery, tags, anonymous, anonymousReplies } = content;
+    const { text, title, board, kind, poll, lottery, positioning, tags } = content;
     return {
       body: text,
       title,
@@ -153,9 +210,10 @@ function draftBody({ target, content }: Writing) {
       kind,
       poll: kind === "poll" ? poll : null,
       lottery: kind === "lottery" ? lottery : null,
+      positioning: kind === "positioning" ? positioning : null,
       tags,
-      author_anonymous: anonymous,
-      anonymous_replies: anonymousReplies,
+      author_anonymous: content.anonymous,
+      anonymous_replies: content.anonymousReplies,
     };
   }
   return {
@@ -322,12 +380,10 @@ export function ComposerProvider({
         text: draft.body,
         title: draft.title,
         board: draft.board ?? "",
-        kind:
-          draft.kind === "question" || draft.kind === "poll" || draft.kind === "lottery"
-            ? draft.kind
-            : "discussion",
+        kind: KINDS.find((k) => k.kind === draft.kind)?.kind ?? "discussion",
         poll: draft.poll ?? EMPTY.poll,
         lottery: draft.lottery ?? EMPTY.lottery,
+        positioning: draft.positioning ?? EMPTY.positioning,
         tags: draft.tags,
         anonymous: draft.author_anonymous,
         anonymousReplies: draft.anonymous_replies,
@@ -495,17 +551,21 @@ function Composer({
   const sending = useFetcher<Sent>();
   const { target, content, collapsed } = writing;
   const busy = sending.state !== "idle";
-  const ready =
-    content.text.trim() !== "" &&
-    (target.mode !== "thread" ||
-      (content.board !== "" &&
-        (content.kind !== "poll" || filledOptions(content.poll).length >= 2) &&
-        (content.kind !== "lottery" || lotteryReady(content.lottery))));
   const { label, Icon, field } = SEND[target.mode];
   const withPoll = target.mode === "thread" && content.kind === "poll";
   const withLottery = target.mode === "thread" && content.kind === "lottery";
+  const withPositioning = target.mode === "thread" && content.kind === "positioning";
+  // A 保研定位 thread's body is mostly its table, so the rest may stay empty.
+  const ready = withPositioning
+    ? content.board !== "" && positioningReady(content.positioning)
+    : content.text.trim() !== "" &&
+      (target.mode !== "thread" ||
+        (content.board !== "" &&
+          (content.kind !== "poll" || filledOptions(content.poll).length >= 2) &&
+          (content.kind !== "lottery" || lotteryReady(content.lottery))));
   const setPoll = (next: PollDraft) => onChange({ ...content, poll: next });
   const setLottery = (next: LotteryDraft) => onChange({ ...content, lottery: next });
+  const setPositioning = (next: PositioningDraft) => onChange({ ...content, positioning: next });
 
   useEffect(() => {
     if (sending.state !== "idle" || !sending.data?.ok) return;
@@ -518,10 +578,18 @@ function Composer({
     const options = { method: "post", defaultShouldRevalidate: false } as const;
     if (target.mode === "thread") {
       const form = new FormData();
-      form.set("title", content.title);
+      form.set(
+        "title",
+        withPositioning && !content.title.trim()
+          ? positioningTitle(content.positioning)
+          : content.title,
+      );
       form.set("board", content.board);
       form.set("kind", content.kind);
-      form.set("markdown", content.text);
+      form.set(
+        "markdown",
+        withPositioning ? positioningBody(content.positioning, content.text) : content.text,
+      );
       for (const tag of content.tags) form.append("tags", tag);
       form.set("anonymous", String(content.anonymous));
       form.set("anonymous_replies", String(content.anonymousReplies));
@@ -533,6 +601,9 @@ function Composer({
         form.set("poll_anonymous", String(poll.anonymous));
         form.set("results", poll.results);
         form.set("closes_at", String(deadlineOf(poll.days, poll.closes_at) ?? ""));
+      }
+      if (withPositioning) {
+        for (const school of filledSchools(content.positioning)) form.append("schools", school);
       }
       if (content.kind === "lottery") {
         const { lottery } = content;
@@ -566,7 +637,10 @@ function Composer({
     return clamped;
   }
 
-  const open = withPoll || withLottery ? Math.max(height, clampHeight(SETUP_HEIGHT)) : height;
+  const open =
+    withPoll || withLottery || withPositioning
+      ? Math.max(height, clampHeight(SETUP_HEIGHT))
+      : height;
   const shown = collapsed ? COLLAPSED_HEIGHT : open;
   return (
     <>
@@ -647,11 +721,14 @@ function Composer({
             <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
               {withPoll && <PollOptions poll={content.poll} onChange={setPoll} />}
               {withLottery && <LotteryPrizes lottery={content.lottery} onChange={setLottery} />}
+              {withPositioning && (
+                <PositioningFields positioning={content.positioning} onChange={setPositioning} />
+              )}
               <MarkdownEditor
                 value={content.text}
                 onChange={(text) => onChange({ ...content, text })}
                 onSubmit={send}
-                label={field}
+                label={withPositioning ? "补充说明" : field}
                 textarea={textarea}
                 className="min-h-40 flex-1 border-t"
               />
@@ -722,8 +799,13 @@ const KINDS = [
   { kind: "discussion", label: "讨论" },
   { kind: "question", label: "问答" },
   { kind: "poll", label: "投票" },
+  { kind: "positioning", label: "保研定位" },
   { kind: "lottery", label: "抽奖" },
 ] as const;
+
+// Where 保研定位 threads go, and the tag they come with, when the forum has them (design §8.14).
+const POSITIONING_BOARD = "qa";
+const POSITIONING_TAG = "定位";
 
 // A new thread's title, board, kind and tags above its body. Picking a board takes its kind,
 // unless a poll or lottery is being set up.
@@ -737,14 +819,20 @@ function ThreadFields({
   const me = useMe();
   const staff = me !== null && STAFF.includes(me.role);
   const boards = usePostableBoards();
+  const forumTags = useTags();
   const id = useId();
+  const positioning = content.kind === "positioning";
   return (
     <div className="flex flex-col gap-2 border-t px-4 py-2.5">
       <Input
         value={content.title}
         onChange={(e) => onChange({ ...content, title: e.target.value })}
         aria-label="标题"
-        placeholder="标题：把问题写清楚，比如「rank 30% 能冲华五的夏令营吗」"
+        placeholder={
+          positioning
+            ? `标题：不填就是「${positioningTitle(content.positioning)}」`
+            : "标题：把问题写清楚，比如「rank 30% 能冲华五的夏令营吗」"
+        }
         maxLength={80}
         className="h-9 text-base md:text-base"
       />
@@ -754,7 +842,7 @@ function ThreadFields({
           onValueChange={(slug) => {
             const board = boards.find((b) => b.slug === slug);
             const kind = board?.default_kind === "question" ? "question" : "discussion";
-            const kept = content.kind === "poll" || content.kind === "lottery";
+            const kept = content.kind !== "discussion" && content.kind !== "question";
             onChange({ ...content, board: slug, kind: kept ? content.kind : kind });
           }}
           options={boards.map((b) => ({ value: b.slug, label: b.name }))}
@@ -765,7 +853,7 @@ function ThreadFields({
         <fieldset className="flex rounded-full bg-secondary p-0.5 text-sm">
           <legend className="sr-only">类型</legend>
           {KINDS.map((k) => {
-            // Polls and lotteries come with L2 (design §6.6).
+            // Polls and lotteries come with L2 (design §6.6); 保研定位 is for everyone.
             const held =
               (k.kind === "poll" || k.kind === "lottery") && !staff && (me?.level ?? 0) < 2;
             return (
@@ -786,6 +874,18 @@ function ThreadFields({
                       kind: k.kind,
                       // Lotteries can't be anonymous (design §8.13).
                       ...(k.kind === "lottery" && { anonymous: false, anonymousReplies: false }),
+                      // Few would show their rank under their name.
+                      ...(k.kind === "positioning" && {
+                        anonymous: true,
+                        board: boards.some((b) => b.slug === POSITIONING_BOARD)
+                          ? POSITIONING_BOARD
+                          : content.board,
+                        tags:
+                          forumTags.some((t) => t.name === POSITIONING_TAG) &&
+                          !content.tags.includes(POSITIONING_TAG)
+                            ? [...content.tags, POSITIONING_TAG].slice(0, 5)
+                            : content.tags,
+                      }),
                     })
                   }
                   className="sr-only"
@@ -986,6 +1086,93 @@ function PollOptions({ poll, onChange }: { poll: PollDraft; onChange: (poll: Pol
           <Plus /> 添加选项
         </Button>
       )}
+    </div>
+  );
+}
+
+// The background, a box each, and the schools; it all becomes the table the body opens with.
+function PositioningFields({
+  positioning,
+  onChange,
+}: {
+  positioning: PositioningDraft;
+  onChange: (positioning: PositioningDraft) => void;
+}) {
+  const id = useId();
+  const field = (f: (typeof BACKGROUND)[number]) => (
+    <div key={f.key} className="flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-3">
+      <label htmlFor={`${id}-${f.key}`} className="shrink-0 text-meta font-medium sm:w-28">
+        {f.label}
+      </label>
+      <Input
+        id={`${id}-${f.key}`}
+        value={positioning.fields[f.key] ?? ""}
+        onChange={(e) =>
+          onChange({ ...positioning, fields: { ...positioning.fields, [f.key]: e.target.value } })
+        }
+        placeholder={f.hint}
+        maxLength={200}
+        className="h-8"
+      />
+    </div>
+  );
+  return (
+    <div className="flex shrink-0 flex-col gap-2 border-t px-4 py-2.5">
+      <p className="text-meta text-muted-foreground">
+        都要填，没有的写「无」。每所目标院校一行，大家从「随便去」到「几乎不可能」选一项，匿名投票。
+      </p>
+      {BACKGROUND.slice(0, -1).map(field)}
+      <div className="flex flex-col gap-1 sm:flex-row sm:gap-3">
+        <span className="shrink-0 text-meta font-medium sm:w-28 sm:pt-1.5">目标院校</span>
+        <div className="flex min-w-0 flex-1 flex-col items-start gap-1.5">
+          <ol className="flex w-full flex-col gap-1.5">
+            {positioning.schools.map((school, i) => (
+              // Schools have nothing but their place to tell them apart while being typed.
+              <li key={i} className="flex items-center gap-2">
+                <Input
+                  value={school}
+                  onChange={(e) =>
+                    onChange({
+                      ...positioning,
+                      schools: positioning.schools.with(i, e.target.value),
+                    })
+                  }
+                  aria-label={`目标院校 ${i + 1}`}
+                  placeholder="可以写到学院或方向，例如：浙江大学计算机学院"
+                  maxLength={30}
+                  className="h-8"
+                />
+                {positioning.schools.length > 1 && (
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label={`删除目标院校 ${i + 1}`}
+                    title="删除"
+                    onClick={() =>
+                      onChange({ ...positioning, schools: positioning.schools.toSpliced(i, 1) })
+                    }
+                  >
+                    <X />
+                  </Button>
+                )}
+              </li>
+            ))}
+          </ol>
+          {positioning.schools.length < MAX_SCHOOLS && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => onChange({ ...positioning, schools: [...positioning.schools, ""] })}
+            >
+              <Plus /> 添加目标院校
+            </Button>
+          )}
+        </div>
+      </div>
+      {field(BACKGROUND[BACKGROUND.length - 1])}
+      <p className="text-meta text-muted-foreground">
+        下面的正文选填，可以接着写别的，比如方向偏好、夏令营情况，也可以贴图。
+      </p>
     </div>
   );
 }

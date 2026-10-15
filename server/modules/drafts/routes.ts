@@ -41,6 +41,17 @@ const DraftLotterySchema = z
       "写了一半的抽奖，奖品可以是空的；开奖时间是 days 或 draws_at，其余字段同发帖的 lottery",
   });
 
+const DraftPositioningSchema = z
+  .object({
+    fields: z
+      .record(z.string(), z.string().max(200))
+      .openapi({ description: "各项背景，键是编辑器定的" }),
+    schools: z.array(z.string().max(30)).max(10),
+  })
+  .openapi("DraftPositioning", {
+    description: "写了一半的保研定位：各项背景和目标院校，可以是空的",
+  });
+
 const DraftSchema = z
   .object({
     thread_id: z.number().nullable().openapi({ description: "回复哪个帖子；null 是发帖" }),
@@ -49,6 +60,7 @@ const DraftSchema = z
     kind: z.string().nullable(),
     poll: DraftPollSchema.nullable(),
     lottery: DraftLotterySchema.nullable(),
+    positioning: DraftPositioningSchema.nullable(),
     tags: z.array(z.string()),
     author_anonymous: z.boolean(),
     anonymous_replies: z.boolean(),
@@ -129,9 +141,13 @@ export const draftsRoutes = createRouter()
                 body: z.string().max(MAX_BODY),
                 title: z.string().max(80).optional(),
                 board: z.string().nullable().optional(),
-                kind: z.enum(["discussion", "question", "poll", "lottery"]).nullable().optional(),
+                kind: z
+                  .enum(["discussion", "question", "poll", "positioning", "lottery"])
+                  .nullable()
+                  .optional(),
                 poll: DraftPollSchema.nullable().optional(),
                 lottery: DraftLotterySchema.nullable().optional(),
+                positioning: DraftPositioningSchema.nullable().optional(),
                 tags: z.array(z.string().max(20)).max(5).optional(),
                 author_anonymous: z.boolean().optional(),
                 anonymous_replies: z.boolean().optional(),
