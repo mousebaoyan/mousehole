@@ -118,6 +118,22 @@
   body {
     @apply bg-background font-sans text-foreground antialiased;
   }
+  /* Hover and press colors ease in rather than snap; utilities on an element still win. */
+  a,
+  button,
+  summary {
+    transition-property: color, background-color, border-color, text-decoration-color, opacity;
+    transition-duration: 150ms;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    ::before,
+    ::after {
+      animation-duration: 1ms !important;
+      animation-delay: 0s !important;
+      transition-duration: 1ms !important;
+    }
+  }
   /* Tailwind 4 resets buttons to the default cursor. */
   button:not(:disabled),
   [role="button"]:not([aria-disabled="true"]) {
@@ -173,6 +189,32 @@
   }
   .btn-icon-lg {
     @apply size-9;
+  }
+}
+
+/* A thin bar along the top while the next page loads, shown only once it takes a moment. Only
+   transform moves, so it costs no layout. */
+.nav-progress {
+  position: fixed;
+  inset: 0 0 auto;
+  z-index: 60;
+  height: 2px;
+  background: var(--brand);
+  transform-origin: left;
+  animation: nav-progress 8s cubic-bezier(0.1, 0.7, 0.2, 1) 150ms both;
+}
+@keyframes nav-progress {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(0.9);
+  }
+}
+
+@keyframes reaction-pop {
+  40% {
+    transform: scale(1.35);
   }
 }
 

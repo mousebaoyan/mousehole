@@ -372,7 +372,7 @@ function PostRows({ posts, now }: { posts: UserPost[]; now: number }) {
   return posts.map((p) => (
     <li
       key={p.id}
-      className="relative rounded-xl px-3 py-3.5 before:absolute before:inset-x-3 before:bottom-0 before:h-px before:bg-border/70 last:before:hidden hover:bg-accent/60 sm:px-4"
+      className="relative rounded-xl px-3 py-3.5 before:absolute before:inset-x-3 before:bottom-0 before:h-px before:bg-border/70 last:before:hidden transition-colors hover:bg-accent/60 sm:px-4"
     >
       <Link
         to={`/t/${p.thread.id}?floor=${p.floor}`}

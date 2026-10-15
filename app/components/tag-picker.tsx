@@ -58,7 +58,7 @@ export function TagPicker({
         </Button>
       )}
       {open && (
-        <div className="absolute top-full left-0 z-50 mt-2 flex max-h-80 w-64 flex-col rounded-xl border bg-popover text-sm text-popover-foreground shadow-lg">
+        <div className="absolute top-full left-0 z-50 mt-2 flex max-h-80 w-64 flex-col rounded-xl border bg-popover text-sm text-popover-foreground shadow-lg animate-in fade-in zoom-in-95">
           <div className="overflow-y-auto p-1">
             <SearchBox value={filter} onChange={setFilter} />
             {TAG_GROUPS.map((g) => {

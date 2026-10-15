@@ -69,7 +69,7 @@ export function FloorProgress({ floors }: { floors: Floors }) {
       {open && (
         <nav
           aria-label="楼层"
-          className="absolute right-0 bottom-full mb-2 w-56 rounded-2xl border bg-card p-3 text-meta shadow-lg"
+          className="absolute right-0 bottom-full mb-2 w-56 rounded-2xl border bg-card p-3 text-meta shadow-lg animate-in fade-in zoom-in-95"
         >
           <FloorNav floors={floors} onJump={() => setOpen(false)} />
         </nav>

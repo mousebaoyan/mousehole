@@ -94,7 +94,7 @@ function ThreadRow({
     <li
       className={cn(
         COLUMNS,
-        "relative items-center rounded-xl py-3.5 text-xs text-muted-foreground before:absolute before:inset-x-3 before:bottom-0 before:h-px before:bg-border/70 last:before:hidden hover:bg-accent/60 lg:py-4",
+        "relative items-center rounded-xl py-3.5 text-xs text-muted-foreground before:absolute before:inset-x-3 before:bottom-0 before:h-px before:bg-border/70 last:before:hidden transition-colors hover:bg-accent/60 lg:py-4",
       )}
     >
       <div className="min-w-0">
