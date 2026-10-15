@@ -28,14 +28,16 @@ export function sameWriter(a: Writer, b: Writer) {
   return !("anonymous" in b) && a.id === b.id;
 }
 
-// The name as shown, and for an admin who chose to, who it really is.
-export function WriterName({ writer }: { writer: Writer }) {
+// For an admin who chose to see who the anonymous people in a thread are: each shown as the
+// real person, avatar, name and badges, as if they had never been anonymous.
+export function useShown() {
   const revealed = use(RevealContext);
-  const real = "anonymous" in writer ? revealed?.get(writer.number) : undefined;
-  return (
-    <>
-      {writer.display_name}
-      {real && <span className="ml-1 font-normal text-destructive">（{real.display_name}）</span>}
-    </>
-  );
+  return <T extends object>(writer: T | Anonymous): T | Anonymous | UserBrief =>
+    (isAnonymous(writer) && revealed?.get(writer.number)) || writer;
+}
+
+type Anonymous = Extract<Writer, { anonymous: true }>;
+
+function isAnonymous(writer: object): writer is Anonymous {
+  return "anonymous" in writer;
 }
