@@ -1,3 +1,4 @@
+import { pageTitle } from "~/share-meta";
 import { Download, LogOut, Monitor } from "lucide-react";
 import { useEffect, useState } from "react";
 import { redirect, useFetcher, useRevalidator } from "react-router";
@@ -14,10 +15,10 @@ import { useMe } from "~/forum";
 import type { Route } from "./+types/settings.ts";
 import { Checkbox } from "~/components/ui/checkbox";
 import { NOTIFICATION_TYPES } from "~/notification-types";
-import { BOT_NAME, SITE_NAME } from "../../server/platform/site.ts";
+import { BOT_NAME } from "../../server/platform/site.ts";
 
 export function meta() {
-  return [{ title: `设置 · ${SITE_NAME}` }];
+  return [{ title: pageTitle("设置") }];
 }
 
 // The page's sections, for the navigation beside them.

@@ -1,3 +1,4 @@
+import { pageTitle } from "~/share-meta";
 import { Heart, Search, Snowflake } from "lucide-react";
 import { useRef } from "react";
 import { data, Link, useFetcher, useLocation } from "react-router";
@@ -17,10 +18,17 @@ import type { Api } from "~/api-types";
 import type { Route } from "./+types/user.ts";
 import { ModerationButtons } from "./user-moderation.tsx";
 import { REACTIONS } from "./reactions.tsx";
-import { levelName, SITE_NAME, STAFF } from "../../server/platform/site.ts";
+import { levelName, STAFF } from "../../server/platform/site.ts";
 
 export function meta({ loaderData }: Route.MetaArgs) {
-  return [{ title: `${loaderData.user.display_name} · ${SITE_NAME}` }];
+  const { user, tab, list } = loaderData;
+  const shown =
+    tab === "threads"
+      ? []
+      : tab === "people"
+        ? [PEOPLE.find((p) => p.list === list)?.label ?? list, "关系"]
+        : [TABS.find((t) => t.tab === tab)?.label ?? tab];
+  return [{ title: pageTitle(...shown, user.display_name) }];
 }
 
 // What the page lists below the profile, ?tab=; likes and people only for members, and only

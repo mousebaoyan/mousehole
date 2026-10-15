@@ -1,3 +1,4 @@
+import { pageTitle } from "~/share-meta";
 import { X } from "lucide-react";
 import { useEffect, useRef } from "react";
 import { Form, Link, useNavigation } from "react-router";
@@ -11,7 +12,7 @@ import { choice, Field, readForm, Result, Section } from "~/components/form-part
 import { confirmSubmit } from "~/components/ui/dialog";
 
 export function meta() {
-  return [{ title: "标签 · 管理后台" }];
+  return [{ title: pageTitle("标签", "管理后台") }];
 }
 
 const KINDS = [

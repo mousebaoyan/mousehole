@@ -1,3 +1,4 @@
+import { pageTitle } from "~/share-meta";
 import {
   AtSign,
   BellRing,
@@ -29,10 +30,10 @@ import { useMe } from "~/forum";
 import { useNearView } from "~/near-view";
 import { ago, unixNow } from "~/time";
 import type { Route } from "./+types/notifications.ts";
-import { levelName, SITE_NAME } from "../../server/platform/site.ts";
+import { levelName } from "../../server/platform/site.ts";
 
-export function meta() {
-  return [{ title: `通知 · ${SITE_NAME}` }];
+export function meta({ loaderData }: Route.MetaArgs) {
+  return [{ title: loaderData.unread ? pageTitle("未读", "通知") : pageTitle("通知") }];
 }
 
 // All of them, or ?unread for the unread ones only; a page at a time.

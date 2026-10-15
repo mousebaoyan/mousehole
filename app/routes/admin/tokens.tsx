@@ -1,3 +1,4 @@
+import { pageTitle } from "~/share-meta";
 import { Copy } from "lucide-react";
 import { useEffect, useRef } from "react";
 import { Form, useNavigation } from "react-router";
@@ -10,7 +11,7 @@ import { confirmSubmit } from "~/components/ui/dialog";
 import { Checkbox } from "~/components/ui/checkbox";
 
 export function meta() {
-  return [{ title: "bot · 管理后台" }];
+  return [{ title: pageTitle("bot", "管理后台") }];
 }
 
 const SCOPES = [

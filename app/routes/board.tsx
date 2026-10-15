@@ -1,7 +1,7 @@
 import { Lock } from "lucide-react";
 import { data, Link, redirect } from "react-router";
 import { apiContext } from "../api.server.ts";
-import { readCounts, readFilter, ThreadFeed } from "~/components/thread-feed";
+import { feedTitle, readCounts, readFilter, ThreadFeed } from "~/components/thread-feed";
 import { buttonVariants } from "~/components/ui/button";
 import { useMe } from "~/forum";
 import { shareMeta } from "~/share-meta";
@@ -11,7 +11,9 @@ import { SITE_NAME } from "../../server/platform/site.ts";
 
 export function meta({ loaderData }: Route.MetaArgs) {
   const { name, description } = loaderData.board;
-  return shareMeta(name, description || `${SITE_NAME}的${name}版块`);
+  // A board above the reader's level has no list, and so no filters.
+  const filters = loaderData.view ? feedTitle(loaderData.view, loaderData.tag ?? null) : [];
+  return shareMeta([...filters, name], description || `${SITE_NAME}的${name}版块`);
 }
 
 export async function loader({ request, params, context }: Route.LoaderArgs) {

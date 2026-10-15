@@ -1,3 +1,4 @@
+import { pageTitle } from "~/share-meta";
 import { ArrowDown, ArrowUp } from "lucide-react";
 import { useEffect, useRef } from "react";
 import { Form, Link, useNavigation } from "react-router";
@@ -11,7 +12,7 @@ import { confirmSubmit } from "~/components/ui/dialog";
 import { LEVEL_NAMES, levelName } from "../../../server/platform/site.ts";
 
 export function meta() {
-  return [{ title: "版块 · 管理后台" }];
+  return [{ title: pageTitle("版块", "管理后台") }];
 }
 
 // Thresholds as one choice each: who reads the board, and who starts threads in it (design §8.1).

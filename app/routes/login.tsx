@@ -1,3 +1,4 @@
+import { pageTitle } from "~/share-meta";
 import {
   Link2,
   LoaderCircle,
@@ -18,7 +19,7 @@ import type { action as codeAction } from "./login-code.ts";
 import { BOT_NAME, SITE_NAME } from "../../server/platform/site.ts";
 
 export function meta() {
-  return [{ title: `登录 · ${SITE_NAME}` }];
+  return [{ title: pageTitle("登录") }];
 }
 
 // Also the code login's poll: it shows this browser's code until a bot confirms it, then logs in.

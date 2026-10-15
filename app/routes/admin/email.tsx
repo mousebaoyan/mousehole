@@ -1,3 +1,4 @@
+import { pageTitle } from "~/share-meta";
 import { ArrowDown, ArrowUp, Plus, X } from "lucide-react";
 import { useState } from "react";
 import { Form, useNavigation } from "react-router";
@@ -11,7 +12,7 @@ import { SettingsForm } from "~/components/settings-form";
 import { NOTIFICATION_TYPES } from "~/notification-types";
 
 export function meta() {
-  return [{ title: "邮件 · 管理后台" }];
+  return [{ title: pageTitle("邮件", "管理后台") }];
 }
 
 export async function loader({ context }: Route.LoaderArgs) {

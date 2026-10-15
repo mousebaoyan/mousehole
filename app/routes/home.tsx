@@ -1,16 +1,16 @@
 import { data, redirect } from "react-router";
 import { apiContext } from "../api.server.ts";
-import { readCounts, readFilter, ThreadFeed } from "~/components/thread-feed";
+import { feedTitle, readCounts, readFilter, ThreadFeed } from "~/components/thread-feed";
 import { shareMeta } from "~/share-meta";
 import { unixNow } from "~/time";
 import type { Route } from "./+types/home.ts";
 import { SITE_NAME, SITE_DESCRIPTION } from "../../server/platform/site.ts";
 
-export function meta() {
+export function meta({ loaderData }: Route.MetaArgs) {
   return shareMeta(
-    SITE_NAME,
+    [...feedTitle(loaderData.view, loaderData.tag), "全部帖子"],
     `${SITE_DESCRIPTION}：保研经验、院校信息、夏令营和预推免`,
-    `${SITE_NAME} · ${SITE_DESCRIPTION}`,
+    SITE_NAME,
   );
 }
 
