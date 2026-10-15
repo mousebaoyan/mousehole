@@ -147,23 +147,30 @@ function ThreadRow({
             </span>
           )}
         </Link>
-        <div className="relative mt-1.5 flex flex-wrap items-center gap-x-2.5 gap-y-1">
+        <div className="mt-1.5 flex flex-wrap items-center gap-x-2.5 gap-y-1">
           {showBoard && <BoardBadge board={thread.board} />}
           {thread.tags.map((t) => (
             <span key={t}>#{t}</span>
           ))}
         </div>
       </div>
-      <div className="relative flex gap-0.5 max-md:hidden">
+      {/* The avatars sit above the title's link, which covers the row; this wrapper doesn't, so
+          the space beside them opens the thread as well. */}
+      <div className="flex gap-0.5 max-md:hidden">
         {"anonymous" in thread.author && (
-          <span title={thread.author.display_name} className="rounded-full">
+          <span title={thread.author.display_name} className="relative rounded-full">
             <UserAvatar user={thread.author} thread={thread.id} className="size-7" />
           </span>
         )}
         {[thread.author, ...thread.posters].map(
           (p) =>
             !("anonymous" in p) && (
-              <Link key={p.id} to={`/u/${p.id}`} title={p.display_name} className="rounded-full">
+              <Link
+                key={p.id}
+                to={`/u/${p.id}`}
+                title={p.display_name}
+                className="relative rounded-full"
+              >
                 <UserAvatar user={p} className="size-7" />
               </Link>
             ),
