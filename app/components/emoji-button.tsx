@@ -1,6 +1,13 @@
 import { Smile } from "lucide-react";
-import { lazy, Suspense, useRef, useState, type RefObject } from "react";
-import { cn } from "cn";
+import {
+  lazy,
+  Suspense,
+  useEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type RefObject,
+} from "react";
 import { useDismiss } from "~/components/disclosure";
 import { Button } from "~/components/ui/button";
 
@@ -8,22 +15,50 @@ const EmojiPicker = lazy(() =>
   import("./emoji-picker.tsx").then((m) => ({ default: m.EmojiPicker })),
 );
 
-// Inserts the chosen emoji at the caret of `target` and hands the new value to `onChange`.
+// The picker's size (emoji-picker.tsx), with the gap to the button.
+const PICKER_HEIGHT = 340;
+const PICKER_WIDTH = 320;
+
+// Inserts the chosen emoji at the caret of `target` and hands the new value to `onChange`. The
+// picker is fixed to the screen beside the button, above it when there is room: in the composer
+// it would otherwise be cut off by the scrolling area it sits in.
 export function EmojiButton({
   target,
   onChange,
-  side,
 }: {
   target: RefObject<HTMLInputElement | HTMLTextAreaElement | null>;
   onChange: (value: string) => void;
-  side: "top" | "bottom";
 }) {
-  const [open, setOpen] = useState(false);
+  const [place, setPlace] = useState<CSSProperties | null>(null);
+  const open = place !== null;
   const root = useRef<HTMLDivElement>(null);
-  useDismiss(open, () => setOpen(false), root);
+  useDismiss(open, () => setPlace(null), root);
+
+  // Fixed in place, it would drift from the button as the page scrolls; it closes instead.
+  useEffect(() => {
+    if (!open) return undefined;
+    const close = (e: Event) => {
+      if (!(e.target instanceof Node && root.current?.contains(e.target))) setPlace(null);
+    };
+    addEventListener("scroll", close, true);
+    addEventListener("resize", close);
+    return () => {
+      removeEventListener("scroll", close, true);
+      removeEventListener("resize", close);
+    };
+  }, [open]);
+
+  function show(button: HTMLElement) {
+    const box = button.getBoundingClientRect();
+    // Its right edge under the button's, kept on the screen.
+    const width = Math.min(PICKER_WIDTH, innerWidth - 32);
+    const left = Math.min(Math.max(8, box.right - width), innerWidth - width - 8);
+    const up = box.top >= PICKER_HEIGHT || box.top > innerHeight - box.bottom;
+    setPlace(up ? { left, bottom: innerHeight - box.top + 8 } : { left, top: box.bottom + 8 });
+  }
 
   function insert(emoji: string) {
-    setOpen(false);
+    setPlace(null);
     const el = target.current;
     if (!el) return;
     const start = el.selectionStart ?? el.value.length;
@@ -45,17 +80,12 @@ export function EmojiButton({
         aria-label="表情"
         title="表情"
         aria-expanded={open}
-        onClick={() => setOpen(!open)}
+        onClick={(e) => (open ? setPlace(null) : show(e.currentTarget))}
       >
         <Smile />
       </Button>
       {open && (
-        <div
-          className={cn(
-            "absolute right-0 z-50",
-            side === "top" ? "bottom-full mb-2" : "top-full mt-2",
-          )}
-        >
+        <div className="fixed z-50 animate-in fade-in zoom-in-95" style={place}>
           <Suspense
             fallback={
               <div className="h-80 w-[min(20rem,calc(100vw-2rem))] rounded-xl border bg-popover" />

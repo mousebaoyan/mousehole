@@ -228,7 +228,7 @@ export function BoostButton({
               {length}/{BOOST_MAX}
             </span>
           )}
-          <EmojiButton target={input} onChange={setText} side="bottom" />
+          <EmojiButton target={input} onChange={setText} />
           {mine !== null && (
             <Button
               variant="ghost"
