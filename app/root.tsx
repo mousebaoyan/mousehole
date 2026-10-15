@@ -6,6 +6,7 @@ import {
   Outlet,
   Scripts,
   ScrollRestoration,
+  useNavigation,
   useRouteLoaderData,
 } from "react-router";
 import { use } from "react";
@@ -64,7 +65,13 @@ export function Layout({ children }: { children: React.ReactNode }) {
 }
 
 export default function App() {
-  return <Outlet />;
+  const loading = useNavigation().state === "loading";
+  return (
+    <>
+      {loading && <div aria-hidden="true" className="nav-progress" />}
+      <Outlet />
+    </>
+  );
 }
 
 const TITLES: Partial<Record<number, string>> = {

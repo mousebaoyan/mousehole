@@ -185,7 +185,7 @@ function Row({ item: n, now }: { item: Item; now: number }) {
   return (
     <li
       className={cn(
-        "relative flex gap-3 rounded-xl px-3 py-3.5 before:absolute before:inset-x-3 before:bottom-0 before:h-px before:bg-border/70 last:before:hidden hover:bg-accent/60 sm:px-4",
+        "relative flex gap-3 rounded-xl px-3 py-3.5 before:absolute before:inset-x-3 before:bottom-0 before:h-px before:bg-border/70 last:before:hidden transition-colors hover:bg-accent/60 sm:px-4",
         !n.read && "bg-brand/[0.06]",
       )}
     >

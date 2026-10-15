@@ -264,7 +264,7 @@ function Results({ results, q, now }: { results: Result[]; q: string; now: numbe
   return results.map((r) => (
     <li
       key={r.thread.id}
-      className="relative rounded-xl px-3 py-3.5 before:absolute before:inset-x-3 before:bottom-0 before:h-px before:bg-border/70 last:before:hidden hover:bg-accent/60 sm:px-4"
+      className="relative rounded-xl px-3 py-3.5 before:absolute before:inset-x-3 before:bottom-0 before:h-px before:bg-border/70 last:before:hidden transition-colors hover:bg-accent/60 sm:px-4"
     >
       <Link
         to={r.post.floor > 1 ? `/t/${r.thread.id}?floor=${r.post.floor}` : `/t/${r.thread.id}`}

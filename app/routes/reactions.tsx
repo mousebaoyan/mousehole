@@ -149,6 +149,9 @@ export function LikeButton({
   onChange: (key: ReactionKey | null) => void;
 }) {
   const [palette, setPalette] = useState(false);
+  // Set once the reader picks one here, so it pops then and not on every liked floor as the
+  // page loads.
+  const [picked, setPicked] = useState(false);
   const timer = useRef(0);
   const longPress = useRef(false);
   const root = useRef<HTMLDivElement>(null);
@@ -160,6 +163,7 @@ export function LikeButton({
   }
 
   function choose(key: ReactionKey) {
+    setPicked(true);
     onChange(mine === key ? null : key);
     setPalette(false);
   }
@@ -200,14 +204,23 @@ export function LikeButton({
         }}
         onClick={() => {
           if (longPress.current) longPress.current = false;
-          else onChange(mine === null ? "heart" : null);
+          else {
+            setPicked(true);
+            onChange(mine === null ? "heart" : null);
+          }
         }}
       >
-        {mine !== null && mine !== "heart" ? (
-          <span className="text-base">{emojiOf(mine)}</span>
-        ) : (
-          <Heart className={cn(mine !== null && "fill-rose-500 text-rose-500")} />
-        )}
+        {/* Keyed by the reaction, so each new pick plays the pop again. */}
+        <span
+          key={mine}
+          className={cn("flex", picked && mine !== null && "animate-[reaction-pop_300ms_ease-out]")}
+        >
+          {mine !== null && mine !== "heart" ? (
+            <span className="text-base">{emojiOf(mine)}</span>
+          ) : (
+            <Heart className={cn(mine !== null && "fill-rose-500 text-rose-500")} />
+          )}
+        </span>
       </button>
       {palette && (
         <fieldset className="absolute right-0 bottom-full z-30 mb-2 grid w-max grid-cols-[repeat(5,2.5rem)] gap-0.5 rounded-2xl border bg-popover p-1.5 shadow-lg animate-in fade-in zoom-in-95">

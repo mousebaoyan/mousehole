@@ -15,7 +15,7 @@ export function Dialog({ className, ...props }: ComponentProps<"dialog">) {
   return (
     <dialog
       className={cn(
-        "m-auto w-[min(24rem,calc(100%-2rem))] overflow-visible rounded-2xl border bg-popover p-5 text-popover-foreground shadow-xl backdrop:bg-black/30",
+        "m-auto w-[min(24rem,calc(100%-2rem))] overflow-visible rounded-2xl border bg-popover p-5 text-popover-foreground shadow-xl backdrop:bg-black/30 open:animate-in open:fade-in open:zoom-in-95 backdrop:animate-in backdrop:fade-in",
         className,
       )}
       {...props}
