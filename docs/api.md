@@ -55,10 +55,12 @@
 
 // 投票（总体设计 §8.11）。results：voted 投过票或结束后才看得到结果，always 随时公开；
 // 还看不到结果时每项的 votes 为 null，voter_count（一共多少人投了票）总是有；closes_at 为 null 是不限时间；
+// rows 是分行投票的各行，普通投票为 null；分行投票的每行各有一组选项，row 是第几行（从 0 起），普通投票都是 0；
+// preset 是生成它的预设，positioning 保研定位（总体设计 §8.14），普通投票为 null；
 // my_votes 是自己投的选项，没投为 []，访客为 null
-{ "multiple": true, "max_choices": 2, "anonymous": false, "results": "voted",
+{ "multiple": true, "max_choices": 2, "anonymous": false, "results": "voted", "rows": null, "preset": null,
   "closes_at": 1760600000, "closed": false, "voter_count": 12,
-  "options": [ { "id": 5, "label": "1–3 个", "votes": 4 }, { "id": 6, "label": "4–6 个", "votes": 9 } ],
+  "options": [ { "id": 5, "row": 0, "label": "1–3 个", "votes": 4 }, { "id": 6, "row": 0, "label": "4–6 个", "votes": 9 } ],
   "my_votes": [6] }
 
 // 抽奖（总体设计 §8.13）。entry：button 点按钮参与，reply 开奖前回复过就算参与；min_level 参与要几级（版主和管理员不受限制）；
@@ -248,13 +250,13 @@ token 由站长在后台创建，只显示一次。每个 token 绑定一个 bot
 | --- | --- | --- | --- |
 | GET | `/threads` | 帖子列表，每页 30 个，`limit` 可以改小：`board`、`tag`、`author`、`kind`、`view`、`cursor`；版块或标签不存在返回 404。`view` 默认 `latest`（按最后回复），还可以是 `created`（按发布时间）、`hot`（热门）、`unsolved`（待解答）；以下几种要登录：`new`（最近 7 天发布、自己还没打开过）、`unread`（读过、之后有新楼层）、`read`（读过的，按最后阅读时间）、`posted`（自己发过或回复过的，删掉的回复不算，按最后回复）、`bookmarked`（收藏的，按收藏时间）。`latest` 的第一页先列置顶的帖子：首页是全站置顶，版块页还有版块内置顶；按标签筛选时不置顶 | 访客 |
 | GET | `/threads/counts` | 当前范围里新和未读的帖子各有几个：`board`、`tag`，返回 `{ new, unread }` | 成员 |
-| POST | `/threads` | 发帖：`board`、`title`（4–80 个字）、`content`、`kind`（不带时用版块的默认类型）、`tags`（最多 5 个，只能用已有的）、`source`、`anonymous`（楼主匿名）、`anonymous_replies`（楼主以外的人回复时匿名），后两个发出后不能改。`kind` 为 `poll` 时要带 `poll`，别的类型不能带：`options`（2–20 个，每个最多 50 个字，不能重复）、`multiple`、`max_choices`（多选时最多选几项，要少于选项数，`null` 不限）、`anonymous`（匿名投票）、`results`（`voted` 或 `always`）、`closes_at`（截止时间，Unix 秒，10 分钟以后、一年以内，`null` 不限），发出后都不能改。`kind` 为 `lottery` 时要带 `lottery`，别的类型不能带，也不能匿名：`prizes`（1–10 个奖项，每个 `{ name, winners }`：奖品最多 50 个字，抽 1–100 人）、`entry`（`button` 或 `reply`，默认 `button`）、`min_level`（0–5，默认 0）、`draws_at`（开奖时间，Unix 秒，10 分钟以后、一年以内），发出后都不能改。L2 起才能发投票帖和抽奖帖，否则返回 `403 level_required`。只有版主能发的版块返回 `403 forbidden`。先审后发的版块里，版主以外的人发的帖子 `status` 为 `pending`，通过后才公开 | 成员 / `act` |
+| POST | `/threads` | 发帖：`board`、`title`（4–80 个字）、`content`、`kind`（不带时用版块的默认类型）、`tags`（最多 5 个，只能用已有的）、`source`、`anonymous`（楼主匿名）、`anonymous_replies`（楼主以外的人回复时匿名），后两个发出后不能改。`kind` 为 `poll` 时要带 `poll`，别的类型不能带：`options`（2–20 个，每个最多 50 个字，不能重复）、`rows`（分行投票的各行，1–10 个，每个最多 30 个字，不能重复；带了就只能单选）、`multiple`、`max_choices`（多选时最多选几项，要少于选项数，`null` 不限）、`anonymous`（匿名投票）、`results`（`voted` 或 `always`）、`closes_at`（截止时间，Unix 秒，10 分钟以后、一年以内，`null` 不限），发出后都不能改。`poll.preset` 为 `positioning` 时是保研定位：只带 `rows`（目标院校）和 `closes_at`，选项、单选、匿名和结果可见方式由论坛按预设生成，带了别的返回 `400`。`kind` 为 `lottery` 时要带 `lottery`，别的类型不能带，也不能匿名：`prizes`（1–10 个奖项，每个 `{ name, winners }`：奖品最多 50 个字，抽 1–100 人）、`entry`（`button` 或 `reply`，默认 `button`）、`min_level`（0–5，默认 0）、`draws_at`（开奖时间，Unix 秒，10 分钟以后、一年以内），发出后都不能改。L2 起才能发投票帖和抽奖帖（保研定位除外），否则返回 `403 level_required`。只有版主能发的版块返回 `403 forbidden`。先审后发的版块里，版主以外的人发的帖子 `status` 为 `pending`，通过后才公开 | 成员 / `act` |
 | GET | `/threads/{id}` | 帖子详情；楼层（包括主楼）用 `/threads/{id}/posts` 取。楼主设置了不给访客看时，访客得到 `401 login_required` | 访客 |
 | PATCH | `/threads/{id}` | 只改带了的字段：楼主可以改 `title`、`tags`；版主还可以改 `board`（移动版块）、`pinned`（0–2）、`featured`、`locked`、`status`（`visible` 或 `hidden`，见下面的「审核」）和 `reason`（隐藏的理由，最多 200 个字，会告诉作者）。L3 起可以改等级比自己低的人的 `title`、`tags`、`board`（只能移到自己能发帖的版块），L5 还可以改 `locked`；版主的和匿名的帖子不行（总体设计 §6.6）。改标题记在主楼的编辑记录里；锁定后只有版主和 L5 能改 | 楼主、版主、L3 / `act`、`moderate` |
 | DELETE | `/threads/{id}` | 删除帖子；有人回复后楼主不能删，只有版主能删 | 楼主、版主 / `act`、`moderate` |
 | PUT | `/threads/{id}/answers/{post}` | 采纳一层回答（总体设计 §8.1）：只能是问答帖子里公开、没删的回复（不含主楼），否则 `400`；可以采纳几层，已经采纳的不变；帖子待审核或已隐藏时返回 `403`。每采纳一层，回答的人收到通知，产生 `thread.solved` 事件；锁定后只有版主能改。返回帖子详情 | 楼主、版主 / `act`、`moderate` |
 | DELETE | `/threads/{id}/answers/{post}` | 取消采纳这一层，没采纳的不变；被采纳的回答被删除时也自动取消 | 同上 |
-| PUT | `/threads/{id}/poll/vote` | 投票：`{ options }`，选项 ID；再投就换掉原来的，空数组是撤票。单选选了几项、超过 `max_choices`、选项不在这个投票里返回 `400`；投票已结束返回 `403 poll_closed`，帖子锁定返回 `403 thread_locked`，待审核或已隐藏返回 `403`；不是投票帖返回 `404 poll_not_found`。返回投票 | 没被禁言的成员 / `act` |
+| PUT | `/threads/{id}/poll/vote` | 投票：`{ options }`，选项 ID；再投就换掉原来的，空数组是撤票。分行投票每行最多选一项，可以只投其中几行。单选选了几项、分行投票同一行选了几项、超过 `max_choices`、选项不在这个投票里返回 `400`；投票已结束返回 `403 poll_closed`，帖子锁定返回 `403 thread_locked`，待审核或已隐藏返回 `403`；不是投票帖返回 `404 poll_not_found`。返回投票 | 没被禁言的成员 / `act` |
 | POST | `/threads/{id}/poll/close` | 提前结束投票，已经结束的不变；返回投票 | 楼主、版主 / `act`、`moderate` |
 | GET | `/threads/{id}/poll/options/{option}/voters` | 投了这一项的人，先投的在前：`{ items }`；匿名投票，或者自己还看不到结果时返回 `403` | 成员 / `read` |
 | PUT | `/threads/{id}/lottery/entry` | 参与抽奖，已经参与的不变；只用于 `entry` 为 `button` 的抽奖，回复参与的返回 `403`。楼主、帖子锁定（`thread_locked`）、待审核或已隐藏返回 `403`，等级不够返回 `403 level_required`，已开奖、过了开奖时间或已取消返回 `403 lottery_closed`；不是抽奖帖返回 `404 lottery_not_found`。返回抽奖 | 没被禁言的成员 / `act` |
