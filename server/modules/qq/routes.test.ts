@@ -262,3 +262,109 @@ describe("群消息收录到论坛", () => {
     expect(told).toEqual([]);
   });
 });
+
+// Since a moment ago, in Unix seconds.
+function justNow() {
+  return Math.floor(Date.now() / 1000) - 1;
+}
+
+async function ask(asker: { qq: number }, kind: "question" | "discussion", from = source()) {
+  const res = await api.threads.$post(
+    {
+      json: {
+        board: "qq",
+        kind,
+        title: "群里问的问题",
+        content: { onebot: [{ type: "text", data: { text: "有人知道吗" } }] },
+        source: from,
+      },
+    },
+    { headers: { ...bot.headers, "x-act-as": `qq:${asker.qq}` } },
+  );
+  if (!res.ok) throw new Error(`status ${res.status}: ${await res.text()}`);
+  return (await res.json()).id;
+}
+
+async function answer(threadId: number, who: { headers: Record<string, string> }) {
+  const res = await api.threads[":id"].posts.$post(
+    { param: { id: String(threadId) }, json: { content: { markdown: "论坛上的回答" } } },
+    who,
+  );
+  if (!res.ok) throw new Error(`status ${res.status}: ${await res.text()}`);
+  return (await res.json()).floor;
+}
+
+async function answers(threadId: number, since: number, until?: number) {
+  const query = { since: String(since), until: until === undefined ? undefined : String(until) };
+  const res = await api.bot.answers.$get({ query }, bot);
+  if (!res.ok) throw new Error(`status ${res.status}`);
+  return (await res.json()).items.filter((item) => item.thread.id === threadId);
+}
+
+describe("提问在论坛上的新回答", () => {
+  test("按帖子合起来，引用提问的第一条消息；收录的回复、楼主自己的回复和讨论帖不算", async () => {
+    const since = justNow();
+    const asker = await createUser();
+    // NapCat's IDs don't grow with time: the first message has the larger one.
+    const from = { ...source(), message_ids: [lastMessage + 2, lastMessage + 1] };
+    lastMessage += 2;
+    const threadId = await ask(asker, "question", from);
+    const first = await answer(threadId, as(await login((await createUser()).id)));
+    await answer(threadId, as(await login((await createUser()).id)));
+    await answer(threadId, as(await login(asker.id)));
+    await api.threads[":id"].posts.$post(
+      {
+        param: { id: String(threadId) },
+        json: {
+          content: { onebot: [{ type: "text", data: { text: "群里的回答" } }] },
+          source: source(),
+        },
+      },
+      asMember,
+    );
+
+    const [item] = await answers(threadId, since);
+    expect(item).toMatchObject({
+      thread: { id: threadId, title: "群里问的问题" },
+      asker: { id: asker.id, display_name: "鼠鼠", qq: asker.qq },
+      source: { chat_id: GROUP, message_id: from.message_ids[0] },
+      count: 2,
+    });
+    expect(item.url).toMatch(new RegExp(`/t/${threadId}\\?floor=${first}$`));
+    expect(await answers(threadId, since, since + 1)).toEqual([]);
+
+    const discussion = await ask(asker, "discussion");
+    await answer(discussion, as(await login((await createUser()).id)));
+    expect(await answers(discussion, since)).toEqual([]);
+  });
+
+  test("楼主在论坛上读过了每一条新回答，或者已经退群，就不提醒", async () => {
+    const since = justNow();
+    const asker = await createUser();
+    const asAsker = as(await login(asker.id));
+    const threadId = await ask(asker, "question");
+    const answerer = as(await login((await createUser()).id));
+    const first = await answer(threadId, answerer);
+    const last = await answer(threadId, answerer);
+    const read = (floors: [number, number][]) =>
+      api.threads[":id"].read.$post(
+        { param: { id: String(threadId) }, json: { floors, seconds: 10 } },
+        asAsker,
+      );
+
+    await read([[1, first]]);
+    expect(await answers(threadId, since)).toMatchObject([{ count: 2 }]);
+    await read([[1, last]]);
+    expect(await answers(threadId, since)).toEqual([]);
+
+    const other = await ask(asker, "question");
+    await answer(other, answerer);
+    expect(await answers(other, since)).toHaveLength(1);
+    await db
+      .updateTable("users")
+      .set({ member_status: "frozen" })
+      .where("id", "=", asker.id)
+      .execute();
+    expect(await answers(other, since)).toEqual([]);
+  });
+});
