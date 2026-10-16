@@ -100,8 +100,8 @@ export default function Email({ loaderData, actionData }: Route.ComponentProps) 
     <>
       <h1 className="text-xl font-semibold">邮件</h1>
       <p className="mt-1 text-meta text-muted-foreground">
-        通知邮件和登录验证码都从这里的邮箱发出。建议使用 QQ 邮箱，发往 qq.com
-        的邮件不易被判为垃圾邮件
+        通知邮件和登录验证码都从这里的邮箱发出。建议把邮件推送服务（如阿里云邮件推送）排在前面，专门注册的
+        QQ 邮箱放在后面兜底
       </p>
       <Result
         result={
