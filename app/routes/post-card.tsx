@@ -147,12 +147,10 @@ export function PostCard({
         {/* Avatar and name are one control, so either opens the same card in the same place. */}
         <UserCard
           user={author}
-          className="group flex max-w-full min-w-0 items-center gap-3 rounded-lg text-left"
+          className="flex max-w-full min-w-0 items-center gap-3 rounded-lg text-left"
         >
           <UserAvatar user={author} thread={threadId} className="size-10 shrink-0 max-sm:size-9" />
-          <span className="truncate text-body font-semibold group-hover:underline">
-            {author.display_name}
-          </span>
+          <span className="truncate text-body font-semibold">{author.display_name}</span>
         </UserCard>
         <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-1.5 gap-y-1">
           <UserBadges user={author} op={op} mine={own} />
