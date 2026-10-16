@@ -1,5 +1,6 @@
 import { testClient } from "hono/testing";
 import sharp from "sharp";
+import { sql } from "kysely";
 import { beforeAll, describe, expect, test } from "vitest";
 import { as, createUser, login, nextQq } from "../../../test/fixtures.ts";
 import { app } from "../../app.ts";
@@ -260,6 +261,45 @@ describe("群消息收录到论坛", () => {
       .where("user_id", "=", asker.id)
       .execute();
     expect(told).toEqual([]);
+  });
+  test("收录的内容按群里发出的那天算访问；补上的那天接起前后的连续访问", async () => {
+    const asked = await postThread([{ type: "text", data: { text: "谁来回答" } }]);
+    if (!asked.ok) throw new Error(`status ${asked.status}: ${await asked.text()}`);
+    const param = { id: String((await opening((await asked.json()).id)).id) };
+    const { id, qq } = await createUser();
+    const asThem = { headers: { ...bot.headers, "x-act-as": `qq:${qq}` } };
+    const now = Math.floor(Date.now() / 1000);
+    const today = sql<Date>`(now() AT TIME ZONE 'Asia/Shanghai')::date`;
+    await db
+      .insertInto("user_days")
+      .values([1, 3].map((back) => ({ user_id: id, day: sql<Date>`${today} - ${back}::integer` })))
+      .execute();
+    await db
+      .updateTable("users")
+      .set({ days_visited: 2, visit_streak: 1 })
+      .where("id", "=", id)
+      .execute();
+    async function standing() {
+      return db
+        .selectFrom("users")
+        .select(["days_visited", "visit_streak"])
+        .where("id", "=", id)
+        .executeTakeFirstOrThrow();
+    }
+
+    const boosted = await api.posts[":id"].boost.$put(
+      { param, json: { body: "确实", source: source(), created_at: now - 2 * 86_400 } },
+      asThem,
+    );
+    expect(boosted.status).toBe(200);
+    expect(await standing()).toEqual({ days_visited: 3, visit_streak: 3 });
+
+    const liked = await api.posts[":id"].reaction.$put(
+      { param, json: { emoji: "+1", source: source(), created_at: now - 5 * 86_400 } },
+      asThem,
+    );
+    expect(liked.status).toBe(204);
+    expect(await standing()).toEqual({ days_visited: 4, visit_streak: 3 });
   });
 });
 
