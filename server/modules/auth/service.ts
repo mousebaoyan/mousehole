@@ -1,4 +1,5 @@
 import { randomInt } from "node:crypto";
+import { html } from "hono/html";
 import type { Kysely, NotNull, Transaction } from "kysely";
 import type { DB } from "../../../db/types.ts";
 import {
@@ -12,6 +13,7 @@ import {
 import { db } from "../../platform/db.ts";
 import { AppError } from "../../platform/errors.ts";
 import { sendMail } from "../../platform/mail.ts";
+import { LINE, mailPage, MUTED, TEAL } from "../../platform/mail-page.ts";
 import { rateLimit } from "../../platform/rate-limit.ts";
 import { getSettings } from "../../platform/settings.ts";
 import { hashToken, newToken } from "../../platform/tokens.ts";
@@ -351,10 +353,22 @@ export async function requestEmailCode(qq: number, ip: string | null) {
       oc.column("user_id").doUpdateSet({ code, attempts: 0, sent_at: new Date(), expires_at }),
     )
     .execute();
+  const ignore = "如果不是你本人操作，请忽略这封邮件。";
   await sendMail(
     `${qq}@qq.com`,
     `${SITE_NAME}登录验证码：${code}`,
-    `你的${SITE_NAME}登录验证码是 ${code}，10 分钟内有效。\n\n如果不是你本人操作，请忽略这封邮件。`,
+    `你的${SITE_NAME}登录验证码是 ${code}，10 分钟内有效。\n\n${ignore}`,
+    await mailPage(
+      `${code}，10 分钟内有效`,
+      html`<p style="margin:0;">你的登录验证码</p>
+        <p
+          style="margin:12px 0;display:inline-block;padding:10px 20px;border:1px solid ${LINE};border-radius:12px;background:#ffffff;font-size:30px;font-weight:600;letter-spacing:8px;color:${TEAL};font-family:Menlo,Consolas,monospace;"
+        >
+          ${code}
+        </p>
+        <p style="margin:0;color:${MUTED};">10 分钟内有效，请勿告诉他人。</p>`,
+      ignore,
+    ),
   );
 }
 

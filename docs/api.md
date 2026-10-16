@@ -332,6 +332,7 @@ token 由站长在后台创建，只显示一次。每个 token 绑定一个 bot
 | GET | `/notifications` | 通知列表，最新的在前，每页 30 条，合并的通知有新动静时排到前面：`unread_only`、`cursor` | 成员 / `act` |
 | GET | `/notifications/unread-count` | 未读数：`{ count }` | 成员 / `act` |
 | POST | `/notifications/read` | 标为已读：`{ ids }`（最多 100 条）或 `{ all: true }` | 成员 / `act` |
+| POST | `/mail/unsubscribe` | 按邮件里的退订链接关掉一类邮件：`{ user_id, kind, sig }`，取自链接的 `u`、`k`、`s`，`kind` 是通知类型或 `weekly`（每周来信），见[总体设计 §8.6](design.md#86-通知与实时)。和在设置里关一样，记进操作日志。成功返回 204，签名不对返回 `400 unsubscribe_invalid` | 不用登录 |
 | GET | `/stream` | SSE：当前用户的未读通知数，连上时和每次变化时推一条 `unread` 事件，`data` 是未读数；每 20 秒一条心跳注释 | 登录用户，只能在网页上 |
 
 ### 3.9 管理后台

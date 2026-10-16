@@ -8,11 +8,13 @@ import {
   actorOf,
   authorize,
   authorizePosting,
+  clientIp,
   createRouter,
   errorResponse,
   requireWeb,
   unix,
 } from "../../platform/http.ts";
+import { signedUnsubscribe } from "../../platform/mail.ts";
 import { rateLimit } from "../../platform/rate-limit.ts";
 import { getSettings as getSiteSettings } from "../../platform/settings.ts";
 import { UserBriefSchema, UserRefSchema } from "./schemas.ts";
@@ -516,6 +518,52 @@ export const usersRoutes = createRouter()
       if (custom_name !== undefined)
         await setCustomName(actorOf(c, viewer), viewer.id, custom_name);
       return c.json(await settingsJson(viewer.id), 200);
+    },
+  )
+  .openapi(
+    createRoute({
+      method: "post",
+      path: "/mail/unsubscribe",
+      summary:
+        "按邮件里的退订链接关掉一类邮件，不用登录：通知类型或 weekly（每周来信），和在设置里关一样",
+      request: {
+        body: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: z.object({
+                user_id: z.number().int(),
+                kind: z.enum([...NOTIFICATION_TYPES, "weekly"]),
+                sig: z.string().max(64),
+              }),
+            },
+          },
+        },
+      },
+      responses: {
+        204: { description: "已关闭" },
+        400: errorResponse("链接无效"),
+      },
+    }),
+    async (c) => {
+      const { user_id, kind, sig } = c.req.valid("json");
+      if (!signedUnsubscribe(user_id, kind, sig)) {
+        throw new AppError(400, "unsubscribe_invalid", "退订链接无效，请在设置中关闭邮件提醒");
+      }
+      const actor = {
+        userId: user_id,
+        operatorId: null,
+        tokenId: null,
+        ip: clientIp(c),
+        userAgent: c.req.header("user-agent") ?? null,
+      };
+      await updateSettings(
+        actor,
+        kind === "weekly"
+          ? { weekly_email: false }
+          : { notify_prefs: { [kind]: { email: false } } },
+      );
+      return c.body(null, 204);
     },
   )
   .openapi(

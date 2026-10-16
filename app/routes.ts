@@ -17,6 +17,7 @@ export default [
   layout("routes/login-layout.tsx", [
     route("login", "routes/login.tsx"),
     route("login/link", "routes/login-link.tsx"),
+    route("unsubscribe", "routes/unsubscribe.tsx"),
   ]),
   // For fetchers on the forum's pages.
   route("new", "routes/new-thread.ts"),
