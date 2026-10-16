@@ -15,6 +15,7 @@ import {
   getTagId,
   readable,
 } from "../boards/service.ts";
+import { QUESTION_COST, spendCoins } from "../coins/service.ts";
 import { discardDraft } from "../drafts/service.ts";
 import { onebotToMarkdown, type Segment } from "../qq/onebot.ts";
 import {
@@ -892,13 +893,14 @@ export async function createThread(
   await assertWithinL0(viewer, input.source, links, "thread");
 
   const status = statusFor(board.review_mode, viewer);
+  const kind = input.kind ?? board.default_kind;
   const id = await db.transaction().execute(async (trx) => {
     const thread = await trx
       .insertInto("threads")
       .values({
         board_id: board.id,
         author_id: viewer.id,
-        kind: input.kind ?? board.default_kind,
+        kind,
         title: input.title,
         last_poster_id: viewer.id,
         status,
@@ -909,6 +911,10 @@ export async function createThread(
       })
       .returning(["id", "last_post_at"])
       .executeTakeFirstOrThrow();
+    // A question costs a coin (design §8.17); one collected from the groups was asked there.
+    if (kind === "question" && !input.source) {
+      await spendCoins(trx, viewer.id, QUESTION_COST, { reason: "question", thread_id: thread.id });
+    }
     const opening = await trx
       .insertInto("posts")
       .values({

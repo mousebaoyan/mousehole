@@ -19,6 +19,7 @@ import { signedUnsubscribe } from "../../platform/mail.ts";
 import { rateLimit } from "../../platform/rate-limit.ts";
 import { getSettings as getSiteSettings } from "../../platform/settings.ts";
 import { UserBriefSchema, UserRefSchema } from "./schemas.ts";
+import { coinBalance } from "../coins/service.ts";
 import { setCustomName } from "../members/service.ts";
 import { NOTIFICATION_TYPES, notifyPrefs } from "../notifications/service.ts";
 import { exportOwnBoosts } from "../reactions/service.ts";
@@ -69,6 +70,7 @@ const MeSchema = z
     qq: z.number().nullable().openapi({ description: "站长账号没有 QQ 号，为 null" }),
     member_status: z.string(),
     activated: z.boolean(),
+    coins: z.number().openapi({ description: "鼠币余额" }),
   })
   .openapi("Me");
 
@@ -900,8 +902,12 @@ export const usersRoutes = createRouter()
       },
     }),
     async (c) => {
-      const { activated_at, ...profile } = await getProfile(authorize(c, "read").id);
-      return c.json({ ...profile, activated: activated_at !== null }, 200);
+      const { id } = authorize(c, "read");
+      const { activated_at, ...profile } = await getProfile(id);
+      return c.json(
+        { ...profile, activated: activated_at !== null, coins: await coinBalance(id) },
+        200,
+      );
     },
   )
   .openapi(

@@ -88,6 +88,23 @@ export interface Boosts {
   user_id: number;
 }
 
+export interface CoinBalances {
+  coins: number;
+  user_id: number;
+}
+
+export interface CoinLedger {
+  amount: number;
+  created_at: Generated<Timestamp>;
+  day: Timestamp;
+  id: Generated<number>;
+  look_key: string | null;
+  look_kind: string | null;
+  reason: string;
+  thread_id: number | null;
+  user_id: number;
+}
+
 export interface Drafts {
   anonymous_replies: Generated<boolean>;
   author_anonymous: Generated<boolean>;
@@ -492,6 +509,8 @@ export interface DB {
   badges: Badges;
   boards: Boards;
   boosts: Boosts;
+  coin_balances: CoinBalances;
+  coin_ledger: CoinLedger;
   drafts: Drafts;
   email_codes: EmailCodes;
   endorsements: Endorsements;

@@ -15,7 +15,14 @@ let moderator: Who = as("");
 beforeAll(async () => {
   const admin = as(await login((await createUser("admin")).id));
   await api.boards.$post({ json: { slug: "qa", name: "问答", default_kind: "question" } }, admin);
-  asker = as(await login((await createUser()).id));
+  const { id } = await createUser();
+  asker = as(await login(id));
+  // Each question costs a coin; the tests here ask several.
+  await db
+    .insertInto("coin_balances")
+    .values({ user_id: id, coins: 10 })
+    .onConflict((oc) => oc.column("user_id").doUpdateSet({ coins: 10 }))
+    .execute();
   const user = await createUser();
   answerer = { id: user.id, who: as(await login(user.id)) };
   moderator = as(await login((await createUser("moderator")).id));

@@ -132,7 +132,7 @@
 - `coin_ledger` 是只追加的流水：`amount` 挣为正、花为负；`reason` 取 `check_in`、`liked`、`accepted`、`question`、`look`；`day` 是北京时间的日期，签到、获赞、采纳是算的那一天，花的是花的那天；发问答帖记 `thread_id`，兑换记 `look_kind`、`look_key`。
 - 签到、获赞、采纳每人每天各一行，靠部分唯一索引 `(user_id, reason, day) WHERE reason IN ('check_in', 'liked', 'accepted')` 和 `ON CONFLICT DO NOTHING`：网页和群同步同一天各来一次、结算重跑，都不会多发。获赞那一行的 `amount` 是这一天给了赞的人数。
 - `coin_balances` 每人一行余额，`CHECK (coins >= 0)`，和流水在同一个事务里改：挣的用 `INSERT … ON CONFLICT DO UPDATE SET coins = coins + n`；花的用 `UPDATE … SET coins = coins - n WHERE user_id = … AND coins >= n`，没改到一行就是不够，返回 `403 coins_insufficient`。没有这一行就是 0。
-- 签到：`users` 记新的一天（`recordDay`，见上面的阅读统计）时调用 `checkIn`；成员同步写入的 `group_members.last_sent_at` 往后移、落在今天或昨天时，也给那一天签到。冻结的账号和 bot 不签到。
+- 签到：`users` 记新的一天（`recordDay`，见上面的阅读统计）时调用 `checkIn`；成员同步写入的 `group_members.last_sent_at` 往后移时，也给那一天签到。都只认今天和昨天；冻结的账号、bot 和站长不签到。
 - 结算：每小时的任务看 `job_runs` 里 `coins` 结算到了哪天，昨天还没结算就结算，一天一个事务。获赞：`reactions.created_at` 落在那天、给赞的人不是 bot、楼层没删没隐藏也不匿名、作者是成员的，按（作者，给赞的人）去重计数；采纳：`posts.accepted_at` 落在那天、同样条件的楼层，有就记一次。
 - 明细按 `(user_id, id DESC)` 分页。排行榜现算：按 `day` 的范围汇总 `amount > 0` 的流水，走 `coin_ledger (day)`。
 

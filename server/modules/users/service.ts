@@ -16,6 +16,7 @@ import { processAvatar } from "../../platform/images.ts";
 import { renderMarkdown } from "../../platform/markdown.ts";
 import { log } from "../../platform/log.ts";
 import { recordAudit } from "../audit/service.ts";
+import { checkIn } from "../coins/service.ts";
 import { recordEvent } from "../events/service.ts";
 import { removeBackground } from "./backgrounds.ts";
 import {
@@ -190,7 +191,8 @@ export async function findMember(ref: UserRef) {
 
 // A day someone was active, in Beijing time: they visited, read, or had content synced from the
 // groups, on the day it was said there. Returns 1 for the first of a day, which counts as a day
-// visited, else 0. What they read adds to the day's reading, which L4 looks at (design §6.6).
+// visited and checks them in (design §8.17), else 0. What they read adds to the day's reading,
+// which L4 looks at (design §6.6).
 async function recordDay(
   trx: Transaction<DB>,
   userId: number,
@@ -205,6 +207,7 @@ async function recordDay(
     .returning("user_id")
     .executeTakeFirst();
   if (first) {
+    await checkIn(trx, [userId], day);
     // Days in a row up to the latest, for the badges, kept in users: user_days keeps only 35 days.
     // An archived day may come before the latest and join the days in a row; they are counted
     // anew then, as far back as user_days goes.
