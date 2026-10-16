@@ -1,10 +1,31 @@
 import { useEffect, useRef, useState, type RefObject } from "react";
 import { useFetcher } from "react-router";
-import { AtSign, Bold, Code, Eye, ImagePlus, Link2, PenLine, Quote } from "~/components/icons";
+import {
+  AtSign,
+  Bold,
+  Code,
+  Eye,
+  EyeOff,
+  Highlighter,
+  ImagePlus,
+  Info,
+  Lightbulb,
+  Link2,
+  ListCollapse,
+  MessageSquareWarning,
+  OctagonAlert,
+  PenLine,
+  Plus,
+  Quote,
+  Sigma,
+  Superscript,
+  TriangleAlert,
+} from "~/components/icons";
 import type { loader as mentionLoader } from "~/routes/mention";
 import { cn } from "cn";
 import type { UserBrief } from "~/api-types";
 import { browserApi } from "~/browser-api";
+import { Dropdown, menuItem } from "~/components/disclosure";
 import { EmojiButton } from "~/components/emoji-button";
 import { PROSE } from "~/components/prose";
 import { Button } from "~/components/ui/button";
@@ -59,6 +80,50 @@ const link: Edit = (text, start, end) => {
     select: [from, from + "https://".length],
   };
 };
+
+// A callout (design §8.2) around the selected lines, or a line to write in.
+function callout(head: string): Edit {
+  return (text, start, end) => {
+    const lineStart = text.lastIndexOf("\n", start - 1) + 1;
+    const body = (text.slice(lineStart, end) || "内容")
+      .split("\n")
+      .map((line) => `> ${line}`)
+      .join("\n");
+    const from = lineStart + head.length + 5;
+    return {
+      text: `${text.slice(0, lineStart)}> ${head}\n${body}${text.slice(end)}`,
+      select: [from, lineStart + head.length + 3 + body.length],
+    };
+  };
+}
+
+// The next free number after the selection, its note at the end, ready to be written.
+const footnote: Edit = (text, start, end) => {
+  let n = 1;
+  while (text.includes(`[^${n}]`)) n++;
+  const body = `${text.slice(0, end)}[^${n}]${text.slice(end)}`.trimEnd();
+  const from = body.length + `\n\n[^${n}]: `.length;
+  return { text: `${body}\n\n[^${n}]: 说明`, select: [from, from + 2] };
+};
+
+// In two columns: the callouts, colored as they show, beside the rest.
+const FORMATS = [
+  { label: "说明", icon: Info, tone: "text-link!", edit: callout("[!NOTE]") },
+  { label: "折叠", icon: ListCollapse, tone: "", edit: callout("[!FOLD] 标题") },
+  { label: "提示", icon: Lightbulb, tone: "text-success!", edit: callout("[!TIP]") },
+  { label: "剧透", icon: EyeOff, tone: "", edit: wrap("||", "||", "剧透") },
+  {
+    label: "重要",
+    icon: MessageSquareWarning,
+    tone: "text-important!",
+    edit: callout("[!IMPORTANT]"),
+  },
+  { label: "高亮", icon: Highlighter, tone: "", edit: wrap("==", "==", "重点") },
+  { label: "注意", icon: TriangleAlert, tone: "text-warning!", edit: callout("[!WARNING]") },
+  { label: "公式", icon: Sigma, tone: "", edit: wrap("$", "$", "x^2") },
+  { label: "警告", icon: OctagonAlert, tone: "text-destructive!", edit: callout("[!CAUTION]") },
+  { label: "脚注", icon: Superscript, tone: "", edit: footnote },
+];
 
 const MAX_IMAGE = 20 * 1024 * 1024;
 
@@ -251,6 +316,31 @@ export function MarkdownEditor({
               <t.icon />
             </Button>
           ))}
+          <Dropdown
+            label="更多格式"
+            trigger={<Plus />}
+            triggerClassName="btn btn-ghost btn-icon-sm"
+            align="start"
+          >
+            {(close) => (
+              <div className="grid grid-cols-2 gap-0.5">
+                {FORMATS.map((f) => (
+                  <button
+                    key={f.label}
+                    type="button"
+                    className={menuItem}
+                    onClick={() => {
+                      close();
+                      apply(f.edit);
+                    }}
+                  >
+                    <f.icon className={f.tone} />
+                    {f.label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </Dropdown>
           <Button
             type="button"
             variant="ghost"
