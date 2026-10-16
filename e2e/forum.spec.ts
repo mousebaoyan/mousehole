@@ -15,7 +15,9 @@ async function signIn(page: Page, args: string[]) {
   await page.waitForURL((url) => !url.pathname.startsWith("/login"));
 }
 
-test("站长设公告，管理员建版块、发帖再回复，从通知打开别人的回复，读完回到列表", async ({ page }) => {
+test("站长设公告，管理员建版块、发帖再回复，从通知打开别人的回复，读完回到列表", async ({
+  page,
+}) => {
   await signIn(page, ["--owner"]);
   await page.goto("/admin/site");
   await page.getByLabel("公告横幅").fill("端到端测试的公告");
