@@ -42,7 +42,7 @@ export default function Groups({ loaderData: { groups }, actionData }: Route.Com
     <>
       <h1 className="text-xl font-semibold">QQ 群</h1>
       <p className="mt-1 text-meta text-muted-foreground">
-        在任一启用的群中即为成员；显示名以主群为准
+        在任何一个启用的群里都算成员，名字以主群为准
       </p>
       <Result result={actionData} />
 

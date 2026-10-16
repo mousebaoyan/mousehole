@@ -22,16 +22,16 @@ export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
 
 // As settings and emails name them.
 export const NOTIFICATION_LABELS: Record<NotificationType, string> = {
-  reply: "回复我的楼层",
-  thread_reply: "回复我的帖子（未指定楼层）",
+  reply: "回复我",
+  thread_reply: "回复我的帖子",
   mention: "@我",
-  like: "点赞",
-  boost: "短评",
+  like: "收到赞",
+  boost: "收到短评",
   watching: "关注的帖子有新回复",
   following: "关注的人发新帖",
   solved: "回答被采纳",
   moderation: "内容被审核或隐藏",
   level: "升级",
   lottery: "抽奖开奖或取消",
-  badge: "得到徽章",
+  badge: "获得徽章",
 };

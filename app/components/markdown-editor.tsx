@@ -425,7 +425,7 @@ export function MarkdownEditor({
             }
           }}
           aria-label={label}
-          placeholder="支持 Markdown；输入 @ 加名字或 QQ 号提及成员；可粘贴或拖入图片"
+          placeholder="支持 Markdown，输入 @ 提及成员，可以粘贴或拖入图片"
           className="min-h-0 flex-1 resize-none bg-transparent px-4 py-3 text-body leading-7 outline-none placeholder:text-muted-foreground"
         />
         {uploadError !== null && (

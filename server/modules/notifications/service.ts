@@ -91,7 +91,7 @@ const SAID: Record<Notice["type"], string> = {
   thread_reply: "回复了你的帖子",
   mention: "提到了你",
   like: "赞了你",
-  boost: "对你的楼层发表了短评",
+  boost: "给你留了短评",
   watching: "回复了你关注的帖子",
   following: "发了新帖",
   solved: "采纳了你的回答",

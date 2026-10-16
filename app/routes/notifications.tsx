@@ -86,7 +86,7 @@ const ICONS: Record<string, typeof Reply> = {
 // How a lottery went, for whom; see design §8.13.
 const LOTTERY: Record<string, string> = {
   won: "你中奖了",
-  lost: "你参与的抽奖已开奖，未中奖",
+  lost: "你参与的抽奖已开奖，这次没有中奖",
   drawn: "你发起的抽奖已开奖",
   cancelled: "你参与的抽奖已取消",
 };
@@ -107,15 +107,15 @@ function headline(n: Item) {
     case "reply":
       return `${who} 回复了你`;
     case "thread_reply":
-      return many ? `你的帖子有 ${n.count} 层新回复` : `${who} 回复了你的帖子`;
+      return many ? `你的帖子有 ${n.count} 条新回复` : `${who} 回复了你的帖子`;
     case "mention":
       return `${who} 提到了你`;
     case "like":
       return many ? `${who} 等 ${n.count} 人赞了你` : `${who} 赞了你`;
     case "boost":
-      return `${many ? `${who} 等 ${n.count} 人` : who} 对你的楼层发表了短评：${n.data.body}`;
+      return `${many ? `${who} 等 ${n.count} 人` : who} 给你留了短评：${n.data.body}`;
     case "watching":
-      return many ? `关注的帖子有 ${n.count} 层新回复` : `${who} 回复了你关注的帖子`;
+      return many ? `你关注的帖子有 ${n.count} 条新回复` : `${who} 回复了你关注的帖子`;
     case "solved":
       return `${who} 采纳了你的回答`;
     case "moderation":
@@ -125,7 +125,7 @@ function headline(n: Item) {
     case "lottery":
       return `${LOTTERY[n.data.result]}${n.data.prize ? `：${n.data.prize}` : ""}`;
     case "badge":
-      return `你得到了徽章「${n.data.name}」`;
+      return `你获得了徽章「${n.data.name}」`;
     default:
       return `${who} 发了新帖`;
   }

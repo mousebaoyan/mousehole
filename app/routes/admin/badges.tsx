@@ -33,7 +33,7 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 
 // The event frame an event badge opens for those who have it (design §8.16).
 const FRAME_OPTIONS = [
-  { value: "", label: "不配" },
+  { value: "", label: "不附带" },
   ...EVENT_FRAMES.map((key) => ({ value: key, label: FRAME_LOOKS[key].name })),
 ];
 
@@ -101,7 +101,7 @@ export default function Badges({ loaderData: { badges, edit }, actionData }: Rou
     <>
       <h1 className="text-xl font-semibold">徽章</h1>
       <p className="mt-1 text-meta text-muted-foreground">
-        活动徽章用于征文、活动的名次和纪念，由管理员授予，可以配一个活动框，得到的人能用作头像框；其余徽章按规则自动授予，见
+        活动徽章用来纪念征文、活动的名次，由管理员授予，可以附带一个头像框。其他徽章按规则自动授予，见
         <Link to="/badges" className="text-primary hover:underline">
           徽章页
         </Link>
@@ -139,10 +139,10 @@ export default function Badges({ loaderData: { badges, edit }, actionData }: Rou
             <Field label="说明">
               <Input name="description" required maxLength={60} className="w-72" />
             </Field>
-            <Field label="档">
+            <Field label="档次">
               <Select name="tier" options={TIERS} className="w-20" />
             </Field>
-            <Field label="活动框">
+            <Field label="头像框">
               <Select name="frame" options={FRAME_OPTIONS} className="w-28" />
             </Field>
             <Button type="submit" name="intent" value="create" disabled={busy}>
@@ -187,7 +187,7 @@ function EditBadge({ badge, busy }: { badge: Badge; busy: boolean }) {
             className="w-72"
           />
         </Field>
-        <Field label="活动框">
+        <Field label="头像框">
           <Select
             name="frame"
             defaultValue={badge.frame ?? ""}
@@ -213,7 +213,9 @@ function EditBadge({ badge, busy }: { badge: Badge; busy: boolean }) {
         <Button type="submit" name="intent" value="revoke" variant="outline" disabled={busy}>
           撤销
         </Button>
-        <p className="w-full text-meta text-muted-foreground">授予时须填写理由，会记入操作日志</p>
+        <p className="w-full text-meta text-muted-foreground">
+          授予时要填写理由，理由会记入操作日志
+        </p>
       </Form>
     </div>
   );

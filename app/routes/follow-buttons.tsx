@@ -8,9 +8,9 @@ import { useSavedValue } from "~/saved-value";
 
 // `shown` is what the button says while the level is chosen.
 export const NOTIFY_LEVELS = [
-  { level: "watching", label: "关注", shown: "已关注", note: "有新楼层时通知", icon: BellRing },
+  { level: "watching", label: "关注", shown: "已关注", note: "有新回复时通知", icon: BellRing },
   { level: "normal", label: "普通", shown: "关注", note: "回复我、@我时通知", icon: Bell },
-  { level: "muted", label: "静音", shown: "已静音", note: "不接收通知", icon: BellOff },
+  { level: "muted", label: "静音", shown: "已静音", note: "不接收任何通知", icon: BellOff },
 ] as const;
 
 function levelOf(raw: string | undefined) {

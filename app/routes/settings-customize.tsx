@@ -9,6 +9,7 @@ import { UserAvatar } from "~/components/user-avatar";
 import { browserApi } from "~/browser-api";
 import { TIER_STYLES } from "~/components/badge-chip";
 import { EmojiButton } from "~/components/emoji-button";
+import { Field } from "~/components/form-parts";
 import { Button, buttonVariants } from "~/components/ui/button";
 import { toast } from "~/components/ui/toast";
 import { Dialog } from "~/components/ui/dialog";
@@ -79,13 +80,13 @@ export function ShownBadgesField({ badges, shown }: { badges: Badge[]; shown: nu
         value={value === null ? "auto" : "pick"}
         onValueChange={(mode) => change(mode === "auto" ? null : (shown ?? []))}
         options={[
-          { value: "auto", label: "自动：金徽章在前，同档的最近得到的在前" },
+          { value: "auto", label: "自动选择" },
           { value: "pick", label: "自己选择" },
         ]}
       />
       {value !== null &&
         (badges.length === 0 ? (
-          <span className="text-meta text-muted-foreground">得到徽章后可以在这里选择</span>
+          <span className="text-meta text-muted-foreground">获得徽章后可以在这里挑选</span>
         ) : (
           <>
             <div className="mt-1 flex flex-wrap gap-1.5">
@@ -119,7 +120,7 @@ export function ShownBadgesField({ badges, shown }: { badges: Badge[]; shown: nu
               })}
             </div>
             <span className="text-meta text-muted-foreground">
-              最多 {SHOWN_MAX} 枚，按点选的顺序显示在资料卡和主页上；一枚都不选就不展示
+              最多 {SHOWN_MAX} 枚，按选择的先后排列
             </span>
           </>
         ))}
@@ -158,17 +159,15 @@ export function ThemeField({ theme }: { theme: string | null }) {
           </label>
         ))}
       </div>
-      <span className="text-meta text-muted-foreground">
-        资料卡和个人主页上的按钮、链接和进度条使用这个颜色
-      </span>
+      <span className="text-meta text-muted-foreground">用在你的资料卡和个人主页上</span>
     </fieldset>
   );
 }
 
 // When a status clears by itself, from now. One already set keeps its time unless changed.
 const CLEARS = [
-  { value: "never", label: "不自动清除" },
-  { value: "today", label: "今天之内" },
+  { value: "never", label: "不清除" },
+  { value: "today", label: "今天过后清除" },
   { value: "3d", label: "3 天后清除" },
   { value: "7d", label: "一周后清除" },
 ];
@@ -218,9 +217,7 @@ export function StatusField({
           className="w-36 shrink-0 max-sm:flex-1"
         />
       </div>
-      <span className="text-meta text-muted-foreground">
-        最多 {STATUS_MAX} 个字；楼层里名字旁边显示表情，点一下显示这句话。留空则不显示状态
-      </span>
+      <span className="text-meta text-muted-foreground">显示在你的名字旁边</span>
     </div>
   );
 }
@@ -294,7 +291,7 @@ export function PinsField({ pins, userId }: { pins: Pin[]; userId: number }) {
         </Button>
       )}
       <span className="text-meta text-muted-foreground">
-        从自己公开发布的帖子里选最多 {PINS_MAX} 个，按顺序排在个人主页上
+        挑最多 {PINS_MAX} 个自己的帖子，展示在个人主页上
       </span>
       <Dialog
         ref={dialog}
@@ -353,7 +350,9 @@ function ThreadChoices({
   }
   if (cursor === null && data.threads.length === 0) {
     return (
-      <li className="px-2 py-6 text-center text-meta text-muted-foreground">暂无公开发布的帖子</li>
+      <li className="px-2 py-6 text-center text-meta text-muted-foreground">
+        暂无可选的帖子，匿名发布的不能选
+      </li>
     );
   }
   const full = chosen.length >= PINS_MAX;
@@ -407,8 +406,7 @@ function ThreadChoices({
 
 export function ShowcaseField({ showcase }: { showcase: string | null }) {
   return (
-    <label className="flex flex-col gap-1.5 text-sm">
-      <span className="font-medium">展柜</span>
+    <Field label="展柜" hint="显示在个人主页上，支持 Markdown，但不显示图片">
       <Textarea
         name="showcase"
         defaultValue={showcase ?? ""}
@@ -416,10 +414,7 @@ export function ShowcaseField({ showcase }: { showcase: string | null }) {
         placeholder="介绍一下自己：方向、经历、去向……"
         className="min-h-28"
       />
-      <span className="text-meta text-muted-foreground">
-        最多 {SHOWCASE_MAX} 个字，显示在个人主页的个性签名下面；支持 Markdown，图片显示为链接
-      </span>
-    </label>
+    </Field>
   );
 }
 
@@ -591,9 +586,7 @@ export function BackgroundField({
           />
         </label>
         <span className="text-meta text-muted-foreground">
-          {unlocked.upload
-            ? "静图或动图，资料卡和主页分别裁剪；动图压缩后资料卡不超过 500KB、主页不超过 1MB"
-            : `L${UPLOAD_LEVEL} 起可以上传自己的图片，静图、动图都可以`}
+          {unlocked.upload ? "支持动图" : `L${UPLOAD_LEVEL} 起可以上传自己的图片`}
         </span>
       </div>
       {picked && (
@@ -640,9 +633,6 @@ export function FrameField({
           </Tile>
         ))}
       </div>
-      <span className="text-meta text-muted-foreground">
-        显示在楼层、资料卡和个人主页的头像上；楼层里静止，点开资料卡时才动
-      </span>
     </fieldset>
   );
 }

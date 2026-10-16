@@ -263,11 +263,11 @@ export function ThreadHeader({
         <p className="mt-3 flex items-center gap-2 rounded-xl bg-warning/10 px-3 py-2 text-meta text-warning">
           {thread.status === "pending" ? (
             <>
-              <Clock className="size-4 shrink-0" /> 等待审核：审核通过后其他人才能查看和回复
+              <Clock className="size-4 shrink-0" /> 正在审核，通过后其他人才能看到
             </>
           ) : (
             <>
-              <EyeOff className="size-4 shrink-0" /> 已隐藏：仅作者和版主可见
+              <EyeOff className="size-4 shrink-0" /> 已隐藏，仅作者和版主可见
             </>
           )}
         </p>

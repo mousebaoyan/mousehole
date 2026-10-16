@@ -79,7 +79,7 @@ export function mailButton(label: string, url: string) {
 }
 
 // Why the mail came and how to stop it, as the big senders say it; the link turns this kind off
-// without logging in. reason is what was turned on, e.g. 「回复我的楼层」的邮件提醒.
+// without logging in. reason is what was turned on, e.g. 「回复我」的邮件提醒.
 export function optOut(reason: string, unsubscribe: string) {
   const settings = `${env.PUBLIC_URL}/settings#notify`;
   return {

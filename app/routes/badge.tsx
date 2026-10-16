@@ -52,7 +52,7 @@ export default function Badge({ loaderData }: Route.ComponentProps) {
         </div>
       </header>
       {items.length === 0 ? (
-        <p className="py-12 text-center text-sm text-muted-foreground">暂时还没有人获得</p>
+        <p className="py-12 text-center text-sm text-muted-foreground">暂无人获得</p>
       ) : (
         <ul className="stagger">
           <Holders items={items} now={now} />

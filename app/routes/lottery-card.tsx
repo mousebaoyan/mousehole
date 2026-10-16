@@ -50,7 +50,7 @@ export function LotteryCard({
     <section aria-label="抽奖" className="mt-4 rounded-2xl border bg-secondary/30 p-4">
       <p className="mb-3 flex flex-wrap items-center gap-x-2 text-meta text-muted-foreground">
         <Gift className="size-4" />
-        {lottery.entry === "reply" ? "回复参与" : "点按钮参与"}
+        {lottery.entry === "reply" ? "回复参与" : "直接参与"}
         {lottery.min_level > 0 && <span>· {levelName(lottery.min_level)} 起</span>}
       </p>
 
