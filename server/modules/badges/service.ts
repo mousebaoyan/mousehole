@@ -9,7 +9,7 @@ import { recordAudit } from "../audit/service.ts";
 import { readable } from "../boards/service.ts";
 import { recordEvent } from "../events/service.ts";
 import { notifyBadges } from "../notifications/service.ts";
-import { clearTitleBadge, shownToGuests, userBriefs } from "../users/service.ts";
+import { dropRevokedBadge, shownToGuests, userBriefs } from "../users/service.ts";
 import { GROUPINGS, RULES, type Tier } from "./rules.ts";
 
 // Badges, see design §8.8: the automatic ones from rules.ts, checked every few minutes, and
@@ -328,7 +328,7 @@ export async function grantBadge(actor: Actor, id: number, userId: number, reaso
   });
 }
 
-// Taking an event badge back also takes it off as their title.
+// Taking an event badge back also takes it off as their title and off their card.
 export async function revokeBadge(actor: Actor, id: number, userId: number, reason: string | null) {
   await db.transaction().execute(async (trx) => {
     const badge = await manualBadge(trx, id);
@@ -340,7 +340,7 @@ export async function revokeBadge(actor: Actor, id: number, userId: number, reas
     if (revoked.numDeletedRows === 0n) {
       throw new AppError(404, "badge_not_granted", "TA 没有这枚徽章");
     }
-    await clearTitleBadge(trx, userId, id);
+    await dropRevokedBadge(trx, userId, id);
     await recordAudit(trx, actor, {
       action: "badge.revoke",
       target_type: "user",

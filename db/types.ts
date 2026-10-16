@@ -469,6 +469,7 @@ export interface Users {
   restriction: string | null;
   role: Generated<string>;
   role_locked: Generated<boolean>;
+  shown_badge_ids: number[] | null;
   thread_count: Generated<number>;
   title_badge_id: number | null;
   visit_streak: Generated<number>;

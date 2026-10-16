@@ -422,7 +422,7 @@ export async function listPeople(userId: number, list: RelationList, offset: num
   };
 }
 
-// Badges on the profile card, the best first (design §8.8).
+// Badges on the profile card when they haven't picked theirs: the best first (design §8.8).
 const CARD_BADGES = 3;
 
 // What the profile card and the user's page show; see design §6.1 and §9. `viewerId` is for
@@ -471,14 +471,18 @@ export async function getUser(ref: UserRef, viewerId: number | null) {
         WHERE followee_id = users.id AND follower_id = ${viewerId})`.as("followed"),
       sql<boolean>`EXISTS (SELECT 1 FROM endorsements
         WHERE endorsements.user_id = users.id AND endorser_id = ${viewerId})`.as("endorsed"),
-      sql<{ id: number; name: string; tier: string }[]>`(SELECT coalesce(json_agg(b), '[]')
-        FROM (SELECT badges.id, badges.name, badges.tier FROM user_badges
-          JOIN badges ON badges.id = user_badges.badge_id
-          WHERE user_badges.user_id = users.id
-          GROUP BY badges.id
-          ORDER BY array_position('{gold,silver,bronze}'::text[], badges.tier),
-            max(user_badges.granted_at) DESC
-          LIMIT ${CARD_BADGES}) b)`.as("badges"),
+      sql<{ id: number; name: string; tier: string }[]>`CASE
+        WHEN users.shown_badge_ids IS NULL THEN (SELECT coalesce(json_agg(b), '[]')
+          FROM (SELECT badges.id, badges.name, badges.tier FROM user_badges
+            JOIN badges ON badges.id = user_badges.badge_id
+            WHERE user_badges.user_id = users.id
+            GROUP BY badges.id
+            ORDER BY array_position('{gold,silver,bronze}'::text[], badges.tier),
+              max(user_badges.granted_at) DESC
+            LIMIT ${CARD_BADGES}) b)
+        ELSE (SELECT coalesce(json_agg(b ORDER BY array_position(users.shown_badge_ids, b.id)), '[]')
+          FROM (SELECT id, name, tier FROM badges WHERE id = ANY(users.shown_badge_ids)) b)
+        END`.as("badges"),
     ])
     .where((eb) => ("id" in ref ? eb("users.id", "=", ref.id) : eb("users.qq", "=", ref.qq)))
     .executeTakeFirst();
@@ -512,6 +516,7 @@ export async function getSettings(userId: number) {
       "hide_from_guests",
       "relations_public",
       "title_badge_id",
+      "shown_badge_ids",
       "weekly_email",
       sql<
         { id: number; name: string; tier: string }[]
@@ -521,6 +526,11 @@ export async function getSettings(userId: number) {
           WHERE user_badges.user_id = users.id AND badges.tier IN ('gold', 'silver')) b)`.as(
         "title_badges",
       ),
+      sql<{ id: number; name: string; tier: string }[]>`(SELECT coalesce(json_agg(b
+          ORDER BY array_position('{gold,silver,bronze}'::text[], b.tier), b.name), '[]')
+        FROM (SELECT DISTINCT badges.id, badges.name, badges.tier FROM user_badges
+          JOIN badges ON badges.id = user_badges.badge_id
+          WHERE user_badges.user_id = users.id) b)`.as("badges"),
       "notify_email",
       sql<Record<string, { site?: boolean; email?: boolean }>>`notify_prefs`.as("notify_prefs"),
     ])
@@ -538,6 +548,7 @@ export async function updateSettings(
     hide_from_guests?: boolean;
     relations_public?: boolean;
     title_badge_id?: number | null;
+    shown_badge_ids?: number[] | null;
     weekly_email?: boolean;
     notify_email?: boolean;
     notify_prefs?: Record<string, { site?: boolean; email?: boolean }>;
@@ -548,6 +559,7 @@ export async function updateSettings(
   await db.transaction().execute(async (trx) => {
     if (change.title_badge_id != null)
       await assertTitleBadge(trx, actor.userId, change.title_badge_id);
+    if (change.shown_badge_ids) await assertOwnBadges(trx, actor.userId, change.shown_badge_ids);
     await trx
       .updateTable("users")
       .set({
@@ -577,13 +589,27 @@ async function assertTitleBadge(trx: Transaction<DB>, userId: number, badgeId: n
   if (!own) throw new AppError(400, "badge_not_title", "只能选自己得到的金徽章或银徽章作为头衔");
 }
 
-// When the badge someone wears as their title is taken back.
-export async function clearTitleBadge(trx: Transaction<DB>, userId: number, badgeId: number) {
+async function assertOwnBadges(trx: Transaction<DB>, userId: number, badgeIds: number[]) {
+  const { owned } = await trx
+    .selectFrom("user_badges")
+    .select(sql<number>`count(DISTINCT badge_id)::integer`.as("owned"))
+    .where("user_id", "=", userId)
+    .where("badge_id", "=", sql<number>`any(${badgeIds}::integer[])`)
+    .executeTakeFirstOrThrow();
+  if (owned !== badgeIds.length) {
+    throw new AppError(400, "badge_not_owned", "只能展示自己得到的徽章");
+  }
+}
+
+// A badge taken back is no longer worn as their title, nor shown on their card.
+export async function dropRevokedBadge(trx: Transaction<DB>, userId: number, badgeId: number) {
   await trx
     .updateTable("users")
-    .set({ title_badge_id: null })
+    .set({
+      title_badge_id: sql`nullif(title_badge_id, ${badgeId})`,
+      shown_badge_ids: sql`array_remove(shown_badge_ids, ${badgeId})`,
+    })
     .where("id", "=", userId)
-    .where("title_badge_id", "=", badgeId)
     .execute();
 }
 

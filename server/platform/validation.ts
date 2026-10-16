@@ -32,6 +32,7 @@ const LABELS: Record<string, string> = {
   days: "天数",
   custom_name: "名字",
   custom_bio: "签名",
+  shown_badge_ids: "展示徽章",
   bio: "简介",
   banner: "公告横幅",
   code_hint: "口令说明",

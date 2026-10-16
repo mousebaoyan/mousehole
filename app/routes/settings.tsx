@@ -21,6 +21,7 @@ import {
   NOTIFICATION_TYPES,
 } from "../../server/modules/notifications/types.ts";
 import { BOT_NAME } from "../../server/platform/site.ts";
+import { ShownBadgesField } from "./settings-customize.tsx";
 
 export function meta() {
   return [{ title: pageTitle("设置") }];
@@ -29,6 +30,7 @@ export function meta() {
 // The page's sections, for the navigation beside them.
 const SECTIONS = {
   profile: { id: "profile", title: "资料" },
+  customize: { id: "customize", title: "个性化" },
   privacy: { id: "privacy", title: "隐私" },
   proxy: { id: "proxy", title: "群聊收录" },
   notify: { id: "notify", title: "通知" },
@@ -69,6 +71,7 @@ export async function action({ request, context }: Route.ActionArgs) {
       hide_from_guests: on("hide_from_guests"),
       relations_public: on("relations_public"),
       title_badge_id: field("title_badge_id") ? Number(field("title_badge_id")) : null,
+      shown_badge_ids: ids(field("shown_badges")),
       notify_email: on("notify_email"),
       weekly_email: on("weekly_email"),
       notify_prefs: Object.fromEntries(
@@ -89,6 +92,12 @@ export async function action({ request, context }: Route.ActionArgs) {
   });
   if (res.ok) return { ok: true, message: "已保存" };
   return { ok: false, message: (await res.json()).error.message };
+}
+
+// What a picker of several sent: "auto" for the default, else the IDs in order.
+function ids(value: string) {
+  if (value === "auto") return null;
+  return value === "" ? [] : value.split(",").map(Number);
 }
 
 export default function Settings({ loaderData, actionData }: Route.ComponentProps) {
@@ -153,6 +162,15 @@ export default function Settings({ loaderData, actionData }: Route.ComponentProp
                   ]}
                 />
               </Field>
+            </div>
+          </Section>
+
+          <Section
+            {...SECTIONS.customize}
+            description="资料卡和个人主页上的样子；匿名发布的内容不显示这些"
+          >
+            <div className="flex flex-col gap-5">
+              <ShownBadgesField badges={settings.badges} shown={settings.shown_badge_ids} />
             </div>
           </Section>
 

@@ -221,6 +221,58 @@ describe("徽章", () => {
     expect(automatic.status).toBe(403);
   });
 
+  test("展示徽章按自己选的顺序，只能选得到的，撤销的自动去掉；没选过和改回默认时金的在前", async () => {
+    const member = await person();
+    const event = async (name: string, tier: "gold" | "silver" | "bronze") => {
+      const res = await api.admin.badges.$post(
+        { json: { name, description: "活动", tier } },
+        admin.who,
+      );
+      if (res.status !== 201) throw new Error(`status ${res.status}`);
+      return (await res.json()).id;
+    };
+    const [gold, silver, bronze, other] = [
+      await event("展示金", "gold"),
+      await event("展示银", "silver"),
+      await event("展示铜", "bronze"),
+      await event("没得到", "gold"),
+    ];
+    for (const id of [bronze, gold, silver]) {
+      await api.admin.badges[":id"].grants.$post(
+        { param: { id: String(id) }, json: { user: String(member.id), reason: "活动" } },
+        admin.who,
+      );
+    }
+    const shown = async () => {
+      const res = await api.users[":user"].$get({ param: { user: String(member.id) } });
+      if (!res.ok) throw new Error(`status ${res.status}`);
+      const card = await res.json();
+      if (card.members_only) throw new Error("members only");
+      return card.badges.map((b) => b.id);
+    };
+    const pick = (ids: number[] | null) =>
+      api.me.$patch({ json: { shown_badge_ids: ids } }, member.who);
+
+    expect(await shown()).toEqual([gold, silver, bronze]);
+    expect((await pick([bronze, gold])).status).toBe(200);
+    expect(await shown()).toEqual([bronze, gold]);
+    const unowned = await pick([gold, other]);
+    expect(unowned.status).toBe(400);
+    expect(await unowned.json()).toMatchObject({ error: { code: "badge_not_owned" } });
+    expect((await pick([gold, gold])).status).toBe(400);
+    expect((await pick([gold, silver, bronze, other])).status).toBe(400);
+
+    await api.admin.badges[":id"].grants[":user"].$delete(
+      { param: { id: String(bronze), user: String(member.id) }, json: {} },
+      admin.who,
+    );
+    expect(await shown()).toEqual([gold]);
+    expect((await pick([])).status).toBe(200);
+    expect(await shown()).toEqual([]);
+    expect((await pick(null)).status).toBe(200);
+    expect(await shown()).toEqual([gold, silver]);
+  });
+
   test("访客看不到设了不给访客看的人的徽章，也看不到自己进不去的版块里的楼层", async () => {
     const member = await person();
     const inner = await reply(member.who, await thread(admin.who, "inner"));
