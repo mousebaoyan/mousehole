@@ -1,4 +1,5 @@
 import { mkdir, rename, rm, writeFile } from "node:fs/promises";
+import { sql } from "kysely";
 import type { Actor } from "../../platform/access.ts";
 import { db } from "../../platform/db.ts";
 import { AppError } from "../../platform/errors.ts";
@@ -15,18 +16,24 @@ function file(userId: number, place: (typeof PLACES)[number]) {
   return `${BACKGROUNDS_DIR}/${userId}-${place}.webp`;
 }
 
-function urls(userId: number, version: number) {
+export function backgroundUrls(userId: number, version: number) {
   return {
     card_url: `/backgrounds/${userId}-card.webp?v=${version}`,
     profile_url: `/backgrounds/${userId}-profile.webp?v=${version}`,
   };
 }
 
-// What their card and page show behind them: a preset, their own picture, or nothing.
-export function backgroundOf(userId: number, background: string | null, version: number) {
-  if (background === "custom") return urls(userId, version);
+// What their card and page show behind them: a preset, moving once bought, their own picture, or
+// nothing.
+export function backgroundOf(
+  userId: number,
+  background: string | null,
+  version: number,
+  bought: boolean,
+) {
+  if (background === "custom") return backgroundUrls(userId, version);
   const preset = BACKGROUNDS.find((key) => key === background);
-  return preset === undefined ? null : { preset };
+  return preset === undefined ? null : { preset, moving: bought };
 }
 
 export async function uploadBackground(
@@ -36,7 +43,12 @@ export async function uploadBackground(
 ) {
   const user = await db
     .selectFrom("users")
-    .select(["level", "role"])
+    .select([
+      "level",
+      "role",
+      sql<boolean>`EXISTS (SELECT 1 FROM user_looks l WHERE l.user_id = users.id
+        AND l.kind = 'background' AND l.key = 'custom')`.as("moving"),
+    ])
     .where("id", "=", actor.userId)
     .executeTakeFirstOrThrow();
   if (!reaches(user, UPLOAD_LEVEL)) {
@@ -49,6 +61,7 @@ export async function uploadBackground(
       still: BACKGROUND_CROPS[place].still,
       moving: BACKGROUND_CROPS[place].moving,
     })),
+    user.moving,
   );
   if (animated && PLACES.some((place, i) => files[i].length > BACKGROUND_CROPS[place].movingMax)) {
     throw new AppError(
@@ -73,7 +86,7 @@ export async function uploadBackground(
     await recordAudit(trx, actor, { action: "user.background", data: { animated } });
     return row.background_version;
   });
-  return urls(actor.userId, version);
+  return backgroundUrls(actor.userId, version);
 }
 
 // Once they no longer use their own picture.

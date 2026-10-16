@@ -16,18 +16,21 @@ import { processAvatar } from "../../platform/images.ts";
 import { renderMarkdown } from "../../platform/markdown.ts";
 import { log } from "../../platform/log.ts";
 import { recordAudit } from "../audit/service.ts";
-import { checkIn } from "../coins/service.ts";
+import { checkIn, spendCoins } from "../coins/service.ts";
 import { recordEvent } from "../events/service.ts";
 import { removeBackground } from "./backgrounds.ts";
 import {
   BACKGROUND_PRESETS,
   FRAME_LOOKS,
+  frameMoves,
   FRAMES,
+  movingLook,
   reaches,
   unlockedFrames,
   type BackgroundPreset,
   type Clearable,
   type Frame,
+  type Look,
   type Theme,
 } from "./customization.ts";
 
@@ -465,9 +468,11 @@ export async function getUser(ref: UserRef, viewerId: number | null) {
       eb.fn.coalesce("users.custom_bio", "users.qq_bio").as("bio"),
       USER_STATUS.as("user_status"),
       "users.frame",
+      boughtWorn("frame").as("frame_bought"),
       "users.theme",
       "users.background",
       "users.background_version",
+      boughtWorn("background").as("background_bought"),
       "users.hide_from_guests",
       "users.relations_public",
       "users.qq",
@@ -514,13 +519,25 @@ export async function getUser(ref: UserRef, viewerId: number | null) {
     .where((eb) => ("id" in ref ? eb("users.id", "=", ref.id) : eb("users.qq", "=", ref.qq)))
     .executeTakeFirst();
   if (!row) throw userNotFound();
-  const { avatar_version, frame, ...user } = row;
-  return { ...user, frame: frameOf(frame), avatar_url: avatarUrl(user.id, avatar_version) };
+  const { avatar_version, frame, frame_bought, ...user } = row;
+  return {
+    ...user,
+    frame: frameOf(frame, frame_bought),
+    avatar_url: avatarUrl(user.id, avatar_version),
+  };
+}
+
+// Whether they bought the moving version of the background or frame they wear (design §8.16).
+function boughtWorn(kind: Look["kind"]) {
+  return sql<boolean>`EXISTS (SELECT 1 FROM user_looks
+    WHERE user_looks.user_id = users.id AND user_looks.kind = ${kind}
+      AND user_looks.key = ${sql.ref(`users.${kind}`)})`;
 }
 
 // The frame as pages draw it.
-function frameOf(key: string | null) {
-  return FRAMES.find((frame) => frame === key) ?? null;
+function frameOf(key: string | null, bought: boolean) {
+  const frame = FRAMES.find((f) => f === key);
+  return frame === undefined ? null : { key: frame, moving: frameMoves(frame, bought) };
 }
 
 // What someone's badges open of the frames.
@@ -595,7 +612,43 @@ export async function getSettings(userId: number) {
     ])
     .where("id", "=", userId)
     .executeTakeFirstOrThrow();
-  return { ...settings, badge_unlocks: await badgeUnlocks(db, userId) };
+  const looks = await db
+    .selectFrom("user_looks")
+    .select(["kind", "key"])
+    .where("user_id", "=", userId)
+    .execute();
+  return { ...settings, badge_unlocks: await badgeUnlocks(db, userId), looks };
+}
+
+// Buying a look's moving version (design §8.16) wears it too; their own picture's changes nothing
+// worn, it lets animated pictures through.
+export async function buyLook(actor: Actor, look: Look) {
+  const moving = movingLook(look);
+  if (!moving) throw new AppError(400, "invalid_request", "这一款没有动态版");
+  await db.transaction().execute(async (trx) => {
+    const user = await trx
+      .selectFrom("users")
+      .select(["level", "role"])
+      .where("id", "=", actor.userId)
+      .executeTakeFirstOrThrow();
+    if (!reaches(user, moving.level)) {
+      throw new AppError(403, "cosmetic_locked", `L${moving.level} 起才能兑换这一款`);
+    }
+    const fresh = await trx
+      .insertInto("user_looks")
+      .values({ user_id: actor.userId, ...look })
+      .onConflict((oc) => oc.doNothing())
+      .returning("key")
+      .executeTakeFirst();
+    if (!fresh) throw new AppError(409, "look_owned", "已经兑换过这一款了");
+    await spendCoins(trx, actor.userId, moving.price, {
+      reason: "look",
+      look_kind: look.kind,
+      look_key: look.key,
+    });
+  });
+  if (look.kind === "frame") await updateSettings(actor, { frame: look.key });
+  else if (look.key !== "custom") await updateSettings(actor, { background: look.key });
 }
 
 // Only what is given changes, down to each notification switch: one never set follows the
@@ -787,9 +840,9 @@ export async function dropRevokedBadge(trx: Transaction<DB>, userId: number, bad
     .where("id", "=", userId)
     .returning(["frame", "level", "role"])
     .executeTakeFirstOrThrow();
-  const frame = frameOf(user.frame);
+  const frame = FRAMES.find((f) => f === user.frame);
   if (
-    frame !== null &&
+    frame !== undefined &&
     !("level" in FRAME_LOOKS[frame].unlock) &&
     !unlockedFrames(user, await badgeUnlocks(trx, userId)).includes(frame)
   ) {
@@ -1071,13 +1124,14 @@ export async function userBriefs(ids: number[]) {
       "title_badge.tier as title_tier",
       USER_STATUS.as("user_status"),
       "users.frame",
+      boughtWorn("frame").as("frame_bought"),
     ])
     .where("users.id", "=", sql<number>`any(${[...new Set(ids)]}::integer[])`)
     .execute();
   const users = new Map(
-    rows.map(({ avatar_version, frame, ...r }) => [
+    rows.map(({ avatar_version, frame, frame_bought, ...r }) => [
       r.id,
-      { ...r, frame: frameOf(frame), avatar_url: avatarUrl(r.id, avatar_version) },
+      { ...r, frame: frameOf(frame, frame_bought), avatar_url: avatarUrl(r.id, avatar_version) },
     ]),
   );
   return (id: number) => {

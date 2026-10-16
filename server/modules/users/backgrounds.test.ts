@@ -67,7 +67,7 @@ describe("背景", () => {
     const locked = await pick("stars");
     expect(locked.status).toBe(403);
     expect(await locked.json()).toMatchObject({ error: { code: "cosmetic_locked" } });
-    expect(await background(member.id)).toEqual({ preset: "waves" });
+    expect(await background(member.id)).toEqual({ preset: "waves", moving: false });
 
     await db.updateTable("users").set({ level: 0 }).where("id", "=", member.id).execute();
     expect((await pick("waves")).status).toBe(200);
@@ -106,7 +106,7 @@ describe("背景", () => {
     expect(await exists(profile)).toBe(false);
   });
 
-  test("裁的区域超出图片不收；压缩后太大的动图不收", async () => {
+  test("裁的区域超出图片不收；没兑换动态版的动图只留第一帧，兑换后压缩了还太大的不收", async () => {
     const member = await person(3);
     const outside = await upload(member.who, await picture, "500,500,1200,600");
     expect(outside.status).toBe(400);
@@ -123,10 +123,26 @@ describe("背景", () => {
     const noise = await sharp(frames, { join: { animated: true } })
       .gif({ effort: 1, dither: 0 })
       .toBuffer();
+    const still = await upload(member.who, noise, "0,0,432,216", "0,0,432,144");
+    if (!still.ok) throw new Error(`status ${still.status}`);
+    const urls = await still.json();
+    const pages = await sharp(`${BACKGROUNDS_DIR}/${member.id}-card.webp`).metadata();
+    expect(pages.pages ?? 1).toBe(1);
+
+    await db
+      .updateTable("coin_balances")
+      .set({ coins: 200 })
+      .where("user_id", "=", member.id)
+      .execute();
+    const bought = await api.me.looks.$post(
+      { json: { kind: "background", key: "custom" } },
+      member.who,
+    );
+    expect(bought.status).toBe(200);
     const heavy = await upload(member.who, noise, "0,0,432,216", "0,0,432,144");
     expect(heavy.status).toBe(400);
     expect(await heavy.json()).toMatchObject({ error: { code: "background_too_large" } });
-    expect(await background(member.id)).toBeNull();
+    expect(await background(member.id)).toEqual(urls);
   });
 
   test("版主清除上传的背景，文件一起删掉", async () => {

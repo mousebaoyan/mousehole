@@ -24,7 +24,7 @@ import { setCustomName } from "../members/service.ts";
 import { NOTIFICATION_TYPES, notifyPrefs } from "../notifications/service.ts";
 import { exportOwnBoosts } from "../reactions/service.ts";
 import { exportOwnPosts, listPins } from "../threads/service.ts";
-import { backgroundOf, BACKGROUNDS_DIR, uploadBackground } from "./backgrounds.ts";
+import { backgroundOf, BACKGROUNDS_DIR, backgroundUrls, uploadBackground } from "./backgrounds.ts";
 import {
   BACKGROUND_PRESETS,
   BACKGROUNDS,
@@ -41,6 +41,7 @@ import {
 import {
   assertRelationsShown,
   AVATARS_DIR,
+  buyLook,
   clearCustomization,
   findUserId,
   getProfile,
@@ -77,9 +78,12 @@ const MeSchema = z
 // Behind a card and a page (design §8.16): a preset, or their own picture cut for each.
 const BackgroundUrls = z.object({ card_url: z.string(), profile_url: z.string() });
 const BackgroundSchema = z
-  .union([z.object({ preset: z.enum(BACKGROUNDS) }), BackgroundUrls])
+  .union([z.object({ preset: z.enum(BACKGROUNDS), moving: z.boolean() }), BackgroundUrls])
   .nullable()
-  .openapi({ description: "背景：预设的 { preset }，或上传的两张图；没有为 null" });
+  .openapi({
+    description:
+      "背景：预设的 { preset, moving }，moving 是兑换了动态版；或上传的两张图。没有为 null",
+  });
 
 const UserSchema = UserBriefSchema.extend({
   members_only: z.literal(false),
@@ -222,6 +226,10 @@ const SettingsSchema = z
       frames: z.array(z.string()).openapi({ description: "能选的头像框" }),
       upload: z.boolean().openapi({ description: "能不能上传自己的背景" }),
     }),
+    owned: z
+      .object({ backgrounds: z.array(z.string()), frames: z.array(z.string()) })
+      .openapi({ description: "兑换了的动态版，key 的列表；上传背景的为 custom" }),
+    coins: z.number().openapi({ description: "鼠币余额" }),
     user_status: z
       .object({ emoji: z.string(), text: z.string(), until: z.number().nullable() })
       .nullable()
@@ -241,11 +249,12 @@ const SettingsSchema = z
   .openapi("MySettings");
 
 async function settingsJson(userId: number) {
-  const { level, role, background_version, badge_unlocks, ...settings } = await getSettings(userId);
-  const background = backgroundOf(userId, settings.background, background_version);
+  const { level, role, background_version, badge_unlocks, looks, ...settings } =
+    await getSettings(userId);
   return {
     ...settings,
-    background_urls: background && "card_url" in background ? background : null,
+    background_urls:
+      settings.background === "custom" ? backgroundUrls(userId, background_version) : null,
     unlocked: {
       backgrounds: BACKGROUNDS.filter((key) =>
         reaches({ level, role }, BACKGROUND_PRESETS[key].level),
@@ -253,6 +262,11 @@ async function settingsJson(userId: number) {
       frames: unlockedFrames({ level, role }, badge_unlocks),
       upload: reaches({ level, role }, UPLOAD_LEVEL),
     },
+    owned: {
+      backgrounds: looks.filter((l) => l.kind === "background").map((l) => l.key),
+      frames: looks.filter((l) => l.kind === "frame").map((l) => l.key),
+    },
+    coins: await coinBalance(userId),
     notify_prefs: await notifyPrefs(settings.notify_prefs),
   };
 }
@@ -344,7 +358,7 @@ export const usersRoutes = createRouter()
           user_status: u.user_status,
           bio: u.bio,
           theme: u.theme,
-          background: backgroundOf(u.id, u.background, u.background_version),
+          background: backgroundOf(u.id, u.background, u.background_version, u.background_bought),
           badges: u.badges,
           // Like a group's member list, which people outside it can't see, unless the site
           // shows QQ numbers to everyone.
@@ -851,6 +865,46 @@ export const usersRoutes = createRouter()
       const { file, card, profile } = c.req.valid("form");
       const picture = Buffer.from(await file.arrayBuffer());
       return c.json(await uploadBackground(actorOf(c, viewer), picture, { card, profile }), 200);
+    },
+  )
+  .openapi(
+    createRoute({
+      method: "post",
+      path: "/me/looks",
+      summary: "用鼠币兑换动态版并换上；上传背景的（key 为 custom）兑换后可以上传动图，不换背景",
+      request: {
+        body: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: z.discriminatedUnion("kind", [
+                z.object({
+                  kind: z.literal("background"),
+                  key: z.enum([...BACKGROUNDS, "custom"]),
+                }),
+                z.object({ kind: z.literal("frame"), key: z.enum(FRAMES) }),
+              ]),
+            },
+          },
+        },
+      },
+      responses: {
+        200: {
+          description: "改好的设置",
+          content: { "application/json": { schema: SettingsSchema } },
+        },
+        400: errorResponse("这一款没有动态版"),
+        403: errorResponse(
+          "还没够得上这一款的等级（cosmetic_locked），或者鼠币不够（coins_insufficient）",
+        ),
+        409: errorResponse("兑换过了"),
+      },
+    }),
+    async (c) => {
+      requireWeb(c);
+      const viewer = authorize(c, "act");
+      await buyLook(actorOf(c, viewer), c.req.valid("json"));
+      return c.json(await settingsJson(viewer.id), 200);
     },
   )
   .openapi(

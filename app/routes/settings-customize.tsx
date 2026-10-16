@@ -24,6 +24,7 @@ import {
   BACKGROUNDS,
   DEFAULT_THEME_NAME,
   FRAME_LOOKS,
+  frameMoves,
   FRAMES,
   frameUnlockLabel,
   PINS_MAX,
@@ -490,10 +491,12 @@ export function BackgroundField({
   background,
   urls,
   unlocked,
+  owned,
 }: {
   background: string | null;
   urls: BackgroundUrls | null;
   unlocked: { backgrounds: string[]; upload: boolean };
+  owned: string[];
 }) {
   const { revalidate } = useRevalidator();
   const [picked, setPicked] = useState<{ file: File; url: string } | null>(null);
@@ -548,7 +551,7 @@ export function BackgroundField({
             }
             wide
           >
-            <Backdrop background={{ preset: key }} place="card" />
+            <Backdrop background={{ preset: key, moving: owned.includes(key) }} place="card" />
           </Tile>
         ))}
         {urls && (
@@ -586,7 +589,11 @@ export function BackgroundField({
           />
         </label>
         <span className="text-meta text-muted-foreground">
-          {unlocked.upload ? "支持动图" : `L${UPLOAD_LEVEL} 起可以上传自己的图片`}
+          {!unlocked.upload
+            ? `L${UPLOAD_LEVEL} 起可以上传自己的图片`
+            : owned.includes("custom")
+              ? "支持动图"
+              : "动图只留第一帧"}
         </span>
       </div>
       {picked && (
@@ -600,10 +607,12 @@ export function BackgroundField({
 export function FrameField({
   frame,
   unlocked,
+  owned,
   me,
 }: {
   frame: string | null;
   unlocked: string[];
+  owned: string[];
   me: { id: number; display_name: string; avatar_url: string | null };
 }) {
   return (
@@ -627,7 +636,10 @@ export function FrameField({
             <span className="absolute inset-0 flex items-center justify-center">
               <span className="relative size-[52%]">
                 <UserAvatar user={me} className="size-full" />
-                <AvatarFrame frame={key} still={false} />
+                <AvatarFrame
+                  frame={{ key, moving: frameMoves(key, owned.includes(key)) }}
+                  still={false}
+                />
               </span>
             </span>
           </Tile>

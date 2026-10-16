@@ -38,7 +38,8 @@ export const STATUS_MAX = 30;
 export const PINS_MAX = 6;
 export const SHOWCASE_MAX = 1000;
 
-// Backgrounds drawn by app/components/backdrop.tsx, and the level each opens at.
+// Backgrounds drawn by app/components/backdrop.tsx: the level each opens at, still, and what
+// its moving version costs in coins (design §8.16); paper has none.
 export const BACKGROUNDS = [
   "mist",
   "paper",
@@ -50,19 +51,23 @@ export const BACKGROUNDS = [
   "gilded",
 ] as const;
 export type BackgroundPreset = (typeof BACKGROUNDS)[number];
-export const BACKGROUND_PRESETS: Record<BackgroundPreset, { name: string; level: number }> = {
-  mist: { name: "晨雾", level: 0 },
-  paper: { name: "纸笺", level: 0 },
-  waves: { name: "海浪", level: 1 },
-  sunrise: { name: "日出", level: 2 },
-  stars: { name: "星空", level: 3 },
-  aurora: { name: "极光", level: 3 },
-  shimmer: { name: "流光", level: 4 },
-  gilded: { name: "鎏金", level: 5 },
+export const BACKGROUND_PRESETS: Record<
+  BackgroundPreset,
+  { name: string; level: number; price: number | null }
+> = {
+  mist: { name: "晨雾", level: 0, price: 40 },
+  paper: { name: "纸笺", level: 0, price: null },
+  waves: { name: "海浪", level: 1, price: 60 },
+  sunrise: { name: "日出", level: 2, price: 80 },
+  stars: { name: "星空", level: 3, price: 120 },
+  aurora: { name: "极光", level: 3, price: 120 },
+  shimmer: { name: "流光", level: 4, price: 200 },
+  gilded: { name: "鎏金", level: 5, price: 300 },
 };
 
-// One's own picture, from this level.
+// One's own picture, from this level; animated ones once its moving version is bought.
 export const UPLOAD_LEVEL = 3;
+export const UPLOAD_PRICE = 200;
 
 // What an uploaded picture is cut into: the top of the card and the banner of the page. Still
 // pictures at twice the size they show at; animated ones smaller, and only so large.
@@ -82,7 +87,8 @@ export const BACKGROUND_CROPS = {
 };
 
 // Avatar frames drawn by app/components/frame.tsx, and what opens each: a level, a badge, any gold
-// badge, or an event badge an admin gave the frame to.
+// badge, or an event badge an admin gave the frame to. Those of badges move; those of levels stand
+// still unless their moving version is bought, which teal has none of.
 export const FRAMES = [
   "teal",
   "apricot",
@@ -100,13 +106,17 @@ export type Frame = (typeof FRAMES)[number];
 export const EVENT_FRAMES = ["trophy", "wreath", "confetti", "medal"] as const;
 
 // `by` is what a locked one says opens it.
-type Unlock = { level: number } | { badge: string; by: string } | { gold: true } | { event: true };
+type Unlock =
+  | { level: number; price: number | null }
+  | { badge: string; by: string }
+  | { gold: true }
+  | { event: true };
 export const FRAME_LOOKS: Record<Frame, { name: string; unlock: Unlock }> = {
-  teal: { name: "青环", unlock: { level: 1 } },
-  apricot: { name: "杏环", unlock: { level: 2 } },
-  flow: { name: "流转", unlock: { level: 3 } },
-  breath: { name: "呼吸", unlock: { level: 4 } },
-  laurel: { name: "桂冠", unlock: { level: 5 } },
+  teal: { name: "青环", unlock: { level: 1, price: null } },
+  apricot: { name: "杏环", unlock: { level: 2, price: 60 } },
+  flow: { name: "流转", unlock: { level: 3, price: 100 } },
+  breath: { name: "呼吸", unlock: { level: 4, price: 160 } },
+  laurel: { name: "桂冠", unlock: { level: 5, price: 240 } },
   sprout: { name: "新芽", unlock: { badge: "seed", by: "种子用户" } },
   gilt: { name: "金边", unlock: { gold: true } },
   trophy: { name: "奖杯", unlock: { event: true } },
@@ -135,4 +145,27 @@ export function unlockedFrames(
     if ("gold" in unlock) return badges.some((b) => b.tier === "gold");
     return badges.some((b) => b.frame === key);
   });
+}
+
+export function frameMoves(frame: Frame, bought: boolean) {
+  return bought || !("level" in FRAME_LOOKS[frame].unlock);
+}
+
+// A look to buy the moving version of; "custom" is their own picture.
+export type Look =
+  { kind: "background"; key: BackgroundPreset | "custom" } | { kind: "frame"; key: Frame };
+
+// What its moving version costs and the level opening the look, if it has one.
+export function movingLook(look: Look) {
+  if (look.kind === "frame") {
+    const { unlock } = FRAME_LOOKS[look.key];
+    return "level" in unlock ? priced(unlock) : null;
+  }
+  return look.key === "custom"
+    ? { level: UPLOAD_LEVEL, price: UPLOAD_PRICE }
+    : priced(BACKGROUND_PRESETS[look.key]);
+}
+
+function priced({ level, price }: { level: number; price: number | null }) {
+  return price === null ? null : { level, price };
 }
