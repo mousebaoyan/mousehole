@@ -3,7 +3,10 @@ import { db } from "../../platform/db.ts";
 import { env } from "../../platform/env.ts";
 import { queueMail, unsubscribeUrl } from "../../platform/mail.ts";
 import { getSettings } from "../../platform/settings.ts";
+import { levelName } from "../../platform/site.ts";
+import { levelProgress } from "../levels/service.ts";
 import { letterHtml, letterText, subjectOf } from "./letter.ts";
+import { weeklyStats } from "./stats.ts";
 
 // The weekly letters (design §8.15): on Monday from 9 o'clock, Beijing time, each member whose
 // floors did enough for others last week, Monday to Sunday, hears of it by email.
@@ -38,6 +41,7 @@ export async function sendWeeklyLetters(now = new Date()) {
   const { weekly } = await getSettings();
   if (!weekly.enabled) return;
   const { start, end } = lastWeek(now);
+  const before = new Date(start.getTime() - 7 * DAY_MS);
   const due = new Date(end.getTime() + SEND_HOUR * HOUR_MS);
   if (now < due) return;
   const sent = await db
@@ -59,21 +63,33 @@ export async function sendWeeklyLetters(now = new Date()) {
     reads: number;
     likes: number;
     accepted: number;
+    reads_before: number;
+    likes_before: number;
+    accepted_before: number;
   }>`
     SELECT users.id, users.qq, users.display_name, users.activated_at, users.people_reached,
       coalesce(r.reads, 0) AS reads, coalesce(l.likes, 0) AS likes,
-      coalesce(a.accepted, 0) AS accepted
+      coalesce(a.accepted, 0) AS accepted, coalesce(r.reads_before, 0) AS reads_before,
+      coalesce(l.likes_before, 0) AS likes_before,
+      coalesce(a.accepted_before, 0) AS accepted_before
     FROM users
-    LEFT JOIN (SELECT user_id, sum(reads)::integer AS reads FROM user_reads
-      WHERE day >= ${day(start)}::date AND day < ${day(end)}::date
+    LEFT JOIN (SELECT user_id,
+        (sum(reads) FILTER (WHERE day >= ${day(start)}::date))::integer AS reads,
+        (sum(reads) FILTER (WHERE day < ${day(start)}::date))::integer AS reads_before
+      FROM user_reads WHERE day >= ${day(before)}::date AND day < ${day(end)}::date
       GROUP BY user_id) r ON r.user_id = users.id
-    LEFT JOIN (SELECT p.author_id, count(*)::integer AS likes
+    LEFT JOIN (SELECT p.author_id,
+        (count(*) FILTER (WHERE reactions.created_at >= ${start}))::integer AS likes,
+        (count(*) FILTER (WHERE reactions.created_at < ${start}))::integer AS likes_before
       FROM reactions JOIN posts p ON p.id = reactions.post_id
       WHERE ${shown} AND reactions.user_id <> p.author_id
-        AND reactions.created_at >= ${start} AND reactions.created_at < ${end}
+        AND reactions.created_at >= ${before} AND reactions.created_at < ${end}
       GROUP BY p.author_id) l ON l.author_id = users.id
-    LEFT JOIN (SELECT p.author_id, count(*)::integer AS accepted FROM posts p
-      WHERE ${shown} AND p.accepted_at >= ${start} AND p.accepted_at < ${end}
+    LEFT JOIN (SELECT p.author_id,
+        (count(*) FILTER (WHERE p.accepted_at >= ${start}))::integer AS accepted,
+        (count(*) FILTER (WHERE p.accepted_at < ${start}))::integer AS accepted_before
+      FROM posts p
+      WHERE ${shown} AND p.accepted_at >= ${before} AND p.accepted_at < ${end}
       GROUP BY p.author_id) a ON a.author_id = users.id
     WHERE (coalesce(r.reads, 0) >= ${weekly.min_reads} AND coalesce(l.likes, 0) >= ${weekly.min_likes}
         OR coalesce(a.accepted, 0) > 0)
@@ -105,14 +121,35 @@ export async function sendWeeklyLetters(now = new Date()) {
     HAVING count(*) >= ${weekly.top_likes}
     ORDER BY count(*) DESC, p.id`.execute(db);
 
+  // The same lists the weekly poster shows, over the same week.
+  const lists = (await weeklyStats(end)).people;
+  const ranked = [
+    { label: "获赞", list: lists.most_liked },
+    { label: "被采纳", list: lists.most_accepted },
+    { label: "回复", list: lists.most_replies },
+  ];
+
   const mails = await Promise.all(
     people.map(async (p) => {
+      const { level, next } = await levelProgress(p.id);
+      const missing = (next?.items ?? [])
+        .filter((i) => i.have < i.need)
+        .map((i) => ({ key: i.key, label: i.label, left: i.need - i.have }));
       const week = {
         name: p.display_name,
         activated: p.activated_at !== null,
         reads: p.reads,
         likes: p.likes,
         accepted: p.accepted,
+        before: { reads: p.reads_before, likes: p.likes_before, accepted: p.accepted_before },
+        places: ranked.flatMap((r) => {
+          const place = r.list.findIndex((item) => item.user.id === p.id) + 1;
+          return place > 0 ? [{ label: r.label, place }] : [];
+        }),
+        level:
+          next && missing.length > 0
+            ? { name: levelName(next.level), keep: next.level === level, missing }
+            : null,
         badges: badges.filter((b) => b.user_id === p.id).map((b) => b.name),
         top: top
           .filter((t) => t.user_id === p.id)

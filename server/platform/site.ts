@@ -12,6 +12,13 @@ export function levelName(level: number) {
   return `L${level} ${LEVEL_NAMES[level]}`;
 }
 
+// Reading time wherever it is shown: in hours from an hour on, else in minutes.
+export function readTime(seconds: number) {
+  return seconds >= 3600
+    ? { n: Math.round(seconds / 360) / 10, unit: "小时" }
+    : { n: Math.round(seconds / 60), unit: "分钟" };
+}
+
 // Badge tiers (design §8.8), as in "银徽章".
 export const TIER_NAMES: Record<string, string> = { gold: "金", silver: "银", bronze: "铜" };
 

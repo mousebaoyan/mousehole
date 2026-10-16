@@ -82,9 +82,12 @@ export function mailButton(label: string, url: string) {
   </p>`;
 }
 
-// Numbers in boxes, three to a row, a unit in small print after the number. The table sits in a
-// div pulled out by the spacing of its cells, which would otherwise indent them from the text.
-export function mailNumbers(items: { value: number; unit?: string; label: string }[]) {
+// Numbers in boxes, three to a row, a unit in small print after the number and a note under its
+// label. The table sits in a div pulled out by the spacing of its cells, which would otherwise
+// indent them from the text.
+export function mailNumbers(
+  items: { value: number; unit?: string; label: string; note?: string }[],
+) {
   const rows = [];
   for (let i = 0; i < items.length; i += 3) rows.push(items.slice(i, i + 3));
   return html`<div style="margin:12px -8px 0;">
@@ -107,6 +110,7 @@ export function mailNumbers(items: { value: number; unit?: string; label: string
                     ${n.value}${n.unit && html`<span style="font-size:14px;"> ${n.unit}</span>`}
                   </div>
                   <div style="font-size:13px;color:${MUTED};margin-top:2px;">${n.label}</div>
+                  ${n.note && html`<div style="font-size:12px;color:${MUTED};">${n.note}</div>`}
                 </td>`,
             )}
           </tr>`,
