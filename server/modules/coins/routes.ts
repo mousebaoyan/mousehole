@@ -4,7 +4,8 @@ import { AppError } from "../../platform/errors.ts";
 import { authorize, createRouter, errorResponse, unix } from "../../platform/http.ts";
 import { UserBriefSchema } from "../users/schemas.ts";
 import { userBriefs } from "../users/service.ts";
-import { coinBalance, leaderboard, listLedger, PERIODS } from "./service.ts";
+import { PERIODS } from "./rules.ts";
+import { coinBalance, leaderboard, listLedger } from "./service.ts";
 
 const EntrySchema = z
   .object({

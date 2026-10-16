@@ -15,7 +15,8 @@ import {
   getTagId,
   readable,
 } from "../boards/service.ts";
-import { QUESTION_COST, spendCoins } from "../coins/service.ts";
+import { QUESTION_COST } from "../coins/rules.ts";
+import { spendCoins } from "../coins/service.ts";
 import { discardDraft } from "../drafts/service.ts";
 import { onebotToMarkdown, type Segment } from "../qq/onebot.ts";
 import {

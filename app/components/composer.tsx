@@ -35,6 +35,7 @@ import { useMe, usePostableBoards, useTags } from "~/forum";
 import { useHydrated } from "~/hydrated";
 import { fromWallClock, unixNow, wallClock } from "~/time";
 import { levelName, STAFF } from "../../server/platform/site.ts";
+import { QUESTION_COST } from "../../server/modules/coins/rules.ts";
 
 type ThreadRef = { id: number; title: string };
 type ReplyRef = { id: number; floor: number; name: string };
@@ -897,6 +898,19 @@ function ThreadFields({
         </fieldset>
         <TagPicker chosen={content.tags} onChange={(tags) => onChange({ ...content, tags })} />
       </div>
+      {/* A question costs a coin (design §8.17). */}
+      {content.kind === "question" && me && (
+        <p
+          className={cn(
+            "text-meta",
+            me.coins < QUESTION_COST ? "text-destructive" : "text-muted-foreground",
+          )}
+        >
+          {me.coins < QUESTION_COST
+            ? `发问答帖要 ${QUESTION_COST} 个鼠币，现在不够，可以先发讨论帖；每天打开论坛就会签到得鼠币`
+            : `问答帖消耗 ${QUESTION_COST} 个鼠币，现有 ${me.coins} 个`}
+        </p>
+      )}
       {/* Fixed once posted, so said up front (design §8.12); lotteries have none. */}
       <div
         hidden={content.kind === "lottery"}

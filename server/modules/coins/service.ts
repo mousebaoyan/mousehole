@@ -2,15 +2,12 @@ import { sql, type RawBuilder, type Transaction } from "kysely";
 import type { DB } from "../../../db/types.ts";
 import { db } from "../../platform/db.ts";
 import { AppError } from "../../platform/errors.ts";
+import { ACCEPTED, CHECK_IN, PER_LIKER, type Period } from "./rules.ts";
 
 // Coins (design §8.17): earned for coming by, for others' reactions and for accepted answers, and
 // spent on questions and moving looks. Other modules call in within their own transactions; this
 // one calls none of them.
 
-const CHECK_IN = 2;
-const PER_LIKER = 1;
-const ACCEPTED = 10;
-export const QUESTION_COST = 1;
 const PAGE = 50;
 const BOARD_SIZE = 50;
 const SETTLED = "coins";
@@ -145,9 +142,6 @@ export async function listLedger(userId: number, cursor?: number) {
   const last = rows.at(-1);
   return { rows, next_cursor: rows.length === PAGE && last ? String(last.id) : null };
 }
-
-export const PERIODS = ["week", "month", "all"] as const;
-type Period = (typeof PERIODS)[number];
 
 // The most earned over this week, this month or all along, Beijing time; spending doesn't count.
 export async function leaderboard(period: Period) {
