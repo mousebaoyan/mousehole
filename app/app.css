@@ -407,6 +407,112 @@
   }
 }
 
+/* Backgrounds and avatar frames people pick (design §8.16). They only move what the compositor
+   moves by itself, transforms and opacity, so nothing is laid out or painted again. A container
+   sets --play: paused to hold them still. */
+@theme {
+  --animate-look-drift: look-drift 16s ease-in-out infinite alternate;
+  --animate-look-slide: look-slide 12s linear infinite;
+  --animate-look-twinkle: look-twinkle 4s ease-in-out infinite;
+  --animate-look-shoot: look-shoot 9s ease-in infinite;
+  --animate-look-sway: look-sway 13s ease-in-out infinite alternate;
+  --animate-look-sweep: look-sweep 6s ease-in-out infinite;
+  --animate-look-rise: look-rise 9s linear infinite;
+  --animate-look-glow: look-glow 5s ease-in-out infinite;
+  --animate-look-spin: look-spin 60s linear infinite;
+  --animate-look-bob: look-bob 7s ease-in-out infinite alternate;
+
+  @keyframes look-drift {
+    to {
+      transform: translate(12%, 8%) scale(1.12);
+    }
+  }
+  @keyframes look-slide {
+    to {
+      transform: translateX(-50%);
+    }
+  }
+  @keyframes look-twinkle {
+    50% {
+      opacity: 0.25;
+    }
+  }
+  @keyframes look-shoot {
+    0% {
+      opacity: 0;
+      transform: translate(0, 0) rotate(-24deg);
+    }
+    2% {
+      opacity: 1;
+    }
+    12% {
+      opacity: 0;
+      transform: translate(-240%, 0) rotate(-24deg);
+    }
+    100% {
+      opacity: 0;
+      transform: translate(-240%, 0) rotate(-24deg);
+    }
+  }
+  @keyframes look-sway {
+    from {
+      transform: translateX(-8%) skewX(-10deg) scaleY(0.9);
+    }
+    to {
+      transform: translateX(8%) skewX(8deg) scaleY(1.12);
+    }
+  }
+  @keyframes look-sweep {
+    0% {
+      transform: translateX(-120%) skewX(-18deg);
+    }
+    55%,
+    100% {
+      transform: translateX(380%) skewX(-18deg);
+    }
+  }
+  @keyframes look-rise {
+    0% {
+      opacity: 0;
+      transform: translateY(0);
+    }
+    15% {
+      opacity: 1;
+    }
+    80% {
+      opacity: 0.8;
+    }
+    100% {
+      opacity: 0;
+      transform: translateY(-100%);
+    }
+  }
+  @keyframes look-glow {
+    50% {
+      opacity: 0.55;
+      transform: scale(0.92);
+    }
+  }
+  @keyframes look-spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+  @keyframes look-bob {
+    to {
+      transform: translateY(-7%);
+    }
+  }
+}
+.look-motion {
+  animation-play-state: var(--play, running);
+}
+@media (prefers-reduced-motion: reduce) {
+  .look-motion {
+    animation: none;
+  }
+}
+
 /* Post bodies, rendered when they were written. The typography plugin's defaults are for
    articles; posts are shorter, mostly Chinese and often read on phones. */
 

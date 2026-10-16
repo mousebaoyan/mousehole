@@ -107,15 +107,28 @@ export function ModerationButtons({
 }
 
 // Clearing what someone wrote about themselves when it isn't fit to show (design §8.16).
-export function ClearButtons({ status, showcase }: { status: boolean; showcase: boolean }) {
+export function ClearButtons({
+  background,
+  status,
+  showcase,
+}: {
+  background: boolean;
+  status: boolean;
+  showcase: boolean;
+}) {
   const submit = useSubmit();
-  if (!status && !showcase) return null;
-  async function clear(item: "status" | "showcase", label: string) {
+  if (!background && !status && !showcase) return null;
+  async function clear(item: "background" | "status" | "showcase", label: string) {
     const reason = await promptDialog(`${label}的理由，将记入操作日志`, "理由", "清除");
     if (reason) void submit({ intent: "clear", item, reason }, { method: "post" });
   }
   return (
     <p className="mt-3 flex flex-wrap gap-2">
+      {background && (
+        <Button variant="outline" size="sm" onClick={() => void clear("background", "清除背景")}>
+          <Eraser /> 清除背景
+        </Button>
+      )}
       {status && (
         <Button variant="outline" size="sm" onClick={() => void clear("status", "清除状态")}>
           <Eraser /> 清除状态

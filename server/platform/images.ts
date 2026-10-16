@@ -84,3 +84,41 @@ export async function processAvatar(input: Buffer) {
       .catch(invalid);
   });
 }
+
+type Size = { width: number; height: number };
+export type Region = Size & { left: number; top: number };
+
+// Cuts each region out of the picture turned upright, and fits it to its size without enlarging
+// it: `still` for a still picture, `moving` for an animated one, which keeps its frames. Regions
+// are in pixels of the upright picture.
+export async function cropImage(
+  input: Buffer,
+  crops: { region: Region; still: Size; moving: Size }[],
+) {
+  return oneOf(async () => {
+    const image = sharp(input, { animated: true, limitInputPixels: MAX_PIXELS, failOn: "error" });
+    const meta = await image.metadata().catch(invalid);
+    if (!FORMATS.has(meta.format)) invalid();
+    const animated = (meta.pages ?? 1) > 1;
+    // An animated picture's height covers every frame stacked; such pictures carry no EXIF.
+    const { width } = meta.autoOrient;
+    const height = animated ? (meta.pageHeight ?? meta.height) : meta.autoOrient.height;
+    if (crops.some(({ region: r }) => r.left + r.width > width || r.top + r.height > height)) {
+      throw new AppError(400, "invalid_crop", "裁剪的区域超出了图片");
+    }
+    const files: Buffer[] = [];
+    for (const { region, still, moving } of crops) {
+      files.push(
+        await image
+          .clone()
+          .autoOrient()
+          .extract(region)
+          .resize({ ...(animated ? moving : still), fit: "cover", withoutEnlargement: true })
+          .webp({ quality: animated ? 60 : 78 })
+          .toBuffer()
+          .catch(invalid),
+      );
+    }
+    return { animated, files };
+  });
+}

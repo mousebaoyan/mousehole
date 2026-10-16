@@ -22,6 +22,7 @@ import {
 } from "../../server/modules/notifications/types.ts";
 import { BOT_NAME } from "../../server/platform/site.ts";
 import {
+  BackgroundField,
   DEFAULT_STATUS_EMOJI,
   PinsField,
   ShowcaseField,
@@ -30,7 +31,7 @@ import {
   ThemeField,
 } from "./settings-customize.tsx";
 import { endOfDay, unixNow } from "~/time";
-import { THEMES } from "../../server/modules/users/customization.ts";
+import { BACKGROUNDS, THEMES } from "../../server/modules/users/customization.ts";
 
 export function meta() {
   return [{ title: pageTitle("设置") }];
@@ -86,6 +87,10 @@ export async function action({ request, context }: Route.ActionArgs) {
       title_badge_id: field("title_badge_id") ? Number(field("title_badge_id")) : null,
       shown_badge_ids: field("shown_badges") === "auto" ? null : ids(field("shown_badges")),
       theme: THEMES.find((t) => t === field("theme")) ?? null,
+      // Their own picture is already saved, by the upload.
+      ...(field("background") !== "custom" && {
+        background: BACKGROUNDS.find((key) => key === field("background")) ?? null,
+      }),
       user_status: field("status_text")
         ? {
             emoji: field("status_emoji") || DEFAULT_STATUS_EMOJI,
@@ -204,6 +209,12 @@ export default function Settings({ loaderData, actionData }: Route.ComponentProp
           >
             <div className="flex flex-col gap-5">
               <StatusField status={settings.user_status} now={now} />
+              <BackgroundField
+                key={`${settings.background}:${settings.background_urls?.card_url}`}
+                background={settings.background}
+                urls={settings.background_urls}
+                unlocked={settings.unlocked}
+              />
               <ThemeField theme={settings.theme} />
               <ShownBadgesField badges={settings.badges} shown={settings.shown_badge_ids} />
               {me && <PinsField pins={settings.pins} userId={me.id} />}

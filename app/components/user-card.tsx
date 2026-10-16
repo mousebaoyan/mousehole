@@ -4,6 +4,7 @@ import { cn } from "cn";
 import { Award, UserCheck, UserPlus } from "~/components/icons";
 import { useDismiss } from "~/components/disclosure";
 import { Button, buttonVariants } from "~/components/ui/button";
+import { Backdrop } from "~/components/backdrop";
 import { UserAvatar } from "~/components/user-avatar";
 import { BadgeChip } from "~/components/badge-chip";
 import { UserBadges } from "~/components/user-badges";
@@ -191,10 +192,22 @@ function FullCard({ profile }: { profile: Extract<Profile, { members_only: false
   ];
   return (
     <div className={profile.theme ? `theme-${profile.theme}` : undefined}>
-      <div className="flex items-center gap-3">
-        <UserAvatar user={profile} className="size-14 text-xl" />
-        <div className="min-w-0">
-          <p className="truncate font-semibold">{profile.display_name}</p>
+      {/* Its top, under the avatar and the name, fading into the card. */}
+      {profile.background && (
+        <div className="relative -mx-4 -mt-4 -mb-11 aspect-[2/1] overflow-hidden rounded-t-2xl">
+          <Backdrop background={profile.background} place="card" />
+          <div className="absolute inset-0 bg-linear-to-b from-transparent from-50% to-popover" />
+        </div>
+      )}
+      <div className="relative flex items-center gap-3">
+        <UserAvatar
+          user={profile}
+          className={cn("size-14 text-xl", profile.background && "ring-3 ring-popover")}
+        />
+        <div className="min-w-0 self-end">
+          <p className="truncate font-semibold [text-shadow:0_0_0.5rem_var(--popover)]">
+            {profile.display_name}
+          </p>
           <div className="mt-1 flex flex-wrap gap-1">
             <UserBadges user={profile} />
           </div>

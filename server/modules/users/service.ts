@@ -16,7 +16,14 @@ import { renderMarkdown } from "../../platform/markdown.ts";
 import { log } from "../../platform/log.ts";
 import { recordAudit } from "../audit/service.ts";
 import { recordEvent } from "../events/service.ts";
-import type { Theme } from "./customization.ts";
+import { removeBackground } from "./backgrounds.ts";
+import {
+  BACKGROUND_PRESETS,
+  reaches,
+  type BackgroundPreset,
+  type Clearable,
+  type Theme,
+} from "./customization.ts";
 
 // For the bootstrap command: the owner sets the site up before any group is synced (design
 // §10). There is one, with no QQ number.
@@ -450,6 +457,8 @@ export async function getUser(ref: UserRef, viewerId: number | null) {
       eb.fn.coalesce("users.custom_bio", "users.qq_bio").as("bio"),
       USER_STATUS.as("user_status"),
       "users.theme",
+      "users.background",
+      "users.background_version",
       "users.hide_from_guests",
       "users.relations_public",
       "users.qq",
@@ -527,6 +536,10 @@ export async function getSettings(userId: number) {
       "title_badge_id",
       "shown_badge_ids",
       "theme",
+      "background",
+      "background_version",
+      "level",
+      "role",
       sql<{ emoji: string; text: string; until: number | null } | null>`CASE
         WHEN status_text IS NOT NULL AND (status_until IS NULL OR status_until > now())
         THEN json_build_object('emoji', status_emoji, 'text', status_text,
@@ -570,6 +583,7 @@ export async function updateSettings(
     title_badge_id?: number | null;
     shown_badge_ids?: number[] | null;
     theme?: Theme | null;
+    background?: BackgroundPreset | null;
     user_status?: { emoji: string; text: string; until: number | null } | null;
     pins?: number[];
     showcase?: string | null;
@@ -580,7 +594,11 @@ export async function updateSettings(
 ) {
   const { notify_prefs, user_status, ...rest } = change;
   if (Object.keys(change).length === 0) return;
-  await db.transaction().execute(async (trx) => {
+  const was = await db.transaction().execute(async (trx) => {
+    const background =
+      change.background === undefined
+        ? undefined
+        : await assertBackground(trx, actor.userId, change.background);
     if (change.title_badge_id != null)
       await assertTitleBadge(trx, actor.userId, change.title_badge_id);
     if (change.shown_badge_ids) await assertOwnBadges(trx, actor.userId, change.shown_badge_ids);
@@ -599,7 +617,29 @@ export async function updateSettings(
       .where("id", "=", actor.userId)
       .execute();
     await recordAudit(trx, actor, { action: "user.settings", data: change });
+    return { background };
   });
+  // Their own picture's files go once another background takes its place.
+  if (was.background === "custom") await removeBackground(actor.userId);
+}
+
+// A preset is taken once unlocked; the one already worn needs nothing, even after a level is lost
+// (design §8.16). Returns the background before.
+async function assertBackground(
+  trx: Transaction<DB>,
+  userId: number,
+  next: BackgroundPreset | null,
+) {
+  const user = await trx
+    .selectFrom("users")
+    .select(["background", "level", "role"])
+    .where("id", "=", userId)
+    .forUpdate()
+    .executeTakeFirstOrThrow();
+  if (next !== null && next !== user.background && !reaches(user, BACKGROUND_PRESETS[next].level)) {
+    throw new AppError(403, "cosmetic_locked", "还没有解锁这个背景");
+  }
+  return user.background;
 }
 
 // Only a gold or silver badge of one's own makes a title (design §8.8).
@@ -651,20 +691,23 @@ function statusColumns(status: { emoji: string; text: string; until: number | nu
   };
 }
 
-// What moderators clear when it isn't fit to show (design §8.16).
-export const CLEARABLE = ["status", "showcase"] as const;
-
 export async function clearCustomization(
   actor: Actor,
   ref: UserRef,
-  item: (typeof CLEARABLE)[number],
+  item: Clearable,
   reason: string,
 ) {
   const userId = await findUserId(ref);
   await db.transaction().execute(async (trx) => {
     await trx
       .updateTable("users")
-      .set(item === "status" ? statusColumns(null) : { showcase: null })
+      .set(
+        item === "background"
+          ? { background: null }
+          : item === "status"
+            ? statusColumns(null)
+            : { showcase: null },
+      )
       .where("id", "=", userId)
       .execute();
     await recordAudit(trx, actor, {
@@ -674,6 +717,7 @@ export async function clearCustomization(
       data: { item, reason },
     });
   });
+  if (item === "background") await removeBackground(userId);
 }
 
 // Their showcase for their page, and which threads they pinned there; see design §8.16.

@@ -730,7 +730,7 @@ bot 把 QQ 群的信息推送给论坛。两种方式都支持，推荐一起用
   | 内容 | 计划任务 | 时间 | 文件 |
   | --- | --- | --- | --- |
   | 数据库 | `mousehole-db`，备份 PostgreSQL 的 `mousehole` 库 | 每天 4:00 | `database/postgresql/postgresql/mousehole/db_mousehole_*.sql.gz` |
-  | `data/`（图片和头像） | `mousehole-data`，把整个目录打包 | 每天 4:20 | `directory/mousehole-data/sites_mousehole_data_*.tar.gz` |
+  | `data/`（图片、头像和上传的背景） | `mousehole-data`，把整个目录打包 | 每天 4:20 | `directory/mousehole-data/sites_mousehole_data_*.tar.gz` |
 
   - 上传占服务器的出口带宽，所以放在凌晨。数据库压缩后很小；`data/` 整个打包最简单，到了几百 MB 再改成只传新增的文件。
   - 数据库备份是 gzip 压缩的 `pg_dump` 自定义格式，用 `zcat <文件> | pg_restore --no-owner -d <库>` 恢复。
