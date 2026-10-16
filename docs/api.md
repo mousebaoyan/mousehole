@@ -183,6 +183,8 @@ token 由站长在后台创建，只显示一次。每个 token 绑定一个 bot
 
 发帖和回复带 `source` 时，bot 可以再带 `created_at`（Unix 秒）：消息在群里发出的时间，帖子和这一层就记成这个时间，晚于现在的按现在算。收得晚的回复不会把帖子的最后活动时间往回拨。没带 `source` 时返回 `400 invalid_request`，不是 bot 的请求返回 `403 forbidden`。
 
+群里对某一层的附和、感谢这类话，bot 可以收录成这一层的表情回应或短评，同样带 `source`（那条消息）和 `created_at`。这样收录的不提醒楼层作者，和收录的帖子、回复一样。
+
 ## 3. 接口清单
 
 "权限"一栏写的是：网页用户需要的身份 / bot token 需要的范围。这里的"成员"指已登录、没被冻结的账号。
@@ -297,11 +299,11 @@ token 由站长在后台创建，只显示一次。每个 token 绑定一个 bot
 | PATCH | `/posts/{id}` | 修改 `content`（Markdown 或 OneBot 消息段），旧的正文进编辑记录；收录的楼层更新时带上 `source`，是这一层整理自的全部消息，替换原来的，其中有消息属于别的楼层时返回 `409 source_exists`；版主也能改别人的，L5 能改等级比自己低的人的（不含版主的和匿名的），版主还可以改 `status` 和 `reason`，同帖子。主楼的状态跟着帖子（`400`）；帖子待审核或已隐藏时不能改回复的状态（`403`）；锁定的帖子只有版主能改 | 作者、版主 / `act`、`moderate` |
 | DELETE | `/posts/{id}` | 删除；楼层号保留，显示"该楼已删除"。主楼不能单独删除（`400`），要删就删整个帖子 | 作者、版主 / `act`、`moderate` |
 | GET | `/posts/{id}/revisions` | 编辑记录，最近的在前：每次修改之前的 `body`，改标题时还有旧的 `title`，以及修改人 | 作者、版主 / `read` |
-| PUT | `/posts/{id}/reaction` | 表情回应：`{ emoji }`，取 `heart`（点赞）、`+1`、`laughing`、`open_mouth`、`clap`、`tada`、`hugs`、`thinking`、`sob`、`mouse` 之一；每人一个，已有就替换；不能回应自己的楼层 | 成员 / `act` |
+| PUT | `/posts/{id}/reaction` | 表情回应：`{ emoji }`，取 `heart`（点赞）、`+1`、`laughing`、`open_mouth`、`clap`、`tada`、`hugs`、`thinking`、`sob`、`mouse` 之一；每人一个，已有就替换；不能回应自己的楼层。从群里收录的带 `source` 和 `created_at`（2.5 节） | 成员 / `act` |
 | DELETE | `/posts/{id}/reaction` | 取消自己的回应 | 成员 / `act` |
 | GET | `/posts/{id}/reactions` | 谁回应了什么，最近的在前，每次 50 个：可按 `emoji` 筛选，`cursor` 翻页 | 访客 |
 | POST | `/posts/{id}/report` | 举报：`{ reason }`（最多 200 个字）；每人对每层一次，再举报返回 `409 already_reported`；产生 `report.created` 事件。L4 举报等级比自己低的人的回复时，这一层先隐藏，驳回举报时恢复 | 没被禁言的成员 / `act` |
-| PUT | `/posts/{id}/boost` | 留下或修改自己在这一层的短评：`{ body }`，不超过 16 个字（emoji 算一个），首尾空白去掉；返回这条短评 | 成员 / `act` |
+| PUT | `/posts/{id}/boost` | 留下或修改自己在这一层的短评：`{ body }`，不超过 16 个字（emoji 算一个），首尾空白去掉；返回这条短评。从群里收录的带 `source` 和 `created_at`（2.5 节） | 成员 / `act` |
 | DELETE | `/posts/{id}/boost` | 删除自己的短评 | 成员 / `act` |
 | GET | `/posts/{id}/boosts` | 这一层的全部短评，按时间排序；楼层列表里每层只带前 6 条 | 访客 |
 | DELETE | `/boosts/{id}` | 删除任意短评，可附 `{ reason }`，和短评原文一起记进操作日志 | 版主 / `moderate` |

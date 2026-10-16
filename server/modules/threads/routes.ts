@@ -23,6 +23,7 @@ import { listBoards } from "../boards/service.ts";
 import { onEvent } from "../events/service.ts";
 import { BoostSchema, boostJson } from "../reactions/schemas.ts";
 import { floorExtras } from "../reactions/service.ts";
+import { CREATED_WITH_SOURCE, CreatedAt, createdWithSource, Source } from "../qq/schemas.ts";
 import { showImages } from "../uploads/service.ts";
 import { UserBriefSchema, UserRefSchema, WriterSchema } from "../users/schemas.ts";
 import {
@@ -291,24 +292,6 @@ const Content = z.union([
       .openapi({ description: "OneBot v11 消息段，论坛转换成 Markdown" }),
   }),
 ]);
-
-const Source = z
-  .object({
-    chat_type: z.enum(["group", "private"]),
-    chat_id: z.number().int().positive(),
-    message_ids: z
-      .array(z.number().int())
-      .min(1)
-      .max(50)
-      .refine((ids) => new Set(ids).size === ids.length, "消息不能重复"),
-  })
-  .openapi("Source", { description: "内容整理自同一个聊天里的哪几条 QQ 消息" });
-
-const CreatedAt = z
-  .number()
-  .int()
-  .positive()
-  .openapi({ description: "bot 收录时带：消息在群里发出的时间（Unix 秒），晚于现在的按现在算" });
 
 const Title = z.string().trim().min(4).max(80);
 
@@ -846,10 +829,7 @@ export const threadsRoutes = createRouter()
               message: "抽奖帖不能匿名",
               path: ["anonymous"],
             })
-            .refine((b) => b.created_at === undefined || b.source !== undefined, {
-              message: "created_at 要和 source 一起带",
-              path: ["created_at"],
-            }),
+            .refine(createdWithSource, CREATED_WITH_SOURCE),
         ),
       },
       responses: {
@@ -884,10 +864,7 @@ export const threadsRoutes = createRouter()
               source: Source.optional(),
               created_at: CreatedAt.optional(),
             })
-            .refine((b) => b.created_at === undefined || b.source !== undefined, {
-              message: "created_at 要和 source 一起带",
-              path: ["created_at"],
-            }),
+            .refine(createdWithSource, CREATED_WITH_SOURCE),
         ),
       },
       responses: {

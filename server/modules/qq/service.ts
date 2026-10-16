@@ -1,11 +1,22 @@
-import type { Kysely, Transaction } from "kysely";
+import { sql, type Kysely, type Transaction } from "kysely";
 import type { DB } from "../../../db/types.ts";
 import { db } from "../../platform/db.ts";
+import type { Actor } from "../../platform/access.ts";
 import { AppError } from "../../platform/errors.ts";
 
 // QQ messages in one chat: a group, or a private chat with someone. A floor archived from a
 // group is organized from one or more of them (plugin design §8).
 export type Source = { chat_type: "group" | "private"; chat_id: number; message_ids: number[] };
+
+// Content archived from a group is dated when it was said there, which the bot gives; never
+// later than now (design §6.5).
+export function postedAt(actor: Actor, createdAt: number | undefined) {
+  if (createdAt === undefined) return sql<Date>`now()`;
+  if (actor.tokenId === null) {
+    throw new AppError(403, "forbidden", "只有 bot 收录群聊时能带 created_at");
+  }
+  return sql<Date>`least(to_timestamp(${createdAt}), now())`;
+}
 
 type Message = { chat_type: "group" | "private"; chat_id: number; message_id: number };
 
