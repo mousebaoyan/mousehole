@@ -181,6 +181,8 @@ token 由站长在后台创建，只显示一次。每个 token 绑定一个 bot
 { "chat_type": "group", "chat_id": 987654321, "message_ids": [7731, 7733] }
 ```
 
+发帖和回复带 `source` 时，bot 可以再带 `created_at`（Unix 秒）：消息在群里发出的时间，帖子和这一层就记成这个时间，晚于现在的按现在算。收得晚的回复不会把帖子的最后活动时间往回拨。没带 `source` 时返回 `400 invalid_request`，不是 bot 的请求返回 `403 forbidden`。
+
 ## 3. 接口清单
 
 "权限"一栏写的是：网页用户需要的身份 / bot token 需要的范围。这里的"成员"指已登录、没被冻结的账号。
@@ -261,7 +263,7 @@ token 由站长在后台创建，只显示一次。每个 token 绑定一个 bot
 | --- | --- | --- | --- |
 | GET | `/threads` | 帖子列表，每页 30 个，`limit` 可以改小：`board`、`tag`、`author`、`kind`、`view`、`cursor`；版块或标签不存在返回 404。`view` 默认 `latest`（按最后回复），还可以是 `created`（按发布时间）、`hot`（热门）、`unsolved`（待解答）；以下几种要登录：`new`（最近 7 天发布、自己还没打开过）、`unread`（读过、之后有新楼层）、`read`（读过的，按最后阅读时间）、`posted`（自己发过或回复过的，删掉的回复不算，按最后回复）、`bookmarked`（收藏的，按收藏时间）。`latest` 的第一页先列置顶的帖子：首页是全站置顶，版块页还有版块内置顶；按标签筛选时不置顶 | 访客 |
 | GET | `/threads/counts` | 当前范围里新和未读的帖子各有几个：`board`、`tag`，返回 `{ new, unread }` | 成员 |
-| POST | `/threads` | 发帖：`board`、`title`（4–80 个字）、`content`、`kind`（不带时用版块的默认类型）、`tags`（最多 5 个，只能用已有的）、`source`、`anonymous`（楼主匿名）、`anonymous_replies`（楼主以外的人回复时匿名），后两个发出后不能改。`kind` 为 `poll` 时要带 `poll`，别的类型不能带：`options`（2–20 个，每个最多 50 个字，不能重复）、`rows`（分行投票的各行，1–10 个，每个最多 30 个字，不能重复；带了就只能单选）、`multiple`、`max_choices`（多选时最多选几项，要少于选项数，`null` 不限）、`anonymous`（匿名投票）、`results`（`voted` 或 `always`）、`closes_at`（截止时间，Unix 秒，10 分钟以后、一年以内，`null` 不限），发出后都不能改。`poll.preset` 为 `positioning` 时是保研定位：只带 `rows`（目标院校），选项、单选、匿名、结果可见方式和不限截止时间由论坛按预设生成，带了别的返回 `400`。`kind` 为 `lottery` 时要带 `lottery`，别的类型不能带，也不能匿名：`prizes`（1–10 个奖项，每个 `{ name, winners }`：奖品最多 50 个字，抽 1–100 人）、`entry`（`button` 或 `reply`，默认 `button`）、`min_level`（0–5，默认 0）、`draws_at`（开奖时间，Unix 秒，10 分钟以后、一年以内），发出后都不能改。L2 起才能发投票帖和抽奖帖（保研定位除外），否则返回 `403 level_required`。只有版主能发的版块返回 `403 forbidden`。先审后发的版块里，版主以外的人发的帖子 `status` 为 `pending`，通过后才公开 | 成员 / `act` |
+| POST | `/threads` | 发帖：`board`、`title`（4–80 个字）、`content`、`kind`（不带时用版块的默认类型）、`tags`（最多 5 个，只能用已有的）、`source` 和 `created_at`（2.5 节）、`anonymous`（楼主匿名）、`anonymous_replies`（楼主以外的人回复时匿名），后两个发出后不能改。`kind` 为 `poll` 时要带 `poll`，别的类型不能带：`options`（2–20 个，每个最多 50 个字，不能重复）、`rows`（分行投票的各行，1–10 个，每个最多 30 个字，不能重复；带了就只能单选）、`multiple`、`max_choices`（多选时最多选几项，要少于选项数，`null` 不限）、`anonymous`（匿名投票）、`results`（`voted` 或 `always`）、`closes_at`（截止时间，Unix 秒，10 分钟以后、一年以内，`null` 不限），发出后都不能改。`poll.preset` 为 `positioning` 时是保研定位：只带 `rows`（目标院校），选项、单选、匿名、结果可见方式和不限截止时间由论坛按预设生成，带了别的返回 `400`。`kind` 为 `lottery` 时要带 `lottery`，别的类型不能带，也不能匿名：`prizes`（1–10 个奖项，每个 `{ name, winners }`：奖品最多 50 个字，抽 1–100 人）、`entry`（`button` 或 `reply`，默认 `button`）、`min_level`（0–5，默认 0）、`draws_at`（开奖时间，Unix 秒，10 分钟以后、一年以内），发出后都不能改。L2 起才能发投票帖和抽奖帖（保研定位除外），否则返回 `403 level_required`。只有版主能发的版块返回 `403 forbidden`。先审后发的版块里，版主以外的人发的帖子 `status` 为 `pending`，通过后才公开 | 成员 / `act` |
 | GET | `/threads/{id}` | 帖子详情；楼层（包括主楼）用 `/threads/{id}/posts` 取。楼主设置了不给访客看时，访客得到 `401 login_required` | 访客 |
 | PATCH | `/threads/{id}` | 只改带了的字段：楼主可以改 `title`、`tags`；版主还可以改 `board`（移动版块）、`pinned`（0–2）、`featured`、`locked`、`status`（`visible` 或 `hidden`，见下面的「审核」）和 `reason`（隐藏的理由，最多 200 个字，会告诉作者）。L3 起可以改等级比自己低的人的 `title`、`tags`、`board`（只能移到自己能发帖的版块），L5 还可以改 `locked`；版主的和匿名的帖子不行（总体设计 §6.6）。改标题记在主楼的编辑记录里；锁定后只有版主和 L5 能改 | 楼主、版主、L3 / `act`、`moderate` |
 | DELETE | `/threads/{id}` | 删除帖子；有人回复后楼主不能删，只有版主能删 | 楼主、版主 / `act`、`moderate` |
@@ -289,7 +291,7 @@ token 由站长在后台创建，只显示一次。每个 token 绑定一个 bot
 | --- | --- | --- | --- |
 | GET | `/threads/{id}/posts` | 楼层列表，按楼层号升序，每次最多 20 层：`after=N` 取第 N 楼之后的（默认 0，从主楼开始），`before=N` 取第 N 楼之前的，二选一；不足 20 层说明这个方向到头了。每层带 `reply_to`（回复的是哪一层，没有为 `null`）和 `reply_count`（有几条回复它）；删除的楼层也在，带 `deleted: true`；待审核和已隐藏的楼层只给作者和版主，别人看到的楼层号会跳过它们 | 访客 |
 | POST | `/preview` | `{ markdown }`：渲染成发布后的 HTML，返回 `{ html }`，编辑器预览用；每人每分钟最多 120 次 | 成员 / `act` |
-| POST | `/threads/{id}/posts` | 回复：`content`、`reply_to_id`（回复同一帖子里的哪一层，可选）、`source`；锁定的帖子只有版主能回复，否则返回 `403 thread_locked`；帖子待审核或已隐藏时不能回复（`403 forbidden`）。先审后发的版块里，版主以外的人发的回复 `status` 为 `pending` | 成员 / `act` |
+| POST | `/threads/{id}/posts` | 回复：`content`、`reply_to_id`（回复同一帖子里的哪一层，可选）、`source` 和 `created_at`（2.5 节）；锁定的帖子只有版主能回复，否则返回 `403 thread_locked`；帖子待审核或已隐藏时不能回复（`403 forbidden`）。先审后发的版块里，版主以外的人发的回复 `status` 为 `pending` | 成员 / `act` |
 | GET | `/posts/{id}` | 单个楼层 | 访客 |
 | GET | `/posts/{id}/replies` | 回复这一层的楼层，按楼层号升序，每次最多 20 层：`after=N` 取第 N 楼之后的，不足 20 层说明取完了 | 访客 |
 | PATCH | `/posts/{id}` | 修改 `content`（Markdown 或 OneBot 消息段），旧的正文进编辑记录；收录的楼层更新时带上 `source`，是这一层整理自的全部消息，替换原来的，其中有消息属于别的楼层时返回 `409 source_exists`；版主也能改别人的，L5 能改等级比自己低的人的（不含版主的和匿名的），版主还可以改 `status` 和 `reason`，同帖子。主楼的状态跟着帖子（`400`）；帖子待审核或已隐藏时不能改回复的状态（`403`）；锁定的帖子只有版主能改 | 作者、版主 / `act`、`moderate` |

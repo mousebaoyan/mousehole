@@ -772,6 +772,14 @@ function via(actor: Actor, source: Source | undefined) {
   return source ? "qq" : actor.tokenId === null ? "web" : "bot";
 }
 
+// Content archived from a group is dated when it was said there, which the bot gives; never
+// later than now (design §6.5).
+function postedAt(actor: Actor, createdAt: number | undefined) {
+  if (createdAt === undefined) return sql<Date>`now()`;
+  if (actor.tokenId === null) throw forbidden("只有 bot 收录群聊时能带 created_at");
+  return sql<Date>`least(to_timestamp(${createdAt}), now())`;
+}
+
 // What levels allow (design §6.6). Moderators and admins aren't held by any of it.
 // Polls and lotteries.
 const KIND_LEVEL = 2;
@@ -846,11 +854,13 @@ export async function createThread(
     lottery?: LotterySpec;
     tags: string[];
     source?: Source;
+    created_at?: number;
     anonymous?: boolean;
     anonymous_replies?: boolean;
   },
 ) {
   const reader: Reader = { reach, id: viewer.id, staff: false };
+  const at = postedAt(actor, input.created_at);
   const board = await getBoard(input.board, reach);
   const anonymous = input.anonymous ?? false;
   assertMayPost(viewer, board);
@@ -878,6 +888,8 @@ export async function createThread(
         status,
         author_anonymous: anonymous,
         anonymous_replies: input.anonymous_replies ?? false,
+        created_at: at,
+        last_post_at: at,
       })
       .returning(["id", "last_post_at"])
       .executeTakeFirstOrThrow();
@@ -892,6 +904,7 @@ export async function createThread(
         via: via(actor, input.source),
         status,
         anonymous,
+        created_at: at,
       })
       .returning("id")
       .executeTakeFirstOrThrow();
@@ -945,9 +958,10 @@ export async function createPost(
   viewer: Viewer,
   reach: number,
   threadId: number,
-  input: { content: Content; reply_to_id?: number; source?: Source },
+  input: { content: Content; reply_to_id?: number; source?: Source; created_at?: number },
 ) {
   const reader: Reader = { reach, id: viewer.id, staff: false };
+  const at = postedAt(actor, input.created_at);
   const thread = await assertVisible(threadId, reader);
   assertPublic(thread);
   if (thread.locked && !STAFF.includes(viewer.role)) {
@@ -1000,6 +1014,7 @@ export async function createPost(
         via: via(actor, input.source),
         status,
         anonymous,
+        created_at: at,
       })
       .returning("id")
       .executeTakeFirstOrThrow();
@@ -1445,6 +1460,7 @@ async function publishPost(
       "posts.reply_to_id",
       "posts.anonymous",
       "posts.via",
+      "posts.created_at",
       "threads.board_id",
       "threads.author_id as thread_author_id",
       "threads.status as thread_status",
@@ -1454,17 +1470,22 @@ async function publishPost(
     .executeTakeFirstOrThrow();
   const replyTo = await countReply(trx, post, 1);
   if (announce) {
-    const { last_post_at } = await trx
+    // An archived floor is as old as its messages, maybe older than the thread's last activity.
+    const at = post.via === "qq" ? sql<Date>`${post.created_at}` : sql<Date>`now()`;
+    const bumped = await trx
       .updateTable("threads")
-      .set({ last_post_at: sql<Date>`now()`, last_poster_id: post.author_id })
+      .set({ last_post_at: at, last_poster_id: post.author_id })
       .where("id", "=", post.thread_id)
+      .where("last_post_at", "<=", at)
       .returning("last_post_at")
-      .executeTakeFirstOrThrow();
-    await trx
-      .updateTable("thread_tags")
-      .set({ last_post_at })
-      .where("thread_id", "=", post.thread_id)
-      .execute();
+      .executeTakeFirst();
+    if (bumped) {
+      await trx
+        .updateTable("thread_tags")
+        .set({ last_post_at: bumped.last_post_at })
+        .where("thread_id", "=", post.thread_id)
+        .execute();
+    }
   }
   if (announce) {
     await postCreated(trx, postId);

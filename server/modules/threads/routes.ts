@@ -304,6 +304,12 @@ const Source = z
   })
   .openapi("Source", { description: "内容整理自同一个聊天里的哪几条 QQ 消息" });
 
+const CreatedAt = z
+  .number()
+  .int()
+  .positive()
+  .openapi({ description: "bot 收录时带：消息在群里发出的时间（Unix 秒），晚于现在的按现在算" });
+
 const Title = z.string().trim().min(4).max(80);
 
 const SOON_S = 600;
@@ -820,6 +826,7 @@ export const threadsRoutes = createRouter()
               }),
               tags: Tags.default([]),
               source: Source.optional(),
+              created_at: CreatedAt.optional(),
               anonymous: z.boolean().optional().openapi({ description: "楼主匿名，发出后不能改" }),
               anonymous_replies: z
                 .boolean()
@@ -838,6 +845,10 @@ export const threadsRoutes = createRouter()
             .refine((b) => b.kind !== "lottery" || !(b.anonymous || b.anonymous_replies), {
               message: "抽奖帖不能匿名",
               path: ["anonymous"],
+            })
+            .refine((b) => b.created_at === undefined || b.source !== undefined, {
+              message: "created_at 要和 source 一起带",
+              path: ["created_at"],
             }),
         ),
       },
@@ -866,11 +877,17 @@ export const threadsRoutes = createRouter()
       request: {
         params: IdParam,
         body: json(
-          z.object({
-            content: Content,
-            reply_to_id: z.number().int().optional(),
-            source: Source.optional(),
-          }),
+          z
+            .object({
+              content: Content,
+              reply_to_id: z.number().int().optional(),
+              source: Source.optional(),
+              created_at: CreatedAt.optional(),
+            })
+            .refine((b) => b.created_at === undefined || b.source !== undefined, {
+              message: "created_at 要和 source 一起带",
+              path: ["created_at"],
+            }),
         ),
       },
       responses: {
