@@ -114,15 +114,27 @@
 
 ## 个性化
 
-都是 `users` 上的列（[总体设计 §8.16](design.md#816-个性化)）。预设的背景、头像框、主题色和解锁条件写在代码里（`users/customization.ts`），页面和服务共用，库里只存 key；保存时检查解锁，和原来一样的值不再检查，读的时候也不检查。
+表：`users` 上的列、`user_looks`（[总体设计 §8.16](design.md#816-个性化)）。预设的背景、头像框、主题色、解锁条件和动态版的价格写在代码里（`users/customization.ts`），页面和服务共用，库里只存 key；保存时检查解锁，和原来一样的值不再检查，读的时候也不检查。
 
 - 背景：`background` 是预设的 key，上传的为 `custom`。上传的裁成两张，存在 `data/backgrounds/{用户ID}-card.webp` 和 `{用户ID}-profile.webp`，每次上传覆盖，用 `background_version` 控制缓存，同头像；换成预设或不用背景时删掉这两个文件。
+- 动态版：兑换了的记在 `user_looks`，每款一行，主键 `(user_id, kind, key)`，`kind` 取 `background`、`frame`，上传背景的动态版 `key` 为 `custom`。资料卡、个人主页和楼层作者按戴着的那一款连一下这张表，有这一行就动。兑换在一个事务里写这一行、扣鼠币（`coins` 模块的 `spendCoins`）、换上这一款。
 - 头像框：`frame`。活动徽章能配的活动框是 `badges.frame`；撤销手动授予的徽章时，戴着的框如果是徽章解锁的（种子用户、金徽章、活动框），剩下的徽章又解锁不了它，就一并清空；等级解锁的不动。
 - 展示徽章：`shown_badge_ids integer[]`，`NULL` 是没选过、按默认规则，`'{}'` 是一枚都不展示；保存时检查是自己得到的，撤销手动授予的徽章时从数组里去掉（`array_remove`，头衔用 `nullif` 一并清掉），读的时候直接按数组取。
 - 主题色：`theme`，`NULL` 是默认的海青。
 - 状态：`status_emoji`、`status_text`、`status_until`（`NULL` 是不清除），读的时候只取没过期的，不另外清理。
 - 代表作：`pins integer[]`，帖子 ID 按显示的顺序；删除、隐藏、匿名的帖子和看的人打不开的，读的时候过滤掉。
 - 展柜：`showcase` 是 Markdown 原文，只在个人主页上用，打开时现渲染，不存 HTML，渲染规则变了也不用重新渲染。
+
+## 鼠币
+
+表：`coin_ledger`、`coin_balances`（[总体设计 §8.17](design.md#817-鼠币)）。只由 `coins` 模块写入；它不调用别的模块，签到、发问答帖和兑换由 `users`、`members`、`threads` 在各自的事务里调用它导出的函数。
+
+- `coin_ledger` 是只追加的流水：`amount` 挣为正、花为负；`reason` 取 `check_in`、`liked`、`accepted`、`question`、`look`；`day` 是北京时间的日期，签到、获赞、采纳是算的那一天，花的是花的那天；发问答帖记 `thread_id`，兑换记 `look_kind`、`look_key`。
+- 签到、获赞、采纳每人每天各一行，靠部分唯一索引 `(user_id, reason, day) WHERE reason IN ('check_in', 'liked', 'accepted')` 和 `ON CONFLICT DO NOTHING`：网页和群同步同一天各来一次、结算重跑，都不会多发。获赞那一行的 `amount` 是这一天给了赞的人数。
+- `coin_balances` 每人一行余额，`CHECK (coins >= 0)`，和流水在同一个事务里改：挣的用 `INSERT … ON CONFLICT DO UPDATE SET coins = coins + n`；花的用 `UPDATE … SET coins = coins - n WHERE user_id = … AND coins >= n`，没改到一行就是不够，返回 `403 coins_insufficient`。没有这一行就是 0。
+- 签到：`users` 记新的一天（`recordDay`，见上面的阅读统计）时调用 `checkIn`；成员同步写入的 `group_members.last_sent_at` 往后移、落在今天或昨天时，也给那一天签到。冻结的账号和 bot 不签到。
+- 结算：每小时的任务看 `job_runs` 里 `coins` 结算到了哪天，昨天还没结算就结算，一天一个事务。获赞：`reactions.created_at` 落在那天、给赞的人不是 bot、楼层没删没隐藏也不匿名、作者是成员的，按（作者，给赞的人）去重计数；采纳：`posts.accepted_at` 落在那天、同样条件的楼层，有就记一次。
+- 明细按 `(user_id, id DESC)` 分页。排行榜现算：按 `day` 的范围汇总 `amount > 0` 的流水，走 `coin_ledger (day)`。
 
 ## 图片
 
@@ -178,7 +190,6 @@
 
 | 表 | 用途 |
 | --- | --- |
-| `points_ledger`、`check_ins` | 鼠币流水、签到 |
 | `conversations`、`conversation_members`、`messages` | 私信：会话、双方各自的已读位置和屏蔽状态、消息 |
 | `group_notices`、`group_essences`、`group_files` | 同步来的群公告、精华消息、群文件目录 |
 
