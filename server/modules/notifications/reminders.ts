@@ -14,7 +14,7 @@ import {
   TEAL,
 } from "../../platform/mail-page.ts";
 import { excerpt } from "../../platform/markdown.ts";
-import { levelName, SITE_NAME, TIER_NAMES } from "../../platform/site.ts";
+import { levelName, readTime, SITE_NAME, TIER_NAMES } from "../../platform/site.ts";
 import { anonymousBrief } from "../users/service.ts";
 import { NOTIFICATION_LABELS, type NotificationType } from "./types.ts";
 
@@ -373,13 +373,7 @@ const LEVEL_UNLOCKS: Record<number, string> = {
 };
 const KEEP_L4 = `${levelName(4)}按最近 30 天算：达不到会降回 ${levelName(3)}，刚升上去的两周内不降。`;
 
-// As the profile shows progress: reading time in hours from an hour on, else in minutes.
-function readTime(seconds: number) {
-  return seconds >= 3600
-    ? { n: Math.round(seconds / 360) / 10, unit: "小时" }
-    : { n: Math.round(seconds / 60), unit: "分钟" };
-}
-
+// As the profile shows progress.
 function shown(key: string, n: number) {
   if (key !== "read_seconds") return String(n);
   const time = readTime(n);

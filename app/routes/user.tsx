@@ -34,7 +34,7 @@ import type { Api } from "~/api-types";
 import type { Route } from "./+types/user.ts";
 import { ClearButtons, ModerationButtons } from "./user-moderation.tsx";
 import { REACTIONS } from "./reactions.tsx";
-import { levelName, STAFF, TIER_NAMES } from "../../server/platform/site.ts";
+import { levelName, readTime, STAFF, TIER_NAMES } from "../../server/platform/site.ts";
 import { CLEARABLE } from "../../server/modules/users/customization.ts";
 
 export function meta({ loaderData }: Route.MetaArgs) {
@@ -178,9 +178,8 @@ export async function action({ params, request, context }: Route.ActionArgs) {
 
 // "3.5 小时", "40 分钟".
 function duration(seconds: number) {
-  return seconds >= 3600
-    ? `${Math.round(seconds / 360) / 10} 小时`
-    : `${Math.round(seconds / 60)} 分钟`;
+  const time = readTime(seconds);
+  return `${time.n} ${time.unit}`;
 }
 
 // How long ago, in the largest whole unit: "2 年", "5 个月", "12 天".

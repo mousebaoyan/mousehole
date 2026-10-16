@@ -101,7 +101,7 @@ describe("每周来信", () => {
     await sendAgain();
     const [letter] = await lettersTo(enough.qq);
     expect(letter.subject).toContain("被读了 25 次");
-    expect(letter.body).toContain("被读 25 次，获赞 5 次");
+    expect(letter.body).toContain("被读 25 次（比上周多 25），获赞 5 次（比上周多 5）");
     expect(letter.body).not.toContain("被采纳");
     expect(letter.body).toContain(`夏令营经验 #`);
     expect(letter.html).toContain("每周来信");
@@ -137,6 +137,9 @@ describe("每周来信", () => {
       reads: 1,
       likes: 0,
       accepted: 0,
+      before: { reads: 0, likes: 0, accepted: 0 },
+      places: [],
+      level: null,
       badges: [],
       top: [{ title: "<script>", floor: 2, likes: 5, url: "https://example.com/t/1?floor=2" }],
       peopleReached: 1,
@@ -146,6 +149,6 @@ describe("每周来信", () => {
     expect(html).not.toContain("<b>鼠鼠");
     expect(html).not.toContain("<script>");
     expect(html).toContain("&lt;b&gt;鼠鼠");
-    expect(html).not.toContain("获赞（次）");
+    expect(html).not.toContain(">获赞<");
   });
 });

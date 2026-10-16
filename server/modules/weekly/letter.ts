@@ -3,13 +3,14 @@ import {
   INK,
   LINE,
   mailButton,
+  mailNumbers,
   mailPage,
   MUTED,
   optOut,
   SERIF,
   TEAL,
 } from "../../platform/mail-page.ts";
-import { BOT_NAME, SITE_NAME } from "../../platform/site.ts";
+import { BOT_NAME, readTime, SITE_NAME } from "../../platform/site.ts";
 
 // The weekly letter (design §8.15): what someone's floors did for others last week, written to
 // thank them. Only what happened is said; a count of nothing is left out.
@@ -21,6 +22,17 @@ export type Week = {
   reads: number;
   likes: number;
   accepted: number;
+  // The same the week before, to tell how it changed.
+  before: { reads: number; likes: number; accepted: number };
+  // Their places on the weekly lists (design §8.15) they made.
+  places: { label: string; place: number }[];
+  // What the next level still needs of each requirement, or keeping L4 does; null with nothing
+  // missing or no level to go for.
+  level: {
+    name: string;
+    keep: boolean;
+    missing: { key: string; label: string; left: number }[];
+  } | null;
   badges: string[];
   // Their floors most liked last week, each with the likes it got then.
   top: { title: string; floor: number; likes: number; url: string }[];
@@ -31,13 +43,37 @@ export type Week = {
 
 const REASON = "每周来信";
 
+function change(now: number, before: number) {
+  if (now > before) return `比上周多 ${now - before}`;
+  if (now < before) return `比上周少 ${before - now}`;
+  return undefined;
+}
+
 // The numbers worth telling, biggest news first.
 function numbers(week: Week) {
   return [
-    { label: "被读", value: week.reads, unit: "次" },
-    { label: "获赞", value: week.likes, unit: "次" },
-    { label: "被采纳", value: week.accepted, unit: "次" },
-  ].filter((n) => n.value > 0);
+    { label: "被读", value: week.reads, before: week.before.reads },
+    { label: "获赞", value: week.likes, before: week.before.likes },
+    { label: "被采纳", value: week.accepted, before: week.before.accepted },
+  ]
+    .filter((n) => n.value > 0)
+    .map((n) => ({ label: n.label, value: n.value, unit: "次", note: change(n.value, n.before) }));
+}
+
+function placesLine(week: Week) {
+  const places = week.places.map((p) => `${p.label}第 ${p.place}`).join("、");
+  return `上周全站排名：${places}。`;
+}
+
+function levelLine({ name, keep, missing }: NonNullable<Week["level"]>) {
+  const left = missing
+    .map((m) => {
+      if (m.key !== "read_seconds") return `${m.label} ${m.left}`;
+      const time = readTime(m.left);
+      return `${m.label} ${time.n} ${time.unit}`;
+    })
+    .join("、");
+  return keep ? `要保持 ${name}，最近 30 天还差：${left}。` : `离 ${name}还差：${left}。`;
 }
 
 export function subjectOf(week: Week) {
@@ -52,9 +88,11 @@ export function letterText(week: Week) {
     "",
     `过去一周，你在${SITE_NAME}留下的文字又帮到了一些人：`,
     numbers(week)
-      .map((n) => `${n.label} ${n.value} ${n.unit}`)
+      .map((n) => `${n.label} ${n.value} ${n.unit}${n.note ? `（${n.note}）` : ""}`)
       .join("，"),
+    ...(week.places.length > 0 ? [placesLine(week)] : []),
     ...(week.badges.length > 0 ? [`新得到的徽章：${week.badges.join("、")}`] : []),
+    ...(week.level ? [levelLine(week.level)] : []),
     ...(week.top.length > 0
       ? [
           "",
@@ -78,32 +116,18 @@ export function letterText(week: Week) {
 }
 
 export async function letterHtml(week: Week) {
-  const shown = numbers(week);
-  // The numbers' table sits in a div pulled out by the spacing of its cells, which would
-  // otherwise indent them from the text.
   const card = html`<div style="font-family:${SERIF};font-size:17px;line-height:1.9;">
       <p style="margin:0 0 12px;">${week.name}，你好：</p>
       <p style="margin:0 0 12px;">
         过去一周，你在${SITE_NAME}留下的文字又帮到了一些人。想把这些告诉你：
       </p>
     </div>
-    <div style="margin:0 -8px;">
-      <table role="presentation" width="100%" cellpadding="0" cellspacing="8">
-        <tr>
-          ${shown.map(
-            (n) =>
-              html`<td
-                style="background:#ffffff;border:1px solid ${LINE};border-radius:12px;padding:14px 8px;text-align:center;"
-              >
-                <div style="font-size:26px;font-weight:600;color:${TEAL};">${n.value}</div>
-                <div style="font-size:13px;color:${MUTED};margin-top:2px;">
-                  ${n.label}（${n.unit}）
-                </div>
-              </td>`,
-          )}
-        </tr>
-      </table>
-    </div>
+    ${mailNumbers(numbers(week))}
+    ${
+      week.places.length > 0
+        ? html`<p style="margin:12px 0 0;font-size:14px;">${placesLine(week)}</p>`
+        : ""
+    }
     ${
       week.badges.length > 0
         ? html`<p style="margin:12px 0 0;font-size:14px;">
@@ -114,6 +138,13 @@ export async function letterHtml(week: Week) {
                   >${b}</span
                 >`,
             )}
+          </p>`
+        : ""
+    }
+    ${
+      week.level
+        ? html`<p style="margin:12px 0 0;font-size:14px;color:${MUTED};">
+            ${levelLine(week.level)}
           </p>`
         : ""
     }
