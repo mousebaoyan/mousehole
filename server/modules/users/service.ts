@@ -1,5 +1,11 @@
 import { mkdir, readFile, rename, stat, utimes, writeFile } from "node:fs/promises";
-import { sql, type ExpressionBuilder, type NotNull, type Transaction } from "kysely";
+import {
+  sql,
+  type ExpressionBuilder,
+  type NotNull,
+  type RawBuilder,
+  type Transaction,
+} from "kysely";
 import type { DB } from "../../../db/types.ts";
 import type { Actor, UserRef, Viewer } from "../../platform/access.ts";
 import { readCapped } from "../../platform/body.ts";
@@ -169,14 +175,15 @@ export async function findMember(ref: UserRef) {
 }
 
 // A day someone was active, in Beijing time: they visited, read, or had content synced from the
-// groups. Returns 1 for the first of a day, which counts as a day visited, else 0. What they
-// read adds to the day's reading, which L4 looks at (design §6.6).
+// groups, on the day it was said there. Returns 1 for the first of a day, which counts as a day
+// visited, else 0. What they read adds to the day's reading, which L4 looks at (design §6.6).
 async function recordDay(
   trx: Transaction<DB>,
   userId: number,
   read: { posts: number; seconds: number } = { posts: 0, seconds: 0 },
+  at = sql<Date>`now()`,
 ) {
-  const day = sql<Date>`(now() AT TIME ZONE 'Asia/Shanghai')::date`;
+  const day = sql<Date>`(${at} AT TIME ZONE 'Asia/Shanghai')::date`;
   const first = await trx
     .insertInto("user_days")
     .values({ user_id: userId, day, posts_read: read.posts, read_seconds: read.seconds })
@@ -184,12 +191,22 @@ async function recordDay(
     .returning("user_id")
     .executeTakeFirst();
   if (first) {
-    // Days in a row, for the badges: user_days keeps only 35 days.
+    // Days in a row up to the latest, for the badges, kept in users: user_days keeps only 35 days.
+    // An archived day may come before the latest and join the days in a row; they are counted
+    // anew then, as far back as user_days goes.
+    const latest = sql<Date>`(SELECT max(day) FROM user_days
+      WHERE user_id = ${userId} AND day <> ${day})`;
+    const inARow = sql<number>`(SELECT count(*)::integer FROM (
+        SELECT first_value(day) OVER w - day AS back, row_number() OVER w - 1 AS n
+        FROM user_days WHERE user_id = ${userId} WINDOW w AS (ORDER BY day DESC)
+      ) d WHERE back = n)`;
     await trx
       .updateTable("users")
       .set({
-        visit_streak: sql<number>`CASE WHEN EXISTS (SELECT 1 FROM user_days
-          WHERE user_id = ${userId} AND day = ${day} - 1) THEN visit_streak + 1 ELSE 1 END`,
+        visit_streak: sql<number>`CASE
+          WHEN ${latest} IS NULL OR ${latest} < ${day} - 1 THEN 1
+          WHEN ${latest} = ${day} - 1 THEN visit_streak + 1
+          ELSE greatest(visit_streak, ${inARow}) END`,
       })
       .where("id", "=", userId)
       .execute();
@@ -332,9 +349,10 @@ export async function recountPeopleReached() {
     WHERE users.id = reached.author_id AND users.people_reached <> reached.people`.execute(db);
 }
 
-// Posting is being active that day, also when the post comes from the groups or a bot.
-export async function countPosting(trx: Transaction<DB>, userId: number) {
-  if ((await recordDay(trx, userId)) === 0) return;
+// Posting, reacting or leaving a boost is being active the day it is done, also when it comes from
+// the groups or a bot.
+export async function countActive(trx: Transaction<DB>, userId: number, at: RawBuilder<Date>) {
+  if ((await recordDay(trx, userId, undefined, at)) === 0) return;
   await trx
     .updateTable("users")
     .set((eb) => ({ days_visited: eb("days_visited", "+", 1) }))

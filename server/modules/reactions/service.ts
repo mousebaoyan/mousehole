@@ -12,7 +12,7 @@ import {
   getPost,
   writesAnonymously,
 } from "../threads/service.ts";
-import { shownToGuests, userBriefs, writer } from "../users/service.ts";
+import { countActive, shownToGuests, userBriefs, writer } from "../users/service.ts";
 
 // The heart is the like; every reaction counts as one. See design §8.1.
 export const REACTIONS = [
@@ -74,6 +74,7 @@ export async function react(
         .execute();
     }
     await countReaction(trx, postId, { from: previous, to: emoji });
+    if (emoji !== null) await countActive(trx, viewer.id, at);
     if (previous === null && emoji !== null && !archived) {
       await notifyOnPost(trx, "like", post, viewer.id, null, { emoji });
     }
@@ -148,6 +149,7 @@ export async function setBoost(
       .returning(sql<number | null>`old.id`.as("replaced"))
       .executeTakeFirstOrThrow();
     const alias = anonymous ? await aliasIn(trx, post.thread_id, viewer.id) : null;
+    await countActive(trx, viewer.id, at);
     if (replaced === null) {
       await countBoosts(trx, postId, 1);
       if (!archived) await notifyOnPost(trx, "boost", post, viewer.id, alias, { body });
