@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode, type Ref } from "react";
 import { useFetcher, useNavigate } from "react-router";
+import { Popover } from "@base-ui/react/popover";
 import { cn } from "cn";
 import {
   ArrowDown,
@@ -144,39 +145,36 @@ export function PostCard({
         </div>
       )}
       {/* On phones the time and the rest go on a line of their own, under the name. */}
-      <div className="flex flex-wrap items-center gap-x-2">
-        {/* Avatar and name are one control, so either opens the same card in the same place. */}
-        <UserCard
-          user={author}
-          className="flex max-w-full min-w-0 items-center gap-3 rounded-lg text-left"
-        >
-          <UserAvatar
+      <div className="flex items-center gap-x-2 max-sm:flex-wrap">
+        {/* A long name is cut short rather than pushing the badges onto a line of their own. */}
+        <div className="flex min-w-0 flex-1 items-center gap-x-2 max-sm:basis-full">
+          {/* Avatar and name are one control, so either opens the same card in the same place. */}
+          <UserCard
             user={author}
-            thread={threadId}
-            className="size-10 shrink-0 max-sm:size-9"
-            frame="still"
-          />
-          <span className="truncate text-body font-semibold">{author.display_name}</span>
-        </UserCard>
-        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-1.5 gap-y-1">
-          {"user_status" in author && author.user_status && (
-            <StatusEmoji status={author.user_status} />
-          )}
-          <UserBadges user={author} op={op} mine={own} />
-          {/* The opening post's state is the thread's, shown above it. */}
-          {post.floor > 1 && post.status !== "visible" && (
-            <span className="rounded bg-warning/10 px-1.5 py-px text-2xs font-medium text-warning">
-              {post.status === "pending" ? "待审核" : "已隐藏"}
-            </span>
-          )}
+            className="flex max-w-full min-w-0 items-center gap-3 rounded-lg text-left"
+          >
+            <UserAvatar
+              user={author}
+              thread={threadId}
+              className="size-10 shrink-0 max-sm:size-9"
+              frame="still"
+            />
+            <span className="truncate text-body font-semibold">{author.display_name}</span>
+          </UserCard>
+          <div className="flex shrink-0 items-center gap-x-1.5">
+            {"user_status" in author && author.user_status && (
+              <StatusEmoji status={author.user_status} />
+            )}
+            <UserBadges user={author} op={op} mine={own} />
+            {/* The opening post's state is the thread's, shown above it. */}
+            {post.floor > 1 && post.status !== "visible" && (
+              <span className="rounded bg-warning/10 px-1.5 py-px text-2xs font-medium text-warning">
+                {post.status === "pending" ? "待审核" : "已隐藏"}
+              </span>
+            )}
+          </div>
         </div>
-        <span className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs whitespace-nowrap text-muted-foreground max-sm:-mt-1.5 max-sm:basis-full max-sm:pl-12">
-          {post.via === "qq" && (
-            <span className="inline-flex items-center gap-1">
-              <MessagesSquare className="size-3.5" />
-              整理自群聊
-            </span>
-          )}
+        <span className="flex shrink-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs whitespace-nowrap text-muted-foreground max-sm:-mt-1.5 max-sm:basis-full max-sm:pl-12">
           {replyTo && (
             <button
               type="button"
@@ -204,6 +202,25 @@ export function PostCard({
                 {shown(replyTo.author).display_name}
               </span>
             </button>
+          )}
+          {/* Phones have no hover, so a tap opens it too. */}
+          {post.via === "qq" && (
+            <Popover.Root>
+              <Popover.Trigger
+                openOnHover
+                aria-label="整理自群聊"
+                className="-m-1 rounded p-1 hover:bg-accent hover:text-foreground"
+              >
+                <MessagesSquare className="size-3.5" />
+              </Popover.Trigger>
+              <Popover.Portal>
+                <Popover.Positioner sideOffset={4} className="z-50">
+                  <Popover.Popup className="rounded-lg border bg-popover px-2.5 py-1 text-xs text-popover-foreground shadow-md">
+                    整理自群聊
+                  </Popover.Popup>
+                </Popover.Positioner>
+              </Popover.Portal>
+            </Popover.Root>
           )}
           {post.edited_at !== null &&
             (manage.history ? (
