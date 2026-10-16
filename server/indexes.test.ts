@@ -53,7 +53,11 @@ beforeAll(async () => {
   );
   if (!res.ok) throw new Error(`status ${res.status}`);
   thread = (await res.json()).id;
-  await db.updateTable("users").set({ pins: [thread] }).where("id", "=", memberId).execute();
+  await db
+    .updateTable("users")
+    .set({ pins: [thread] })
+    .where("id", "=", memberId)
+    .execute();
   await api.threads[":id"].posts.$post(
     { param: { id: String(thread) }, json: { content: { markdown: "rank 30% 也能进" } } },
     admin,
