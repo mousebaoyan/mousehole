@@ -1,10 +1,17 @@
-import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import {
+  lazy,
+  Suspense,
+  useEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+} from "react";
 import { Link, useFetcher, useNavigate } from "react-router";
 import { cn } from "cn";
 import { Award, UserCheck, UserPlus } from "~/components/icons";
 import { useDismiss } from "~/components/disclosure";
 import { Button, buttonVariants } from "~/components/ui/button";
-import { Backdrop } from "~/components/backdrop";
 import { UserAvatar } from "~/components/user-avatar";
 import { BadgeChip } from "~/components/badge-chip";
 import { UserBadges } from "~/components/user-badges";
@@ -13,6 +20,9 @@ import { useMe } from "~/forum";
 import type { Writer } from "~/api-types";
 import type { loader } from "~/routes/user-card";
 import { useSavedValue } from "~/saved-value";
+
+// Loaded when a card with a background first opens: most pages never open one.
+const Backdrop = lazy(() => import("./backdrop.tsx").then((m) => ({ default: m.Backdrop })));
 
 type Relatable = {
   id: number;
@@ -120,7 +130,7 @@ function PersonCard({
         aria-expanded={open}
         aria-label={`${user.display_name} 的资料卡`}
         onClick={() => setOpen(!open)}
-        className={cn("cursor-pointer", className)}
+        className={cn("group/card cursor-pointer", className)}
       >
         {children}
       </button>
@@ -174,7 +184,7 @@ function CardBody({ profile }: { profile: Profile }) {
   return (
     <>
       <div className="flex items-center gap-3">
-        <UserAvatar user={profile} className="size-14 text-xl" />
+        <UserAvatar user={profile} className="size-14 text-xl" frame="live" />
         <p className="min-w-0 truncate font-semibold">{profile.display_name}</p>
       </div>
       <p className="mt-3 text-meta text-muted-foreground">TA 的资料和发言仅成员可见</p>
@@ -195,7 +205,9 @@ function FullCard({ profile }: { profile: Extract<Profile, { members_only: false
       {/* Its top, under the avatar and the name, fading into the card. */}
       {profile.background && (
         <div className="relative -mx-4 -mt-4 -mb-11 aspect-[2/1] overflow-hidden rounded-t-2xl">
-          <Backdrop background={profile.background} place="card" />
+          <Suspense>
+            <Backdrop background={profile.background} place="card" />
+          </Suspense>
           <div className="absolute inset-0 bg-linear-to-b from-transparent from-50% to-popover" />
         </div>
       )}
@@ -203,6 +215,7 @@ function FullCard({ profile }: { profile: Extract<Profile, { members_only: false
         <UserAvatar
           user={profile}
           className={cn("size-14 text-xl", profile.background && "ring-3 ring-popover")}
+          frame="live"
         />
         <div className="min-w-0 self-end">
           <p className="truncate font-semibold [text-shadow:0_0_0.5rem_var(--popover)]">

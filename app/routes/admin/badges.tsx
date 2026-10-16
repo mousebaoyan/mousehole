@@ -10,6 +10,7 @@ import { Input } from "~/components/ui/input";
 import { Select } from "~/components/ui/select";
 import type { Route } from "./+types/badges.ts";
 import { choice, Field, readForm, Result, Section } from "~/components/form-parts";
+import { EVENT_FRAMES, FRAME_LOOKS } from "../../../server/modules/users/customization.ts";
 
 export function meta() {
   return [{ title: pageTitle("徽章", "管理后台") }];
@@ -30,6 +31,16 @@ export async function loader({ request, context }: Route.LoaderArgs) {
   };
 }
 
+// The event frame an event badge opens for those who have it (design §8.16).
+const FRAME_OPTIONS = [
+  { value: "", label: "不配" },
+  ...EVENT_FRAMES.map((key) => ({ value: key, label: FRAME_LOOKS[key].name })),
+];
+
+function frameOf(value: string) {
+  return EVENT_FRAMES.find((key) => key === value) ?? null;
+}
+
 // The QQ number someone typed, as the API names a user.
 function byQq(qq: string) {
   return `qq:${qq}`;
@@ -47,6 +58,7 @@ export async function action({ request, context }: Route.ActionArgs) {
             name: field("name"),
             description: field("description"),
             tier: choice(TIERS, field("tier")),
+            frame: frameOf(field("frame")),
           },
         })
       : intent === "grant"
@@ -61,7 +73,11 @@ export async function action({ request, context }: Route.ActionArgs) {
             })
           : await api[":id"].$patch({
               param,
-              json: { name: field("name"), description: field("description") },
+              json: {
+                name: field("name"),
+                description: field("description"),
+                frame: frameOf(field("frame")),
+              },
             });
   if (res.ok) {
     const message = {
@@ -85,7 +101,7 @@ export default function Badges({ loaderData: { badges, edit }, actionData }: Rou
     <>
       <h1 className="text-xl font-semibold">徽章</h1>
       <p className="mt-1 text-meta text-muted-foreground">
-        活动徽章用于征文、活动的名次和纪念，由管理员授予；其余徽章按规则自动授予，见
+        活动徽章用于征文、活动的名次和纪念，由管理员授予，可以配一个活动框，得到的人能用作头像框；其余徽章按规则自动授予，见
         <Link to="/badges" className="text-primary hover:underline">
           徽章页
         </Link>
@@ -125,6 +141,9 @@ export default function Badges({ loaderData: { badges, edit }, actionData }: Rou
             </Field>
             <Field label="档">
               <Select name="tier" options={TIERS} className="w-20" />
+            </Field>
+            <Field label="活动框">
+              <Select name="frame" options={FRAME_OPTIONS} className="w-28" />
             </Field>
             <Button type="submit" name="intent" value="create" disabled={busy}>
               新建
@@ -166,6 +185,14 @@ function EditBadge({ badge, busy }: { badge: Badge; busy: boolean }) {
             required
             maxLength={60}
             className="w-72"
+          />
+        </Field>
+        <Field label="活动框">
+          <Select
+            name="frame"
+            defaultValue={badge.frame ?? ""}
+            options={FRAME_OPTIONS}
+            className="w-28"
           />
         </Field>
         <Button type="submit" name="intent" value="update" disabled={busy}>

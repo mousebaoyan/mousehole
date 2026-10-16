@@ -28,11 +28,13 @@ import {
   BACKGROUND_PRESETS,
   BACKGROUNDS,
   CLEARABLE,
+  FRAMES,
   PINS_MAX,
   reaches,
   SHOWCASE_MAX,
   STATUS_MAX,
   THEMES,
+  unlockedFrames,
   UPLOAD_LEVEL,
 } from "./customization.ts";
 import {
@@ -212,8 +214,10 @@ const SettingsSchema = z
       .nullable()
       .openapi({ description: "背景：预设的 key，上传的为 custom，没有为 null" }),
     background_urls: BackgroundUrls.nullable().openapi({ description: "上传的背景，没有为 null" }),
+    frame: z.string().nullable().openapi({ description: "头像框；null 是不用" }),
     unlocked: z.object({
       backgrounds: z.array(z.string()).openapi({ description: "能选的预设背景" }),
+      frames: z.array(z.string()).openapi({ description: "能选的头像框" }),
       upload: z.boolean().openapi({ description: "能不能上传自己的背景" }),
     }),
     user_status: z
@@ -235,7 +239,7 @@ const SettingsSchema = z
   .openapi("MySettings");
 
 async function settingsJson(userId: number) {
-  const { level, role, background_version, ...settings } = await getSettings(userId);
+  const { level, role, background_version, badge_unlocks, ...settings } = await getSettings(userId);
   const background = backgroundOf(userId, settings.background, background_version);
   return {
     ...settings,
@@ -244,6 +248,7 @@ async function settingsJson(userId: number) {
       backgrounds: BACKGROUNDS.filter((key) =>
         reaches({ level, role }, BACKGROUND_PRESETS[key].level),
       ),
+      frames: unlockedFrames({ level, role }, badge_unlocks),
       upload: reaches({ level, role }, UPLOAD_LEVEL),
     },
     notify_prefs: await notifyPrefs(settings.notify_prefs),
@@ -319,6 +324,7 @@ export const usersRoutes = createRouter()
         avatar_url: u.avatar_url,
         role: u.role,
         level: u.level,
+        frame: u.frame,
       };
       if (u.hide_from_guests && !members) {
         return c.json(
@@ -658,6 +664,7 @@ export const usersRoutes = createRouter()
                   .nullable()
                   .optional()
                   .openapi({ description: "null 改回默认" }),
+                frame: z.enum(FRAMES).nullable().optional().openapi({ description: "null 是不用" }),
                 background: z.enum(BACKGROUNDS).nullable().optional().openapi({
                   description: "预设背景的 key，null 是不用背景；上传的用 PUT /me/background",
                 }),
@@ -716,7 +723,7 @@ export const usersRoutes = createRouter()
         400: errorResponse(
           "不是自己的金徽章或银徽章，展示了没得到的徽章，或者代表作不是自己公开的帖子",
         ),
-        403: errorResponse("不是成员，或者选了还没解锁的背景（cosmetic_locked）"),
+        403: errorResponse("不是成员，或者选了还没解锁的背景、头像框（cosmetic_locked）"),
       },
     }),
     async (c) => {

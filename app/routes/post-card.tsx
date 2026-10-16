@@ -150,7 +150,12 @@ export function PostCard({
           user={author}
           className="flex max-w-full min-w-0 items-center gap-3 rounded-lg text-left"
         >
-          <UserAvatar user={author} thread={threadId} className="size-10 shrink-0 max-sm:size-9" />
+          <UserAvatar
+            user={author}
+            thread={threadId}
+            className="size-10 shrink-0 max-sm:size-9"
+            frame="still"
+          />
           <span className="truncate text-body font-semibold">{author.display_name}</span>
         </UserCard>
         <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-1.5 gap-y-1">

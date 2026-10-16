@@ -273,6 +273,54 @@ describe("徽章", () => {
     expect(await shown()).toEqual([gold, silver]);
   });
 
+  test("活动徽章配的框得到的人能用；撤销徽章时框一并取消，靠等级解锁的不受影响", async () => {
+    const member = await person();
+    const created = await api.admin.badges.$post(
+      { json: { name: "征文奖杯", description: "征文前三名", tier: "silver", frame: "trophy" } },
+      admin.who,
+    );
+    if (created.status !== 201) throw new Error(`status ${created.status}`);
+    const { id } = await created.json();
+    const wear = (frame: "trophy" | "medal" | "teal") =>
+      api.me.$patch({ json: { frame } }, member.who);
+    expect((await wear("trophy")).status).toBe(403);
+
+    const param = { id: String(id), user: String(member.id) };
+    const grant = () =>
+      api.admin.badges[":id"].grants.$post(
+        { param, json: { user: String(member.id), reason: "征文第二名" } },
+        admin.who,
+      );
+    const revoke = () =>
+      api.admin.badges[":id"].grants[":user"].$delete({ param, json: {} }, admin.who);
+    const frame = async () =>
+      (
+        await db
+          .selectFrom("users")
+          .select("frame")
+          .where("id", "=", member.id)
+          .executeTakeFirstOrThrow()
+      ).frame;
+
+    await grant();
+    expect((await wear("trophy")).status).toBe(200);
+    expect((await wear("medal")).status).toBe(403);
+    await revoke();
+    expect(await frame()).toBeNull();
+
+    await grant();
+    expect((await wear("teal")).status).toBe(200);
+    await revoke();
+    expect(await frame()).toBe("teal");
+
+    await api.admin.badges[":id"].$patch(
+      { param: { id: String(id) }, json: { frame: "medal" } },
+      admin.who,
+    );
+    await grant();
+    expect((await wear("medal")).status).toBe(200);
+  });
+
   test("访客看不到设了不给访客看的人的徽章，也看不到自己进不去的版块里的楼层", async () => {
     const member = await person();
     const inner = await reply(member.who, await thread(admin.who, "inner"));

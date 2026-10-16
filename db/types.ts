@@ -51,6 +51,7 @@ export interface AuditLogs {
 export interface Badges {
   created_at: Generated<Timestamp>;
   description: string;
+  frame: string | null;
   grouping: string;
   id: Generated<number>;
   multiple: Generated<boolean>;
@@ -447,6 +448,7 @@ export interface Users {
   custom_name: string | null;
   days_visited: Generated<number>;
   display_name: string;
+  frame: string | null;
   hide_from_guests: Generated<boolean>;
   id: Generated<number>;
   last_seen_at: Timestamp | null;

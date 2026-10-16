@@ -117,6 +117,51 @@ describe("个性化", () => {
     expect((await showcase(member.id, member.who)).showcase_html).not.toBeNull();
   });
 
+  test("头像框按等级和徽章解锁：版主只免等级，种子用户和金徽章要有那枚徽章；楼层里的作者带着框", async () => {
+    const member = await person();
+    const wear = (frame: "teal" | "flow" | "sprout" | "gilt" | null, who = member.who) =>
+      api.me.$patch({ json: { frame } }, who);
+    expect((await wear("teal")).status).toBe(200);
+    for (const locked of ["flow", "sprout", "gilt"] as const) {
+      expect((await wear(locked)).status).toBe(403);
+    }
+    const give = async (slug: string) => {
+      const badge = await db
+        .insertInto("badges")
+        .values({
+          slug,
+          name: `测试${slug}`,
+          description: "",
+          tier: slug === "seed" ? "silver" : "gold",
+          grouping: "limited",
+          position: 0,
+        })
+        .onConflict((oc) => oc.column("slug").doUpdateSet({ position: 0 }))
+        .returning("id")
+        .executeTakeFirstOrThrow();
+      await db
+        .insertInto("user_badges")
+        .values({ user_id: member.id, badge_id: badge.id })
+        .execute();
+    };
+    await give("seed");
+    expect((await wear("sprout")).status).toBe(200);
+    await give("great_reply");
+    expect((await wear("gilt")).status).toBe(200);
+
+    const threadId = await thread(member.who);
+    const floors = await api.threads[":id"].posts.$get({
+      param: { id: String(threadId) },
+      query: {},
+    });
+    if (!floors.ok) throw new Error(`status ${floors.status}`);
+    expect((await floors.json()).items[0].author).toMatchObject({ frame: "gilt" });
+
+    const moderator = as(await login((await createUser("moderator", 0)).id));
+    expect((await wear("flow", moderator)).status).toBe(200);
+    expect((await wear("sprout", moderator)).status).toBe(403);
+  });
+
   test("版主能清除别人的状态和展柜，要写理由；普通成员不能", async () => {
     const member = await person();
     const moderator = as(await login((await createUser("moderator")).id));

@@ -24,6 +24,7 @@ import { BOT_NAME } from "../../server/platform/site.ts";
 import {
   BackgroundField,
   DEFAULT_STATUS_EMOJI,
+  FrameField,
   PinsField,
   ShowcaseField,
   ShownBadgesField,
@@ -31,7 +32,7 @@ import {
   ThemeField,
 } from "./settings-customize.tsx";
 import { endOfDay, unixNow } from "~/time";
-import { BACKGROUNDS, THEMES } from "../../server/modules/users/customization.ts";
+import { BACKGROUNDS, FRAMES, THEMES } from "../../server/modules/users/customization.ts";
 
 export function meta() {
   return [{ title: pageTitle("设置") }];
@@ -87,6 +88,7 @@ export async function action({ request, context }: Route.ActionArgs) {
       title_badge_id: field("title_badge_id") ? Number(field("title_badge_id")) : null,
       shown_badge_ids: field("shown_badges") === "auto" ? null : ids(field("shown_badges")),
       theme: THEMES.find((t) => t === field("theme")) ?? null,
+      frame: FRAMES.find((f) => f === field("frame")) ?? null,
       // Their own picture is already saved, by the upload.
       ...(field("background") !== "custom" && {
         background: BACKGROUNDS.find((key) => key === field("background")) ?? null,
@@ -215,6 +217,9 @@ export default function Settings({ loaderData, actionData }: Route.ComponentProp
                 urls={settings.background_urls}
                 unlocked={settings.unlocked}
               />
+              {me && (
+                <FrameField frame={settings.frame} unlocked={settings.unlocked.frames} me={me} />
+              )}
               <ThemeField theme={settings.theme} />
               <ShownBadgesField badges={settings.badges} shown={settings.shown_badge_ids} />
               {me && <PinsField pins={settings.pins} userId={me.id} />}

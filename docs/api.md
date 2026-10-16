@@ -41,9 +41,9 @@
 
 // 徽章（总体设计 §8.8）。tier：bronze 铜、silver 银、gold 金；grouping：start 入门、likes 获赞、answers 回答、
 // persistence 坚持、limited 绝版；multiple 能不能得多次；manual 是不是管理员手动授予的活动徽章；
-// granted_count 有几个人得到；列表和详情里登录用户还带 granted（自己得到了几次，没有为 0）
+// granted_count 有几个人得到；frame 是活动徽章配的活动框（总体设计 §8.16），没有为 null；列表和详情里登录用户还带 granted（自己得到了几次，没有为 0）
 { "id": 12, "name": "指导顾问", "description": "回复被采纳 10 次", "tier": "silver", "grouping": "answers",
-  "multiple": false, "manual": false, "granted_count": 8, "granted": 1 }
+  "multiple": false, "manual": false, "frame": null, "granted_count": 8, "granted": 1 }
 
 // 匿名写的人（总体设计 §8.12）：帖子、楼层、短评、通知和事件里的 author、user、actor 都可能是这个样子，
 // number 是这个人在这个帖子里的编号，楼主匿名时是 1 号；没有 id、头像和 QQ 号
