@@ -6,7 +6,7 @@ import { db } from "../../platform/db.ts";
 import { env } from "../../platform/env.ts";
 import { AppError } from "../../platform/errors.ts";
 import { queueMail, unsubscribeUrl } from "../../platform/mail.ts";
-import { INK, mailButton, mailPage, MUTED, optOut, TEAL } from "../../platform/mail-page.ts";
+import { mailButton, mailPage, MUTED, optOut, TEAL } from "../../platform/mail-page.ts";
 import { excerpt } from "../../platform/markdown.ts";
 import { getSettings, type EmailPolicy, type Settings } from "../../platform/settings.ts";
 import { levelName, SITE_NAME } from "../../platform/site.ts";
@@ -98,16 +98,24 @@ const SAID: Record<Notice["type"], string> = {
   moderation: "处理了你的内容",
 };
 
-// What a moderator did, for moderation notices.
+// What a moderator did, for moderation notices, and what comes of it for the author.
 const MODERATED: Record<string, string> = {
   approve: "通过了你的内容",
   reject: "未通过你的内容",
   hide: "隐藏了你的内容",
   unhide: "恢复了你的内容",
 };
+const NOT_SHOWN = "现在别人看不到它。对处理有疑问，可以在群里找版主。";
+const MODERATED_AFTER: Record<string, string> = {
+  approve: "现在大家都能看到它了。",
+  reject: NOT_SHOWN,
+  hide: NOT_SHOWN,
+  unhide: "现在大家又能看到它了。",
+};
 
-// Characters of the floor in an email.
+// Characters of the floor in an email, and of the floor it replied to.
 const MAIL_EXCERPT = 200;
+const CONTEXT_EXCERPT = 60;
 
 // Emails go to the QQ mailbox that comes with every QQ number, so they reach members who never
 // logged in here too: someone whose question was brought over from a group learns of the answers.
@@ -115,46 +123,43 @@ function mailbox(qq: number) {
   return `${qq}@qq.com`;
 }
 
-// A reminder by email (design §8.6): what happened, the floor in a quote, a line of small print
-// (where it was), and a button to it; under the card, why it came and the link that stops this
-// type.
+// What a reminder says under what happened, in order: a title, a floor quoted, a line of small
+// print, a sentence.
+type Block = { kind: "title" | "quote" | "small" | "text"; text: string };
+
+const BLOCK_STYLES: Record<Block["kind"], string> = {
+  title: "margin:12px 0 0;font-size:19px;font-weight:600;",
+  quote: `margin:12px 0 0;padding:8px 12px;border-left:3px solid ${TEAL};background:#f6f3ee;`,
+  small: `margin:8px 0 0;font-size:13px;color:${MUTED};`,
+  text: "margin:12px 0 0;",
+};
+
+// A reminder by email (design §8.6): what happened, then its blocks, and a button to it; under
+// the card, why it came and the link that stops this type. Inboxes preview the floor quoted, or
+// the first sentence.
 async function reminder(
   person: { id: number; qq: number },
   type: NotificationType,
   mail: {
     subject: string;
     said: string;
-    quote?: string;
-    note?: string;
+    blocks: (Block | false)[];
     button: string;
     url: string;
   },
 ) {
   const unsubscribe = unsubscribeUrl(person.id, type);
   const footer = optOut(`「${NOTIFICATION_LABELS[type]}」的邮件提醒`, unsubscribe);
+  const blocks = mail.blocks.filter((b) => b !== false);
   const card = html`<p style="margin:0;font-size:17px;font-weight:600;">${mail.said}</p>
-    ${
-      mail.quote
-        ? html`<p
-            style="margin:12px 0 0;padding:8px 12px;border-left:3px solid ${TEAL};background:#f6f3ee;color:${INK};"
-          >
-            ${mail.quote}
-          </p>`
-        : ""
-    }
-    ${
-      mail.note
-        ? html`<p style="margin:8px 0 0;font-size:13px;color:${MUTED};">${mail.note}</p>`
-        : ""
-    }
+    ${blocks.map((b) => html`<p style="${BLOCK_STYLES[b.kind]}">${b.text}</p>`)}
     ${mailButton(mail.button, mail.url)}`;
+  const preview = blocks.find((b) => b.kind === "quote" || b.kind === "text")?.text ?? mail.said;
   return {
     address: mailbox(person.qq),
     subject: mail.subject,
-    body: [mail.said, mail.quote, mail.note, mail.url, footer.text]
-      .filter((line) => line)
-      .join("\n\n"),
-    html: await mailPage(mail.quote || mail.note || mail.said, card, footer.html),
+    body: [mail.said, ...blocks.map((b) => b.text), mail.url, footer.text].join("\n\n"),
+    html: await mailPage(preview, card, footer.html),
     unsubscribe,
   };
 }
@@ -219,33 +224,142 @@ async function notify(trx: Transaction<DB>, userIds: number[], notice: Notice) {
   if (byEmail.length > 0) await remindByEmail(trx, byEmail, notice);
 }
 
+// The floor a notice is about, its thread and who did it, with the numbers its email tells.
+function aboutFloor(trx: Transaction<DB>, notice: Notice) {
+  return trx
+    .selectFrom("posts")
+    .innerJoin("threads", "threads.id", "posts.thread_id")
+    .innerJoin("boards", "boards.id", "threads.board_id")
+    .innerJoin("users", (join) => join.on("users.id", "=", notice.actorId))
+    .leftJoin("posts as parent", "parent.id", "posts.reply_to_id")
+    .select([
+      "posts.floor",
+      "posts.html",
+      "posts.like_count",
+      "posts.boost_count",
+      "parent.floor as parent_floor",
+      "parent.html as parent_html",
+      "threads.title",
+      "threads.reply_count",
+      "threads.view_count",
+      "boards.name as board",
+      sql<string[]>`ARRAY(SELECT tags.name FROM thread_tags
+        JOIN tags ON tags.id = thread_tags.tag_id
+        WHERE thread_tags.thread_id = threads.id ORDER BY tags.id)`.as("tags"),
+      sql<number>`(SELECT count(DISTINCT p.author_id)::integer FROM posts p
+        WHERE p.thread_id = threads.id AND p.status = 'visible' AND p.deleted_at IS NULL)`.as(
+        "participants",
+      ),
+      "users.display_name as actor_name",
+      "users.level as actor_level",
+      "users.thread_count as actor_threads",
+      "users.people_reached as actor_reached",
+      sql<number>`(SELECT count(*)::integer FROM posts p WHERE p.author_id = users.id
+        AND p.accepted_at IS NOT NULL AND p.deleted_at IS NULL AND NOT p.anonymous)`.as(
+        "actor_accepted",
+      ),
+    ])
+    .where("posts.id", "=", notice.postId)
+    .executeTakeFirstOrThrow();
+}
+
+function small(parts: (string | false)[]): Block {
+  return { kind: "small", text: parts.filter((p) => p !== false).join(" · ") };
+}
+
+// What each kind of floor notice tells besides the floor (design §8.6): a new floor, the thread's
+// numbers; a new thread, its board and author; a like or a boost, the floor's numbers.
 async function remindByEmail(
   trx: Transaction<DB>,
   people: { id: number; qq: number }[],
   notice: Notice,
 ) {
-  const about = await trx
-    .selectFrom("posts")
-    .innerJoin("threads", "threads.id", "posts.thread_id")
-    .innerJoin("users", (join) => join.on("users.id", "=", notice.actorId))
-    .select(["posts.floor", "posts.html", "threads.title", "users.display_name as actor_name"])
-    .where("posts.id", "=", notice.postId)
-    .executeTakeFirstOrThrow();
+  const about = await aboutFloor(trx, notice);
   const url = `${env.PUBLIC_URL}/t/${notice.threadId}${about.floor > 1 ? `?floor=${about.floor}` : ""}`;
-  const said =
-    notice.type === "moderation" ? MODERATED[notice.data?.action ?? ""] : SAID[notice.type];
-  const reason = notice.data?.reason ? `（${notice.data.reason}）` : "";
   const actor =
     notice.actorAlias === null ? about.actor_name : anonymousBrief(notice.actorAlias).display_name;
-  const mail = {
-    subject: `${actor} ${said}：${about.title}`,
-    said: `${actor} ${said}${reason}`,
-    quote: excerpt(about.html, MAIL_EXCERPT),
-    note: about.floor > 1 ? `${about.title} #${about.floor}` : about.title,
-    button: "查看",
-    url,
-  };
-  await queueMail(trx, await Promise.all(people.map((p) => reminder(p, notice.type, mail))));
+  // Their name and level, ready for what they did to follow.
+  const who =
+    notice.actorAlias === null && notice.type !== "moderation"
+      ? `${actor}（${levelName(about.actor_level)}）`
+      : `${actor} `;
+  const where = about.floor > 1 ? `${about.title} #${about.floor}` : about.title;
+  const quote: Block = { kind: "quote", text: excerpt(about.html, MAIL_EXCERPT) };
+  const floorNumbers = small([
+    where,
+    about.like_count > 0 && `${about.like_count} 个赞`,
+    about.boost_count > 0 && `${about.boost_count} 条短评`,
+  ]);
+  const verb =
+    notice.type === "moderation" ? MODERATED[notice.data?.action ?? ""] : SAID[notice.type];
+  let mail: { said: string; blocks: (Block | false)[]; button: string };
+  switch (notice.type) {
+    case "following": {
+      const did = [
+        `发过 ${about.actor_threads} 个帖子`,
+        about.actor_accepted > 0 && `回答被采纳 ${about.actor_accepted} 次`,
+        about.actor_reached > 0 && `帮到过 ${about.actor_reached} 位群友`,
+      ].filter((d) => d !== false);
+      mail = {
+        said: `你关注的 ${who}发了新帖`,
+        blocks: [
+          { kind: "title", text: about.title },
+          small([about.board, ...about.tags]),
+          quote,
+          { kind: "small", text: `TA 在${SITE_NAME}${did.join("，")}。` },
+        ],
+        button: "去看看",
+      };
+      break;
+    }
+    case "like":
+    case "boost":
+      mail = {
+        said: `${who}${verb}${notice.type === "boost" ? `：「${notice.data?.body}」` : ""}`,
+        blocks: [quote, floorNumbers],
+        button: "查看",
+      };
+      break;
+    case "solved":
+      mail = { said: `${who}${verb}`, blocks: [quote, small([where])], button: "查看" };
+      break;
+    case "moderation":
+      mail = {
+        said: `${actor} ${verb}${notice.data?.reason ? `（${notice.data.reason}）` : ""}`,
+        blocks: [
+          quote,
+          small([where]),
+          { kind: "text", text: MODERATED_AFTER[notice.data?.action ?? ""] },
+        ],
+        button: "查看",
+      };
+      break;
+    case "reply":
+    case "mention":
+    case "thread_reply":
+    case "watching":
+      mail = {
+        said: `${who}${verb}`,
+        blocks: [
+          quote,
+          notice.type === "reply" &&
+            about.parent_floor !== null &&
+            about.parent_html !== null && {
+              kind: "small",
+              text: `回复的是${about.parent_floor === 1 ? "你的主楼" : `你在 #${about.parent_floor} 说的`}：${excerpt(about.parent_html, CONTEXT_EXCERPT)}`,
+            },
+          small([
+            where,
+            about.reply_count > 0 && `${about.reply_count} 条回复`,
+            about.participants > 1 && `${about.participants} 人参与`,
+            about.view_count > 0 && `浏览 ${about.view_count}`,
+          ]),
+        ],
+        button: "去回复",
+      };
+  }
+  const full = { ...mail, subject: `${actor} ${verb}：${about.title}`, url };
+  await queueMail(trx, await Promise.all(people.map((p) => reminder(p, notice.type, full))));
 }
 
 // Going up a level, automatically or from an admin (design §6.6); going down is not told, nor
@@ -273,6 +387,7 @@ export async function notifyLevel(trx: Transaction<DB>, userId: number, level: n
       await reminder(person, type, {
         subject: said,
         said,
+        blocks: [],
         button: "去我的主页",
         url: `${env.PUBLIC_URL}/u/${userId}`,
       }),
@@ -328,7 +443,13 @@ export async function notifyLottery(
     if (!p?.email || (t.result !== "won" && t.result !== "drawn")) continue;
     const said = t.result === "won" ? `你中奖了：${t.prize}` : "你发起的抽奖已开奖";
     mails.push(
-      await reminder(p, type, { subject: said, said, note: thread.title, button: "查看抽奖", url }),
+      await reminder(p, type, {
+        subject: said,
+        said,
+        blocks: [small([thread.title])],
+        button: "查看抽奖",
+        url,
+      }),
     );
   }
   await queueMail(trx, mails);
@@ -390,7 +511,7 @@ export async function notifyBadges(
   const mail = {
     subject: said,
     said,
-    note: badge.description,
+    blocks: [small([badge.description])],
     button: "查看徽章",
     url: `${env.PUBLIC_URL}/badges/${badge.id}`,
   };
