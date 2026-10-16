@@ -199,16 +199,19 @@ function Row({ item: n, now }: { item: Item; now: number }) {
         !n.read && "bg-brand/[0.06]",
       )}
     >
-      <span className="relative shrink-0 self-start">
-        {n.actor ? (
+      {/* Levels, lotteries and badges have nobody behind them, so their icon takes the avatar's place. */}
+      {n.actor ? (
+        <span className="relative shrink-0 self-start">
           <UserAvatar user={n.actor} thread={n.thread?.id} className="size-9" />
-        ) : (
-          <span className="block size-9 rounded-full bg-muted" />
-        )}
-        <span className="absolute -right-1 -bottom-1 flex size-5 items-center justify-center rounded-full bg-background text-muted-foreground ring-1 ring-border">
-          <Icon className="size-3" />
+          <span className="absolute -right-1 -bottom-1 flex size-5 items-center justify-center rounded-full bg-background text-muted-foreground ring-1 ring-border">
+            <Icon className="size-3" />
+          </span>
         </span>
-      </span>
+      ) : (
+        <span className="flex size-9 shrink-0 items-center justify-center self-start rounded-full bg-brand/15 text-brand-strong">
+          <Icon className="size-4.5" />
+        </span>
+      )}
       <div className="min-w-0 flex-1">
         <Link
           to={to}
