@@ -472,21 +472,21 @@
   margin-block: 1.5em;
 }
 /* Images sit in the line, so a paragraph of them shows side by side; their size on the page was
-   worked out when the post was written. */
+   worked out when the post was written. A paragraph of only images is centered. */
 .prose :where(img) {
   display: inline-block;
   margin: 0.15em 0;
   border-radius: 0.4rem;
   vertical-align: bottom;
 }
-/* A table too wide for the column scrolls sideways. Cells keep a few characters' width besides
-   their padding, since Chinese may break after any one of them and a squeezed column runs one or
-   two characters a line. The table is a card of the page's color, so in a tinted callout the
-   scroll covers, which must be opaque, match what they cover. */
-.prose :where(table) {
-  display: block;
-  width: max-content;
-  max-width: 100%;
+.prose :where(p.images) {
+  text-align: center;
+}
+/* A table fills the column, and one too wide for it scrolls sideways in its box. Cells keep a few
+   characters' width besides their padding, since Chinese may break after any one of them and a
+   squeezed column runs one or two characters a line. The box is a card of the page's color, so in
+   a tinted callout the scroll covers, which must be opaque, match what they cover. */
+.prose :where(.table-scroll) {
   overflow-x: auto;
   margin: 0.8em 0;
   border: 1px solid var(--border);
@@ -511,6 +511,10 @@
       )
       right / 0.7em 100% no-repeat scroll,
     var(--background);
+}
+.prose :where(table) {
+  width: 100%;
+  margin: 0;
 }
 .prose :where(thead) {
   border-bottom: 1px solid var(--border);

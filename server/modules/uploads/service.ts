@@ -12,11 +12,11 @@ import type { ShownImage } from "../../platform/markdown.ts";
 // -960.webp beside it for still images. The name never changes, so they can be cached for good.
 export const UPLOADS_DIR = "data/uploads";
 
-// How large an image appears in a post at most, so it sits among the text rather than taking over
-// the screen: a phone screenshot at full width would fill a few. Pages narrow it further to fit;
-// a tap opens the large one.
-const SHOWN_WIDTH = 600;
-const SHOWN_HEIGHT = 300;
+// How large an image appears in a post at most: a wide screenshot takes about 80% of the column on
+// a computer, while one from a phone at full width would fill a few screens. Pages narrow it
+// further to fit; a tap opens the large one.
+const SHOWN_WIDTH = 560;
+const SHOWN_HEIGHT = 350;
 
 const NAME = /^\/uploads\/[0-9a-f]{2}\/([0-9a-f]{64})\.webp$/;
 
