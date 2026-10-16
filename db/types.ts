@@ -190,10 +190,11 @@ export interface MailQueue {
   attempts: Generated<number>;
   body: string;
   created_at: Generated<Timestamp>;
-  html: string | null;
+  html: string;
   id: Generated<number>;
   next_at: Generated<Timestamp>;
   subject: string;
+  unsubscribe: string | null;
 }
 
 export interface Notifications {

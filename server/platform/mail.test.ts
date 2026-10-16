@@ -22,6 +22,9 @@ vi.mock("nodemailer", () => ({
   }),
 }));
 
+// Queued mails go a second or two apart; not here.
+vi.mock("node:timers/promises", () => ({ setTimeout: async () => {} }));
+
 // As nodemailer reports them.
 const loginFailed = () =>
   Object.assign(new Error("Invalid login: 535 Login fail"), { code: "EAUTH", command: "AUTH" });
@@ -53,7 +56,7 @@ async function queue(...addresses: string[]) {
   await db.transaction().execute((trx) =>
     queueMail(
       trx,
-      addresses.map((address) => ({ address, subject: "提醒", body: "正文" })),
+      addresses.map((address) => ({ address, subject: "提醒", body: "正文", html: "<p>正文</p>" })),
     ),
   );
 }
@@ -66,8 +69,8 @@ describe("发信", () => {
   test("一个邮箱发不出去就换下一个，它歇着的时候不再试它", async () => {
     await mailboxes("a@qq.com", "b@qq.com");
     smtp.failures.set("a@qq.com", loginFailed());
-    await sendMail("1@qq.com", "验证码", "123456");
-    await sendMail("2@qq.com", "验证码", "654321");
+    await sendMail("1@qq.com", "验证码", "123456", "<p>123456</p>");
+    await sendMail("2@qq.com", "验证码", "654321", "<p>654321</p>");
     expect(smtp.tries).toEqual(["a@qq.com", "b@qq.com", "b@qq.com"]);
     expect(smtp.sent).toEqual(["b@qq.com → 1@qq.com", "b@qq.com → 2@qq.com"]);
   });
@@ -75,7 +78,7 @@ describe("发信", () => {
   test("哪个邮箱都发不出去时报错", async () => {
     await mailboxes("c@qq.com");
     smtp.failures.set("c@qq.com", loginFailed());
-    await expect(sendMail("1@qq.com", "验证码", "123456")).rejects.toMatchObject({
+    await expect(sendMail("1@qq.com", "验证码", "123456", "<p>123456</p>")).rejects.toMatchObject({
       code: "email_failed",
     });
   });
@@ -89,6 +92,7 @@ describe("发信", () => {
         address: "old@qq.com",
         subject: "提醒",
         body: "正文",
+        html: "<p>正文</p>",
         created_at: sql<Date>`now() - interval '25 hours'`,
       })
       .execute();
@@ -123,7 +127,7 @@ describe("发信", () => {
     const start = Date.now();
     const at = async (minutes: number) => {
       vi.spyOn(Date, "now").mockReturnValue(start + minutes * 60_000);
-      await sendMail("1@qq.com", "验证码", "123456").catch(() => {});
+      await sendMail("1@qq.com", "验证码", "123456", "<p>123456</p>").catch(() => {});
       return smtp.tries.splice(0).length;
     };
     // Rests 10 minutes, then 20, then 40.

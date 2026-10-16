@@ -118,8 +118,11 @@ export const app = new Hono<AppEnv>()
   .get("/avatars/:file{[0-9]+\\.webp}", serveAvatar)
   .get("/robots.txt", (c) => c.text(ROBOTS, 200, { "cache-control": "public, max-age=86400" }))
   .get("/sitemap.xml", serveSitemap)
-  // A cross-site page can make the browser send our cookie, but not a bearer token.
-  .use((c, next) => (bearerToken(c) ? next() : checkOrigin(c, next)))
+  // A cross-site page can make the browser send our cookie, but not a bearer token. Mail apps
+  // post to unsubscribe links without an Origin; the signature in the link is what counts there.
+  .use((c, next) =>
+    bearerToken(c) || c.req.path === "/unsubscribe" ? next() : checkOrigin(c, next),
+  )
   .use(authenticate)
   .use("/api/v1/*", requestBody, idempotency)
   .get("/healthz", async (c) => {

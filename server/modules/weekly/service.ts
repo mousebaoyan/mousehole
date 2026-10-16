@@ -1,7 +1,7 @@
 import { sql } from "kysely";
 import { db } from "../../platform/db.ts";
 import { env } from "../../platform/env.ts";
-import { queueMail } from "../../platform/mail.ts";
+import { queueMail, unsubscribeUrl } from "../../platform/mail.ts";
 import { getSettings } from "../../platform/settings.ts";
 import { letterHtml, letterText, subjectOf } from "./letter.ts";
 
@@ -125,13 +125,14 @@ export async function sendWeeklyLetters(now = new Date()) {
           })),
         peopleReached: p.people_reached,
         profileUrl: `${env.PUBLIC_URL}/u/${p.id}`,
-        settingsUrl: `${env.PUBLIC_URL}/settings`,
+        unsubscribe: unsubscribeUrl(p.id, "weekly"),
       };
       return {
         address: `${p.qq}@qq.com`,
         subject: subjectOf(week),
         body: letterText(week),
         html: await letterHtml(week),
+        unsubscribe: week.unsubscribe,
       };
     }),
   );

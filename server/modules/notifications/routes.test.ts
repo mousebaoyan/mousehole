@@ -304,3 +304,41 @@ describe("邮件", () => {
     expect(await mails()).toEqual([]);
   });
 });
+
+describe("退订", () => {
+  beforeEach(async () => {
+    await clear(author, replier);
+    await mails();
+  });
+
+  test("邮件里的退订链接不用登录，只关掉这个人的这一类邮件；改了类型或用户就无效", async () => {
+    const t = await thread(author.who);
+    await reply(replier.who, t.id, "回复主楼", t.opening);
+    const mail = await db.selectFrom("mail_queue").select("unsubscribe").executeTakeFirstOrThrow();
+    await mails();
+    const link = new URL(mail.unsubscribe ?? "");
+    const signed = {
+      user_id: Number(link.searchParams.get("u")),
+      kind: "reply" as const,
+      sig: link.searchParams.get("s") ?? "",
+    };
+    expect(signed.user_id).toBe(author.id);
+    expect(link.searchParams.get("k")).toBe("reply");
+
+    const unsubscribe = (json: { user_id: number; kind: "reply" | "mention"; sig: string }) =>
+      api.mail.unsubscribe.$post({ json });
+    expect((await unsubscribe({ ...signed, kind: "mention" })).status).toBe(400);
+    expect((await unsubscribe({ ...signed, user_id: replier.id })).status).toBe(400);
+    expect((await unsubscribe(signed)).status).toBe(204);
+
+    await reply(replier.who, t.id, "再回复一次", t.opening);
+    await reply(replier.who, t.id, `[@楼主](/u/${author.id}) 看看这个`);
+    const { qq } = await db
+      .selectFrom("users")
+      .select("qq")
+      .where("id", "=", author.id)
+      .executeTakeFirstOrThrow();
+    expect(await mails()).toEqual([`${qq}@qq.com 鼠鼠 提到了你：等通知的帖子`]);
+    await api.me.$patch({ json: { notify_prefs: { reply: { email: true } } } }, author.who);
+  });
+});

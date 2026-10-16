@@ -141,7 +141,7 @@ describe("每周来信", () => {
       top: [{ title: "<script>", floor: 2, likes: 5, url: "https://example.com/t/1?floor=2" }],
       peopleReached: 1,
       profileUrl: "https://example.com/u/1",
-      settingsUrl: "https://example.com/settings",
+      unsubscribe: "https://example.com/unsubscribe?u=1&k=weekly&s=x",
     });
     expect(html).not.toContain("<b>鼠鼠");
     expect(html).not.toContain("<script>");

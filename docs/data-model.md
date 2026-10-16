@@ -91,7 +91,7 @@
 - 一条新楼层只给每人一条通知，按先后取第一个适用的：被回复的那一层的作者（`reply`）；@到的人（`mention`）；没指定楼层时是楼主（`thread_reply`）；关注这个帖子的人（`watching`）。新帖通知 @到的人和作者的粉丝（`following`）。从群里收录来的帖子和楼层（`via` 为 `qq`）不产生通知。
 - 合并通知：`like:{楼层 ID}`、`boost:{楼层 ID}`、`thread_reply:{帖子 ID}`、`watching:{帖子 ID}` 是 `group_key`，未读期间再次触发只更新触发者、次数、`data` 和时间，不新增行；`post_id` 留着第一次的，点进去从最早没看的那层开始。
 - 不通知：自己做的事、冻结的账号、把这个帖子设为 `muted` 的人、在 `users.notify_prefs` 里关掉了这类站内通知的人。`notify_prefs` 形如 `{ "like": { "site": false, "email": true } }`，站内通知没写的按开着算，邮件没写的按站长设的默认值（`settings` 的 `notify`，形如 `{ "email": { "thread_reply": "on", "like": "never" } }`，没写的类型用代码里的默认）；站长设为 `never` 的类型不管怎么写都不发邮件。`users.notify_email` 是邮件提醒的总开关，关掉时哪类都不发邮件，`notify_prefs` 里的设置留着。
-- 要发的邮件（`mail_queue`：收件地址、标题、正文）和通知在同一个事务里写入，并 `NOTIFY mousehole_mail`；事务提交后，进程按 `id` 顺序取出到了 `next_at` 的来发，发出去就删掉。发不出去的 `attempts` 加一，`next_at` 往后推（[总体设计 §8.6](design.md#86-通知与实时)），试满 5 次的删掉；每分钟再取一次，放了一天的删掉不发。
+- 要发的邮件（`mail_queue`：收件地址、标题、纯文本正文 `body`、HTML 正文 `html`，提醒和每周来信还有退订链接 `unsubscribe`，也作为 `List-Unsubscribe` 邮件头发出）和通知在同一个事务里写入，并 `NOTIFY mousehole_mail`；事务提交后，进程按 `id` 顺序取出到了 `next_at` 的来发，发出去就删掉。发不出去的 `attempts` 加一，`next_at` 往后推（[总体设计 §8.6](design.md#86-通知与实时)），试满 5 次的删掉；每分钟再取一次，放了一天的删掉不发。
 - 已读超过 180 天的通知每天清理。
 
 - 阅读记录（[总体设计 §8.9](design.md#89-阅读记录)）存在 `thread_users`：`read_floors` 是读过的楼层（`int4multirange`），上报时 `read_floors + 新区间` 并进去，相邻的区间自动合并；`last_read_at` 是最后一次上报的时间。列表里的 `last_read_floor` 取 `upper(read_floors) - 1`。
@@ -109,7 +109,7 @@
 - 头衔：`users.title_badge_id`，只能是自己得到的金徽章或银徽章，为 `NULL` 时显示 QQ 的专属头衔。撤销了这枚徽章时一并清空。
 - 被读（[总体设计 §8.15](design.md#815-影响力每周邮件和周榜)）：阅读上报时已经算出新读的楼层（并入前后区间集合之差），在同一个事务里按作者分组，不算自己的、匿名的、不公开的楼层，给每个作者的 `users.reads_received` 加上次数，并累加到 `user_reads`（每人每天一行，按北京时间）。`user_reads` 用来算最近 7 天和每周邮件，超过 35 天的每天清理。
 - 帮到的人：`users.people_reached` 是读过这个人至少一层的人数，每小时给今天有 `user_reads` 的人重算：按 `thread_users_thread` 取出他发过楼层的帖子的读者，`read_floors @> floor` 的去重计数。
-- 每周来信每小时看一次到没到时间（周一 9 点），`job_runs` 的 `weekly_letters` 记这周发过了；`users.weekly_email` 是成员自己的开关。信是 HTML，`mail_queue.html` 存着，`body` 是给不显示 HTML 的邮件客户端的纯文本。
+- 每周来信每小时看一次到没到时间（周一 9 点），`job_runs` 的 `weekly_letters` 记这周发过了；`users.weekly_email` 是成员自己的开关。
 - 每周来信和周榜现算，每周各一次：赞看 `reactions.created_at`，采纳看 `posts.accepted_at`，新帖新回复看 `created_at`，被读看 `user_reads`，读帖子的人数看 `thread_users.last_read_at` 落在这一周里的行，徽章看 `user_badges.granted_at`。
 
 ## 图片

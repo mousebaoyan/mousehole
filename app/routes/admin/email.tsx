@@ -9,7 +9,10 @@ import type { Route } from "./+types/email.ts";
 import { Check, Field, readForm, Result, Section } from "~/components/form-parts";
 import { Select } from "~/components/ui/select";
 import { SettingsForm } from "~/components/settings-form";
-import { NOTIFICATION_TYPES } from "~/notification-types";
+import {
+  NOTIFICATION_LABELS,
+  NOTIFICATION_TYPES,
+} from "../../../server/modules/notifications/types.ts";
 
 export function meta() {
   return [{ title: pageTitle("邮件", "管理后台") }];
@@ -44,7 +47,7 @@ export async function action({ request, context }: Route.ActionArgs) {
   }
   if (field("intent") === "notify") {
     const email = Object.fromEntries(
-      NOTIFICATION_TYPES.map(({ type }) => [
+      NOTIFICATION_TYPES.map((type) => [
         type,
         POLICIES.find((p) => p.value === field(`email.${type}`))?.value,
       ]),
@@ -120,14 +123,14 @@ export default function Email({ loaderData, actionData }: Route.ComponentProps) 
           description="设置每类通知是否发送邮件。成员未修改过的开关使用这里的默认值；选择「不发送」后，成员也不能自行开启"
         >
           <ul className="divide-y text-sm">
-            {NOTIFICATION_TYPES.map(({ type, label }) => (
+            {NOTIFICATION_TYPES.map((type) => (
               <li key={type} className="flex items-center gap-3 py-1.5">
-                <span className="flex-1">{label}</span>
+                <span className="flex-1">{NOTIFICATION_LABELS[type]}</span>
                 <Select
                   name={`email.${type}`}
                   defaultValue={loaderData.policies[type]}
                   options={POLICIES}
-                  aria-label={`${label}的邮件`}
+                  aria-label={`${NOTIFICATION_LABELS[type]}的邮件`}
                   className="w-32"
                 />
               </li>

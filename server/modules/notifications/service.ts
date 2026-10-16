@@ -1,36 +1,19 @@
 import { EventEmitter } from "node:events";
+import { html } from "hono/html";
 import { sql, type Kysely, type NotNull, type Transaction } from "kysely";
 import type { DB } from "../../../db/types.ts";
 import { db } from "../../platform/db.ts";
 import { env } from "../../platform/env.ts";
 import { AppError } from "../../platform/errors.ts";
-import { queueMail } from "../../platform/mail.ts";
+import { queueMail, unsubscribeUrl } from "../../platform/mail.ts";
+import { INK, mailButton, mailPage, MUTED, optOut, TEAL } from "../../platform/mail-page.ts";
 import { excerpt } from "../../platform/markdown.ts";
 import { getSettings, type EmailPolicy, type Settings } from "../../platform/settings.ts";
 import { levelName, SITE_NAME } from "../../platform/site.ts";
 import { anonymousBrief, userBriefs, writer } from "../users/service.ts";
+import { NOTIFICATION_LABELS, NOTIFICATION_TYPES, type NotificationType } from "./types.ts";
 
-// What people are told of; see design §8.6. reply: someone replied to my floor; thread_reply: to
-// my thread without naming a floor; mention: @ me; like and boost: on my floor; watching: a new
-// floor in a thread I watch; following: a new thread by someone I follow; solved: my answer was
-// accepted; moderation: something of mine was approved, rejected, hidden or shown again; level: I
-// went up a level; lottery: one I entered or started was drawn or called off; badge: I earned a
-// badge.
-export const NOTIFICATION_TYPES = [
-  "reply",
-  "thread_reply",
-  "mention",
-  "like",
-  "boost",
-  "watching",
-  "following",
-  "solved",
-  "moderation",
-  "level",
-  "lottery",
-  "badge",
-] as const;
-export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
+export { NOTIFICATION_TYPES };
 
 // While unread, these become one per floor (likes, boosts) or per thread (new floors), counting
 // up, with the latest person in front: "A 等 3 人".
@@ -132,7 +115,49 @@ function mailbox(qq: number) {
   return `${qq}@qq.com`;
 }
 
-const MAIL_FOOTER = `\n\n——\n如不想再收到此类邮件，可在${SITE_NAME}的设置中关闭：${env.PUBLIC_URL}/settings`;
+// A reminder by email (design §8.6): what happened, the floor in a quote, a line of small print
+// (where it was), and a button to it; under the card, why it came and the link that stops this
+// type.
+async function reminder(
+  person: { id: number; qq: number },
+  type: NotificationType,
+  mail: {
+    subject: string;
+    said: string;
+    quote?: string;
+    note?: string;
+    button: string;
+    url: string;
+  },
+) {
+  const unsubscribe = unsubscribeUrl(person.id, type);
+  const footer = optOut(`「${NOTIFICATION_LABELS[type]}」的邮件提醒`, unsubscribe);
+  const card = html`<p style="margin:0;font-size:17px;font-weight:600;">${mail.said}</p>
+    ${
+      mail.quote
+        ? html`<p
+            style="margin:12px 0 0;padding:8px 12px;border-left:3px solid ${TEAL};background:#f6f3ee;color:${INK};"
+          >
+            ${mail.quote}
+          </p>`
+        : ""
+    }
+    ${
+      mail.note
+        ? html`<p style="margin:8px 0 0;font-size:13px;color:${MUTED};">${mail.note}</p>`
+        : ""
+    }
+    <p style="margin:20px 0 0;">${mailButton(mail.button, mail.url)}</p>`;
+  return {
+    address: mailbox(person.qq),
+    subject: mail.subject,
+    body: [mail.said, mail.quote, mail.note, mail.url, footer.text]
+      .filter((line) => line)
+      .join("\n\n"),
+    html: await mailPage(mail.quote || mail.note || mail.said, card, footer.html),
+    unsubscribe,
+  };
+}
 
 // Written in the transaction that caused it. Nobody hears of their own doing, nor anyone who left
 // the groups or muted the thread, nor the owner, who has no QQ and is in no group. Each type shows on the site and goes by email, as each person
@@ -194,7 +219,11 @@ async function notify(trx: Transaction<DB>, userIds: number[], notice: Notice) {
   if (byEmail.length > 0) await remindByEmail(trx, byEmail, notice);
 }
 
-async function remindByEmail(trx: Transaction<DB>, people: { qq: number }[], notice: Notice) {
+async function remindByEmail(
+  trx: Transaction<DB>,
+  people: { id: number; qq: number }[],
+  notice: Notice,
+) {
   const about = await trx
     .selectFrom("posts")
     .innerJoin("threads", "threads.id", "posts.thread_id")
@@ -208,14 +237,15 @@ async function remindByEmail(trx: Transaction<DB>, people: { qq: number }[], not
   const reason = notice.data?.reason ? `（${notice.data.reason}）` : "";
   const actor =
     notice.actorAlias === null ? about.actor_name : anonymousBrief(notice.actorAlias).display_name;
-  await queueMail(
-    trx,
-    people.map((p) => ({
-      address: mailbox(p.qq),
-      subject: `${actor} ${said}：${about.title}`,
-      body: `${actor} ${said}${reason}：\n${excerpt(about.html, MAIL_EXCERPT)}\n\n${about.title}\n${url}${MAIL_FOOTER}`,
-    })),
-  );
+  const mail = {
+    subject: `${actor} ${said}：${about.title}`,
+    said: `${actor} ${said}${reason}`,
+    quote: excerpt(about.html, MAIL_EXCERPT),
+    note: about.floor > 1 ? `${about.title} #${about.floor}` : about.title,
+    button: "查看",
+    url,
+  };
+  await queueMail(trx, await Promise.all(people.map((p) => reminder(p, notice.type, mail))));
 }
 
 // Going up a level, automatically or from an admin (design §6.6); going down is not told, nor
@@ -224,7 +254,7 @@ export async function notifyLevel(trx: Transaction<DB>, userId: number, level: n
   const type = "level";
   const person = await trx
     .selectFrom("users")
-    .select(["qq", ...(await switches(type))])
+    .select(["id", "qq", ...(await switches(type))])
     .where("id", "=", userId)
     .where("qq", "is not", null)
     .$narrowType<{ qq: NotNull }>()
@@ -240,11 +270,12 @@ export async function notifyLevel(trx: Transaction<DB>, userId: number, level: n
   if (person.email) {
     const said = `你在${SITE_NAME}已升级到 ${levelName(level)}`;
     await queueMail(trx, [
-      {
-        address: mailbox(person.qq),
+      await reminder(person, type, {
         subject: said,
-        body: `${said}\n${env.PUBLIC_URL}/u/${userId}${MAIL_FOOTER}`,
-      },
+        said,
+        button: "去我的主页",
+        url: `${env.PUBLIC_URL}/u/${userId}`,
+      }),
     ]);
   }
 }
@@ -296,11 +327,9 @@ export async function notifyLottery(
     const p = person.get(t.userId);
     if (!p?.email || (t.result !== "won" && t.result !== "drawn")) continue;
     const said = t.result === "won" ? `你中奖了：${t.prize}` : "你发起的抽奖已开奖";
-    mails.push({
-      address: mailbox(p.qq),
-      subject: said,
-      body: `${said}\n\n${thread.title}\n${url}${MAIL_FOOTER}`,
-    });
+    mails.push(
+      await reminder(p, type, { subject: said, said, note: thread.title, button: "查看抽奖", url }),
+    );
   }
   await queueMail(trx, mails);
 }
@@ -358,19 +387,21 @@ export async function notifyBadges(
     );
   }
   const said = `你在${SITE_NAME}得到了徽章「${badge.name}」`;
+  const mail = {
+    subject: said,
+    said,
+    note: badge.description,
+    button: "查看徽章",
+    url: `${env.PUBLIC_URL}/badges/${badge.id}`,
+  };
   await queueMail(
     trx,
-    granted.flatMap((g) => {
-      const p = person.get(g.user_id);
-      if (!p?.email) return [];
-      return [
-        {
-          address: mailbox(p.qq),
-          subject: said,
-          body: `${said}：${badge.description}\n${env.PUBLIC_URL}/badges/${badge.id}${MAIL_FOOTER}`,
-        },
-      ];
-    }),
+    await Promise.all(
+      granted.flatMap((g) => {
+        const p = person.get(g.user_id);
+        return p?.email ? [reminder(p, type, mail)] : [];
+      }),
+    ),
   );
 }
 

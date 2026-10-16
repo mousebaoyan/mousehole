@@ -16,7 +16,10 @@ import { UserAvatar } from "~/components/user-avatar";
 import { useMe } from "~/forum";
 import type { Route } from "./+types/settings.ts";
 import { Checkbox } from "~/components/ui/checkbox";
-import { NOTIFICATION_TYPES } from "~/notification-types";
+import {
+  NOTIFICATION_LABELS,
+  NOTIFICATION_TYPES,
+} from "../../server/modules/notifications/types.ts";
 import { BOT_NAME } from "../../server/platform/site.ts";
 
 export function meta() {
@@ -69,7 +72,7 @@ export async function action({ request, context }: Route.ActionArgs) {
       notify_email: on("notify_email"),
       weekly_email: on("weekly_email"),
       notify_prefs: Object.fromEntries(
-        NOTIFICATION_TYPES.map(({ type }) => {
+        NOTIFICATION_TYPES.map((type) => {
           const was = notify_prefs[type];
           const site = on(`${type}.site`);
           const email = on(`${type}.email`);
@@ -202,9 +205,9 @@ export default function Settings({ loaderData, actionData }: Route.ComponentProp
                 </tr>
               </thead>
               <tbody>
-                {NOTIFICATION_TYPES.map(({ type, label }) => (
+                {NOTIFICATION_TYPES.map((type) => (
                   <tr key={type} className="border-t">
-                    <td className="py-2">{label}</td>
+                    <td className="py-2">{NOTIFICATION_LABELS[type]}</td>
                     {(["site", "email"] as const).map((where) => {
                       const checked = settings.notify_prefs[type][where];
                       return (
@@ -214,14 +217,17 @@ export default function Settings({ loaderData, actionData }: Route.ComponentProp
                               title="站长关闭了这类邮件"
                               className="flex h-10 items-center justify-center text-muted-foreground"
                             >
-                              —<span className="sr-only">{label}：站长关闭了这类邮件</span>
+                              —
+                              <span className="sr-only">
+                                {NOTIFICATION_LABELS[type]}：站长关闭了这类邮件
+                              </span>
                             </span>
                           ) : (
                             /* The whole cell takes the tap, not just the 16px box. */
                             <label className="flex h-10 cursor-pointer items-center justify-center">
                               <Checkbox name={`${type}.${where}`} defaultChecked={checked} />
                               <span className="sr-only">
-                                {label}：{where === "site" ? "站内" : "邮件"}
+                                {NOTIFICATION_LABELS[type]}：{where === "site" ? "站内" : "邮件"}
                               </span>
                             </label>
                           )}

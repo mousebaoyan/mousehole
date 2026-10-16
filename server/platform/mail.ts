@@ -1,9 +1,13 @@
+import { createHmac, timingSafeEqual } from "node:crypto";
+import { setTimeout } from "node:timers/promises";
 import { sql, type Transaction } from "kysely";
 import { createTransport } from "nodemailer";
 import type { DB } from "../../db/types.ts";
 import { db } from "./db.ts";
+import { env } from "./env.ts";
 import { AppError } from "./errors.ts";
 import { log } from "./log.ts";
+import { mailPage } from "./mail-page.ts";
 import { getSettings, type SmtpAccount } from "./settings.ts";
 import { SITE_NAME } from "./site.ts";
 
@@ -15,10 +19,17 @@ const FIRST_REST_MS = 10 * 60_000;
 const MAX_REST_MS = 8 * 60 * 60_000;
 const resting = new Map<string, { until: number; failures: number }>();
 
-// A mail: plain text, and for letters an HTML version mail apps show instead.
-type Mail = { to: string; subject: string; text: string; html?: string | null };
+// A mail: plain text, the HTML version mail apps show instead, and for reminders and letters the
+// link that stops them.
+type Mail = {
+  to: string;
+  subject: string;
+  text: string;
+  html: string;
+  unsubscribe?: string | null;
+};
 
-function send(account: SmtpAccount, { to, subject, text, html }: Mail) {
+function send(account: SmtpAccount, { to, subject, text, html, unsubscribe }: Mail) {
   const transport = createTransport({
     host: account.host,
     port: account.port,
@@ -32,7 +43,13 @@ function send(account: SmtpAccount, { to, subject, text, html }: Mail) {
     to,
     subject,
     text,
-    ...(html && { html }),
+    html,
+    // RFC 8058: mail apps that show their own unsubscribe button post to the link, which the page
+    // there takes as pressing its button.
+    ...(unsubscribe && {
+      list: { unsubscribe },
+      headers: { "List-Unsubscribe-Post": "List-Unsubscribe=One-Click" },
+    }),
   });
 }
 
@@ -75,11 +92,11 @@ async function deliver(mail: Mail) {
 
 // Sends now, for whoever is waiting on it. Called after transactions commit: a slow mail server
 // must not hold database locks.
-export async function sendMail(to: string, subject: string, text: string) {
+export async function sendMail(to: string, subject: string, text: string, html: string) {
   if ((await getSettings()).smtp.accounts.length === 0) {
     throw new AppError(503, "email_not_configured", "尚未配置发信邮箱");
   }
-  if ((await deliver({ to, subject, text })) !== "sent") {
+  if ((await deliver({ to, subject, text, html })) !== "sent") {
     throw new AppError(502, "email_failed", "邮件发送失败，请稍后重试");
   }
 }
@@ -93,10 +110,12 @@ export async function testMailboxes(to: string) {
   const results = [];
   for (const account of smtp.accounts) {
     try {
+      const said = `${account.user} 可以正常发信。`;
       await send(account, {
         to,
         subject: `${SITE_NAME}测试邮件`,
-        text: `${account.user} 可以正常发信。`,
+        text: said,
+        html: await mailPage(said, said),
       });
       resting.delete(account.user);
       results.push({ user: account.user, error: null });
@@ -117,7 +136,7 @@ export const MAIL_CHANNEL = "mousehole_mail";
 // The NOTIFY reaches sendQueued only once the transaction commits.
 export async function queueMail(
   trx: Transaction<DB>,
-  mails: { address: string; subject: string; body: string; html?: string }[],
+  mails: { address: string; subject: string; body: string; html: string; unsubscribe?: string }[],
 ) {
   if (mails.length === 0) return;
   await trx.insertInto("mail_queue").values(mails).execute();
@@ -139,7 +158,8 @@ export function sendQueued() {
   return sending;
 }
 
-// Oldest due first, until no mailbox can send. A reminder a day late is no use any more.
+// Oldest due first, until no mailbox can send, a second or two apart so that a batch doesn't leave
+// all at once. A reminder a day late is no use any more.
 async function drain() {
   const stale = await db
     .deleteFrom("mail_queue")
@@ -149,10 +169,11 @@ async function drain() {
     log("warn", "Dropped mail unsent for a day", { count: Number(stale.numDeletedRows) });
   }
   if ((await getSettings()).smtp.accounts.length === 0) return;
-  for (;;) {
+  for (let first = true; ; first = false) {
+    if (!first) await setTimeout(1000 + Math.random() * 1000);
     const mail = await db
       .selectFrom("mail_queue")
-      .select(["id", "address", "subject", "body", "html", "attempts"])
+      .select(["id", "address", "subject", "body", "html", "unsubscribe", "attempts"])
       .where("next_at", "<=", sql<Date>`now()`)
       .orderBy("id")
       .limit(1)
@@ -163,6 +184,7 @@ async function drain() {
       subject: mail.subject,
       text: mail.body,
       html: mail.html,
+      unsubscribe: mail.unsubscribe,
     });
     if (outcome === "resting") return;
     const attempts = mail.attempts + 1;
@@ -180,4 +202,21 @@ async function drain() {
     if (outcome === "refused") log("warn", "Mail refused", { address: mail.address });
     await db.deleteFrom("mail_queue").where("id", "=", mail.id).execute();
   }
+}
+
+// ---- Unsubscribe links (design §8.6): signed, so they turn off one kind of mail without logging in.
+
+// What a link turns off: a notification type, or "weekly" for the weekly letters.
+function signature(userId: number, kind: string) {
+  return createHmac("sha256", env.APP_SECRET).update(`${userId}:${kind}`).digest("base64url");
+}
+
+export function unsubscribeUrl(userId: number, kind: string) {
+  return `${env.PUBLIC_URL}/unsubscribe?u=${userId}&k=${kind}&s=${signature(userId, kind)}`;
+}
+
+export function signedUnsubscribe(userId: number, kind: string, sig: string) {
+  const expected = Buffer.from(signature(userId, kind));
+  const given = Buffer.from(sig);
+  return given.length === expected.length && timingSafeEqual(given, expected);
 }
