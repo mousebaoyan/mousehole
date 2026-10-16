@@ -388,6 +388,7 @@ function Profile({
       {progress && <LevelProgress progress={progress} />}
 
       <section>
+        {/* Switching lists keeps the reader where they are, below the profile. */}
         <nav
           aria-label="TA 的内容和关系"
           className="-mx-1 mb-3 flex gap-1 overflow-x-auto px-2 [scrollbar-width:none]"
@@ -396,6 +397,7 @@ function Profile({
             <Link
               key={t.tab}
               to={t.tab === "threads" ? "." : `?tab=${t.tab}`}
+              preventScrollReset
               aria-current={t.tab === tab ? "page" : undefined}
               className={cn(
                 "shrink-0 rounded-full px-3.5 py-1.5 text-sm text-muted-foreground hover:text-foreground",
@@ -438,6 +440,7 @@ function Profile({
                 <Link
                   key={p.list}
                   to={`?tab=people&list=${p.list}`}
+                  preventScrollReset
                   aria-current={p.list === list ? "page" : undefined}
                   className="rounded-full border px-3 py-1 text-meta text-muted-foreground hover:text-foreground aria-[current]:border-foreground/30 aria-[current]:text-foreground"
                 >
