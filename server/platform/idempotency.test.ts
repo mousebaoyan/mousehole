@@ -22,6 +22,10 @@ const app = new Hono<AppEnv>()
     runs++;
     throw new Error("boom");
   })
+  .post("/limited", () => {
+    runs++;
+    throw new AppError(429, "rate_limited", "操作过于频繁");
+  })
   .onError(handleError);
 
 let token = "";
@@ -72,6 +76,12 @@ describe("幂等", () => {
   test("服务器出错不记结果，重试会再执行", async () => {
     expect((await post("/broken", "k")).status).toBe(500);
     expect((await post("/broken", "k")).status).toBe(500);
+    expect(runs).toBe(2);
+  });
+
+  test("被限流不记结果，等一会儿用同一个键重试会再执行", async () => {
+    expect((await post("/limited", "k")).status).toBe(429);
+    expect((await post("/limited", "k")).status).toBe(429);
     expect(runs).toBe(2);
   });
 
