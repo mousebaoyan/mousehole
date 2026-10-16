@@ -85,9 +85,9 @@ const UserSchema = UserBriefSchema.extend({
     .boolean()
     .optional()
     .openapi({ description: "TA 是否公开赞和关系；只给成员" }),
-  badges: z
-    .array(z.object({ id: z.number(), name: z.string(), tier: z.string() }))
-    .openapi({ description: "最多 3 枚徽章，金的在前，同档的最近得到的在前" }),
+  badges: z.array(z.object({ id: z.number(), name: z.string(), tier: z.string() })).openapi({
+    description: "TA 选的展示徽章，按选的顺序；没选过的最多 3 枚，金的在前，同档的最近得到的在前",
+  }),
   stats: z.object({
     threads: z.number(),
     posts: z.number(),
@@ -175,6 +175,13 @@ const SettingsSchema = z
     title_badges: z
       .array(z.object({ id: z.number(), name: z.string(), tier: z.string() }))
       .openapi({ description: "能当头衔的徽章：自己得到的金徽章和银徽章" }),
+    shown_badge_ids: z
+      .array(z.number())
+      .nullable()
+      .openapi({ description: "资料卡上展示的徽章，按顺序；null 是没选过，按默认规则" }),
+    badges: z
+      .array(z.object({ id: z.number(), name: z.string(), tier: z.string() }))
+      .openapi({ description: "自己得到的全部徽章，选展示徽章用" }),
     weekly_email: z.boolean().openapi({ description: "收每周影响力邮件" }),
     notify_email: z
       .boolean()
@@ -489,6 +496,15 @@ export const usersRoutes = createRouter()
                   .nullable()
                   .optional()
                   .openapi({ description: "自己得到的金徽章或银徽章；null 改回 QQ 的专属头衔" }),
+                shown_badge_ids: z
+                  .array(z.number().int())
+                  .max(3)
+                  .refine((ids) => new Set(ids).size === ids.length, "展示徽章不能重复")
+                  .nullable()
+                  .optional()
+                  .openapi({
+                    description: "最多 3 枚自己得到的徽章，按顺序；[] 是不展示，null 改回默认规则",
+                  }),
                 weekly_email: z.boolean().optional(),
                 notify_email: z.boolean().optional(),
                 notify_prefs: z
@@ -507,7 +523,7 @@ export const usersRoutes = createRouter()
           description: "改好的设置",
           content: { "application/json": { schema: SettingsSchema } },
         },
-        400: errorResponse("不是自己的金徽章或银徽章"),
+        400: errorResponse("不是自己的金徽章或银徽章，或者展示了没得到的徽章"),
         403: errorResponse("不是成员"),
       },
     }),
