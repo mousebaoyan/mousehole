@@ -175,7 +175,7 @@ token 由站长在后台创建，只显示一次。每个 token 绑定一个 bot
 
 `chat_log` 用来发"聊天记录帖"（`kind: "chatlog"`，二期），每条消息的 `message` 同样是 OneBot 消息段。插件把合并转发的节点展开后传进来即可。
 
-`source` 表示内容整理自同一个聊天里的哪几条 QQ 消息（1–50 条，不能重复），一条消息只能属于一层：
+`source` 表示内容整理自同一个聊天里的哪几条 QQ 消息（1–50 条，不能重复，按在群里发出的先后排），一条消息只能属于一层：
 
 ```json
 { "chat_type": "group", "chat_id": 987654321, "message_ids": [7731, 7733] }
@@ -371,6 +371,7 @@ token 由站长在后台创建，只显示一次。每个 token 绑定一个 bot
 | PUT | `/bot/users/{user}/bio` | 推送 QQ 的个性签名：`{ bio }`，超过 60 个字的截掉；本人没写过自己的签名时显示它。插件在收到 `member.activated` 时查询后推送 | `sync` |
 | GET | `/bot/messages/{chat_type}/{chat_id}/{message_id}` | 某条 QQ 消息收录在哪一层：`{ thread_id, post_id }`；没有收录时返回 `404 message_not_linked` | `read` |
 | GET | `/bot/stats/weekly` | 一周的统计，给插件排周榜图片（总体设计 §8.15）：`until`（Unix 秒，统计 `[until - 7 天, until)`，默认现在）。返回 `since`、`until`（统计的起止，Unix 秒），`overview`（`threads`、`posts`（含收录的）、`archived`（收录了几层）、`active`（发过内容的人数）、`activated`（第一次登录的人数）、`badges`（发出的徽章数））；`threads`：`most_liked`、`most_replied`、`most_read`，各前 5，每项 `{ thread: { id, title, url }, board, author, count }`；`people`：`most_liked`、`most_accepted`、`most_replies`，各前 5，每项 `{ user, count }`；`gold_badges`：`[{ user, badge }]`。用户对象是 `{ id, display_name, qq, avatar_url }`，匿名的楼主是匿名用户对象。只算阅读门槛为访客或成员的版块，人的榜单不算匿名的内容，bot 和站长不上榜 | `read` |
+| GET | `/bot/answers` | 从群里收录的提问在论坛上有了哪些新回答，给插件在群里提醒提问的人（总体设计 §8.6）：`since`、`until`（Unix 秒，算 `[since, until)` 里发的回复，`until` 默认现在）。返回 `{ items }`，一个帖子一项：`thread`（`id`、`title`）、`asker`（楼主，`{ id, display_name, qq }`）、`source`（主楼整理自的第一条群消息：`chat_id`、`message_id`）、`count`（新回答几条）、`url`（第一条新回答）。帖子要是问答帖，主楼整理自群消息，帖子公开，所在版块的阅读门槛是访客或成员；回答要是公开的、在论坛上写的（`via` 不是 `qq`），不是楼主自己写的，匿名的也算。楼主已经冻结，或者在论坛上读过了每一条新回答的，不返回 | `read` |
 | GET | `/bot/events` | SSE 事件流，见第 5 节 | `events` |
 | GET | `/bot/events/batch` | 按游标拉取事件：`after`、`limit`（1–500，默认 100）、`types`，返回 `{ items: [{ id, type, data, created_at }], next_after }`，`next_after` 是下次的 `after` | `events` |
 
