@@ -278,9 +278,10 @@ const sanitizer = new FilterXSS({
     a: ["href", "title", "class", "rel", "id"],
     blockquote: [],
     br: [],
+    button: ["type", "class", "aria-label", "data-lines"],
     code: ["class"],
     details: ["class", "open"],
-    div: ["class"],
+    div: ["class", "data-lang"],
     em: [],
     h1: [],
     h2: [],
@@ -381,6 +382,27 @@ function inline(
   return out;
 }
 
+// Longer code is cut to 20 lines, with a button to show the rest.
+const LONG_CODE = 24;
+
+// A code block with its language and a copy button above it, which components/post-body.tsx
+// works. Their labels are drawn by app.css, so excerpts and search don't take them for text.
+function codeBlock(source: string, lang: string) {
+  const escape = md.utils.escapeHtml;
+  const language = hljs.getLanguage(lang);
+  const code = language
+    ? `<code class="hljs">${hljs.highlight(source, { language: lang, ignoreIllegals: true }).value}</code>`
+    : `<code>${escape(source)}</code>`;
+  const name = language?.name ?? lang;
+  const lines = source.split("\n").length - 1;
+  const long = lines > LONG_CODE;
+  return (
+    `<div class="code${long ? " long" : ""}"${name ? ` data-lang="${escape(name)}"` : ""}>` +
+    `<pre>${code}</pre><button type="button" class="code-copy" aria-label="复制代码"></button>` +
+    `${long ? `<button type="button" class="code-more" data-lines="${lines}"></button>` : ""}</div>\n`
+  );
+}
+
 // `images` says which of the image addresses in the text may be shown, and how. The result lists
 // those that are, so the caller can keep track of what the post uses, and the links to other
 // sites, which new members may only have a few of.
@@ -412,13 +434,9 @@ export async function renderMarkdown(
         tokens[i - 2].attrJoin("class", "task");
       }
     }
-    if (token.type === "fence") {
-      const lang = token.info.trim().split(/\s+/)[0].toLowerCase();
-      if (hljs.getLanguage(lang)) {
-        const code = hljs.highlight(token.content, { language: lang, ignoreIllegals: true });
-        token.type = "html_block";
-        token.content = `<pre><code class="hljs">${code.value}</code></pre>\n`;
-      }
+    if (token.type === "fence" || token.type === "code_block") {
+      token.content = codeBlock(token.content, token.info.trim().split(/\s+/)[0].toLowerCase());
+      token.type = "html_block";
     }
   }
 

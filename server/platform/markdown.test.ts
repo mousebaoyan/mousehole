@@ -70,12 +70,26 @@ describe("Markdown 渲染", () => {
     expect(out).toContain("<li>普通</li>");
   });
 
-  test("代码按语言高亮，认不出的语言照原样转义", async () => {
-    expect(await html("```cpp\nint main() {}\n```")).toContain(
-      '<span class="hljs-type">int</span>',
+  test("代码按语言高亮、标出语言，认不出的语言照原样转义", async () => {
+    const cpp = await html("```cpp\nint main() {}\n```");
+    expect(cpp).toMatch(/^<div class="code" data-lang="C\+\+"><pre><code class="hljs">/);
+    expect(cpp).toContain('<span class="hljs-type">int</span>');
+    expect(cpp).toContain(
+      '<button type="button" class="code-copy" aria-label="复制代码"></button>',
     );
-    const plain = await html("```whatever\n<b>x</b>\n```");
-    expect(plain).toContain("&lt;b&gt;x&lt;/b&gt;");
+    const plain = await html('```wh"at\n<b>x</b>\n```');
+    expect(plain).toContain('data-lang="wh&quot;at"');
+    expect(plain).toContain("<pre><code>&lt;b&gt;x&lt;/b&gt;\n</code></pre>");
+    expect(await html("    缩进的代码")).toContain(
+      '<div class="code"><pre><code>缩进的代码\n</code></pre>',
+    );
+  });
+
+  test("超过 24 行的代码带展开按钮", async () => {
+    expect(await html(`\`\`\`\n${"x\n".repeat(24)}\`\`\``)).not.toContain("code-more");
+    const long = await html(`\`\`\`\n${"x\n".repeat(25)}\`\`\``);
+    expect(long).toMatch(/^<div class="code long"><pre>/);
+    expect(long).toContain('<button type="button" class="code-more" data-lines="25"></button>');
   });
 
   test("单个换行就是换行", async () => {
