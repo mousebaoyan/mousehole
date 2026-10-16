@@ -13,7 +13,7 @@ import { env } from "./env.ts";
 
 // Raised whenever the HTML written for the same Markdown changes; start-up then renders the floors
 // written before again.
-export const RENDER_VERSION = 2;
+export const RENDER_VERSION = 3;
 
 const md = new MarkdownIt({ html: false, linkify: true, breaks: true }).use(mark).use(footnote);
 const { Token } = new md.core.State("", md, {});
@@ -206,6 +206,10 @@ md.renderer.rules.math_block = (tokens, i) =>
 // as a page shows many posts.
 md.renderer.rules.footnote_block_open = () => '<section class="footnotes">\n<ol>\n';
 
+// ---- Tables fill the column, in a box that scrolls sideways when they are wider.
+md.renderer.rules.table_open = () => '<div class="table-scroll">\n<table>\n';
+md.renderer.rules.table_close = () => "</table>\n</div>\n";
+
 // What Temml writes and needs kept.
 const MATH_TAGS = [
   "math",
@@ -340,6 +344,8 @@ function link(href: string, text: string) {
 // An image a post may show: the file to load, the larger one it opens, and its size on the page.
 export type ShownImage = { src: string; href: string; width: number; height: number };
 
+md.renderer.rules.shown_image = (tokens, i) => tokens[i].content;
+
 // Marks up a paragraph's inline tokens: mentions, external links, images. Mentions and external
 // links are collected on the way.
 function inline(
@@ -370,7 +376,7 @@ function inline(
     const src = attr(token, "src");
     const image = images.get(src);
     if (image) {
-      const shown = new Token("html_inline", "", 0);
+      const shown = new Token("shown_image", "", 0);
       const escape = md.utils.escapeHtml;
       shown.content = `<a href="${escape(image.href)}"><img src="${escape(image.src)}" alt="${escape(token.content)}" width="${image.width}" height="${image.height}" loading="lazy"></a>`;
       out.push(shown);
@@ -427,6 +433,19 @@ export async function renderMarkdown(
   for (const [i, token] of tokens.entries()) {
     if (token.type === "inline" && token.children) {
       token.children = inline(token.children, found, shown);
+      // A paragraph of nothing but images is set apart from the text, centered.
+      const children = token.children;
+      if (
+        tokens[i - 1].type === "paragraph_open" &&
+        children.some((t) => t.type === "shown_image") &&
+        children.every(
+          (t) =>
+            t.type === "shown_image" ||
+            t.type === "softbreak" ||
+            (t.type === "text" && !t.content.trim()),
+        )
+      )
+        tokens[i - 1].attrJoin("class", "images");
       // `- [x] done` in a list.
       const first = token.children.at(0);
       const task = first?.type === "text" ? TASK.exec(first.content) : null;
