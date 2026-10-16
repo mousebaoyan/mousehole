@@ -127,9 +127,13 @@ export async function promoteActive() {
     const { totals, recent } = standing(row);
     const level = earnedLevel(totals, recent);
     if (level <= row.level) continue;
+    const next = level < 4 ? level + 1 : null;
     await db.transaction().execute(async (trx) => {
       await saveLevel(trx, row.id, { level });
-      await notifyLevel(trx, row.id, level);
+      await notifyLevel(trx, row.id, level, {
+        earned: requirements(level, totals, recent),
+        next: next === null ? null : { level: next, items: requirements(next, totals, recent) },
+      });
     });
   }
 }
@@ -174,6 +178,6 @@ export async function setLevel(
       target_id: userId,
       data: { from, to: change.level, locked: change.locked },
     });
-    if (change.level > from) await notifyLevel(trx, userId, change.level);
+    if (change.level > from) await notifyLevel(trx, userId, change.level, null);
   });
 }

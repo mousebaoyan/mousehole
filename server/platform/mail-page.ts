@@ -67,7 +67,9 @@ export async function mailPage(preview: string, card: Html | string, footer?: Ht
         </table>
       </body>
     </html>`;
-  return page.toString();
+  // A run of whitespace shows as one space, and the templates' indentation would be a third of
+  // each email.
+  return page.toString().replace(/[ \t\r\n]+/g, " ");
 }
 
 export function mailButton(label: string, url: string) {
@@ -78,6 +80,39 @@ export function mailButton(label: string, url: string) {
       >${label}</a
     >
   </p>`;
+}
+
+// Numbers in boxes, three to a row, a unit in small print after the number. The table sits in a
+// div pulled out by the spacing of its cells, which would otherwise indent them from the text.
+export function mailNumbers(items: { value: number; unit?: string; label: string }[]) {
+  const rows = [];
+  for (let i = 0; i < items.length; i += 3) rows.push(items.slice(i, i + 3));
+  return html`<div style="margin:12px -8px 0;">
+    <table
+      role="presentation"
+      width="100%"
+      cellpadding="0"
+      cellspacing="8"
+      style="table-layout:fixed;"
+    >
+      ${rows.map(
+        (row) =>
+          html`<tr>
+            ${row.map(
+              (n) =>
+                html`<td
+                  style="background:#ffffff;border:1px solid ${LINE};border-radius:12px;padding:14px 8px;text-align:center;"
+                >
+                  <div style="font-size:24px;font-weight:600;color:${TEAL};">
+                    ${n.value}${n.unit && html`<span style="font-size:14px;"> ${n.unit}</span>`}
+                  </div>
+                  <div style="font-size:13px;color:${MUTED};margin-top:2px;">${n.label}</div>
+                </td>`,
+            )}
+          </tr>`,
+      )}
+    </table>
+  </div>`;
 }
 
 // Why the mail came and how to stop it, as the big senders say it; the link turns this kind off

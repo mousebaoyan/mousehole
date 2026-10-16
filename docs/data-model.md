@@ -103,7 +103,7 @@
 
 表：`badges`、`user_badges`、`job_runs`、`user_reads`。
 
-- 徽章（[总体设计 §8.8](design.md#88-徽章)）：`badges` 每枚一行，`tier` 取 `bronze`、`silver`、`gold`，`grouping` 是徽章页上的组，`multiple` 表示能得多次。自动授予的徽章和规则都写在代码里（`badges/rules.ts`），进程启动时按 `slug` 写入或更新 `badges`；管理员新建的活动徽章 `slug` 为 `NULL`，只能手动授予，每人一次。
+- 徽章（[总体设计 §8.8](design.md#88-徽章)）：`badges` 每枚一行，`tier` 取 `bronze`、`silver`、`gold`，`grouping` 是徽章页上的组，`multiple` 表示能得多次。同一类、按铜银金排成一串的徽章（同一层获赞、主楼获赞、被采纳、保研定位帖里回复、连续访问）有 `ladder`（数的是哪一项）和 `need`（要多少），邮件据此说离下一枚还差多少（[总体设计 §8.6](design.md#86-通知与实时)）；其余为 `NULL`。自动授予的徽章和规则都写在代码里（`badges/rules.ts`），进程启动时按 `slug` 写入或更新 `badges`；管理员新建的活动徽章 `slug` 为 `NULL`，只能手动授予，每人一次。
 - `user_badges` 每次得到一行：能得多次的记 `post_id`（获赞的那一层、获赞的帖子的主楼、中奖的抽奖帖的主楼），其余为 `NULL`；`UNIQUE NULLS NOT DISTINCT (user_id, badge_id, post_id)`，授予用 `ON CONFLICT DO NOTHING`，当场检查和每小时补查重复了也不会多发。`granted_by` 是手动授予的管理员，自动的为 `NULL`；撤销手动授予的就删掉这一行，记进操作日志。
 - 每 5 分钟把每条规则跑一遍：`INSERT INTO user_badges … SELECT` 规则查出的人 `… ON CONFLICT DO NOTHING RETURNING`，先用 `NOT EXISTS` 排除已经有的，每条规则一个事务，新授予的在同一个事务里写通知和 `badge.granted` 事件。`job_runs` 记各个定时任务上次跑的时间；没有 `badges` 这一行时是上线后的第一次检查，补齐以前的内容，不写通知和事件。
 - 头衔：`users.title_badge_id`，只能是自己得到的金徽章或银徽章，为 `NULL` 时显示 QQ 的专属头衔。撤销了这枚徽章时一并清空。

@@ -9,8 +9,6 @@ export const TIER_STYLES: Record<string, string> = {
   bronze: "bg-bronze/15 text-bronze",
 };
 
-export const TIER_NAMES: Record<string, string> = { gold: "金", silver: "银", bronze: "铜" };
-
 export function BadgeChip({
   badge,
   className,

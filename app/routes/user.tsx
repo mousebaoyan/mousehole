@@ -14,7 +14,7 @@ import { useEffect, useRef, useState } from "react";
 import { data, Link, useFetcher, useLocation } from "react-router";
 import { cn } from "cn";
 import { apiContext } from "../api.server.ts";
-import { BadgeChip, TIER_NAMES, TIER_STYLES } from "~/components/badge-chip";
+import { BadgeChip, TIER_STYLES } from "~/components/badge-chip";
 import { Backdrop } from "~/components/backdrop";
 import { BoardBadge } from "~/components/board-badge";
 import { PostBody } from "~/components/post-body";
@@ -34,7 +34,7 @@ import type { Api } from "~/api-types";
 import type { Route } from "./+types/user.ts";
 import { ClearButtons, ModerationButtons } from "./user-moderation.tsx";
 import { REACTIONS } from "./reactions.tsx";
-import { levelName, STAFF } from "../../server/platform/site.ts";
+import { levelName, STAFF, TIER_NAMES } from "../../server/platform/site.ts";
 import { CLEARABLE } from "../../server/modules/users/customization.ts";
 
 export function meta({ loaderData }: Route.MetaArgs) {

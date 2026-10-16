@@ -352,6 +352,7 @@ async function draw(threadId: number) {
       .execute();
 
     const prizeOf = new Map(won.flatMap((winners, i) => winners.map((id) => [id, i])));
+    const prizes = lottery.prizes.map((p, i) => ({ name: p.name, winners: won[i] }));
     const thread = { id: threadId, title: lottery.title };
     await notifyLottery(trx, thread, [
       ...ids.map((userId) => {
@@ -360,13 +361,13 @@ async function draw(threadId: number) {
           ? { userId, result: "lost" as const }
           : { userId, result: "won" as const, prize: lottery.prizes[prize].name };
       }),
-      { userId: lottery.author_id, result: "drawn" },
+      { userId: lottery.author_id, result: "drawn", prizes },
     ]);
 
     await lotteryDrawn(trx, {
       thread,
       authorId: lottery.author_id,
-      prizes: lottery.prizes.map((p, i) => ({ name: p.name, winners: won[i] })),
+      prizes,
       entryCount: ids.length,
     });
   });

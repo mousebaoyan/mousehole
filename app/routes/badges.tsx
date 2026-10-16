@@ -3,7 +3,8 @@ import { pageTitle } from "~/share-meta";
 import { Link } from "react-router";
 import { cn } from "cn";
 import { apiContext } from "../api.server.ts";
-import { TIER_NAMES, TIER_STYLES } from "~/components/badge-chip";
+import { TIER_STYLES } from "~/components/badge-chip";
+import { TIER_NAMES } from "../../server/platform/site.ts";
 import type { Route } from "./+types/badges.ts";
 
 export function meta() {
