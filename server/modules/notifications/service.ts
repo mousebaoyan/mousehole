@@ -147,7 +147,7 @@ async function reminder(
         ? html`<p style="margin:8px 0 0;font-size:13px;color:${MUTED};">${mail.note}</p>`
         : ""
     }
-    <p style="margin:20px 0 0;">${mailButton(mail.button, mail.url)}</p>`;
+    ${mailButton(mail.button, mail.url)}`;
   return {
     address: mailbox(person.qq),
     subject: mail.subject,
