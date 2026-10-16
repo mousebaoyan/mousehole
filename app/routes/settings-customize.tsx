@@ -2,22 +2,35 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { flushSync } from "react-dom";
 import { Link, useFetcher, useRevalidator } from "react-router";
 import { cn } from "cn";
-import { ArrowDown, ArrowUp, Award, Check, ImagePlus, Lock, Plus, X } from "~/components/icons";
+import {
+  ArrowDown,
+  ArrowUp,
+  Award,
+  Check,
+  ImagePlus,
+  Lock,
+  Plus,
+  Sparkles,
+  X,
+} from "~/components/icons";
 import { Backdrop } from "~/components/backdrop";
 import { AvatarFrame } from "~/components/frame";
 import { UserAvatar } from "~/components/user-avatar";
+import type { FullProfile } from "~/components/user-card";
 import { browserApi } from "~/browser-api";
 import { TIER_STYLES } from "~/components/badge-chip";
 import { EmojiButton } from "~/components/emoji-button";
 import { Field } from "~/components/form-parts";
 import { Button, buttonVariants } from "~/components/ui/button";
 import { toast } from "~/components/ui/toast";
-import { Dialog } from "~/components/ui/dialog";
+import { chooseDialog, Dialog } from "~/components/ui/dialog";
 import { Input } from "~/components/ui/input";
 import { Select } from "~/components/ui/select";
 import { Textarea } from "~/components/ui/textarea";
 import { stamp } from "~/time";
 import type { loader as userLoader } from "./user.tsx";
+import type { loader as settingsLoader } from "./settings.tsx";
+import { LookPreview, type TryOn } from "./settings-preview.tsx";
 import { BackgroundCropper, type Region } from "./background-cropper.tsx";
 import {
   BACKGROUND_PRESETS,
@@ -27,12 +40,18 @@ import {
   frameMoves,
   FRAMES,
   frameUnlockLabel,
+  movingLook,
   PINS_MAX,
   SHOWCASE_MAX,
+  SHOWN_BADGES,
   STATUS_MAX,
   THEME_NAMES,
   THEMES,
   UPLOAD_LEVEL,
+  UPLOAD_PRICE,
+  type BackgroundPreset,
+  type Frame,
+  type Look,
 } from "../../server/modules/users/customization.ts";
 
 // The settings page's 个性化 section (design §8.16).
@@ -60,12 +79,9 @@ function useFormValue<T>(initial: T) {
 
 type Badge = { id: number; name: string; tier: string };
 
-// The most a card shows.
-const SHOWN_MAX = 3;
-
 // The badges on their card: the best ones unless they pick, in the order picked; picking none
 // shows none. Sent as "auto" or the IDs.
-export function ShownBadgesField({ badges, shown }: { badges: Badge[]; shown: number[] | null }) {
+function ShownBadgesField({ badges, shown }: { badges: Badge[]; shown: number[] | null }) {
   const { value, change, input } = useFormValue(shown);
   return (
     <div className="flex flex-col gap-1.5 text-sm">
@@ -98,7 +114,7 @@ export function ShownBadgesField({ badges, shown }: { badges: Badge[]; shown: nu
                     key={b.id}
                     type="button"
                     aria-pressed={at >= 0}
-                    disabled={at < 0 && value.length >= SHOWN_MAX}
+                    disabled={at < 0 && value.length >= SHOWN_BADGES}
                     onClick={() =>
                       change(at >= 0 ? value.filter((id) => id !== b.id) : [...value, b.id])
                     }
@@ -121,7 +137,7 @@ export function ShownBadgesField({ badges, shown }: { badges: Badge[]; shown: nu
               })}
             </div>
             <span className="text-meta text-muted-foreground">
-              最多 {SHOWN_MAX} 枚，按选择的先后排列
+              最多 {SHOWN_BADGES} 枚，按选择的先后排列
             </span>
           </>
         ))}
@@ -130,7 +146,7 @@ export function ShownBadgesField({ badges, shown }: { badges: Badge[]; shown: nu
 }
 
 // One swatch per theme, in its own colour; the site's own sea teal is no theme.
-export function ThemeField({ theme }: { theme: string | null }) {
+function ThemeField({ theme }: { theme: string | null }) {
   return (
     <fieldset className="flex flex-col gap-1.5 text-sm">
       <legend className="font-medium">主题色</legend>
@@ -175,7 +191,7 @@ const CLEARS = [
 
 export const DEFAULT_STATUS_EMOJI = "💬";
 
-export function StatusField({
+function StatusField({
   status,
   now,
 }: {
@@ -226,7 +242,7 @@ export function StatusField({
 type Pin = { id: number; title: string };
 
 // The threads on their page, in order: moved up and down, taken off, or added from their own.
-export function PinsField({ pins, userId }: { pins: Pin[]; userId: number }) {
+function PinsField({ pins, userId }: { pins: Pin[]; userId: number }) {
   const { value, change, input } = useFormValue(pins);
   const dialog = useRef<HTMLDialogElement>(null);
   const [picking, setPicking] = useState(false);
@@ -405,7 +421,7 @@ function ThreadChoices({
   );
 }
 
-export function ShowcaseField({ showcase }: { showcase: string | null }) {
+function ShowcaseField({ showcase }: { showcase: string | null }) {
   return (
     <Field label="展柜" hint="显示在个人主页上，支持 Markdown，但不显示图片">
       <Textarea
@@ -420,13 +436,14 @@ export function ShowcaseField({ showcase }: { showcase: string | null }) {
 }
 
 // One look to pick: a radio under a preview that moves only while pointed at or chosen. A locked
-// one says what opens it.
+// one is tried on instead, in the live preview, and says what opens it.
 function Tile({
   name,
   value,
   label,
   checked,
-  locked,
+  lock,
+  onPick,
   wide,
   children,
 }: {
@@ -434,47 +451,164 @@ function Tile({
   value: string;
   label: string;
   checked: boolean;
-  locked: string | null;
+  lock: { label: string; trying: boolean; onTry: () => void } | null;
+  onPick: () => void;
   wide?: boolean;
   children: ReactNode;
 }) {
+  const box = cn(
+    "relative w-full overflow-hidden rounded-lg border ring-primary ring-offset-2 ring-offset-card [--play:paused] group-hover/tile:[--play:running]",
+    wide ? "aspect-[2/1]" : "aspect-square",
+  );
+  if (lock !== null) {
+    return (
+      <button
+        type="button"
+        aria-pressed={lock.trying}
+        onClick={lock.onTry}
+        className="group/tile flex min-w-0 flex-col items-center gap-1 text-xs"
+      >
+        <span
+          className={cn(
+            box,
+            lock.trying
+              ? "outline-2 outline-offset-2 outline-primary outline-dashed [--play:running]"
+              : "*:not-last:opacity-55",
+          )}
+        >
+          {children}
+          <span className="absolute right-1 bottom-1 flex items-center gap-0.5 rounded-md bg-black/60 px-1 py-px text-2xs font-medium whitespace-nowrap text-white">
+            <Lock className="size-3 shrink-0" /> {lock.label}
+          </span>
+        </span>
+        <span className="truncate text-muted-foreground/60">{label}</span>
+      </button>
+    );
+  }
   return (
-    <label
-      className={cn(
-        "group/tile flex min-w-0 flex-col items-center gap-1 text-xs",
-        locked === null ? "cursor-pointer" : "cursor-not-allowed",
-      )}
-    >
+    <label className="group/tile flex min-w-0 cursor-pointer flex-col items-center gap-1 text-xs">
       <input
         type="radio"
         name={name}
         value={value}
         defaultChecked={checked}
-        disabled={locked !== null}
+        onClick={onPick}
         className="peer sr-only"
       />
       <span
         className={cn(
-          "relative w-full overflow-hidden rounded-lg border ring-primary ring-offset-2 ring-offset-card [--play:paused] group-hover/tile:[--play:running] peer-checked:ring-2 peer-checked:[--play:running] peer-focus-visible:ring-2 peer-disabled:*:not-last:opacity-55",
-          wide ? "aspect-[2/1]" : "aspect-square",
+          box,
+          "peer-checked:ring-2 peer-checked:[--play:running] peer-focus-visible:ring-2",
         )}
       >
         {children}
-        {locked !== null && (
-          <span className="absolute right-1 bottom-1 flex items-center gap-0.5 rounded-md bg-black/60 px-1 py-px text-2xs font-medium text-white">
-            <Lock className="size-3 shrink-0" /> {locked}
-          </span>
-        )}
       </span>
-      <span
-        className={cn(
-          "truncate",
-          locked === null ? "text-muted-foreground" : "text-muted-foreground/60",
-        )}
-      >
-        {label}
-      </span>
+      <span className="truncate text-muted-foreground">{label}</span>
     </label>
+  );
+}
+
+type Buy = (look: Look, price: number, what: string) => void;
+
+// Disabled until the look is unlocked and there are coins enough.
+function BuyButton({
+  look,
+  what,
+  price,
+  coins,
+  locked,
+  onBuy,
+  children = "兑换",
+}: {
+  look: Look;
+  what: string;
+  price: number;
+  coins: number;
+  locked: boolean;
+  onBuy: Buy;
+  children?: ReactNode;
+}) {
+  const short = price - coins;
+  return (
+    <span className="inline-flex items-center gap-2">
+      <Button
+        type="button"
+        size="sm"
+        disabled={locked || short > 0}
+        onClick={() => onBuy(look, price, what)}
+      >
+        <Sparkles /> {children} · {price} 鼠币
+      </Button>
+      {!locked && short > 0 && <span className="text-muted-foreground">还差 {short} 鼠币</span>}
+    </span>
+  );
+}
+
+type Looks = {
+  tryOn: TryOn | null;
+  onTryOn: (tryOn: TryOn | null) => void;
+  coins: number;
+  onBuy: Buy;
+};
+
+// The look picked or tried on last: what opens it, and its moving version to see and to buy.
+function LookDetail({
+  look,
+  name,
+  lock,
+  owned,
+  tryOn,
+  onTryOn,
+  coins,
+  onBuy,
+}: Looks & { look: Look; name: string; lock: string | null; owned: boolean }) {
+  const moving = movingLook(look);
+  if (lock === null && moving === null) return null;
+  const seeing =
+    tryOn !== null && tryOn.moving && tryOn.look.kind === look.kind && tryOn.look.key === look.key;
+  return (
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-lg bg-muted/60 px-3 py-2 text-meta">
+      <span className="font-medium">{name}</span>
+      {lock !== null && (
+        <span className="inline-flex items-center gap-1 text-muted-foreground">
+          <Lock className="size-3.5" /> {lock}
+        </span>
+      )}
+      {moving &&
+        (owned ? (
+          <span className="inline-flex items-center gap-1 text-muted-foreground">
+            <Sparkles className="size-3.5" /> 已兑换动态版
+          </span>
+        ) : (
+          <>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              aria-pressed={seeing}
+              onClick={() =>
+                onTryOn(
+                  seeing
+                    ? lock === null
+                      ? null
+                      : { look, moving: false }
+                    : { look, moving: true },
+                )
+              }
+            >
+              {seeing ? "看静态的" : "看动态的"}
+            </Button>
+            <BuyButton
+              look={look}
+              what={`「${name}」的动态版`}
+              price={moving.price}
+              coins={coins}
+              locked={lock !== null}
+              onBuy={onBuy}
+            />
+          </>
+        ))}
+    </div>
   );
 }
 
@@ -487,12 +621,13 @@ function region(r: Region) {
 
 // The presets, their own picture once uploaded, and none. Uploading happens at once, as an avatar
 // does; the field is keyed by what is saved, so it starts again with the new picture chosen.
-export function BackgroundField({
+function BackgroundField({
   background,
   urls,
   unlocked,
   owned,
-}: {
+  ...looks
+}: Looks & {
   background: string | null;
   urls: BackgroundUrls | null;
   unlocked: { backgrounds: string[]; upload: boolean };
@@ -501,6 +636,8 @@ export function BackgroundField({
   const { revalidate } = useRevalidator();
   const [picked, setPicked] = useState<{ file: File; url: string } | null>(null);
   const [busy, setBusy] = useState(false);
+  const [focus, setFocus] = useState(BACKGROUNDS.find((key) => key === background) ?? null);
+  const { tryOn, onTryOn } = looks;
 
   function close() {
     if (picked) URL.revokeObjectURL(picked.url);
@@ -523,16 +660,23 @@ export function BackgroundField({
     await revalidate();
   }
 
+  // Picking one puts away what was tried on here.
+  function pick(key: BackgroundPreset | null) {
+    setFocus(key);
+    if (tryOn?.look.kind === "background") onTryOn(null);
+  }
+
   return (
     <fieldset className="flex flex-col gap-1.5 text-sm">
       <legend className="font-medium">背景</legend>
-      <div className="mt-1.5 grid grid-cols-3 gap-x-2 gap-y-2.5 sm:grid-cols-5">
+      <div className="mt-1.5 grid grid-cols-3 gap-x-2 gap-y-2.5 sm:grid-cols-4 lg:grid-cols-3">
         <Tile
           name="background"
           value=""
           label="不使用"
           checked={background === null}
-          locked={null}
+          lock={null}
+          onPick={() => pick(null)}
           wide
         >
           <span className="absolute inset-0 bg-muted" />
@@ -544,11 +688,19 @@ export function BackgroundField({
             value={key}
             label={BACKGROUND_PRESETS[key].name}
             checked={background === key}
-            locked={
+            lock={
               unlocked.backgrounds.includes(key) || background === key
                 ? null
-                : `L${BACKGROUND_PRESETS[key].level}`
+                : {
+                    label: `L${BACKGROUND_PRESETS[key].level}`,
+                    trying: tryOn?.look.kind === "background" && tryOn.look.key === key,
+                    onTry: () => {
+                      setFocus(key);
+                      onTryOn({ look: { kind: "background", key }, moving: false });
+                    },
+                  }
             }
+            onPick={() => pick(key)}
             wide
           >
             <Backdrop background={{ preset: key, moving: owned.includes(key) }} place="card" />
@@ -560,14 +712,26 @@ export function BackgroundField({
             value="custom"
             label="我的图片"
             checked={background === "custom"}
-            locked={null}
+            lock={null}
+            onPick={() => pick(null)}
             wide
           >
             <Backdrop background={urls} place="card" />
           </Tile>
         )}
       </div>
-      <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
+      {focus && (
+        <LookDetail
+          {...looks}
+          look={{ kind: "background", key: focus }}
+          name={BACKGROUND_PRESETS[focus].name}
+          lock={
+            unlocked.backgrounds.includes(focus) ? null : `L${BACKGROUND_PRESETS[focus].level} 解锁`
+          }
+          owned={owned.includes(focus)}
+        />
+      )}
+      <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1.5">
         <label
           className={buttonVariants({
             variant: "outline",
@@ -595,6 +759,18 @@ export function BackgroundField({
               ? "支持动图"
               : "动图只留第一帧"}
         </span>
+        {unlocked.upload && !owned.includes("custom") && (
+          <BuyButton
+            look={{ kind: "background", key: "custom" }}
+            what="上传动图"
+            price={UPLOAD_PRICE}
+            coins={looks.coins}
+            locked={false}
+            onBuy={looks.onBuy}
+          >
+            兑换动图
+          </BuyButton>
+        )}
       </div>
       {picked && (
         <BackgroundCropper url={picked.url} busy={busy} onCancel={close} onDone={upload} />
@@ -603,23 +779,47 @@ export function BackgroundField({
   );
 }
 
+// What a frame not opened yet says opens it.
+function frameLock(frame: Frame) {
+  const { unlock } = FRAME_LOOKS[frame];
+  if ("level" in unlock) return `L${unlock.level} 解锁`;
+  if ("badge" in unlock) return `得到「${unlock.by}」徽章后解锁`;
+  return "gold" in unlock ? "得到一枚金徽章后解锁" : "得到配了它的活动徽章后解锁";
+}
+
 // Each frame round their own avatar.
-export function FrameField({
+function FrameField({
   frame,
   unlocked,
   owned,
   me,
-}: {
+  ...looks
+}: Looks & {
   frame: string | null;
   unlocked: string[];
   owned: string[];
   me: { id: number; display_name: string; avatar_url: string | null };
 }) {
+  const [focus, setFocus] = useState(FRAMES.find((key) => key === frame) ?? null);
+  const { tryOn, onTryOn } = looks;
+
+  function pick(key: Frame | null) {
+    setFocus(key);
+    if (tryOn?.look.kind === "frame") onTryOn(null);
+  }
+
   return (
     <fieldset className="flex flex-col gap-1.5 text-sm">
       <legend className="font-medium">头像框</legend>
-      <div className="mt-1.5 grid grid-cols-4 gap-x-2 gap-y-2.5 sm:grid-cols-6">
-        <Tile name="frame" value="" label="不使用" checked={frame === null} locked={null}>
+      <div className="mt-1.5 grid grid-cols-4 gap-x-2 gap-y-2.5 sm:grid-cols-5 lg:grid-cols-4">
+        <Tile
+          name="frame"
+          value=""
+          label="不使用"
+          checked={frame === null}
+          lock={null}
+          onPick={() => pick(null)}
+        >
           <span className="absolute inset-0 flex items-center justify-center">
             <UserAvatar user={me} className="size-[52%]" />
           </span>
@@ -631,7 +831,19 @@ export function FrameField({
             value={key}
             label={FRAME_LOOKS[key].name}
             checked={frame === key}
-            locked={unlocked.includes(key) || frame === key ? null : frameUnlockLabel(key)}
+            lock={
+              unlocked.includes(key) || frame === key
+                ? null
+                : {
+                    label: frameUnlockLabel(key),
+                    trying: tryOn?.look.kind === "frame" && tryOn.look.key === key,
+                    onTry: () => {
+                      setFocus(key);
+                      onTryOn({ look: { kind: "frame", key }, moving: false });
+                    },
+                  }
+            }
+            onPick={() => pick(key)}
           >
             <span className="absolute inset-0 flex items-center justify-center">
               <span className="relative size-[52%]">
@@ -645,6 +857,94 @@ export function FrameField({
           </Tile>
         ))}
       </div>
+      {focus && (
+        <LookDetail
+          {...looks}
+          look={{ kind: "frame", key: focus }}
+          name={FRAME_LOOKS[focus].name}
+          lock={unlocked.includes(focus) ? null : frameLock(focus)}
+          owned={owned.includes(focus)}
+        />
+      )}
     </fieldset>
+  );
+}
+
+type Settings = Exclude<Awaited<ReturnType<typeof settingsLoader>>, Response>["settings"];
+
+// The section itself: the looks, and the preview of them beside, sharing what is tried on. A
+// moving look bought is worn once saved, as any other change here; it is the one picked.
+export function Customize({
+  settings,
+  profile,
+  me,
+  now,
+}: {
+  settings: Settings;
+  profile: FullProfile | null;
+  me: { id: number; display_name: string; avatar_url: string | null } | null;
+  now: number;
+}) {
+  const [tryOn, setTryOn] = useState<TryOn | null>(null);
+  const { revalidate } = useRevalidator();
+
+  async function buy(look: Look, price: number, what: string) {
+    const choice = await chooseDialog(`用 ${price} 鼠币兑换${what}？兑换后一直有。`, [
+      { value: "", label: "取消", variant: "ghost" },
+      { value: "buy", label: "兑换", variant: "default" },
+    ]);
+    if (choice !== "buy") return;
+    const res = await browserApi.me.looks.$post({ json: look });
+    if (!res.ok) {
+      toast((await res.json()).error.message);
+      return;
+    }
+    setTryOn(null);
+    const worn = look.kind === "frame" ? settings.frame : settings.background;
+    toast(
+      look.key === "custom"
+        ? "已兑换，现在可以上传动图了"
+        : `已兑换${what}${worn === look.key ? "" : "，保存后换上"}`,
+    );
+    await revalidate();
+  }
+
+  const looks = { tryOn, onTryOn: setTryOn, coins: settings.coins, onBuy: buy };
+  return (
+    <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_18rem] lg:items-start lg:gap-6">
+      {profile && (
+        <LookPreview
+          profile={profile}
+          settings={settings}
+          tryOn={tryOn}
+          className="lg:order-last"
+        />
+      )}
+      <div className="flex flex-col gap-5 max-lg:mt-3">
+        <StatusField status={settings.user_status} now={now} />
+        <BackgroundField
+          key={`${settings.background}:${settings.background_urls?.card_url}`}
+          {...looks}
+          background={settings.background}
+          urls={settings.background_urls}
+          unlocked={settings.unlocked}
+          owned={settings.owned.backgrounds}
+        />
+        {me && (
+          <FrameField
+            key={settings.frame}
+            {...looks}
+            frame={settings.frame}
+            unlocked={settings.unlocked.frames}
+            owned={settings.owned.frames}
+            me={me}
+          />
+        )}
+        <ThemeField theme={settings.theme} />
+        <ShownBadgesField badges={settings.badges} shown={settings.shown_badge_ids} />
+        {me && <PinsField pins={settings.pins} userId={me.id} />}
+        <ShowcaseField showcase={settings.showcase} />
+      </div>
+    </div>
   );
 }

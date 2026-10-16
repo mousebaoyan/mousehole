@@ -34,6 +34,8 @@ export const DEFAULT_THEME_NAME = "海青";
 export const CLEARABLE = ["background", "status", "showcase"] as const;
 export type Clearable = (typeof CLEARABLE)[number];
 
+// The most badges a card shows, picked or by the default rule (design §8.8).
+export const SHOWN_BADGES = 3;
 export const STATUS_MAX = 30;
 export const PINS_MAX = 6;
 export const SHOWCASE_MAX = 1000;

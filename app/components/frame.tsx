@@ -264,6 +264,8 @@ export function AvatarFrame({
   const prefix = useId().replaceAll(/\W/g, "");
   return (
     <svg
+      // Starting over when it stops moving, as it stands still for others.
+      key={String(frame.moving)}
       viewBox="-12 -12 124 124"
       aria-hidden
       className={cn(

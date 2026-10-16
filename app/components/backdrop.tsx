@@ -21,6 +21,8 @@ export function Backdrop({
 }) {
   return (
     <div
+      // Starting over when it stops moving, as it stands still for others.
+      key={"preset" in background ? String(background.moving) : "picture"}
       aria-hidden
       className={cn(
         "absolute inset-0 overflow-hidden",

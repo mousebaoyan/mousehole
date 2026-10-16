@@ -21,16 +21,7 @@ import {
   NOTIFICATION_TYPES,
 } from "../../server/modules/notifications/types.ts";
 import { BOT_NAME } from "../../server/platform/site.ts";
-import {
-  BackgroundField,
-  DEFAULT_STATUS_EMOJI,
-  FrameField,
-  PinsField,
-  ShowcaseField,
-  ShownBadgesField,
-  StatusField,
-  ThemeField,
-} from "./settings-customize.tsx";
+import { Customize, DEFAULT_STATUS_EMOJI } from "./settings-customize.tsx";
 import { endOfDay, unixNow } from "~/time";
 import { BACKGROUNDS, FRAMES, THEMES } from "../../server/modules/users/customization.ts";
 
@@ -51,11 +42,20 @@ const SECTIONS = {
 
 export async function loader({ context }: Route.LoaderArgs) {
   const api = context.get(apiContext);
-  const [settings, sessions] = await Promise.all([api.me.settings.$get(), api.me.sessions.$get()]);
-  if (!settings.ok || !sessions.ok) return redirect("/login");
+  const [settings, sessions, me] = await Promise.all([
+    api.me.settings.$get(),
+    api.me.sessions.$get(),
+    api.me.$get(),
+  ]);
+  if (!settings.ok || !sessions.ok || !me.ok) return redirect("/login");
+  // Their card as others see it, which the 个性化 preview dresses.
+  const card = await api.users[":user"].$get({ param: { user: String((await me.json()).id) } });
+  if (!card.ok) throw new Error("Card failed");
+  const profile = await card.json();
   return {
     settings: await settings.json(),
     sessions: (await sessions.json()).items,
+    profile: profile.members_only ? null : profile,
     now: unixNow(),
   };
 }
@@ -140,7 +140,7 @@ function ids(value: string) {
 }
 
 export default function Settings({ loaderData, actionData }: Route.ComponentProps) {
-  const { settings, sessions, now } = loaderData;
+  const { settings, sessions, profile, now } = loaderData;
   const me = useMe();
   return (
     <div className="flex gap-8">
@@ -202,28 +202,7 @@ export default function Settings({ loaderData, actionData }: Route.ComponentProp
           </Section>
 
           <Section {...SECTIONS.customize} description="装扮你的资料卡和个人主页，匿名发言时不显示">
-            <div className="flex flex-col gap-5">
-              <StatusField status={settings.user_status} now={now} />
-              <BackgroundField
-                key={`${settings.background}:${settings.background_urls?.card_url}`}
-                background={settings.background}
-                urls={settings.background_urls}
-                unlocked={settings.unlocked}
-                owned={settings.owned.backgrounds}
-              />
-              {me && (
-                <FrameField
-                  frame={settings.frame}
-                  unlocked={settings.unlocked.frames}
-                  owned={settings.owned.frames}
-                  me={me}
-                />
-              )}
-              <ThemeField theme={settings.theme} />
-              <ShownBadgesField badges={settings.badges} shown={settings.shown_badge_ids} />
-              {me && <PinsField pins={settings.pins} userId={me.id} />}
-              <ShowcaseField showcase={settings.showcase} />
-            </div>
+            <Customize settings={settings} profile={profile} me={me} now={now} />
           </Section>
 
           <Section {...SECTIONS.privacy}>

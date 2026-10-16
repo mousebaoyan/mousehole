@@ -164,7 +164,7 @@ describe("个性化", () => {
     expect((await wear("sprout", moderator)).status).toBe(403);
   });
 
-  test("按等级解锁的是静态的，用鼠币兑换动态版：要够得上等级、鼠币够，兑换了就换上、一直动", async () => {
+  test("按等级解锁的是静态的，用鼠币兑换动态版：要够得上等级、鼠币够，兑换了戴上就一直动", async () => {
     const { id } = await createUser("user", 3);
     const who = as(await login(id));
     await db.updateTable("coin_balances").set({ coins: 200 }).where("user_id", "=", id).execute();
@@ -191,10 +191,11 @@ describe("个性化", () => {
     const bought = await buy({ kind: "background", key: "waves" });
     if (!bought.ok) throw new Error(`status ${bought.status}`);
     expect(await bought.json()).toMatchObject({
-      background: "waves",
+      background: null,
       coins: 40,
       owned: { backgrounds: ["waves"], frames: ["flow"] },
     });
+    await api.me.$patch({ json: { background: "waves" } }, who);
     expect((await card(id)).background).toEqual({ preset: "waves", moving: true });
 
     for (const [look, status, code] of [
