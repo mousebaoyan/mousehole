@@ -112,6 +112,18 @@
 - 每周来信每小时看一次到没到时间（周一 9 点），`job_runs` 的 `weekly_letters` 记这周发过了；`users.weekly_email` 是成员自己的开关。
 - 每周来信和周榜现算，每周各一次：赞看 `reactions.created_at`，采纳看 `posts.accepted_at`，新帖新回复看 `created_at`，被读看 `user_reads`，读帖子的人数看 `thread_users.last_read_at` 落在这一周里的行，徽章看 `user_badges.granted_at`。
 
+## 个性化
+
+都是 `users` 上的列（[总体设计 §8.16](design.md#816-个性化)）。预设的背景、头像框、主题色和解锁条件写在代码里（`users/cosmetics.ts`），页面和服务共用，库里只存 key；保存时检查解锁，和原来一样的值不再检查，读的时候也不检查。
+
+- 背景：`background` 是预设的 key，上传的为 `custom`。上传的裁成两张，存在 `data/backgrounds/{用户ID}-card.webp` 和 `{用户ID}-profile.webp`，每次上传覆盖，用 `background_version` 控制缓存，同头像；换成预设或不用背景时删掉这两个文件。
+- 头像框：`frame`。活动徽章能配的活动框是 `badges.frame`；撤销手动授予的徽章时，`frame` 是这枚徽章的、又没有别的徽章配着同一个框，就一并清空。
+- 展示徽章：`shown_badge_ids integer[]`，`NULL` 是没选过、按默认规则，`'{}'` 是一枚都不展示；读的时候和 `user_badges` 关联，撤销手动授予的徽章时也从数组里去掉（`array_remove`）。
+- 主题色：`theme`，`NULL` 是默认的海青。
+- 状态：`status_emoji`、`status_text`、`status_until`（`NULL` 是不清除），读的时候只取没过期的，不另外清理。
+- 代表作：`pins integer[]`，帖子 ID 按显示的顺序；删除、隐藏、匿名的帖子和看的人打不开的，读的时候过滤掉。
+- 展柜：`showcase` 是 Markdown 原文，只在个人主页上用，打开时现渲染，不存 HTML，渲染规则变了也不用重新渲染。
+
 ## 图片
 
 表：`uploads`、`post_uploads`。
