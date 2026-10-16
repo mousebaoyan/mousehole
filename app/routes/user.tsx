@@ -740,14 +740,17 @@ function LevelProgress({ progress }: { progress: NonNullable<LoaderData["progres
               <div className="flex justify-between gap-2 text-meta">
                 <span>{item.label}</span>
                 <span
-                  className={cn("tabular-nums", done ? "text-success" : "text-muted-foreground")}
+                  className={cn(
+                    "tabular-nums",
+                    done ? "font-medium text-primary" : "text-muted-foreground",
+                  )}
                 >
                   {shown(Math.min(item.have, item.need))} / {shown(item.need)}
                 </span>
               </div>
               <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-secondary">
                 <div
-                  className={cn("h-full rounded-full", done ? "bg-success" : "bg-primary")}
+                  className={cn("h-full rounded-full", done ? "bg-primary" : "bg-primary/50")}
                   style={{ width: `${Math.min(100, (item.have / item.need) * 100)}%` }}
                 />
               </div>
