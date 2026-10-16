@@ -56,7 +56,7 @@ export function PollCard({
       <p className="mb-3 flex flex-wrap items-center gap-x-2 text-meta text-muted-foreground">
         <ChartBar className="size-4" />
         {poll.rows
-          ? "每行选一项，可以只选其中几行"
+          ? "每行选一项，不必每行都选"
           : poll.multiple
             ? poll.max_choices === null
               ? "多选"
@@ -167,7 +167,7 @@ export function PollCard({
             variant="ghost"
             disabled={busy}
             onClick={async () => {
-              if (await confirmDialog("确定现在结束投票？结束后无法再投票。", "结束"))
+              if (await confirmDialog("确定提前结束投票？结束后无法再投票。", "结束"))
                 submit("close-poll");
             }}
           >

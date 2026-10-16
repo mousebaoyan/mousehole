@@ -428,7 +428,7 @@ export function ComposerProvider({
       const changed = content.text !== target.post.markdown;
       if (changed && !(await confirmDialog("放弃这次修改？", "放弃"))) return;
     } else if (!isEmpty(content)) {
-      const choice = await chooseDialog("内容尚未发布，如何处理？", [
+      const choice = await chooseDialog("内容尚未发布，要保存为草稿吗？", [
         { value: "", label: "继续编辑", variant: "ghost" },
         { value: "discard", label: "放弃", variant: "destructive" },
         { value: "save", label: "保存草稿", variant: "default" },
@@ -830,8 +830,8 @@ function ThreadFields({
         aria-label="标题"
         placeholder={
           positioning
-            ? `标题：不填就是「${positioningTitle(content.positioning)}」`
-            : "标题：把问题写清楚，比如「rank 30% 能冲华五的夏令营吗」"
+            ? `标题，不填则为「${positioningTitle(content.positioning)}」`
+            : "标题，把问题写清楚，比如「rank 30% 能冲华五的夏令营吗」"
         }
         maxLength={80}
         className="h-9 text-base md:text-base"
@@ -922,7 +922,7 @@ function ThreadFields({
         </span>
         {(content.anonymous || content.anonymousReplies) && (
           <span className="text-meta text-muted-foreground">
-            发布后不能修改；只有本人和管理员能看到匿名者的身份
+            发布后不能更改，管理员仍能看到匿名者的身份
           </span>
         )}
       </div>
@@ -1042,7 +1042,7 @@ function PollSettings({
           checked={poll.results === "always"}
           onChange={(e) => onChange({ ...poll, results: e.target.checked ? "always" : "voted" })}
         />
-        <label htmlFor={`${id}-results`}>未投票也可查看结果</label>
+        <label htmlFor={`${id}-results`}>投票前可以查看结果</label>
       </span>
     </div>
   );
@@ -1119,7 +1119,7 @@ function PositioningFields({
   return (
     <div className="flex shrink-0 flex-col gap-2 border-t px-4 py-2.5">
       <p className="text-meta text-muted-foreground">
-        都要填，没有的写「无」。每所目标院校一行，大家从「随便去」到「几乎不可能」选一项，匿名投票。
+        每项都要填，没有就写「无」。每所目标院校会生成一行匿名投票，大家从「随便去」到「几乎不可能」里选一项。
       </p>
       {BACKGROUND.slice(0, -1).map(field)}
       <div className="flex flex-col gap-1 sm:flex-row sm:gap-3">
@@ -1171,7 +1171,7 @@ function PositioningFields({
       </div>
       {field(BACKGROUND[BACKGROUND.length - 1])}
       <p className="text-meta text-muted-foreground">
-        下面的正文选填，可以接着写别的，比如方向偏好、夏令营情况，也可以贴图。
+        正文选填，可以补充方向偏好、夏令营情况等，也可以贴图。
       </p>
     </div>
   );
@@ -1180,7 +1180,7 @@ function PositioningFields({
 const MAX_PRIZES = 10;
 
 const ENTRIES = [
-  { value: "button", label: "点按钮参与" },
+  { value: "button", label: "直接参与" },
   { value: "reply", label: "回复参与" },
 ];
 

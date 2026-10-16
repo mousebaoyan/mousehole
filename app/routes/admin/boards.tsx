@@ -93,9 +93,7 @@ export default function Boards({ loaderData: { boards, edit }, actionData }: Rou
   return (
     <>
       <h1 className="text-xl font-semibold">版块</h1>
-      <p className="mt-1 text-meta text-muted-foreground">
-        侧栏和筛选按这里的顺序排列；仅成员可见的版块，访客看不到
-      </p>
+      <p className="mt-1 text-meta text-muted-foreground">侧栏和筛选按这里的顺序排列</p>
       <Result result={actionData} />
 
       <Section title="全部版块">

@@ -30,7 +30,7 @@ export default function Badges({ loaderData: { badges } }: Route.ComponentProps)
       <header className="px-1">
         <h1 className="text-xl font-semibold">徽章</h1>
         <p className="mt-1 text-meta text-muted-foreground">
-          参与讨论、帮助他人即可获得徽章，从群里收录的发言同样计入。金徽章和银徽章可以在设置中选作头衔。
+          参与讨论、帮助别人就能获得徽章，群里被收录的发言也算。金徽章和银徽章可以在设置里设为头衔。
         </p>
       </header>
       {GROUPS.map((group) => {

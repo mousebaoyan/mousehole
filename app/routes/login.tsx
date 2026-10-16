@@ -239,7 +239,7 @@ function EmailLogin({ state }: { state: Route.ComponentProps["actionData"] }) {
       <p className="text-meta text-muted-foreground">
         {state?.sent
           ? `验证码已发送至 ${state.qq}@qq.com，10 分钟内有效`
-          : "验证码发送至 QQ 邮箱，10 分钟内有效"}
+          : "验证码会发到你的 QQ 邮箱，10 分钟内有效"}
       </p>
     </Form>
   );

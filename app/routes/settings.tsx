@@ -161,22 +161,18 @@ export default function Settings({ loaderData, actionData }: Route.ComponentProp
           <Section {...SECTIONS.profile}>
             <div className="flex flex-col gap-4">
               <AvatarField custom={settings.avatar_custom} />
-              <Field label="名字" hint="最多 24 个字；留空则使用 QQ 群名片">
+              <Field label="名字" hint="不填时使用 QQ 群名片">
                 <Input
                   name="custom_name"
                   defaultValue={settings.custom_name ?? ""}
-                  placeholder="使用 QQ 群名片"
                   maxLength={24}
                 />
               </Field>
-              <Field
-                label="个性签名"
-                hint="最多 60 个字，显示在资料卡和个人主页上；留空则使用 QQ 个性签名"
-              >
+              <Field label="个性签名" hint="不填时使用 QQ 个性签名">
                 <Textarea
                   name="custom_bio"
                   defaultValue={settings.custom_bio ?? ""}
-                  placeholder={settings.qq_bio || "使用 QQ 个性签名"}
+                  placeholder={settings.qq_bio}
                   maxLength={60}
                   className="min-h-16"
                 />
@@ -185,8 +181,8 @@ export default function Settings({ loaderData, actionData }: Route.ComponentProp
                 label="头衔"
                 hint={
                   settings.title_badges.length > 0
-                    ? "显示在名字旁边；可以选一枚自己的金徽章或银徽章"
-                    : "得到金徽章或银徽章后，可以选它作为头衔"
+                    ? "显示在名字旁边，可以用自己的金徽章或银徽章"
+                    : "获得金徽章或银徽章后，可以把它设为头衔"
                 }
               >
                 <Select
@@ -194,7 +190,7 @@ export default function Settings({ loaderData, actionData }: Route.ComponentProp
                   aria-label="头衔"
                   defaultValue={String(settings.title_badge_id ?? "")}
                   options={[
-                    { value: "", label: "跟随 QQ 专属头衔" },
+                    { value: "", label: "使用 QQ 专属头衔" },
                     ...settings.title_badges.map((b) => ({
                       value: String(b.id),
                       label: `${b.name}（${TIER_NAMES[b.tier]}）`,
@@ -205,10 +201,7 @@ export default function Settings({ loaderData, actionData }: Route.ComponentProp
             </div>
           </Section>
 
-          <Section
-            {...SECTIONS.customize}
-            description="资料卡和个人主页上的样子；匿名发布的内容不显示这些"
-          >
+          <Section {...SECTIONS.customize} description="装扮你的资料卡和个人主页，匿名发言时不显示">
             <div className="flex flex-col gap-5">
               <StatusField status={settings.user_status} now={now} />
               <BackgroundField
@@ -230,14 +223,14 @@ export default function Settings({ loaderData, actionData }: Route.ComponentProp
           <Section {...SECTIONS.privacy}>
             <Check
               name="hide_from_guests"
-              label="我的内容不给访客看"
-              hint="未登录的访客和搜索引擎看不到我发布的帖子、回复和短评（包括以前发布的），我的主页只显示名字和头像。约半分钟后生效"
+              label="我的内容仅成员可见"
+              hint="未登录的访客和搜索引擎将看不到你发布的帖子、回复和短评（包括以前发布的），你的主页只显示名字和头像"
               checked={settings.hide_from_guests}
             />
             <Check
               name="relations_public"
-              label="公开我的赞和关系"
-              hint="其他成员可以在我的主页查看我赞过的楼层、我关注和认可的人以及我的粉丝，我也会出现在他人主页的这些名单中。关闭后仍显示数量"
+              label="公开我的点赞和关注列表"
+              hint="其他成员能在你的主页看到你赞过的内容、你关注和认可的人以及你的粉丝。关闭后只显示数量，你也不会出现在别人的这些名单里"
               checked={settings.relations_public}
             />
           </Section>
@@ -246,25 +239,22 @@ export default function Settings({ loaderData, actionData }: Route.ComponentProp
             <Check
               name="allow_proxy"
               label="允许把我在群里的提问和回答整理到论坛"
-              hint={`由${BOT_NAME} 整理，内容记在我名下，我可以编辑和删除。关闭后不再收录我在群里的发言`}
+              hint={`由${BOT_NAME} 整理成帖子和回复，署你的名字，你可以随时编辑或删除`}
               checked={settings.allow_proxy}
             />
           </Section>
 
-          <Section
-            {...SECTIONS.notify}
-            description="站内通知显示在顶栏的铃铛中，邮件发送到我的 QQ 邮箱。未修改过的开关使用站点的默认设置，并随站点默认设置变化"
-          >
+          <Section {...SECTIONS.notify} description="邮件会发到你的 QQ 邮箱">
             <Check
               name="notify_email"
               label="接收邮件提醒"
-              hint="关闭后所有通知都不发送邮件，下方各类的设置保留不变"
+              hint="关闭后不再收到任何通知邮件"
               checked={settings.notify_email}
             />
             <Check
               name="weekly_email"
               label="每周来信"
-              hint="每周一告诉我上周我的分享被读了多少次、获得了多少赞；上周收获较少时不发"
+              hint="每周一告诉你，上周你的分享被读了多少次、收到了多少赞"
               checked={settings.weekly_email}
             />
             <table className="mt-3 w-full text-sm">
@@ -322,7 +312,7 @@ export default function Settings({ loaderData, actionData }: Route.ComponentProp
 
         <Section
           {...SECTIONS.export}
-          description="下载我发布的帖子和回复（Markdown 原文）、短评和收藏，格式为 JSON；每小时最多 3 次"
+          description="导出你的帖子、回复、短评和收藏，帖子和回复保留 Markdown 原文。每小时最多导出 3 次"
         >
           <a href="/api/v1/me/export" download className={buttonVariants({ variant: "outline" })}>
             <Download /> 下载我的内容
