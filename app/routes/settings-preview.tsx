@@ -1,4 +1,5 @@
 import { useRef, useState, useSyncExternalStore, type RefObject } from "react";
+import { Link } from "react-router";
 import { cn } from "cn";
 import { ChevronDown } from "~/components/icons";
 import { Backdrop } from "~/components/backdrop";
@@ -207,7 +208,10 @@ export function LookPreview({
         </div>
         <p className="text-meta text-muted-foreground">
           有 <span className="font-semibold text-foreground tabular-nums">{settings.coins}</span>{" "}
-          鼠币，可以兑换动态版
+          鼠币，可以兑换动态版 ·{" "}
+          <Link to="/coins" className="text-link hover:underline">
+            明细
+          </Link>
         </p>
       </div>
     </div>

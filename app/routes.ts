@@ -9,6 +9,7 @@ export default [
     route("u/:id", "routes/user.tsx"),
     route("badges", "routes/badges.tsx"),
     route("badges/:id", "routes/badge.tsx"),
+    route("coins", "routes/coins.tsx"),
     route("notifications", "routes/notifications.tsx"),
     route("settings", "routes/settings.tsx"),
     route("drafts", "routes/drafts.tsx"),

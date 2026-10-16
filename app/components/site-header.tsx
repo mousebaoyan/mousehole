@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Form, Link, useLocation, useParams } from "react-router";
-import { Bell, LogOut, Menu, Search, Settings, User, Wrench, X } from "~/components/icons";
+import { Bell, Coins, LogOut, Menu, Search, Settings, User, Wrench, X } from "~/components/icons";
 import { NewThreadButton } from "~/components/composer";
 import { Drawer, Dropdown, menuItem } from "~/components/disclosure";
 import { ForumNav } from "~/components/forum-nav";
@@ -10,7 +10,13 @@ import { UserAvatar } from "~/components/user-avatar";
 import { buttonVariants } from "~/components/ui/button";
 import { STAFF } from "../../server/platform/site.ts";
 
-type Me = { id: number; display_name: string; avatar_url: string | null; role: string };
+type Me = {
+  id: number;
+  display_name: string;
+  avatar_url: string | null;
+  role: string;
+  coins: number;
+};
 
 // The unread count as the page was loaded, then as the server tells it live.
 function useUnread(initial: number, signedIn: boolean) {
@@ -145,6 +151,10 @@ export function SiteHeader({ me, unread: loaded }: { me: Me | null; unread: numb
                     </div>
                     <Link to={`/u/${me.id}`} className={menuItem}>
                       <User /> 我的主页
+                    </Link>
+                    <Link to="/coins" className={menuItem}>
+                      <Coins /> 鼠币
+                      <span className="ml-auto text-muted-foreground tabular-nums">{me.coins}</span>
                     </Link>
                     <Link to="/settings" className={menuItem}>
                       <Settings /> 设置
