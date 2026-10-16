@@ -15,6 +15,7 @@ import { data, Link, useFetcher, useLocation } from "react-router";
 import { cn } from "cn";
 import { apiContext } from "../api.server.ts";
 import { BadgeChip, TIER_NAMES, TIER_STYLES } from "~/components/badge-chip";
+import { Backdrop } from "~/components/backdrop";
 import { BoardBadge } from "~/components/board-badge";
 import { PostBody } from "~/components/post-body";
 import { PROSE } from "~/components/prose";
@@ -34,6 +35,7 @@ import type { Route } from "./+types/user.ts";
 import { ClearButtons, ModerationButtons } from "./user-moderation.tsx";
 import { REACTIONS } from "./reactions.tsx";
 import { levelName, STAFF } from "../../server/platform/site.ts";
+import { CLEARABLE } from "../../server/modules/users/customization.ts";
 
 export function meta({ loaderData }: Route.MetaArgs) {
   const { user, tab, list } = loaderData;
@@ -139,8 +141,10 @@ export async function action({ params, request, context }: Route.ActionArgs) {
   const intent = form.get("intent");
   if (intent === "clear") {
     const reason = form.get("reason");
+    const item = CLEARABLE.find((i) => i === form.get("item"));
+    if (!item) throw data("无法清除这一项", { status: 400 });
     const res = await api.customization[":item"].$delete({
-      param: { ...param, item: form.get("item") === "status" ? "status" : "showcase" },
+      param: { ...param, item },
       json: { reason: typeof reason === "string" ? reason : "" },
     });
     if (res.ok) return { ok: true as const, saved: true };
@@ -256,8 +260,20 @@ function Profile({
 
   return (
     <div className={cn("flex flex-col gap-6", user.theme && `theme-${user.theme}`)}>
+      {/* A banner, which the avatar overlaps. */}
+      {user.background && (
+        <div className="relative aspect-[3/1] max-h-72 overflow-hidden rounded-2xl">
+          <Backdrop background={user.background} place="profile" />
+        </div>
+      )}
       <header className="flex items-start gap-4 px-1 sm:gap-5">
-        <UserAvatar user={user} className="size-16 text-2xl sm:size-20 sm:text-3xl" />
+        <UserAvatar
+          user={user}
+          className={cn(
+            "size-16 text-2xl sm:size-20 sm:text-3xl",
+            user.background && "relative -mt-16 ring-4 ring-background sm:-mt-20",
+          )}
+        />
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
             <h1 className="text-xl font-semibold break-all">{user.display_name}</h1>
@@ -326,6 +342,7 @@ function Profile({
           )}
           {staff && !self && (
             <ClearButtons
+              background={user.background !== null}
               status={user.user_status !== null}
               showcase={showcase.showcase_html !== null}
             />
@@ -459,7 +476,7 @@ function Showcase({ html }: { html: string }) {
         ref={box}
         className={cn(!open && "max-h-64 overflow-hidden", long && !open && "mask-b-from-70%")}
       >
-        <PostBody html={html} className={cn(PROSE, "mt-0 [&>:first-child]:mt-0")} />
+        <PostBody html={html} className={cn(PROSE, "mt-0 [&>:first-child]:mt-0!")} />
       </div>
       {long && (
         <button

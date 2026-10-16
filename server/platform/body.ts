@@ -8,7 +8,9 @@ const gunzipAsync = promisify(gunzip);
 
 // Images up to 20MB; a full member list is the largest JSON a bot sends.
 function limitFor(path: string) {
-  if (path === "/api/v1/uploads" || path === "/api/v1/me/avatar") return 20 * MB;
+  if (["/api/v1/uploads", "/api/v1/me/avatar", "/api/v1/me/background"].includes(path)) {
+    return 20 * MB;
+  }
   return /^\/api\/v1\/bot\/groups\/[^/]+\/members$/.test(path) ? 4 * MB : MB;
 }
 

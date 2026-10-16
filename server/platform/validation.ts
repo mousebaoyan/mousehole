@@ -34,6 +34,7 @@ const LABELS: Record<string, string> = {
   custom_bio: "签名",
   shown_badge_ids: "展示徽章",
   theme: "主题色",
+  background: "背景",
   pins: "代表作",
   showcase: "展柜",
   bio: "简介",

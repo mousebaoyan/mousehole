@@ -440,6 +440,8 @@ export interface Users {
   allow_proxy: Generated<boolean>;
   avatar_custom: Generated<boolean>;
   avatar_version: Generated<number>;
+  background: string | null;
+  background_version: Generated<number>;
   created_at: Generated<Timestamp>;
   custom_bio: string | null;
   custom_name: string | null;

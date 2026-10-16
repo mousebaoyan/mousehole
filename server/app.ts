@@ -20,7 +20,7 @@ import { lotteryRoutes } from "./modules/threads/lottery-routes.ts";
 import { pollRoutes } from "./modules/threads/poll-routes.ts";
 import { serveSitemap, threadsRoutes } from "./modules/threads/routes.ts";
 import { serveUpload, uploadsRoutes } from "./modules/uploads/routes.ts";
-import { serveAvatar, usersRoutes } from "./modules/users/routes.ts";
+import { serveAvatar, serveBackground, usersRoutes } from "./modules/users/routes.ts";
 import { weeklyRoutes } from "./modules/weekly/routes.ts";
 import { db } from "./platform/db.ts";
 import { env } from "./platform/env.ts";
@@ -116,6 +116,7 @@ export const app = new Hono<AppEnv>()
   // Before the session lookup: images don't need to know who is looking.
   .get("/uploads/:dir{[0-9a-f]{2}}/:file{[0-9a-f]{64}(?:-960)?\\.webp}", serveUpload)
   .get("/avatars/:file{[0-9]+\\.webp}", serveAvatar)
+  .get("/backgrounds/:file{[0-9]+-(?:card|profile)\\.webp}", serveBackground)
   .get("/robots.txt", (c) => c.text(ROBOTS, 200, { "cache-control": "public, max-age=86400" }))
   .get("/sitemap.xml", serveSitemap)
   // A cross-site page can make the browser send our cookie, but not a bearer token. Mail apps

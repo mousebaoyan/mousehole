@@ -1,24 +1,31 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { flushSync } from "react-dom";
-import { Link, useFetcher } from "react-router";
+import { Link, useFetcher, useRevalidator } from "react-router";
 import { cn } from "cn";
-import { ArrowDown, ArrowUp, Award, Check, Plus, X } from "~/components/icons";
+import { ArrowDown, ArrowUp, Award, Check, ImagePlus, Lock, Plus, X } from "~/components/icons";
+import { Backdrop } from "~/components/backdrop";
+import { browserApi } from "~/browser-api";
 import { TIER_STYLES } from "~/components/badge-chip";
 import { EmojiButton } from "~/components/emoji-button";
-import { Button } from "~/components/ui/button";
+import { Button, buttonVariants } from "~/components/ui/button";
+import { toast } from "~/components/ui/toast";
 import { Dialog } from "~/components/ui/dialog";
 import { Input } from "~/components/ui/input";
 import { Select } from "~/components/ui/select";
 import { Textarea } from "~/components/ui/textarea";
 import { stamp } from "~/time";
 import type { loader as userLoader } from "./user.tsx";
+import { BackgroundCropper, type Region } from "./background-cropper.tsx";
 import {
+  BACKGROUND_PRESETS,
+  BACKGROUNDS,
   DEFAULT_THEME_NAME,
   PINS_MAX,
   SHOWCASE_MAX,
   STATUS_MAX,
   THEME_NAMES,
   THEMES,
+  UPLOAD_LEVEL,
 } from "../../server/modules/users/customization.ts";
 
 // The settings page's 个性化 section (design §8.16).
@@ -408,5 +415,185 @@ export function ShowcaseField({ showcase }: { showcase: string | null }) {
         最多 {SHOWCASE_MAX} 个字，显示在个人主页的个性签名下面；支持 Markdown，图片显示为链接
       </span>
     </label>
+  );
+}
+
+// One look to pick: a radio under a preview that moves only while pointed at or chosen. A locked
+// one says the level it opens at.
+function Tile({
+  name,
+  value,
+  label,
+  checked,
+  lockedAt,
+  wide,
+  children,
+}: {
+  name: string;
+  value: string;
+  label: string;
+  checked: boolean;
+  lockedAt: number | null;
+  wide?: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <label
+      className={cn(
+        "group/tile flex min-w-0 flex-col items-center gap-1 text-xs",
+        lockedAt === null ? "cursor-pointer" : "cursor-not-allowed",
+      )}
+    >
+      <input
+        type="radio"
+        name={name}
+        value={value}
+        defaultChecked={checked}
+        disabled={lockedAt !== null}
+        className="peer sr-only"
+      />
+      <span
+        className={cn(
+          "relative w-full overflow-hidden rounded-lg border ring-primary ring-offset-2 ring-offset-card [--play:paused] group-hover/tile:[--play:running] peer-checked:ring-2 peer-checked:[--play:running] peer-focus-visible:ring-2",
+          wide ? "aspect-[2/1]" : "aspect-square",
+        )}
+      >
+        {children}
+        {lockedAt !== null && (
+          <span className="absolute inset-0 flex items-center justify-center gap-0.5 bg-black/40 font-medium text-white">
+            <Lock className="size-3.5" /> L{lockedAt}
+          </span>
+        )}
+      </span>
+      <span
+        className={cn(
+          "truncate",
+          lockedAt === null ? "text-muted-foreground" : "text-muted-foreground/60",
+        )}
+      >
+        {label}
+      </span>
+    </label>
+  );
+}
+
+type BackgroundUrls = { card_url: string; profile_url: string };
+
+// As the upload takes a region: "x,y,width,height".
+function region(r: Region) {
+  return `${r.left},${r.top},${r.width},${r.height}`;
+}
+
+// The presets, their own picture once uploaded, and none. Uploading happens at once, as an avatar
+// does; the field is keyed by what is saved, so it starts again with the new picture chosen.
+export function BackgroundField({
+  background,
+  urls,
+  unlocked,
+}: {
+  background: string | null;
+  urls: BackgroundUrls | null;
+  unlocked: { backgrounds: string[]; upload: boolean };
+}) {
+  const { revalidate } = useRevalidator();
+  const [picked, setPicked] = useState<{ file: File; url: string } | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  function close() {
+    if (picked) URL.revokeObjectURL(picked.url);
+    setPicked(null);
+  }
+
+  async function upload(regions: Record<"card" | "profile", Region>) {
+    if (!picked) return;
+    setBusy(true);
+    const res = await browserApi.me.background.$put({
+      form: { file: picked.file, card: region(regions.card), profile: region(regions.profile) },
+    });
+    setBusy(false);
+    if (!res.ok) {
+      toast((await res.json()).error.message);
+      return;
+    }
+    close();
+    toast("背景已更换");
+    await revalidate();
+  }
+
+  return (
+    <fieldset className="flex flex-col gap-1.5 text-sm">
+      <legend className="font-medium">背景</legend>
+      <div className="mt-1.5 grid grid-cols-3 gap-x-2 gap-y-2.5 sm:grid-cols-5">
+        <Tile
+          name="background"
+          value=""
+          label="不使用"
+          checked={background === null}
+          lockedAt={null}
+          wide
+        >
+          <span className="absolute inset-0 bg-muted" />
+        </Tile>
+        {BACKGROUNDS.map((key) => (
+          <Tile
+            key={key}
+            name="background"
+            value={key}
+            label={BACKGROUND_PRESETS[key].name}
+            checked={background === key}
+            lockedAt={
+              unlocked.backgrounds.includes(key) || background === key
+                ? null
+                : BACKGROUND_PRESETS[key].level
+            }
+            wide
+          >
+            <Backdrop background={{ preset: key }} place="card" />
+          </Tile>
+        ))}
+        {urls && (
+          <Tile
+            name="background"
+            value="custom"
+            label="我的图片"
+            checked={background === "custom"}
+            lockedAt={null}
+            wide
+          >
+            <Backdrop background={urls} place="card" />
+          </Tile>
+        )}
+      </div>
+      <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
+        <label
+          className={buttonVariants({
+            variant: "outline",
+            size: "sm",
+            className: "cursor-pointer has-disabled:pointer-events-none has-disabled:opacity-50",
+          })}
+        >
+          <ImagePlus /> {urls ? "重新上传图片" : "上传图片"}
+          <input
+            type="file"
+            accept="image/*"
+            disabled={!unlocked.upload}
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              e.target.value = "";
+              if (file) setPicked({ file, url: URL.createObjectURL(file) });
+            }}
+            className="sr-only"
+          />
+        </label>
+        <span className="text-meta text-muted-foreground">
+          {unlocked.upload
+            ? "静图或动图，资料卡和主页分别裁剪；动图压缩后资料卡不超过 500KB、主页不超过 1MB"
+            : `L${UPLOAD_LEVEL} 起可以上传自己的图片，静图、动图都可以`}
+        </span>
+      </div>
+      {picked && (
+        <BackgroundCropper url={picked.url} busy={busy} onCancel={close} onDone={upload} />
+      )}
+    </fieldset>
   );
 }

@@ -3,7 +3,8 @@ import { createRoute, z } from "@hono/zod-openapi";
 import type { Context } from "hono";
 import { AppError } from "../../platform/errors.ts";
 import { isMember, reachOf, restrictionOf, type Restriction } from "../../platform/access.ts";
-import { STAFF } from "../../platform/site.ts";
+import { env } from "../../platform/env.ts";
+import { SITE_NAME, STAFF } from "../../platform/site.ts";
 import {
   actorOf,
   authorize,
@@ -22,11 +23,21 @@ import { setCustomName } from "../members/service.ts";
 import { NOTIFICATION_TYPES, notifyPrefs } from "../notifications/service.ts";
 import { exportOwnBoosts } from "../reactions/service.ts";
 import { exportOwnPosts, listPins } from "../threads/service.ts";
-import { PINS_MAX, SHOWCASE_MAX, STATUS_MAX, THEMES } from "./customization.ts";
+import { backgroundOf, BACKGROUNDS_DIR, uploadBackground } from "./backgrounds.ts";
+import {
+  BACKGROUND_PRESETS,
+  BACKGROUNDS,
+  CLEARABLE,
+  PINS_MAX,
+  reaches,
+  SHOWCASE_MAX,
+  STATUS_MAX,
+  THEMES,
+  UPLOAD_LEVEL,
+} from "./customization.ts";
 import {
   assertRelationsShown,
   AVATARS_DIR,
-  CLEARABLE,
   clearCustomization,
   findUserId,
   getProfile,
@@ -59,10 +70,18 @@ const MeSchema = z
   })
   .openapi("Me");
 
+// Behind a card and a page (design §8.16): a preset, or their own picture cut for each.
+const BackgroundUrls = z.object({ card_url: z.string(), profile_url: z.string() });
+const BackgroundSchema = z
+  .union([z.object({ preset: z.enum(BACKGROUNDS) }), BackgroundUrls])
+  .nullable()
+  .openapi({ description: "背景：预设的 { preset }，或上传的两张图；没有为 null" });
+
 const UserSchema = UserBriefSchema.extend({
   members_only: z.literal(false),
   bio: z.string(),
   theme: z.string().nullable().openapi({ description: "主题色；null 是默认的海青" }),
+  background: BackgroundSchema,
   card: z.string().nullable().optional().openapi({
     description:
       "群名片，取自主群，不在主群时取最早加入的群，都不在为 null；这一项和下面两项只给成员和 bot",
@@ -188,6 +207,15 @@ const SettingsSchema = z
       .array(z.object({ id: z.number(), name: z.string(), tier: z.string() }))
       .openapi({ description: "自己得到的全部徽章，选展示徽章用" }),
     theme: z.string().nullable().openapi({ description: "主题色；null 是默认的海青" }),
+    background: z
+      .string()
+      .nullable()
+      .openapi({ description: "背景：预设的 key，上传的为 custom，没有为 null" }),
+    background_urls: BackgroundUrls.nullable().openapi({ description: "上传的背景，没有为 null" }),
+    unlocked: z.object({
+      backgrounds: z.array(z.string()).openapi({ description: "能选的预设背景" }),
+      upload: z.boolean().openapi({ description: "能不能上传自己的背景" }),
+    }),
     user_status: z
       .object({ emoji: z.string(), text: z.string(), until: z.number().nullable() })
       .nullable()
@@ -207,9 +235,29 @@ const SettingsSchema = z
   .openapi("MySettings");
 
 async function settingsJson(userId: number) {
-  const settings = await getSettings(userId);
-  return { ...settings, notify_prefs: await notifyPrefs(settings.notify_prefs) };
+  const { level, role, background_version, ...settings } = await getSettings(userId);
+  const background = backgroundOf(userId, settings.background, background_version);
+  return {
+    ...settings,
+    background_urls: background && "card_url" in background ? background : null,
+    unlocked: {
+      backgrounds: BACKGROUNDS.filter((key) =>
+        reaches({ level, role }, BACKGROUND_PRESETS[key].level),
+      ),
+      upload: reaches({ level, role }, UPLOAD_LEVEL),
+    },
+    notify_prefs: await notifyPrefs(settings.notify_prefs),
+  };
 }
+
+// A region of a picture, as "x,y,width,height" in pixels.
+const Region = z
+  .string()
+  .regex(/^\d{1,5},\d{1,5},[1-9]\d{0,4},[1-9]\d{0,4}$/, "裁剪的区域格式不正确")
+  .transform((v) => {
+    const [left, top, width, height] = v.split(",").map(Number);
+    return { left, top, width, height };
+  });
 
 const changed = {
   204: { description: "已更新" },
@@ -288,6 +336,7 @@ export const usersRoutes = createRouter()
           user_status: u.user_status,
           bio: u.bio,
           theme: u.theme,
+          background: backgroundOf(u.id, u.background, u.background_version),
           badges: u.badges,
           // Like a group's member list, which people outside it can't see, unless the site
           // shows QQ numbers to everyone.
@@ -609,6 +658,9 @@ export const usersRoutes = createRouter()
                   .nullable()
                   .optional()
                   .openapi({ description: "null 改回默认" }),
+                background: z.enum(BACKGROUNDS).nullable().optional().openapi({
+                  description: "预设背景的 key，null 是不用背景；上传的用 PUT /me/background",
+                }),
                 user_status: z
                   .object({
                     emoji: z
@@ -664,7 +716,7 @@ export const usersRoutes = createRouter()
         400: errorResponse(
           "不是自己的金徽章或银徽章，展示了没得到的徽章，或者代表作不是自己公开的帖子",
         ),
-        403: errorResponse("不是成员"),
+        403: errorResponse("不是成员，或者选了还没解锁的背景（cosmetic_locked）"),
       },
     }),
     async (c) => {
@@ -751,6 +803,45 @@ export const usersRoutes = createRouter()
       rateLimit(`upload:${viewer.id}`, 30, 10 * 60_000);
       const file = Buffer.from(await c.req.valid("form").file.arrayBuffer());
       return c.json({ avatar_url: await uploadAvatar(actorOf(c, viewer), file) }, 200);
+    },
+  )
+  .openapi(
+    createRoute({
+      method: "put",
+      path: "/me/background",
+      summary:
+        "上传背景：multipart 的 file 字段，格式同图片上传；card、profile 是在转正后的原图上裁的区域「x,y,宽,高」，资料卡 2:1、主页 3:1",
+      request: {
+        body: {
+          required: true,
+          content: {
+            "multipart/form-data": {
+              schema: z.object({
+                file: z.instanceof(File).openapi({ type: "string", format: "binary" }),
+                card: Region,
+                profile: Region,
+              }),
+            },
+          },
+        },
+      },
+      responses: {
+        200: {
+          description: "两张背景的地址",
+          content: { "application/json": { schema: BackgroundUrls } },
+        },
+        400: errorResponse("不是能识别的图片，裁的区域超出图片，或者动图太大"),
+        403: errorResponse("还没到能上传背景的等级"),
+        413: errorResponse("超过 20MB"),
+        429: errorResponse("上传太频繁"),
+      },
+    }),
+    async (c) => {
+      const viewer = authorizePosting(c);
+      rateLimit(`background:${viewer.id}`, 10, 60 * 60_000);
+      const { file, card, profile } = c.req.valid("form");
+      const picture = Buffer.from(await file.arrayBuffer());
+      return c.json(await uploadBackground(actorOf(c, viewer), picture, { card, profile }), 200);
     },
   )
   .openapi(
@@ -878,6 +969,29 @@ export const usersRoutes = createRouter()
       );
     },
   );
+
+const SITE = new URL(env.PUBLIC_URL).origin;
+
+// Registered ahead of sessions in app.ts, as avatars are. Larger than avatars, so like uploaded
+// images, other sites' pages may not show them (design §11.2).
+export async function serveBackground(c: Context) {
+  const referer = c.req.header("referer");
+  if (referer !== undefined && URL.parse(referer)?.origin !== SITE) {
+    throw new AppError(403, "forbidden", `背景只能在${SITE_NAME}的页面里显示`);
+  }
+  const file = await readFile(`${BACKGROUNDS_DIR}/${c.req.param("file")}`).catch(
+    (error: unknown) => {
+      if (error instanceof Error && "code" in error && error.code === "ENOENT") {
+        throw new AppError(404, "not_found", "背景不存在");
+      }
+      throw error;
+    },
+  );
+  return c.body(file, 200, {
+    "content-type": "image/webp",
+    "cache-control": "public, max-age=31536000, immutable",
+  });
+}
 
 // Registered ahead of sessions in app.ts: avatars are public, and their addresses carry the
 // version, so they can be cached for good.
