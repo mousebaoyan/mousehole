@@ -13,7 +13,7 @@ import { env } from "./env.ts";
 
 // Raised whenever the HTML written for the same Markdown changes; start-up then renders the floors
 // written before again.
-export const RENDER_VERSION = 1;
+export const RENDER_VERSION = 2;
 
 const md = new MarkdownIt({ html: false, linkify: true, breaks: true }).use(mark).use(footnote);
 const { Token } = new md.core.State("", md, {});

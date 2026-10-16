@@ -12,10 +12,11 @@ import type { ShownImage } from "../../platform/markdown.ts";
 // -960.webp beside it for still images. The name never changes, so they can be cached for good.
 export const UPLOADS_DIR = "data/uploads";
 
-const DISPLAY_WIDTH = 960;
-// How tall an image appears in a post at most: a phone screenshot at full width would fill a few
-// screens. Pages narrow it further to fit; a tap opens the large one.
-const SHOWN_HEIGHT = 400;
+// How large an image appears in a post at most, so it sits among the text rather than taking over
+// the screen: a phone screenshot at full width would fill a few. Pages narrow it further to fit;
+// a tap opens the large one.
+const SHOWN_WIDTH = 600;
+const SHOWN_HEIGHT = 300;
 
 const NAME = /^\/uploads\/[0-9a-f]{2}\/([0-9a-f]{64})\.webp$/;
 
@@ -112,7 +113,7 @@ export async function fetchUpload(userId: number, url: string) {
 
 // How the uploaded images among these addresses appear in a post: still images load their 960px
 // copy and open the large one; animated ones only have the large one. Either is shown at most
-// SHOWN_HEIGHT tall. Other addresses are left out.
+// SHOWN_WIDTH wide and SHOWN_HEIGHT tall. Other addresses are left out.
 export async function showImages(srcs: string[]) {
   const named = srcs.flatMap((src) => {
     const hex = uploadName(src);
@@ -134,8 +135,7 @@ export async function showImages(srcs: string[]) {
   for (const { src, hex } of named) {
     const size = rows.find((r) => r.hex === hex);
     if (!size) continue;
-    const widest = size.animated ? size.width : DISPLAY_WIDTH;
-    const scale = Math.min(1, widest / size.width, SHOWN_HEIGHT / size.height);
+    const scale = Math.min(1, SHOWN_WIDTH / size.width, SHOWN_HEIGHT / size.height);
     shown.set(src, {
       src: uploadUrl(hex, size.animated ? "large" : "display"),
       href: uploadUrl(hex),

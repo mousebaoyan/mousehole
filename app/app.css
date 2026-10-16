@@ -479,8 +479,10 @@
   border-radius: 0.4rem;
   vertical-align: bottom;
 }
-/* A table too wide for the column scrolls sideways. Cells keep a few characters' width, since
-   Chinese may break after any one of them and a squeezed column runs one character a line. */
+/* A table too wide for the column scrolls sideways. Cells keep a few characters' width besides
+   their padding, since Chinese may break after any one of them and a squeezed column runs one or
+   two characters a line. The table is a card of the page's color, so in a tinted callout the
+   scroll covers, which must be opaque, match what they cover. */
 .prose :where(table) {
   display: block;
   width: max-content;
@@ -507,7 +509,8 @@
         color-mix(in oklab, var(--foreground) 22%, transparent),
         transparent
       )
-      right / 0.7em 100% no-repeat scroll;
+      right / 0.7em 100% no-repeat scroll,
+    var(--background);
 }
 .prose :where(thead) {
   border-bottom: 1px solid var(--border);
@@ -518,6 +521,7 @@
   white-space: nowrap;
 }
 .prose :where(th, td) {
+  box-sizing: content-box;
   min-width: 4.5em;
   max-width: 24em;
   padding: 0.45em 0.8em;
@@ -527,7 +531,7 @@
    enough to read. */
 @media (width < 40rem) {
   .prose :where(table:has(tr > :nth-child(5))) :where(td) {
-    min-width: 8em;
+    min-width: 6.5em;
   }
 }
 .prose :where(tbody tr) {
