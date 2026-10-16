@@ -17,6 +17,7 @@ import { buttonVariants } from "~/components/ui/button";
 import { DialogHost } from "~/components/ui/dialog";
 import { Toaster } from "~/components/ui/toast";
 import { pageTitle } from "~/share-meta";
+import { sendReading } from "./routes/reading.ts";
 import "./app.css";
 import { SITE_NAME, UMAMI } from "../server/platform/site.ts";
 
@@ -26,6 +27,13 @@ const themeScript = `try{document.documentElement.dataset.theme=localStorage.get
 export function loader() {
   return { site: SITE_URL };
 }
+
+// What was just read on a thread is saved before the next page loads, so a list shows it read.
+export const clientMiddleware: Route.ClientMiddlewareFunction[] = [
+  async () => {
+    await sendReading();
+  },
+];
 
 // The site's address doesn't change.
 export function shouldRevalidate() {

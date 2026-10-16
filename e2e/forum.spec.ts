@@ -15,7 +15,9 @@ async function signIn(page: Page, args: string[]) {
   await page.waitForURL((url) => !url.pathname.startsWith("/login"));
 }
 
-test("站长设公告，管理员建版块、发帖再回复，从通知打开别人的回复", async ({ page }) => {
+test("站长设公告，管理员建版块、发帖再回复，从通知打开别人的回复，读完回到列表", async ({
+  page,
+}) => {
   await signIn(page, ["--owner"]);
   await page.goto("/admin/site");
   await page.getByLabel("公告横幅").fill("端到端测试的公告");
@@ -62,4 +64,12 @@ test("站长设公告，管理员建版块、发帖再回复，从通知打开�
   await page.goto("/notifications");
   await page.locator('a[href$="?floor=3"]').click();
   await expect(page.locator("#floor-3")).toBeInViewport();
+
+  // Read there, then straight back by the sidebar: the list already knows.
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await page.waitForTimeout(2500);
+  await page.getByRole("link", { name: "全部帖子" }).click();
+  const row = page.getByRole("link", { name: /端到端测试发的帖子/ });
+  await expect(row).toBeVisible();
+  await expect(row).not.toContainText("层没读过");
 });

@@ -30,6 +30,15 @@ function rangesOf(floors: Set<number>) {
   return ranges;
 }
 
+// Sends what the thread on screen has read and not yet reported. The page's own cleanup runs only
+// once the next page has loaded, too late for a list it leads back to, so root.tsx calls this
+// before each navigation loads.
+let flush: (() => Promise<unknown> | undefined) | undefined;
+
+export function sendReading() {
+  return flush?.();
+}
+
 // The floors the reader has read: what the server knew when the page loaded, and what they read
 // since. While the page is in front, it adds up how long each floor has been on screen, like
 // Discourse's screen tracker, and reports the floors read and the time spent in batches; see
@@ -55,13 +64,13 @@ export function useReading(threadId: number, initial: Ranges | undefined) {
 
     function send() {
       const seconds = Math.floor(unsentMs / 1000);
-      if (unsent.size === 0 && seconds === 0) return;
+      if (unsent.size === 0 && seconds === 0) return undefined;
       const floors = rangesOf(unsent);
       unsent = new Set();
       unsentMs -= seconds * 1000;
       lastSent = Date.now();
       // Kept alive so it still goes out when the page is closing.
-      void browserApi.threads[":id"].read.$post(
+      return browserApi.threads[":id"].read.$post(
         { param: { id: String(threadId) }, json: { floors, seconds } },
         { init: { keepalive: true } },
       );
@@ -88,16 +97,17 @@ export function useReading(threadId: number, initial: Ranges | undefined) {
       if (done.length > 0) {
         setState((s) => ({ ...s, read: new Set([...s.read, ...done]) }));
       }
-      if (Date.now() - lastSent >= REPORT_MS) send();
+      if (Date.now() - lastSent >= REPORT_MS) void send();
     }
 
     function onActive() {
       lastActive = Date.now();
     }
     function onVisibility() {
-      if (document.visibilityState === "hidden") send();
+      if (document.visibilityState === "hidden") void send();
     }
 
+    flush = send;
     const timer = setInterval(tick, TICK_MS);
     addEventListener("scroll", onActive, { passive: true });
     addEventListener("keydown", onActive);
@@ -109,7 +119,8 @@ export function useReading(threadId: number, initial: Ranges | undefined) {
       removeEventListener("keydown", onActive);
       document.removeEventListener("visibilitychange", onVisibility);
       removeEventListener("pagehide", send);
-      send();
+      flush = undefined;
+      void send();
     };
   }, [threadId, initial]);
 
