@@ -264,6 +264,7 @@ export interface Posts {
   id: Generated<number>;
   like_count: Generated<number>;
   reactions: Generated<Json>;
+  render_version: Generated<number>;
   reply_count: Generated<number>;
   reply_to_id: number | null;
   status: Generated<string>;

@@ -18,7 +18,7 @@ import {
 import { promoteActive, recheckL4 } from "./modules/levels/service.ts";
 import { indexMissingPosts } from "./modules/search/service.ts";
 import { drawDue } from "./modules/threads/lotteries.ts";
-import { flushViews, recordView } from "./modules/threads/service.ts";
+import { flushViews, recordView, rerenderPosts } from "./modules/threads/service.ts";
 import { clearUnusedUploads } from "./modules/uploads/service.ts";
 import { clearOldDays, recountPeopleReached, refreshAvatars } from "./modules/users/service.ts";
 import { sendWeeklyLetters } from "./modules/weekly/service.ts";
@@ -42,6 +42,7 @@ listen({
   [MAIL_CHANNEL]: () => void sendQueued(),
 });
 indexMissingPosts().catch((error: unknown) => log("error", "Indexing posts failed", { error }));
+rerenderPosts().catch((error: unknown) => log("error", "Rendering posts again failed", { error }));
 every(60_000, "Writing view counts", flushViews);
 every(60_000, "Drawing lotteries", drawDue);
 every(60_000, "Sending queued mail", sendQueued);
