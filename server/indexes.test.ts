@@ -53,6 +53,11 @@ beforeAll(async () => {
   );
   if (!res.ok) throw new Error(`status ${res.status}`);
   thread = (await res.json()).id;
+  await db
+    .updateTable("users")
+    .set({ pins: [thread] })
+    .where("id", "=", memberId)
+    .execute();
   await api.threads[":id"].posts.$post(
     { param: { id: String(thread) }, json: { content: { markdown: "rank 30% 也能进" } } },
     admin,
@@ -142,6 +147,7 @@ describe("热点查询走索引", () => {
     await api.users[":user"].likes.$get({ param: profile, query: {} }, member);
     await api.users[":user"].summary.$get({ param: profile }, member);
     await api.users[":user"].badges.$get({ param: profile });
+    await api.users[":user"].showcase.$get({ param: profile }, member);
     await api.badges.$get({});
     await api.users[":user"].relations.$get(
       { param: profile, query: { list: "endorsing" } },

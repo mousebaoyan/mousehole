@@ -456,6 +456,7 @@ export interface Users {
   notify_email: Generated<boolean>;
   notify_prefs: Generated<Json>;
   people_reached: Generated<number>;
+  pins: Generated<number[]>;
   post_count: Generated<number>;
   posts_read: Generated<number>;
   qq: number | null;
@@ -469,7 +470,12 @@ export interface Users {
   restriction: string | null;
   role: Generated<string>;
   role_locked: Generated<boolean>;
+  showcase: string | null;
   shown_badge_ids: number[] | null;
+  status_emoji: string | null;
+  status_text: string | null;
+  status_until: Timestamp | null;
+  theme: string | null;
   thread_count: Generated<number>;
   title_badge_id: number | null;
   visit_streak: Generated<number>;

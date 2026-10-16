@@ -22,6 +22,7 @@ import { PROSE } from "~/components/prose";
 import { UserAvatar } from "~/components/user-avatar";
 import { PostBody } from "~/components/post-body";
 import { UserCard } from "~/components/user-card";
+import { StatusEmoji } from "~/components/user-status";
 import { UserBadges } from "~/components/user-badges";
 import { isMine, useShown } from "~/components/writer";
 import { Button, buttonVariants } from "~/components/ui/button";
@@ -153,6 +154,9 @@ export function PostCard({
           <span className="truncate text-body font-semibold">{author.display_name}</span>
         </UserCard>
         <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-1.5 gap-y-1">
+          {"user_status" in author && author.user_status && (
+            <StatusEmoji status={author.user_status} />
+          )}
           <UserBadges user={author} op={op} mine={own} />
           {/* The opening post's state is the thread's, shown above it. */}
           {post.floor > 1 && post.status !== "visible" && (

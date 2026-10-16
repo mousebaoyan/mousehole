@@ -127,6 +127,7 @@ describe("我的内容不给访客看", () => {
       level: 1,
       title: "",
       title_tier: null,
+      user_status: null,
       members_only: true,
     });
     expect(await profile(other)).toMatchObject({ members_only: false });

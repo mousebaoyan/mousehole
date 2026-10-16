@@ -4,7 +4,7 @@ import { cn } from "cn";
 import { Check, Flag, Rocket, Trash2, X } from "~/components/icons";
 import type { PostItem, Writer } from "~/api-types";
 import { Dropdown, menuItem, useDismiss } from "~/components/disclosure";
-import { EmojiButton } from "~/components/emoji-button";
+import { EmojiButton, insertEmoji } from "~/components/emoji-button";
 import { Button } from "~/components/ui/button";
 import { UserAvatar } from "~/components/user-avatar";
 import { isMine, useShown } from "~/components/writer";
@@ -230,7 +230,7 @@ export function BoostButton({
               {length}/{BOOST_MAX}
             </span>
           )}
-          <EmojiButton target={input} onChange={setText} />
+          <EmojiButton onSelect={(emoji) => insertEmoji(input, emoji, setText)} />
           {mine !== null && (
             <Button
               variant="ghost"

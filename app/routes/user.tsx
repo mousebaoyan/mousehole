@@ -1,14 +1,28 @@
-import { Award, Heart, Search, Snowflake, Sparkles } from "~/components/icons";
+import {
+  Award,
+  ChevronDown,
+  ChevronUp,
+  Heart,
+  MessageSquare,
+  Pin,
+  Search,
+  Snowflake,
+  Sparkles,
+} from "~/components/icons";
 import { pageTitle } from "~/share-meta";
-import { useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { data, Link, useFetcher, useLocation } from "react-router";
 import { cn } from "cn";
 import { apiContext } from "../api.server.ts";
 import { BadgeChip, TIER_NAMES, TIER_STYLES } from "~/components/badge-chip";
+import { BoardBadge } from "~/components/board-badge";
+import { PostBody } from "~/components/post-body";
+import { PROSE } from "~/components/prose";
 import { More } from "~/components/thread-feed";
 import { ThreadList } from "~/components/thread-list";
 import { UserAvatar } from "~/components/user-avatar";
 import { UserBadges } from "~/components/user-badges";
+import { StatusLine } from "~/components/user-status";
 import { RelationButtons, useRelations } from "~/components/user-card";
 import { useMe } from "~/forum";
 import { restrictionText } from "~/restriction";
@@ -17,7 +31,7 @@ import { ago, unixNow } from "~/time";
 import type { InferResponseType } from "hono/client";
 import type { Api } from "~/api-types";
 import type { Route } from "./+types/user.ts";
-import { ModerationButtons } from "./user-moderation.tsx";
+import { ClearButtons, ModerationButtons } from "./user-moderation.tsx";
 import { REACTIONS } from "./reactions.tsx";
 import { levelName, STAFF } from "../../server/platform/site.ts";
 
@@ -60,24 +74,34 @@ export async function loader({ params, request, context }: Route.LoaderArgs) {
   const list: PeopleList = PEOPLE.find((p) => p.list === search.get("list"))?.list ?? "following";
   const cursor = search.get("cursor") ?? undefined;
   const param = { user: params.id };
-  const [userRes, levelRes, threadsRes, postsRes, likesRes, summaryRes, peopleRes, badgesRes] =
-    await Promise.all([
-      api.$get({ param }),
-      // Only for themselves and admins.
-      api.level.$get({ param }),
-      tab === "threads" ? api.threads.$get({ param, query: { cursor } }) : null,
-      tab === "posts" || tab === "solved"
-        ? api.posts.$get({
-            param,
-            query: { cursor, solved: tab === "solved" ? "true" : undefined },
-          })
-        : null,
-      tab === "likes" ? api.likes.$get({ param, query: { cursor } }) : null,
-      tab === "summary" ? api.summary.$get({ param }) : null,
-      tab === "people" ? api.relations.$get({ param, query: { list, cursor } }) : null,
-      tab === "badges" ? api.badges.$get({ param }) : null,
-    ]);
-  if (!userRes.ok) throw data("用户不存在", { status: 404 });
+  const [
+    userRes,
+    showcaseRes,
+    levelRes,
+    threadsRes,
+    postsRes,
+    likesRes,
+    summaryRes,
+    peopleRes,
+    badgesRes,
+  ] = await Promise.all([
+    api.$get({ param }),
+    api.showcase.$get({ param }),
+    // Only for themselves and admins.
+    api.level.$get({ param }),
+    tab === "threads" ? api.threads.$get({ param, query: { cursor } }) : null,
+    tab === "posts" || tab === "solved"
+      ? api.posts.$get({
+          param,
+          query: { cursor, solved: tab === "solved" ? "true" : undefined },
+        })
+      : null,
+    tab === "likes" ? api.likes.$get({ param, query: { cursor } }) : null,
+    tab === "summary" ? api.summary.$get({ param }) : null,
+    tab === "people" ? api.relations.$get({ param, query: { list, cursor } }) : null,
+    tab === "badges" ? api.badges.$get({ param }) : null,
+  ]);
+  if (!userRes.ok || !showcaseRes.ok) throw data("用户不存在", { status: 404 });
   const threads = threadsRes?.ok ? await threadsRes.json() : null;
   const posts = postsRes?.ok ? await postsRes.json() : null;
   const likes = likesRes?.ok ? await likesRes.json() : null;
@@ -85,6 +109,7 @@ export async function loader({ params, request, context }: Route.LoaderArgs) {
   // Shaped like the thread lists' pages, which `More` loads the next of.
   return {
     user: await userRes.json(),
+    showcase: await showcaseRes.json(),
     progress: levelRes.ok ? await levelRes.json() : null,
     tab,
     list,
@@ -112,6 +137,15 @@ export async function action({ params, request, context }: Route.ActionArgs) {
   const form = await request.formData();
   const param = { user: params.id };
   const intent = form.get("intent");
+  if (intent === "clear") {
+    const reason = form.get("reason");
+    const res = await api.customization[":item"].$delete({
+      param: { ...param, item: form.get("item") === "status" ? "status" : "showcase" },
+      json: { reason: typeof reason === "string" ? reason : "" },
+    });
+    if (res.ok) return { ok: true as const, saved: true };
+    return { ok: false as const, message: (await res.json()).error.message };
+  }
   if (intent === "restrict" || intent === "lift") {
     const days = Number(form.get("days"));
     const reason = form.get("reason");
@@ -178,6 +212,7 @@ export default function User({ loaderData, actionData }: Route.ComponentProps) {
 
 function Profile({
   user,
+  showcase,
   progress,
   tab,
   list,
@@ -220,7 +255,7 @@ function Profile({
   ];
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className={cn("flex flex-col gap-6", user.theme && `theme-${user.theme}`)}>
       <header className="flex items-start gap-4 px-1 sm:gap-5">
         <UserAvatar user={user} className="size-16 text-2xl sm:size-20 sm:text-3xl" />
         <div className="min-w-0 flex-1">
@@ -238,6 +273,7 @@ function Profile({
               </span>
             )}
           </div>
+          {user.user_status && <StatusLine status={user.user_status} className="mt-2" />}
           {user.bio && <p className="mt-2 text-body">{user.bio}</p>}
           {user.badges.length > 0 && (
             <div className="mt-2 flex flex-wrap gap-1">
@@ -288,6 +324,12 @@ function Profile({
               admin={me.role === "admin" || me.role === "owner"}
             />
           )}
+          {staff && !self && (
+            <ClearButtons
+              status={user.user_status !== null}
+              showcase={showcase.showcase_html !== null}
+            />
+          )}
           {actionData?.ok === false && (
             <p role="alert" className="mt-2 text-meta text-destructive">
               {actionData.message}
@@ -295,6 +337,9 @@ function Profile({
           )}
         </div>
       </header>
+
+      {showcase.showcase_html !== null && <Showcase key={user.id} html={showcase.showcase_html} />}
+      {showcase.pins.length > 0 && <Pins pins={showcase.pins} />}
 
       {/* On phones, posting in a row of four and reading in a row of three. */}
       <dl className="grid grid-cols-12 gap-2 px-1 lg:grid-cols-7">
@@ -395,6 +440,74 @@ function Profile({
         )}
       </section>
     </div>
+  );
+}
+
+// What they wrote about themselves (design §8.16). A long one is folded until opened; keyed by
+// the person, so it measures again on someone else's page.
+function Showcase({ html }: { html: string }) {
+  const box = useRef<HTMLDivElement>(null);
+  const [long, setLong] = useState(false);
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    const el = box.current;
+    if (el) setLong(el.scrollHeight > el.clientHeight + 1);
+  }, []);
+  return (
+    <section aria-label="展柜" className="rounded-2xl border bg-card px-4 py-3 sm:px-5">
+      <div
+        ref={box}
+        className={cn(!open && "max-h-64 overflow-hidden", long && !open && "mask-b-from-70%")}
+      >
+        <PostBody html={html} className={cn(PROSE, "mt-0 [&>:first-child]:mt-0")} />
+      </div>
+      {long && (
+        <button
+          type="button"
+          aria-expanded={open}
+          onClick={() => setOpen(!open)}
+          className="mt-1 inline-flex items-center gap-0.5 text-meta text-link"
+        >
+          {open ? "收起" : "展开全文"}
+          {open ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}
+        </button>
+      )}
+    </section>
+  );
+}
+
+// The threads they pinned to their page, like a GitHub profile's.
+function Pins({ pins }: { pins: LoaderData["showcase"]["pins"] }) {
+  return (
+    <section aria-labelledby="pins">
+      <h2 id="pins" className="flex items-center gap-1.5 px-1 text-sm font-medium">
+        <Pin className="size-4 text-brand-strong" aria-hidden /> 代表作
+      </h2>
+      <ul className="mt-2 grid gap-2 sm:grid-cols-2">
+        {pins.map((t) => (
+          <li
+            key={t.id}
+            className="relative flex flex-col gap-2 rounded-2xl border bg-card px-4 py-3 transition-colors hover:border-primary/40"
+          >
+            <Link
+              to={`/t/${t.id}`}
+              className="line-clamp-2 font-medium after:absolute after:inset-0"
+            >
+              {t.title}
+            </Link>
+            <div className="mt-auto flex items-center gap-3 text-xs text-muted-foreground tabular-nums">
+              <BoardBadge board={t.board} />
+              <span className="inline-flex items-center gap-1">
+                <MessageSquare className="size-3.5" aria-label="回复" /> {t.reply_count}
+              </span>
+              <span className="inline-flex items-center gap-1">
+                <Heart className="size-3.5" aria-label="获赞" /> {t.like_count}
+              </span>
+            </div>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
 

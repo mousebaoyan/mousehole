@@ -7,6 +7,7 @@ import { Button, buttonVariants } from "~/components/ui/button";
 import { UserAvatar } from "~/components/user-avatar";
 import { BadgeChip } from "~/components/badge-chip";
 import { UserBadges } from "~/components/user-badges";
+import { StatusLine } from "~/components/user-status";
 import { useMe } from "~/forum";
 import type { Writer } from "~/api-types";
 import type { loader } from "~/routes/user-card";
@@ -189,7 +190,7 @@ function FullCard({ profile }: { profile: Extract<Profile, { members_only: false
     { label: "认可", value: relations.endorsements },
   ];
   return (
-    <>
+    <div className={profile.theme ? `theme-${profile.theme}` : undefined}>
       <div className="flex items-center gap-3">
         <UserAvatar user={profile} className="size-14 text-xl" />
         <div className="min-w-0">
@@ -199,6 +200,7 @@ function FullCard({ profile }: { profile: Extract<Profile, { members_only: false
           </div>
         </div>
       </div>
+      {profile.user_status && <StatusLine status={profile.user_status} className="mt-3" />}
       {profile.bio && <p className="mt-3 line-clamp-3 text-meta">{profile.bio}</p>}
       {profile.badges.length > 0 && (
         <div className="mt-3 flex flex-wrap gap-1">
@@ -222,6 +224,6 @@ function FullCard({ profile }: { profile: Extract<Profile, { members_only: false
       >
         查看主页
       </Link>
-    </>
+    </div>
   );
 }

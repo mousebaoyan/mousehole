@@ -5,6 +5,7 @@ import {
   useRef,
   useState,
   type CSSProperties,
+  type ReactNode,
   type RefObject,
 } from "react";
 import { Smile } from "~/components/icons";
@@ -19,15 +20,36 @@ const EmojiPicker = lazy(() =>
 const PICKER_HEIGHT = 340;
 const PICKER_WIDTH = 320;
 
-// Inserts the chosen emoji at the caret of `target` and hands the new value to `onChange`. The
-// picker is fixed to the screen beside the button, above it when there is room: in the composer
-// it would otherwise be cut off by the scrolling area it sits in.
+// Puts an emoji at the caret of `target` and hands the new value to `onChange`.
+export function insertEmoji(
+  target: RefObject<HTMLInputElement | HTMLTextAreaElement | null>,
+  emoji: string,
+  onChange: (value: string) => void,
+) {
+  const el = target.current;
+  if (!el) return;
+  const start = el.selectionStart ?? el.value.length;
+  const end = el.selectionEnd ?? start;
+  onChange(el.value.slice(0, start) + emoji + el.value.slice(end));
+  const caret = start + emoji.length;
+  requestAnimationFrame(() => {
+    el.focus();
+    el.setSelectionRange(caret, caret);
+  });
+}
+
+// Opens the picker and hands the chosen emoji to `onSelect`. The button shows `children`, a
+// smiley unless said otherwise. The picker is fixed to the screen beside the button, above it
+// when there is room: in the composer it would otherwise be cut off by the scrolling area it sits
+// in.
 export function EmojiButton({
-  target,
-  onChange,
+  onSelect,
+  label = "表情",
+  children = <Smile />,
 }: {
-  target: RefObject<HTMLInputElement | HTMLTextAreaElement | null>;
-  onChange: (value: string) => void;
+  onSelect: (emoji: string) => void;
+  label?: string;
+  children?: ReactNode;
 }) {
   const [place, setPlace] = useState<CSSProperties | null>(null);
   const open = place !== null;
@@ -57,18 +79,9 @@ export function EmojiButton({
     setPlace(up ? { left, bottom: innerHeight - box.top + 8 } : { left, top: box.bottom + 8 });
   }
 
-  function insert(emoji: string) {
+  function select(emoji: string) {
     setPlace(null);
-    const el = target.current;
-    if (!el) return;
-    const start = el.selectionStart ?? el.value.length;
-    const end = el.selectionEnd ?? start;
-    onChange(el.value.slice(0, start) + emoji + el.value.slice(end));
-    const caret = start + emoji.length;
-    requestAnimationFrame(() => {
-      el.focus();
-      el.setSelectionRange(caret, caret);
-    });
+    onSelect(emoji);
   }
 
   return (
@@ -77,12 +90,12 @@ export function EmojiButton({
         type="button"
         variant="ghost"
         size="icon-sm"
-        aria-label="表情"
-        title="表情"
+        aria-label={label}
+        title={label}
         aria-expanded={open}
         onClick={(e) => (open ? setPlace(null) : show(e.currentTarget))}
       >
-        <Smile />
+        {children}
       </Button>
       {open && (
         <div className="fixed z-50 animate-in fade-in zoom-in-95" style={place}>
@@ -91,7 +104,7 @@ export function EmojiButton({
               <div className="h-80 w-[min(20rem,calc(100vw-2rem))] rounded-xl border bg-popover" />
             }
           >
-            <EmojiPicker onSelect={insert} />
+            <EmojiPicker onSelect={select} />
           </Suspense>
         </div>
       )}
