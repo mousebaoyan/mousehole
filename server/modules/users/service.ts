@@ -26,6 +26,7 @@ import {
   FRAMES,
   movingLook,
   reaches,
+  SHOWN_BADGES,
   unlockedFrames,
   type BackgroundPreset,
   type Clearable,
@@ -442,9 +443,6 @@ export async function listPeople(userId: number, list: RelationList, offset: num
   };
 }
 
-// Badges on the profile card when they haven't picked theirs: the best first (design §8.8).
-const CARD_BADGES = 3;
-
 // Their status until it runs out (design §8.16).
 const USER_STATUS = sql<{ emoji: string; text: string } | null>`CASE
   WHEN users.status_text IS NOT NULL AND (users.status_until IS NULL OR users.status_until > now())
@@ -511,7 +509,7 @@ export async function getUser(ref: UserRef, viewerId: number | null) {
             GROUP BY badges.id
             ORDER BY array_position('{gold,silver,bronze}'::text[], badges.tier),
               max(user_badges.granted_at) DESC
-            LIMIT ${CARD_BADGES}) b)
+            LIMIT ${SHOWN_BADGES}) b)
         ELSE (SELECT coalesce(json_agg(b ORDER BY array_position(users.shown_badge_ids, b.id)), '[]')
           FROM (SELECT id, name, tier FROM badges WHERE id = ANY(users.shown_badge_ids)) b)
         END`.as("badges"),
@@ -620,8 +618,8 @@ export async function getSettings(userId: number) {
   return { ...settings, badge_unlocks: await badgeUnlocks(db, userId), looks };
 }
 
-// Buying a look's moving version (design §8.16) wears it too; their own picture's changes nothing
-// worn, it lets animated pictures through.
+// Buying a look's moving version (design §8.16); wearing it is saving settings, as ever. Their own
+// picture's lets animated pictures through.
 export async function buyLook(actor: Actor, look: Look) {
   const moving = movingLook(look);
   if (!moving) throw new AppError(400, "invalid_request", "这一款没有动态版");
@@ -647,8 +645,6 @@ export async function buyLook(actor: Actor, look: Look) {
       look_key: look.key,
     });
   });
-  if (look.kind === "frame") await updateSettings(actor, { frame: look.key });
-  else if (look.key !== "custom") await updateSettings(actor, { background: look.key });
 }
 
 // Only what is given changes, down to each notification switch: one never set follows the

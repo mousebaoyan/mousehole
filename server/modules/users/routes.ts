@@ -33,6 +33,7 @@ import {
   PINS_MAX,
   reaches,
   SHOWCASE_MAX,
+  SHOWN_BADGES,
   STATUS_MAX,
   THEMES,
   unlockedFrames,
@@ -668,7 +669,7 @@ export const usersRoutes = createRouter()
                   .openapi({ description: "自己得到的金徽章或银徽章；null 改回 QQ 的专属头衔" }),
                 shown_badge_ids: z
                   .array(z.number().int())
-                  .max(3)
+                  .max(SHOWN_BADGES)
                   .refine((ids) => new Set(ids).size === ids.length, "展示徽章不能重复")
                   .nullable()
                   .optional()
@@ -871,7 +872,8 @@ export const usersRoutes = createRouter()
     createRoute({
       method: "post",
       path: "/me/looks",
-      summary: "用鼠币兑换动态版并换上；上传背景的（key 为 custom）兑换后可以上传动图，不换背景",
+      summary:
+        "用鼠币兑换动态版，换上照常用 PATCH /me；上传背景的（key 为 custom）兑换后可以上传动图",
       request: {
         body: {
           required: true,

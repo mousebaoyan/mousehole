@@ -178,6 +178,7 @@ export function CardPanel({
 
 // What the card loaded, the API's user.
 type Profile = NonNullable<ReturnType<typeof useFetcher<typeof loader>>["data"]>;
+export type FullProfile = Extract<Profile, { members_only: false }>;
 
 function CardBody({ profile }: { profile: Profile }) {
   if (!profile.members_only) return <FullCard profile={profile} />;
@@ -192,7 +193,8 @@ function CardBody({ profile }: { profile: Profile }) {
   );
 }
 
-function FullCard({ profile }: { profile: Extract<Profile, { members_only: false }> }) {
+// Also the settings' preview of one's own card (design §8.16).
+export function FullCard({ profile }: { profile: FullProfile }) {
   const relations = useRelations(profile);
   const numbers = [
     { label: "帖子", value: profile.stats.threads },
