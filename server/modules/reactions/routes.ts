@@ -8,6 +8,7 @@ import {
   errorResponse,
   unix,
 } from "../../platform/http.ts";
+import { CREATED_WITH_SOURCE, CreatedAt, createdWithSource, Source } from "../qq/schemas.ts";
 import { UserBriefSchema } from "../users/schemas.ts";
 import { BoostSchema, boostJson } from "./schemas.ts";
 import {
@@ -31,6 +32,14 @@ const BoostBody = z
   .refine((s) => boostLength(s) <= BOOST_MAX, `短评不超过 ${BOOST_MAX} 个字`)
   .openapi({ description: `不超过 ${BOOST_MAX} 个字，emoji 算一个` });
 
+// What a bot brings over from a group says where and when (docs/api.md §2.5).
+const archived = {
+  source: Source.optional().openapi({
+    description: "bot 收录时带：整理自哪条群消息；不提醒楼层作者",
+  }),
+  created_at: CreatedAt.optional(),
+};
+
 const changed = {
   204: { description: "已更新" },
   403: errorResponse("不是成员，或者是自己的回复"),
@@ -47,15 +56,28 @@ export const reactionsRoutes = createRouter()
         params: IdParam,
         body: {
           required: true,
-          content: { "application/json": { schema: z.object({ emoji: z.enum(REACTIONS) }) } },
+          content: {
+            "application/json": {
+              schema: z
+                .object({ emoji: z.enum(REACTIONS), ...archived })
+                .refine(createdWithSource, CREATED_WITH_SOURCE),
+            },
+          },
         },
       },
       responses: changed,
     }),
     async (c) => {
       const viewer = authorizePosting(c);
-      const { emoji } = c.req.valid("json");
-      await react(viewer, reachOf(viewer, c.var.bot), c.req.valid("param").id, emoji);
+      const { emoji, source, created_at } = c.req.valid("json");
+      await react(
+        actorOf(c, viewer),
+        viewer,
+        reachOf(viewer, c.var.bot),
+        c.req.valid("param").id,
+        emoji,
+        source && { source, created_at },
+      );
       return c.body(null, 204);
     },
   )
@@ -69,7 +91,8 @@ export const reactionsRoutes = createRouter()
     }),
     async (c) => {
       const viewer = authorize(c, "act");
-      await react(viewer, reachOf(viewer, c.var.bot), c.req.valid("param").id, null);
+      const id = c.req.valid("param").id;
+      await react(actorOf(c, viewer), viewer, reachOf(viewer, c.var.bot), id, null);
       return c.body(null, 204);
     },
   )
@@ -124,7 +147,13 @@ export const reactionsRoutes = createRouter()
         params: IdParam,
         body: {
           required: true,
-          content: { "application/json": { schema: z.object({ body: BoostBody }) } },
+          content: {
+            "application/json": {
+              schema: z
+                .object({ body: BoostBody, ...archived })
+                .refine(createdWithSource, CREATED_WITH_SOURCE),
+            },
+          },
         },
       },
       responses: {
@@ -139,12 +168,14 @@ export const reactionsRoutes = createRouter()
     async (c) => {
       const viewer = authorizePosting(c);
       const reach = reachOf(viewer, c.var.bot);
+      const { body, source, created_at } = c.req.valid("json");
       const boost = await setBoost(
         actorOf(c, viewer),
         viewer,
         reach,
         c.req.valid("param").id,
-        c.req.valid("json").body,
+        body,
+        source && { source, created_at },
       );
       return c.json(boostJson(boost), 200);
     },

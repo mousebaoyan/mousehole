@@ -4,6 +4,7 @@ import { db } from "../../platform/db.ts";
 import { AppError } from "../../platform/errors.ts";
 import { recordAudit } from "../audit/service.ts";
 import { notifyOnPost } from "../notifications/service.ts";
+import { postedAt, type Source } from "../qq/service.ts";
 import {
   aliasIn,
   countBoosts,
@@ -29,8 +30,20 @@ export const REACTIONS = [
 
 export type Reaction = (typeof REACTIONS)[number];
 
+// A reaction or boost a bot brings over from a group: dated when it was said there, and nobody
+// is told, as with the floors archived (design §6.5).
+export type Archived = { source: Source; created_at?: number };
+
 // One reaction per person per post: another emoji replaces it, none takes it back.
-export async function react(viewer: Viewer, reach: number, postId: number, emoji: Reaction | null) {
+export async function react(
+  actor: Actor,
+  viewer: Viewer,
+  reach: number,
+  postId: number,
+  emoji: Reaction | null,
+  archived?: Archived,
+) {
+  const at = postedAt(actor, archived?.created_at);
   const post = await getPost(postId, { reach, id: viewer.id, staff: false });
   if (post.deleted_at !== null) throw new AppError(404, "post_not_found", "回复不存在");
   if (post.author_id === viewer.id) throw new AppError(403, "forbidden", "不能给自己点赞");
@@ -54,14 +67,14 @@ export async function react(viewer: Viewer, reach: number, postId: number, emoji
     } else {
       await trx
         .insertInto("reactions")
-        .values({ post_id: postId, user_id: viewer.id, emoji })
+        .values({ post_id: postId, user_id: viewer.id, emoji, created_at: at })
         .onConflict((oc) =>
-          oc.columns(["post_id", "user_id"]).doUpdateSet({ emoji, created_at: sql<Date>`now()` }),
+          oc.columns(["post_id", "user_id"]).doUpdateSet({ emoji, created_at: at }),
         )
         .execute();
     }
     await countReaction(trx, postId, { from: previous, to: emoji });
-    if (previous === null && emoji !== null) {
+    if (previous === null && emoji !== null && !archived) {
       await notifyOnPost(trx, "like", post, viewer.id, null, { emoji });
     }
   });
@@ -114,7 +127,9 @@ export async function setBoost(
   reach: number,
   postId: number,
   body: string,
+  archived?: Archived,
 ) {
+  const at = postedAt(actor, archived?.created_at);
   const post = await getPost(postId, { reach, id: viewer.id, staff: false });
   if (post.deleted_at !== null) throw new AppError(404, "post_not_found", "回复不存在");
   // As the person writes in this thread: anonymous or not (design §8.12).
@@ -127,7 +142,7 @@ export async function setBoost(
   const row = await db.transaction().execute(async (trx) => {
     const { replaced, ...saved } = await trx
       .insertInto("boosts")
-      .values({ post_id: postId, user_id: viewer.id, body, anonymous })
+      .values({ post_id: postId, user_id: viewer.id, body, anonymous, created_at: at })
       .onConflict((oc) => oc.columns(["post_id", "user_id"]).doUpdateSet({ body }))
       .returning(["id", "post_id", "user_id", "body", "created_at"])
       .returning(sql<number | null>`old.id`.as("replaced"))
@@ -135,7 +150,7 @@ export async function setBoost(
     const alias = anonymous ? await aliasIn(trx, post.thread_id, viewer.id) : null;
     if (replaced === null) {
       await countBoosts(trx, postId, 1);
-      await notifyOnPost(trx, "boost", post, viewer.id, alias, { body });
+      if (!archived) await notifyOnPost(trx, "boost", post, viewer.id, alias, { body });
     }
     await recordAudit(trx, actor, {
       action: "boost.set",

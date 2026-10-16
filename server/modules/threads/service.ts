@@ -18,7 +18,7 @@ import {
 import { discardDraft } from "../drafts/service.ts";
 import { onebotToMarkdown, type Segment } from "../qq/onebot.ts";
 import { notifyOnPost, notifyPost, notifyThread } from "../notifications/service.ts";
-import { assertNotLinked, findLink, linkSource, type Source } from "../qq/service.ts";
+import { assertNotLinked, findLink, linkSource, postedAt, type Source } from "../qq/service.ts";
 import { indexPost, unindexPost } from "../search/service.ts";
 import { fetchUpload, linkUploads, showImages, uploadName } from "../uploads/service.ts";
 import {
@@ -770,14 +770,6 @@ async function resolveContent(
 
 function via(actor: Actor, source: Source | undefined) {
   return source ? "qq" : actor.tokenId === null ? "web" : "bot";
-}
-
-// Content archived from a group is dated when it was said there, which the bot gives; never
-// later than now (design §6.5).
-function postedAt(actor: Actor, createdAt: number | undefined) {
-  if (createdAt === undefined) return sql<Date>`now()`;
-  if (actor.tokenId === null) throw forbidden("只有 bot 收录群聊时能带 created_at");
-  return sql<Date>`least(to_timestamp(${createdAt}), now())`;
 }
 
 // What levels allow (design §6.6). Moderators and admins aren't held by any of it.

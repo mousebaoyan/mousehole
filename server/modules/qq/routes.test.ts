@@ -3,6 +3,7 @@ import sharp from "sharp";
 import { beforeAll, describe, expect, test } from "vitest";
 import { as, createUser, login, nextQq } from "../../../test/fixtures.ts";
 import { app } from "../../app.ts";
+import { db } from "../../platform/db.ts";
 import { createBotToken } from "../auth/service.ts";
 
 const api = testClient(app).api.v1;
@@ -226,5 +227,38 @@ describe("群消息收录到论坛", () => {
     const web = as(await login(member.id));
     const res = await api.threads.$post({ json: { ...json, source: source() } }, web);
     expect(res.status).toBe(403);
+  });
+  test("群里的表情回应和短评收录过来：按群里的时间，不提醒楼层作者", async () => {
+    const asker = await createUser();
+    const asAsker = { headers: { ...bot.headers, "x-act-as": `qq:${asker.qq}` } };
+    const onebot = [{ type: "text", data: { text: "有人知道吗" } }];
+    const res = await api.threads.$post(
+      { json: { board: "qq", title: "群里问的问题", content: { onebot }, source: source() } },
+      asAsker,
+    );
+    if (!res.ok) throw new Error(`status ${res.status}: ${await res.text()}`);
+    const param = { id: String((await opening((await res.json()).id)).id) };
+    const said = Math.floor(Date.now() / 1000) - 86_400;
+    const archived = { source: source(), created_at: said };
+    const liked = await api.posts[":id"].reaction.$put(
+      { param, json: { emoji: "+1", ...archived } },
+      asMember,
+    );
+    expect(liked.status).toBe(204);
+    const boosted = await api.posts[":id"].boost.$put(
+      { param, json: { body: "同问", ...archived } },
+      asMember,
+    );
+    if (!boosted.ok) throw new Error(`status ${boosted.status}: ${await boosted.text()}`);
+    expect((await boosted.json()).created_at).toBe(said);
+    const reactions = await api.posts[":id"].reactions.$get({ param, query: {} });
+    if (!reactions.ok) throw new Error(`status ${reactions.status}`);
+    expect((await reactions.json()).items).toMatchObject([{ emoji: "+1", created_at: said }]);
+    const told = await db
+      .selectFrom("notifications")
+      .select("id")
+      .where("user_id", "=", asker.id)
+      .execute();
+    expect(told).toEqual([]);
   });
 });
