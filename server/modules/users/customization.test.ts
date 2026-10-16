@@ -155,11 +155,70 @@ describe("个性化", () => {
       query: {},
     });
     if (!floors.ok) throw new Error(`status ${floors.status}`);
-    expect((await floors.json()).items[0].author).toMatchObject({ frame: "gilt" });
+    expect((await floors.json()).items[0].author).toMatchObject({
+      frame: { key: "gilt", moving: true },
+    });
 
     const moderator = as(await login((await createUser("moderator", 0)).id));
     expect((await wear("flow", moderator)).status).toBe(200);
     expect((await wear("sprout", moderator)).status).toBe(403);
+  });
+
+  test("按等级解锁的是静态的，用鼠币兑换动态版：要够得上等级、鼠币够，兑换了就换上、一直动", async () => {
+    const { id } = await createUser("user", 3);
+    const who = as(await login(id));
+    await db.updateTable("coin_balances").set({ coins: 200 }).where("user_id", "=", id).execute();
+    const buy = (
+      look:
+        | { kind: "frame"; key: "flow" | "teal" | "laurel" }
+        | { kind: "background"; key: "waves" | "stars" },
+    ) => api.me.looks.$post({ json: look }, who);
+    const author = async () => {
+      const res = await api.threads[":id"].posts.$get({
+        param: { id: String(threadId) },
+        query: {},
+      });
+      if (!res.ok) throw new Error(`status ${res.status}`);
+      return (await res.json()).items[0].author;
+    };
+
+    await api.me.$patch({ json: { frame: "flow" } }, who);
+    const threadId = await thread(who);
+    expect(await author()).toMatchObject({ frame: { key: "flow", moving: false } });
+    expect((await buy({ kind: "frame", key: "flow" })).status).toBe(200);
+    expect(await author()).toMatchObject({ frame: { key: "flow", moving: true } });
+
+    const bought = await buy({ kind: "background", key: "waves" });
+    if (!bought.ok) throw new Error(`status ${bought.status}`);
+    expect(await bought.json()).toMatchObject({
+      background: "waves",
+      coins: 40,
+      owned: { backgrounds: ["waves"], frames: ["flow"] },
+    });
+    expect((await card(id)).background).toEqual({ preset: "waves", moving: true });
+
+    for (const [look, status, code] of [
+      [{ kind: "background", key: "stars" }, 403, "coins_insufficient"],
+      [{ kind: "frame", key: "laurel" }, 403, "cosmetic_locked"],
+      [{ kind: "frame", key: "teal" }, 400, "invalid_request"],
+      [{ kind: "background", key: "waves" }, 409, "look_owned"],
+    ] as const) {
+      const res = await buy(look);
+      expect(res.status).toBe(status);
+      expect(await res.json()).toMatchObject({ error: { code } });
+    }
+    expect((await api.me.coins.$get({ query: {} }, who)).ok).toBe(true);
+    const spent = await db
+      .selectFrom("coin_ledger")
+      .select(["amount", "look_kind", "look_key"])
+      .where("user_id", "=", id)
+      .where("reason", "=", "look")
+      .orderBy("id")
+      .execute();
+    expect(spent).toEqual([
+      { amount: -100, look_kind: "frame", look_key: "flow" },
+      { amount: -60, look_kind: "background", look_key: "waves" },
+    ]);
   });
 
   test("版主能清除别人的状态和展柜，要写理由；普通成员不能", async () => {

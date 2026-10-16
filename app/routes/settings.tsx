@@ -209,9 +209,15 @@ export default function Settings({ loaderData, actionData }: Route.ComponentProp
                 background={settings.background}
                 urls={settings.background_urls}
                 unlocked={settings.unlocked}
+                owned={settings.owned.backgrounds}
               />
               {me && (
-                <FrameField frame={settings.frame} unlocked={settings.unlocked.frames} me={me} />
+                <FrameField
+                  frame={settings.frame}
+                  unlocked={settings.unlocked.frames}
+                  owned={settings.owned.frames}
+                  me={me}
+                />
               )}
               <ThemeField theme={settings.theme} />
               <ShownBadgesField badges={settings.badges} shown={settings.shown_badge_ids} />

@@ -29,7 +29,12 @@ export const UserBriefSchema = z
       .object({ emoji: z.string(), text: z.string() })
       .nullable()
       .openapi({ description: "状态：一个表情加一句话；没有或过期了为 null" }),
-    frame: z.enum(FRAMES).nullable().openapi({ description: "头像框；没有为 null" }),
+    frame: z
+      .object({ key: z.enum(FRAMES), moving: z.boolean() })
+      .nullable()
+      .openapi({
+        description: "头像框；moving 是动不动：兑换了动态版的、徽章解锁的会动。没有为 null",
+      }),
   })
   .openapi("UserBrief");
 

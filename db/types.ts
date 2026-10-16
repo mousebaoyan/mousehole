@@ -447,6 +447,13 @@ export interface UserFollows {
   follower_id: number;
 }
 
+export interface UserLooks {
+  created_at: Generated<Timestamp>;
+  key: string;
+  kind: string;
+  user_id: number;
+}
+
 export interface UserReads {
   day: Timestamp;
   reads: Generated<number>;
@@ -545,6 +552,7 @@ export interface DB {
   user_badges: UserBadges;
   user_days: UserDays;
   user_follows: UserFollows;
+  user_looks: UserLooks;
   user_reads: UserReads;
   users: Users;
 }

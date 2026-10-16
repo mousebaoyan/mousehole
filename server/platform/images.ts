@@ -89,17 +89,22 @@ type Size = { width: number; height: number };
 export type Region = Size & { left: number; top: number };
 
 // Cuts each region out of the picture turned upright, and fits it to its size without enlarging
-// it: `still` for a still picture, `moving` for an animated one, which keeps its frames. Regions
-// are in pixels of the upright picture.
+// it: `still` for a still picture, `moving` for an animated one, which keeps its frames when
+// `animate` allows, else only its first. Regions are in pixels of the upright picture.
 export async function cropImage(
   input: Buffer,
   crops: { region: Region; still: Size; moving: Size }[],
+  animate: boolean,
 ) {
   return oneOf(async () => {
-    const image = sharp(input, { animated: true, limitInputPixels: MAX_PIXELS, failOn: "error" });
+    const image = sharp(input, {
+      animated: animate,
+      limitInputPixels: MAX_PIXELS,
+      failOn: "error",
+    });
     const meta = await image.metadata().catch(invalid);
     if (!FORMATS.has(meta.format)) invalid();
-    const animated = (meta.pages ?? 1) > 1;
+    const animated = animate && (meta.pages ?? 1) > 1;
     // An animated picture's height covers every frame stacked; such pictures carry no EXIF.
     const { width } = meta.autoOrient;
     const height = animated ? (meta.pageHeight ?? meta.height) : meta.autoOrient.height;

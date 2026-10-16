@@ -4,9 +4,11 @@ import type { BackgroundPreset } from "../../server/modules/users/customization.
 
 // What a card's top and a page's banner show behind them (design §8.16): a preset drawn here, or
 // the person's own picture cut for the place. Presets are a few layers of gradients and small
-// inline SVG tiles; only their transforms and opacity move (app.css, .look-motion).
+// inline SVG tiles; only their transforms and opacity move (app.css, .look-motion), and only once
+// their moving version is bought.
 
-export type Background = { preset: BackgroundPreset } | { card_url: string; profile_url: string };
+export type Background =
+  { preset: BackgroundPreset; moving: boolean } | { card_url: string; profile_url: string };
 
 export function Backdrop({
   background,
@@ -18,7 +20,14 @@ export function Backdrop({
   className?: string;
 }) {
   return (
-    <div aria-hidden className={cn("absolute inset-0 overflow-hidden", className)}>
+    <div
+      aria-hidden
+      className={cn(
+        "absolute inset-0 overflow-hidden",
+        "preset" in background && !background.moving && "[--play:paused]",
+        className,
+      )}
+    >
       {"preset" in background ? (
         PRESETS[background.preset]()
       ) : (

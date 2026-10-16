@@ -92,7 +92,8 @@ const DEMO_TAGS = {
 };
 
 // A group as NapCat's get_group_member_list would return it: the first QQ owns it, the next two
-// are admins, and the bot is in it too.
+// are admins, and the bot is in it too. Everyone spoke in the last few hours, which checks them in
+// and gives them the coins the demo questions cost.
 function fakeGroup(firstQq: number, owner?: number) {
   const members = Array.from({ length: MEMBERS }, (_, i) => ({
     user_id: i === 0 && owner ? owner : firstQq + i,
@@ -100,6 +101,7 @@ function fakeGroup(firstQq: number, owner?: number) {
     card: `${25 + (i % 3)}-${SCHOOLS[i % SCHOOLS.length]}-${FIELDS[i % FIELDS.length]}`,
     role: i === 0 ? "owner" : i < 3 ? "admin" : "member",
     join_time: 1_700_000_000 + i * 86_400,
+    last_sent_time: now() - i * 600,
     is_robot: false,
   }));
   const bot = {

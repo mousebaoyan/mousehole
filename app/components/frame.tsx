@@ -251,9 +251,16 @@ const ART: Record<Frame, string> = {
     `<path d='${sparkle(59.5, 99, 2.4)}' fill='#fff' ${moving("twinkle", "animation-duration:2s")}/>`,
 };
 
-// Laid over the avatar, a fifth wider. `still` holds it still, unless the profile card it opens
-// is open (the trigger has group/card and aria-expanded).
-export function AvatarFrame({ frame, still }: { frame: Frame; still: boolean }) {
+// Laid over the avatar, a fifth wider. One that doesn't move stays as it starts (design §8.16);
+// `still` holds a moving one still too, unless the profile card it opens is open (the trigger has
+// group/card and aria-expanded).
+export function AvatarFrame({
+  frame,
+  still,
+}: {
+  frame: { key: Frame; moving: boolean };
+  still: boolean;
+}) {
   const prefix = useId().replaceAll(/\W/g, "");
   return (
     <svg
@@ -261,9 +268,11 @@ export function AvatarFrame({ frame, still }: { frame: Frame; still: boolean }) 
       aria-hidden
       className={cn(
         "pointer-events-none absolute -top-[12%] -left-[12%] size-[124%] overflow-visible",
-        still && "[--play:paused] group-aria-expanded/card:[--play:running]",
+        !frame.moving
+          ? "[--play:paused]"
+          : still && "[--play:paused] group-aria-expanded/card:[--play:running]",
       )}
-      dangerouslySetInnerHTML={{ __html: ART[frame].replaceAll("§", prefix) }}
+      dangerouslySetInnerHTML={{ __html: ART[frame.key].replaceAll("§", prefix) }}
     />
   );
 }
