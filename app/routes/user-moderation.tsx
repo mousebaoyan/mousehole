@@ -1,11 +1,11 @@
 import { useRef } from "react";
-import { Form } from "react-router";
-import { Ban, MicOff, ShieldCheck } from "~/components/icons";
+import { Form, useSubmit } from "react-router";
+import { Ban, Eraser, MicOff, ShieldCheck } from "~/components/icons";
 import { Field } from "~/components/form-parts";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Radio } from "~/components/ui/checkbox";
-import { Dialog } from "~/components/ui/dialog";
+import { Dialog, promptDialog } from "~/components/ui/dialog";
 import { Select } from "~/components/ui/select";
 import type { Restriction } from "~/restriction";
 
@@ -103,5 +103,29 @@ export function ModerationButtons({
         </Form>
       </Dialog>
     </>
+  );
+}
+
+// Clearing what someone wrote about themselves when it isn't fit to show (design §8.16).
+export function ClearButtons({ status, showcase }: { status: boolean; showcase: boolean }) {
+  const submit = useSubmit();
+  if (!status && !showcase) return null;
+  async function clear(item: "status" | "showcase", label: string) {
+    const reason = await promptDialog(`${label}的理由，将记入操作日志`, "理由", "清除");
+    if (reason) void submit({ intent: "clear", item, reason }, { method: "post" });
+  }
+  return (
+    <p className="mt-3 flex flex-wrap gap-2">
+      {status && (
+        <Button variant="outline" size="sm" onClick={() => void clear("status", "清除状态")}>
+          <Eraser /> 清除状态
+        </Button>
+      )}
+      {showcase && (
+        <Button variant="outline" size="sm" onClick={() => void clear("showcase", "清除展柜")}>
+          <Eraser /> 清除展柜
+        </Button>
+      )}
+    </p>
   );
 }

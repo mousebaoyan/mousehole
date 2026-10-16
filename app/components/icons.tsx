@@ -63,6 +63,7 @@ export const Code = icon(lucide.Code);
 export const Copy = icon(lucide.Copy);
 export const Download = icon(lucide.Download);
 export const Ellipsis = icon(lucide.Ellipsis);
+export const Eraser = icon(lucide.Eraser);
 export const ExternalLink = icon(lucide.ExternalLink);
 export const Eye = icon(lucide.Eye);
 export const EyeOff = icon(lucide.EyeOff);

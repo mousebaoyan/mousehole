@@ -26,7 +26,7 @@ import { cn } from "cn";
 import type { UserBrief } from "~/api-types";
 import { browserApi } from "~/browser-api";
 import { Dropdown, menuItem } from "~/components/disclosure";
-import { EmojiButton } from "~/components/emoji-button";
+import { EmojiButton, insertEmoji } from "~/components/emoji-button";
 import { PROSE } from "~/components/prose";
 import { Button } from "~/components/ui/button";
 import { UserAvatar } from "~/components/user-avatar";
@@ -362,7 +362,7 @@ export function MarkdownEditor({
               e.target.value = "";
             }}
           />
-          <EmojiButton target={textarea} onChange={onChange} />
+          <EmojiButton onSelect={(emoji) => insertEmoji(textarea, emoji, onChange)} />
           <Button
             type="button"
             variant="ghost"

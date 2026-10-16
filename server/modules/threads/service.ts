@@ -231,6 +231,25 @@ function inScope({ board, tagId }: Awaited<ReturnType<typeof scopeOf>>) {
 // Cursors: the last thread's ID for `created`, an offset for `hot`, otherwise the time the list
 // is ordered by (last activity, or when the reader bookmarked or last read it) and the ID. The
 // reader's own lists are empty for guests.
+// The threads someone pinned to their page, in their order (design §8.16); those the reader can't
+// open, and any since hidden, drop out.
+export async function listPins(reach: number, ids: number[]) {
+  return visibleThreads(reach)
+    .select([
+      "threads.id",
+      "threads.title",
+      "threads.reply_count",
+      "threads.like_count",
+      "boards.slug as board_slug",
+      "boards.name as board_name",
+      "boards.color as board_color",
+    ])
+    .where("threads.id", "=", sql<number>`any(${ids}::integer[])`)
+    .where("threads.author_anonymous", "=", false)
+    .orderBy(sql`array_position(${ids}::integer[], threads.id)`)
+    .execute();
+}
+
 export async function listThreads(
   reach: number,
   userId: number | null,

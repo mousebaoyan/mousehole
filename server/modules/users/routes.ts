@@ -2,7 +2,7 @@ import { readFile } from "node:fs/promises";
 import { createRoute, z } from "@hono/zod-openapi";
 import type { Context } from "hono";
 import { AppError } from "../../platform/errors.ts";
-import { isMember, restrictionOf, type Restriction } from "../../platform/access.ts";
+import { isMember, reachOf, restrictionOf, type Restriction } from "../../platform/access.ts";
 import { STAFF } from "../../platform/site.ts";
 import {
   actorOf,
@@ -21,13 +21,17 @@ import { UserBriefSchema, UserRefSchema } from "./schemas.ts";
 import { setCustomName } from "../members/service.ts";
 import { NOTIFICATION_TYPES, notifyPrefs } from "../notifications/service.ts";
 import { exportOwnBoosts } from "../reactions/service.ts";
-import { exportOwnPosts } from "../threads/service.ts";
+import { exportOwnPosts, listPins } from "../threads/service.ts";
+import { PINS_MAX, SHOWCASE_MAX, STATUS_MAX, THEMES } from "./customization.ts";
 import {
   assertRelationsShown,
   AVATARS_DIR,
+  CLEARABLE,
+  clearCustomization,
   findUserId,
   getProfile,
   getSettings,
+  getShowcase,
   getUser,
   listMembers,
   listPeople,
@@ -58,6 +62,7 @@ const MeSchema = z
 const UserSchema = UserBriefSchema.extend({
   members_only: z.literal(false),
   bio: z.string(),
+  theme: z.string().nullable().openapi({ description: "主题色；null 是默认的海青" }),
   card: z.string().nullable().optional().openapi({
     description:
       "群名片，取自主群，不在主群时取最早加入的群，都不在为 null；这一项和下面两项只给成员和 bot",
@@ -182,6 +187,15 @@ const SettingsSchema = z
     badges: z
       .array(z.object({ id: z.number(), name: z.string(), tier: z.string() }))
       .openapi({ description: "自己得到的全部徽章，选展示徽章用" }),
+    theme: z.string().nullable().openapi({ description: "主题色；null 是默认的海青" }),
+    user_status: z
+      .object({ emoji: z.string(), text: z.string(), until: z.number().nullable() })
+      .nullable()
+      .openapi({ description: "状态；until 是自动清除的时间，null 是不清除" }),
+    pins: z
+      .array(z.object({ id: z.number(), title: z.string() }))
+      .openapi({ description: "代表作，按顺序；删除、隐藏了的不在里面" }),
+    showcase: z.string().nullable().openapi({ description: "展柜的 Markdown 原文" }),
     weekly_email: z.boolean().openapi({ description: "收每周影响力邮件" }),
     notify_email: z
       .boolean()
@@ -259,7 +273,10 @@ export const usersRoutes = createRouter()
         level: u.level,
       };
       if (u.hide_from_guests && !members) {
-        return c.json({ ...brief, title: "", title_tier: null, members_only: true as const }, 200);
+        return c.json(
+          { ...brief, title: "", title_tier: null, user_status: null, members_only: true as const },
+          200,
+        );
       }
       const { site } = await getSiteSettings();
       return c.json(
@@ -268,7 +285,9 @@ export const usersRoutes = createRouter()
           members_only: false as const,
           title: u.title,
           title_tier: u.title_tier,
+          user_status: u.user_status,
           bio: u.bio,
+          theme: u.theme,
           badges: u.badges,
           // Like a group's member list, which people outside it can't see, unless the site
           // shows QQ numbers to everyone.
@@ -304,6 +323,86 @@ export const usersRoutes = createRouter()
         },
         200,
       );
+    },
+  )
+  .openapi(
+    createRoute({
+      method: "get",
+      path: "/users/{user}/showcase",
+      summary: "个人主页上的展柜和代表作（总体设计 §8.16）",
+      request: { params: UserParam },
+      responses: {
+        200: {
+          description: "看的人打不开的代表作不在里面；TA 不给访客看时，访客拿到的都是空的",
+          content: {
+            "application/json": {
+              schema: z.object({
+                showcase_html: z.string().nullable(),
+                pins: z.array(
+                  z.object({
+                    id: z.number(),
+                    title: z.string(),
+                    board: z.object({ slug: z.string(), name: z.string(), color: z.string() }),
+                    reply_count: z.number(),
+                    like_count: z.number(),
+                  }),
+                ),
+              }),
+            },
+          },
+        },
+        404: errorResponse("用户不存在"),
+      },
+    }),
+    async (c) => {
+      const { viewer, bot } = c.var;
+      const shown = await getShowcase(c.req.valid("param").user);
+      if (shown.hide_from_guests && !isMember(viewer, bot)) {
+        return c.json({ showcase_html: null, pins: [] }, 200);
+      }
+      const pins = shown.pins.length > 0 ? await listPins(reachOf(viewer, bot), shown.pins) : [];
+      return c.json(
+        {
+          showcase_html: shown.html,
+          pins: pins.map((t) => ({
+            id: t.id,
+            title: t.title,
+            board: { slug: t.board_slug, name: t.board_name, color: t.board_color },
+            reply_count: t.reply_count,
+            like_count: t.like_count,
+          })),
+        },
+        200,
+      );
+    },
+  )
+  .openapi(
+    createRoute({
+      method: "delete",
+      path: "/users/{user}/customization/{item}",
+      summary: "清除不合适的状态或展柜，理由必填，记操作日志（总体设计 §8.16）",
+      request: {
+        params: UserParam.extend({ item: z.enum(CLEARABLE) }),
+        body: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: z.object({ reason: z.string().trim().min(1).max(200) }),
+            },
+          },
+        },
+      },
+      responses: {
+        204: { description: "已清除" },
+        403: errorResponse("不是版主"),
+        404: errorResponse("用户不存在"),
+      },
+    }),
+    async (c) => {
+      const viewer = authorize(c, "moderate");
+      const { user, item } = c.req.valid("param");
+      await clearCustomization(actorOf(c, viewer), user, item, c.req.valid("json").reason);
+      return c.body(null, 204);
     },
   )
   .openapi(
@@ -505,6 +604,45 @@ export const usersRoutes = createRouter()
                   .openapi({
                     description: "最多 3 枚自己得到的徽章，按顺序；[] 是不展示，null 改回默认规则",
                   }),
+                theme: z
+                  .enum(THEMES)
+                  .nullable()
+                  .optional()
+                  .openapi({ description: "null 改回默认" }),
+                user_status: z
+                  .object({
+                    emoji: z
+                      .string()
+                      .max(32)
+                      .refine(
+                        (e) =>
+                          [...new Intl.Segmenter().segment(e)].length === 1 &&
+                          /\p{Extended_Pictographic}|\p{Regional_Indicator}/u.test(e),
+                        "请选择一个表情",
+                      ),
+                    text: z.string().trim().min(1).max(STATUS_MAX),
+                    until: z.number().int().nullable(),
+                  })
+                  .nullable()
+                  .optional()
+                  .openapi({
+                    description:
+                      "表情加一句话，until 是自动清除的 Unix 秒，null 是不清除；整个为 null 是清除状态",
+                  }),
+                pins: z
+                  .array(z.number().int())
+                  .max(PINS_MAX)
+                  .refine((ids) => new Set(ids).size === ids.length, "代表作不能重复")
+                  .optional()
+                  .openapi({ description: "代表作：自己公开发布的帖子 ID，按顺序" }),
+                showcase: z
+                  .string()
+                  .trim()
+                  .min(1)
+                  .max(SHOWCASE_MAX)
+                  .nullable()
+                  .optional()
+                  .openapi({ description: "展柜的 Markdown，null 是不要展柜" }),
                 weekly_email: z.boolean().optional(),
                 notify_email: z.boolean().optional(),
                 notify_prefs: z
@@ -523,7 +661,9 @@ export const usersRoutes = createRouter()
           description: "改好的设置",
           content: { "application/json": { schema: SettingsSchema } },
         },
-        400: errorResponse("不是自己的金徽章或银徽章，或者展示了没得到的徽章"),
+        400: errorResponse(
+          "不是自己的金徽章或银徽章，展示了没得到的徽章，或者代表作不是自己公开的帖子",
+        ),
         403: errorResponse("不是成员"),
       },
     }),

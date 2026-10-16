@@ -25,6 +25,11 @@ function date(unix: number, now: number) {
   return year === beijing(now).getUTCFullYear() ? monthDay : `${year}年${monthDay}`;
 }
 
+// The coming midnight in Beijing.
+export function endOfDay(unix: number) {
+  return (day(unix) + 1) * 86_400 - OFFSET_S;
+}
+
 // For lists: "12 分钟前", "昨天", "10月3日".
 export function ago(unix: number, now: number) {
   const s = now - unix;

@@ -12,9 +12,11 @@ import { readCapped } from "../../platform/body.ts";
 import { db } from "../../platform/db.ts";
 import { AppError } from "../../platform/errors.ts";
 import { processAvatar } from "../../platform/images.ts";
+import { renderMarkdown } from "../../platform/markdown.ts";
 import { log } from "../../platform/log.ts";
 import { recordAudit } from "../audit/service.ts";
 import { recordEvent } from "../events/service.ts";
+import type { Theme } from "./customization.ts";
 
 // For the bootstrap command: the owner sets the site up before any group is synced (design
 // §10). There is one, with no QQ number.
@@ -425,6 +427,11 @@ export async function listPeople(userId: number, list: RelationList, offset: num
 // Badges on the profile card when they haven't picked theirs: the best first (design §8.8).
 const CARD_BADGES = 3;
 
+// Their status until it runs out (design §8.16).
+const USER_STATUS = sql<{ emoji: string; text: string } | null>`CASE
+  WHEN users.status_text IS NOT NULL AND (users.status_until IS NULL OR users.status_until > now())
+  THEN json_build_object('emoji', users.status_emoji, 'text', users.status_text) END`;
+
 // What the profile card and the user's page show; see design §6.1 and §9. `viewerId` is for
 // whether the reader follows and has endorsed them.
 export async function getUser(ref: UserRef, viewerId: number | null) {
@@ -441,6 +448,8 @@ export async function getUser(ref: UserRef, viewerId: number | null) {
       "home.joined_at",
       "home.last_sent_at",
       eb.fn.coalesce("users.custom_bio", "users.qq_bio").as("bio"),
+      USER_STATUS.as("user_status"),
+      "users.theme",
       "users.hide_from_guests",
       "users.relations_public",
       "users.qq",
@@ -517,6 +526,17 @@ export async function getSettings(userId: number) {
       "relations_public",
       "title_badge_id",
       "shown_badge_ids",
+      "theme",
+      sql<{ emoji: string; text: string; until: number | null } | null>`CASE
+        WHEN status_text IS NOT NULL AND (status_until IS NULL OR status_until > now())
+        THEN json_build_object('emoji', status_emoji, 'text', status_text,
+          'until', extract(epoch FROM status_until)::integer) END`.as("user_status"),
+      // The ones still shown: deleted and hidden threads drop out when the list is next saved.
+      sql<{ id: number; title: string }[]>`(SELECT coalesce(json_agg(json_build_object(
+          'id', t.id, 'title', t.title) ORDER BY array_position(users.pins, t.id)), '[]')
+        FROM threads t
+        WHERE t.id = ANY(users.pins) AND t.deleted_at IS NULL AND t.status = 'visible')`.as("pins"),
+      "showcase",
       "weekly_email",
       sql<
         { id: number; name: string; tier: string }[]
@@ -549,21 +569,27 @@ export async function updateSettings(
     relations_public?: boolean;
     title_badge_id?: number | null;
     shown_badge_ids?: number[] | null;
+    theme?: Theme | null;
+    user_status?: { emoji: string; text: string; until: number | null } | null;
+    pins?: number[];
+    showcase?: string | null;
     weekly_email?: boolean;
     notify_email?: boolean;
     notify_prefs?: Record<string, { site?: boolean; email?: boolean }>;
   },
 ) {
-  const { notify_prefs, ...rest } = change;
+  const { notify_prefs, user_status, ...rest } = change;
   if (Object.keys(change).length === 0) return;
   await db.transaction().execute(async (trx) => {
     if (change.title_badge_id != null)
       await assertTitleBadge(trx, actor.userId, change.title_badge_id);
     if (change.shown_badge_ids) await assertOwnBadges(trx, actor.userId, change.shown_badge_ids);
+    if (change.pins) await assertPinnable(trx, actor.userId, change.pins);
     await trx
       .updateTable("users")
       .set({
         ...rest,
+        ...(user_status !== undefined && statusColumns(user_status)),
         ...(notify_prefs && {
           notify_prefs: sql`notify_prefs || coalesce((
             SELECT jsonb_object_agg(key, coalesce(notify_prefs -> key, '{}') || value)
@@ -599,6 +625,67 @@ async function assertOwnBadges(trx: Transaction<DB>, userId: number, badgeIds: n
   if (owned !== badgeIds.length) {
     throw new AppError(400, "badge_not_owned", "只能展示自己得到的徽章");
   }
+}
+
+// Only one's own threads, as everyone sees them, make their page (design §8.16).
+async function assertPinnable(trx: Transaction<DB>, userId: number, threadIds: number[]) {
+  const { pinnable } = await trx
+    .selectFrom("threads")
+    .select(sql<number>`count(*)::integer`.as("pinnable"))
+    .where("id", "=", sql<number>`any(${threadIds}::integer[])`)
+    .where("author_id", "=", userId)
+    .where("author_anonymous", "=", false)
+    .where("deleted_at", "is", null)
+    .where("status", "=", "visible")
+    .executeTakeFirstOrThrow();
+  if (pinnable !== threadIds.length) {
+    throw new AppError(400, "thread_not_pinnable", "代表作只能选自己公开发布的帖子");
+  }
+}
+
+function statusColumns(status: { emoji: string; text: string; until: number | null } | null) {
+  return {
+    status_emoji: status && status.emoji,
+    status_text: status && status.text,
+    status_until: status?.until ? new Date(status.until * 1000) : null,
+  };
+}
+
+// What moderators clear when it isn't fit to show (design §8.16).
+export const CLEARABLE = ["status", "showcase"] as const;
+
+export async function clearCustomization(
+  actor: Actor,
+  ref: UserRef,
+  item: (typeof CLEARABLE)[number],
+  reason: string,
+) {
+  const userId = await findUserId(ref);
+  await db.transaction().execute(async (trx) => {
+    await trx
+      .updateTable("users")
+      .set(item === "status" ? statusColumns(null) : { showcase: null })
+      .where("id", "=", userId)
+      .execute();
+    await recordAudit(trx, actor, {
+      action: "user.clear",
+      target_type: "user",
+      target_id: userId,
+      data: { item, reason },
+    });
+  });
+}
+
+// Their showcase for their page, and which threads they pinned there; see design §8.16.
+// Images in it show as links: it is about them, and keeps the page light.
+export async function getShowcase(ref: UserRef) {
+  const { showcase, ...rest } = await db
+    .selectFrom("users")
+    .select(["showcase", "pins", "hide_from_guests"])
+    .where((eb) => ("id" in ref ? eb("id", "=", ref.id) : eb("qq", "=", ref.qq)))
+    .executeTakeFirstOrThrow(userNotFound);
+  const html = showcase && (await renderMarkdown(showcase, async () => new Map())).html;
+  return { ...rest, html };
 }
 
 // A badge taken back is no longer worn as their title, nor shown on their card.
@@ -885,6 +972,7 @@ export async function userBriefs(ids: number[]) {
       "users.level",
       eb.fn.coalesce("title_badge.name", "home.title", eb.val("")).as("title"),
       "title_badge.tier as title_tier",
+      USER_STATUS.as("user_status"),
     ])
     .where("users.id", "=", sql<number>`any(${[...new Set(ids)]}::integer[])`)
     .execute();

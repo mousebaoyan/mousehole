@@ -21,7 +21,16 @@ import {
   NOTIFICATION_TYPES,
 } from "../../server/modules/notifications/types.ts";
 import { BOT_NAME } from "../../server/platform/site.ts";
-import { ShownBadgesField } from "./settings-customize.tsx";
+import {
+  DEFAULT_STATUS_EMOJI,
+  PinsField,
+  ShowcaseField,
+  ShownBadgesField,
+  StatusField,
+  ThemeField,
+} from "./settings-customize.tsx";
+import { endOfDay, unixNow } from "~/time";
+import { THEMES } from "../../server/modules/users/customization.ts";
 
 export function meta() {
   return [{ title: pageTitle("设置") }];
@@ -42,7 +51,11 @@ export async function loader({ context }: Route.LoaderArgs) {
   const api = context.get(apiContext);
   const [settings, sessions] = await Promise.all([api.me.settings.$get(), api.me.sessions.$get()]);
   if (!settings.ok || !sessions.ok) return redirect("/login");
-  return { settings: await settings.json(), sessions: (await sessions.json()).items };
+  return {
+    settings: await settings.json(),
+    sessions: (await sessions.json()).items,
+    now: unixNow(),
+  };
 }
 
 // Saving the form, or signing a device out.
@@ -71,7 +84,17 @@ export async function action({ request, context }: Route.ActionArgs) {
       hide_from_guests: on("hide_from_guests"),
       relations_public: on("relations_public"),
       title_badge_id: field("title_badge_id") ? Number(field("title_badge_id")) : null,
-      shown_badge_ids: ids(field("shown_badges")),
+      shown_badge_ids: field("shown_badges") === "auto" ? null : ids(field("shown_badges")),
+      theme: THEMES.find((t) => t === field("theme")) ?? null,
+      user_status: field("status_text")
+        ? {
+            emoji: field("status_emoji") || DEFAULT_STATUS_EMOJI,
+            text: field("status_text"),
+            until: clearsAt(field("status_until"), field("status_was")),
+          }
+        : null,
+      pins: ids(field("pins")),
+      showcase: field("showcase") || null,
       notify_email: on("notify_email"),
       weekly_email: on("weekly_email"),
       notify_prefs: Object.fromEntries(
@@ -94,14 +117,24 @@ export async function action({ request, context }: Route.ActionArgs) {
   return { ok: false, message: (await res.json()).error.message };
 }
 
-// What a picker of several sent: "auto" for the default, else the IDs in order.
+// When a status clears by itself: the time it had, or one counted from now.
+function clearsAt(choice: string, was: string) {
+  const now = unixNow();
+  if (choice === "keep") return Number(was);
+  if (choice === "today") return endOfDay(now);
+  if (choice === "3d") return now + 3 * 86_400;
+  if (choice === "7d") return now + 7 * 86_400;
+  return null;
+}
+
+// What a picker of several sent: the IDs in order.
 function ids(value: string) {
-  if (value === "auto") return null;
   return value === "" ? [] : value.split(",").map(Number);
 }
 
 export default function Settings({ loaderData, actionData }: Route.ComponentProps) {
-  const { settings, sessions } = loaderData;
+  const { settings, sessions, now } = loaderData;
+  const me = useMe();
   return (
     <div className="flex gap-8">
       <div className="max-w-2xl min-w-0 flex-1">
@@ -170,7 +203,11 @@ export default function Settings({ loaderData, actionData }: Route.ComponentProp
             description="资料卡和个人主页上的样子；匿名发布的内容不显示这些"
           >
             <div className="flex flex-col gap-5">
+              <StatusField status={settings.user_status} now={now} />
+              <ThemeField theme={settings.theme} />
               <ShownBadgesField badges={settings.badges} shown={settings.shown_badge_ids} />
+              {me && <PinsField pins={settings.pins} userId={me.id} />}
+              <ShowcaseField showcase={settings.showcase} />
             </div>
           </Section>
 

@@ -118,6 +118,107 @@
   --bronze: #dd9a6e;
 }
 
+/* Accent colours people pick for their card and page (design §8.16): buttons, links, progress
+   and accents follow; white stays readable on each primary. */
+.theme-apricot {
+  --primary: #a95a1f;
+  --ring: #f2b27a;
+  --link: #9a5418;
+  --brand: #f2b27a;
+  --brand-strong: #a0521f;
+}
+.theme-ink {
+  --primary: #2f5d4a;
+  --ring: #8fb5a0;
+  --link: #2f5d4a;
+  --brand: #8fb5a0;
+  --brand-strong: #2f5d4a;
+}
+.theme-sakura {
+  --primary: #c0466b;
+  --ring: #f4a7bd;
+  --link: #b23d61;
+  --brand: #f4a7bd;
+  --brand-strong: #b23d61;
+}
+.theme-sky {
+  --primary: #2f6fb0;
+  --ring: #8ec3ec;
+  --link: #2a66a3;
+  --brand: #8ec3ec;
+  --brand-strong: #2a5f96;
+}
+.theme-wisteria {
+  --primary: #7656b0;
+  --ring: #c3b0e6;
+  --link: #6c4ea5;
+  --brand: #c3b0e6;
+  --brand-strong: #6a4aa3;
+}
+.theme-vermilion {
+  --primary: #c0392b;
+  --ring: #f19a85;
+  --link: #b23427;
+  --brand: #f19a85;
+  --brand-strong: #b03a2a;
+}
+.theme-graphite {
+  --primary: #4a5560;
+  --ring: #b8c0c8;
+  --link: #46515c;
+  --brand: #b8c0c8;
+  --brand-strong: #48535e;
+}
+:root[data-theme="dark"] .theme-apricot {
+  --primary: #a85f24;
+  --ring: #c98a55;
+  --link: #f0b27e;
+  --brand: #c98a55;
+  --brand-strong: #f2b98a;
+}
+:root[data-theme="dark"] .theme-ink {
+  --primary: #3d7560;
+  --ring: #5f9a80;
+  --link: #8fc9ae;
+  --brand: #5f9a80;
+  --brand-strong: #a5d6bf;
+}
+:root[data-theme="dark"] .theme-sakura {
+  --primary: #b84d6d;
+  --ring: #c9708b;
+  --link: #f2a2bb;
+  --brand: #c9708b;
+  --brand-strong: #f5b3c7;
+}
+:root[data-theme="dark"] .theme-sky {
+  --primary: #3471b0;
+  --ring: #5f93c6;
+  --link: #93c3ef;
+  --brand: #5f93c6;
+  --brand-strong: #a8cff3;
+}
+:root[data-theme="dark"] .theme-wisteria {
+  --primary: #7a5bb5;
+  --ring: #9277c4;
+  --link: #c3abef;
+  --brand: #9277c4;
+  --brand-strong: #cdb9f2;
+}
+:root[data-theme="dark"] .theme-vermilion {
+  --primary: #c0473a;
+  --ring: #cc6a5a;
+  --link: #f4a08f;
+  --brand: #cc6a5a;
+  --brand-strong: #f6b2a3;
+}
+:root[data-theme="dark"] .theme-graphite {
+  --primary: #56616c;
+  --ring: #7f8a95;
+  --link: #b9c3cd;
+  --brand: #7f8a95;
+  --brand-strong: #c7d0d8;
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;
