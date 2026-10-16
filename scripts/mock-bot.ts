@@ -469,11 +469,13 @@ async function demo() {
   // quoting it, and the asker adds to the question later.
   const chat = { chat_type: "group", chat_id: group };
   const question = { ...chat, message_ids: [run * 10 + 1, run * 10 + 2] };
+  const asked = now();
   const fromGroup = await call("/threads", {
     method: "POST",
     headers: asMember,
     body: {
       board: slug,
+      kind: "question",
       title: "群里的提问：夏令营要准备什么",
       content: {
         onebot: [
@@ -540,6 +542,20 @@ async function demo() {
     "提问的人补充以后更新主楼，补充的消息也查得到这一层",
     updated.status === 200 && field(lookedUp.data, "post_id") === field(questionFloor, "id"),
     lookedUp.data,
+  );
+  await call(`/threads/${fromGroupId}/posts`, {
+    method: "POST",
+    headers: { "x-act-as": `qq:${member + 1}` },
+    body: { content: { markdown: "论坛上的回答：还有个人陈述" } },
+  });
+  const answered = Fields.array()
+    .parse(field((await call(`/bot/answers?since=${asked - 1}`)).data, "items"))
+    .find((item) => field(field(item, "thread"), "id") === fromGroupId);
+  check(
+    "群友在论坛上回答了群里的提问，新回答提醒引用提问的第一条消息",
+    field(answered, "count") === 1 &&
+      field(field(answered, "source"), "message_id") === question.message_ids[0],
+    answered,
   );
 
   // The plugin reviewing: while the board is reviewed before publishing, the member's thread

@@ -1,6 +1,7 @@
 import { sql, type Kysely, type Transaction } from "kysely";
 import type { DB } from "../../../db/types.ts";
 import { db } from "../../platform/db.ts";
+import { env } from "../../platform/env.ts";
 import type { Actor } from "../../platform/access.ts";
 import { AppError } from "../../platform/errors.ts";
 
@@ -65,10 +66,11 @@ export async function linkSource(
   const linked = await trx
     .insertInto("qq_message_links")
     .values(
-      source.message_ids.map((message_id) => ({
+      source.message_ids.map((message_id, position) => ({
         chat_type: source.chat_type,
         chat_id: source.chat_id,
         message_id,
+        position,
         thread_id: threadId,
         post_id: postId,
       })),
@@ -79,4 +81,46 @@ export async function linkSource(
   if (linked.length < source.message_ids.length) {
     throw sourceExists(await linkedElsewhere(trx, source, postId).executeTakeFirstOrThrow());
   }
+}
+
+// Answers written on the forum to questions archived from a group, for the plugin to tell each
+// asker in the group (design §8.6): only boards every member reads, and not anonymous threads,
+// whose askers it would name. Askers who left the groups or have read every one aren't told.
+export async function newAnswers(since: Date, until: Date) {
+  const { rows } = await sql<{
+    id: number;
+    title: string;
+    asker_id: number;
+    display_name: string;
+    qq: number;
+    chat_id: number;
+    message_id: number;
+    count: number;
+    floor: number;
+  }>`SELECT t.id, t.title, u.id AS asker_id, u.display_name, u.qq, l.chat_id, l.message_id,
+      count(*)::integer AS count, min(p.floor) AS floor
+    FROM posts p
+    JOIN threads t ON t.id = p.thread_id
+    JOIN boards b ON b.id = t.board_id
+    JOIN posts o ON o.thread_id = t.id AND o.floor = 1
+    JOIN qq_message_links l ON l.post_id = o.id AND l.position = 0
+    JOIN users u ON u.id = t.author_id
+    LEFT JOIN thread_users tu ON tu.thread_id = t.id AND tu.user_id = t.author_id
+    WHERE t.kind = 'question' AND NOT t.author_anonymous
+      AND t.status = 'visible' AND t.deleted_at IS NULL
+      AND (b.visibility = 'public' OR b.read_level = 0)
+      AND l.chat_type = 'group' AND u.member_status = 'member'
+      AND p.floor > 1 AND p.status = 'visible' AND p.deleted_at IS NULL
+      AND p.via <> 'qq' AND p.author_id <> t.author_id
+      AND p.created_at >= ${since} AND p.created_at < ${until}
+    GROUP BY t.id, u.id, l.chat_id, l.message_id
+    HAVING NOT bool_and(coalesce(tu.read_floors @> p.floor, false))
+    ORDER BY count DESC, t.id`.execute(db);
+  return rows.map((r) => ({
+    thread: { id: r.id, title: r.title },
+    asker: { id: r.asker_id, display_name: r.display_name, qq: r.qq },
+    source: { chat_id: r.chat_id, message_id: r.message_id },
+    count: r.count,
+    url: `${env.PUBLIC_URL}/t/${r.id}?floor=${r.floor}`,
+  }));
 }

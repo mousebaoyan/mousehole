@@ -301,6 +301,7 @@ export interface QqMessageLinks {
   chat_type: string;
   created_at: Generated<Timestamp>;
   message_id: number;
+  position: number;
   post_id: number;
   thread_id: number;
 }
