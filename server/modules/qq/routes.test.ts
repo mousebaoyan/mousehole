@@ -1,7 +1,7 @@
 import { testClient } from "hono/testing";
 import sharp from "sharp";
 import { beforeAll, describe, expect, test } from "vitest";
-import { createUser, nextQq } from "../../../test/fixtures.ts";
+import { as, createUser, login, nextQq } from "../../../test/fixtures.ts";
 import { app } from "../../app.ts";
 import { createBotToken } from "../auth/service.ts";
 
@@ -175,5 +175,56 @@ describe("群消息收录到论坛", () => {
     ]);
     if (!res.ok) throw new Error(`status ${res.status}: ${await res.text()}`);
     expect((await opening((await res.json()).id)).body).toBe(`截图里这个分数够吗![](${url})`);
+  });
+  test("收录的帖子和回复按群里发出的时间；收得晚的回复不把帖子的最后活动往回拨，晚于现在的按现在算", async () => {
+    const said = Math.floor(Date.now() / 1000) - 3 * 86_400;
+    const res = await api.threads.$post(
+      {
+        json: {
+          board: "qq",
+          title: "三天前群里的提问",
+          content: { onebot: [{ type: "text", data: { text: "三天前问的" } }] },
+          source: source(),
+          created_at: said,
+        },
+      },
+      asMember,
+    );
+    if (!res.ok) throw new Error(`status ${res.status}: ${await res.text()}`);
+    const { id } = await res.json();
+    const param = { id: String(id) };
+    async function reply(text: string, created_at: number) {
+      const posted = await api.threads[":id"].posts.$post(
+        {
+          param,
+          json: {
+            content: { onebot: [{ type: "text", data: { text } }] },
+            source: source(),
+            created_at,
+          },
+        },
+        asMember,
+      );
+      if (!posted.ok) throw new Error(`status ${posted.status}: ${await posted.text()}`);
+      return (await posted.json()).created_at;
+    }
+    expect(await reply("一分钟后的回答", said + 60)).toBe(said + 60);
+    expect(await reply("更早的回答，这一批才收", said + 30)).toBe(said + 30);
+    const thread = await api.threads[":id"].$get({ param });
+    if (!thread.ok) throw new Error(`status ${thread.status}`);
+    expect(await thread.json()).toMatchObject({ created_at: said, last_post_at: said + 60 });
+
+    const future = Math.floor(Date.now() / 1000) + 3600;
+    expect(await reply("钟快了", future)).toBeLessThanOrEqual(Math.ceil(Date.now() / 1000));
+  });
+
+  test("created_at 只有 bot 收录时能带", async () => {
+    const onebot = [{ type: "text", data: { text: "没有来源" } }];
+    const json = { board: "qq", title: "想改发帖时间", content: { onebot }, created_at: 1 };
+    expect((await api.threads.$post({ json }, asMember)).status).toBe(400);
+    const member = await createUser();
+    const web = as(await login(member.id));
+    const res = await api.threads.$post({ json: { ...json, source: source() } }, web);
+    expect(res.status).toBe(403);
   });
 });
