@@ -421,6 +421,7 @@
   --animate-look-glow: look-glow 5s ease-in-out infinite;
   --animate-look-spin: look-spin 60s linear infinite;
   --animate-look-bob: look-bob 7s ease-in-out infinite alternate;
+  --animate-look-swing: look-swing 2.8s ease-in-out infinite alternate;
 
   @keyframes look-drift {
     to {
@@ -501,6 +502,14 @@
   @keyframes look-bob {
     to {
       transform: translateY(-7%);
+    }
+  }
+  @keyframes look-swing {
+    from {
+      transform: rotate(-7deg);
+    }
+    to {
+      transform: rotate(7deg);
     }
   }
 }

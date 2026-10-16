@@ -10,12 +10,15 @@ import { readable } from "../boards/service.ts";
 import { recordEvent } from "../events/service.ts";
 import { notifyBadges } from "../notifications/service.ts";
 import { dropRevokedBadge, shownToGuests, userBriefs } from "../users/service.ts";
+import type { EVENT_FRAMES } from "../users/customization.ts";
 import { GROUPINGS, RULES, type Tier } from "./rules.ts";
+
+type EventFrame = (typeof EVENT_FRAMES)[number];
 
 // Badges, see design §8.8: the automatic ones from rules.ts, checked every few minutes, and
 // event badges admins create and give by hand.
 
-const BADGE = ["id", "name", "description", "tier", "grouping", "multiple"] as const;
+const BADGE = ["id", "name", "description", "tier", "grouping", "multiple", "frame"] as const;
 
 function badgeNotFound() {
   return new AppError(404, "badge_not_found", "徽章不存在");
@@ -247,7 +250,7 @@ export async function listUserBadges(userId: number, reach: number) {
 
 export async function createBadge(
   actor: Actor,
-  fields: { name: string; description: string; tier: Tier },
+  fields: { name: string; description: string; tier: Tier; frame?: EventFrame | null },
 ) {
   return db.transaction().execute(async (trx) => {
     const badge = await trx
@@ -287,7 +290,7 @@ async function manualBadge(trx: Transaction<DB>, id: number) {
 export async function updateBadge(
   actor: Actor,
   id: number,
-  change: { name?: string; description?: string },
+  change: { name?: string; description?: string; frame?: EventFrame | null },
 ) {
   await db.transaction().execute(async (trx) => {
     await manualBadge(trx, id);

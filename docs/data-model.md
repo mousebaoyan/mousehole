@@ -117,7 +117,7 @@
 都是 `users` 上的列（[总体设计 §8.16](design.md#816-个性化)）。预设的背景、头像框、主题色和解锁条件写在代码里（`users/customization.ts`），页面和服务共用，库里只存 key；保存时检查解锁，和原来一样的值不再检查，读的时候也不检查。
 
 - 背景：`background` 是预设的 key，上传的为 `custom`。上传的裁成两张，存在 `data/backgrounds/{用户ID}-card.webp` 和 `{用户ID}-profile.webp`，每次上传覆盖，用 `background_version` 控制缓存，同头像；换成预设或不用背景时删掉这两个文件。
-- 头像框：`frame`。活动徽章能配的活动框是 `badges.frame`；撤销手动授予的徽章时，`frame` 是这枚徽章的、又没有别的徽章配着同一个框，就一并清空。
+- 头像框：`frame`。活动徽章能配的活动框是 `badges.frame`；撤销手动授予的徽章时，戴着的框如果是徽章解锁的（种子用户、金徽章、活动框），剩下的徽章又解锁不了它，就一并清空；等级解锁的不动。
 - 展示徽章：`shown_badge_ids integer[]`，`NULL` 是没选过、按默认规则，`'{}'` 是一枚都不展示；保存时检查是自己得到的，撤销手动授予的徽章时从数组里去掉（`array_remove`，头衔用 `nullif` 一并清掉），读的时候直接按数组取。
 - 主题色：`theme`，`NULL` 是默认的海青。
 - 状态：`status_emoji`、`status_text`、`status_until`（`NULL` 是不清除），读的时候只取没过期的，不另外清理。

@@ -1,5 +1,6 @@
 import { z } from "@hono/zod-openapi";
 import type { UserRef } from "../../platform/access.ts";
+import { FRAMES } from "./customization.ts";
 
 // A user in a path or header: a forum user ID, or qq: and a QQ number.
 export const UserRefSchema = z
@@ -28,6 +29,7 @@ export const UserBriefSchema = z
       .object({ emoji: z.string(), text: z.string() })
       .nullable()
       .openapi({ description: "状态：一个表情加一句话；没有或过期了为 null" }),
+    frame: z.enum(FRAMES).nullable().openapi({ description: "头像框；没有为 null" }),
   })
   .openapi("UserBrief");
 

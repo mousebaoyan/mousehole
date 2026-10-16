@@ -1,6 +1,9 @@
 import { cn } from "cn";
+import { AvatarFrame } from "~/components/frame";
 import { Rat } from "~/components/icons";
 import type { Writer } from "~/api-types";
+
+type Person = Writer | { id: number; display_name: string; avatar_url: string | null };
 
 const tints = [
   "bg-orange-100 text-orange-800 dark:bg-orange-400/20 dark:text-orange-200",
@@ -11,16 +14,40 @@ const tints = [
   "bg-stone-200 text-stone-700 dark:bg-stone-400/25 dark:text-stone-200",
 ];
 
+// The avatar, in the frame they wear where one is asked for (design §8.16): held still in
+// threads, where dozens would move at once, moving on their card and page.
+export function UserAvatar({
+  user,
+  thread,
+  className,
+  frame,
+}: {
+  user: Person;
+  thread?: number;
+  className?: string;
+  frame?: "still" | "live";
+}) {
+  if (!frame || !("frame" in user) || user.frame === null) {
+    return <Face user={user} thread={thread} className={className} />;
+  }
+  return (
+    <span className={cn("relative inline-flex size-9 shrink-0 rounded-full", className)}>
+      <Face user={user} thread={thread} className="size-full" />
+      <AvatarFrame frame={user.frame} still={frame === "still"} />
+    </span>
+  );
+}
+
 // The copy of the QQ avatar. Until there is one, the first letter on a tint picked by user id;
 // letters rather than characters, as group cards often start with a year: "26-南京大学-CV".
 // Someone anonymous is a mouse on a colour from the thread and their number, so it stays the same
 // through the thread and differs in the next (design §8.12).
-export function UserAvatar({
+function Face({
   user,
   thread = 0,
   className,
 }: {
-  user: Writer | { id: number; display_name: string; avatar_url: string | null };
+  user: Person;
   thread?: number;
   className?: string;
 }) {

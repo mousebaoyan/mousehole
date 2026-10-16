@@ -2,6 +2,7 @@ import { mkdir, readFile, rename, stat, utimes, writeFile } from "node:fs/promis
 import {
   sql,
   type ExpressionBuilder,
+  type Kysely,
   type NotNull,
   type RawBuilder,
   type Transaction,
@@ -19,9 +20,13 @@ import { recordEvent } from "../events/service.ts";
 import { removeBackground } from "./backgrounds.ts";
 import {
   BACKGROUND_PRESETS,
+  FRAME_LOOKS,
+  FRAMES,
   reaches,
+  unlockedFrames,
   type BackgroundPreset,
   type Clearable,
+  type Frame,
   type Theme,
 } from "./customization.ts";
 
@@ -456,6 +461,7 @@ export async function getUser(ref: UserRef, viewerId: number | null) {
       "home.last_sent_at",
       eb.fn.coalesce("users.custom_bio", "users.qq_bio").as("bio"),
       USER_STATUS.as("user_status"),
+      "users.frame",
       "users.theme",
       "users.background",
       "users.background_version",
@@ -505,8 +511,24 @@ export async function getUser(ref: UserRef, viewerId: number | null) {
     .where((eb) => ("id" in ref ? eb("users.id", "=", ref.id) : eb("users.qq", "=", ref.qq)))
     .executeTakeFirst();
   if (!row) throw userNotFound();
-  const { avatar_version, ...user } = row;
-  return { ...user, avatar_url: avatarUrl(user.id, avatar_version) };
+  const { avatar_version, frame, ...user } = row;
+  return { ...user, frame: frameOf(frame), avatar_url: avatarUrl(user.id, avatar_version) };
+}
+
+// The frame as pages draw it.
+function frameOf(key: string | null) {
+  return FRAMES.find((frame) => frame === key) ?? null;
+}
+
+// What someone's badges open of the frames.
+async function badgeUnlocks(executor: Kysely<DB>, userId: number) {
+  return executor
+    .selectFrom("user_badges")
+    .innerJoin("badges", "badges.id", "user_badges.badge_id")
+    .select(["badges.slug", "badges.tier", "badges.frame"])
+    .distinct()
+    .where("user_badges.user_id", "=", userId)
+    .execute();
 }
 
 // For what guests get: leaves out what people who keep their content from guests wrote, given the
@@ -523,7 +545,7 @@ export function shownToGuests(
 export const MAX_BIO = 60;
 
 export async function getSettings(userId: number) {
-  return db
+  const settings = await db
     .selectFrom("users")
     .select([
       "custom_name",
@@ -535,6 +557,7 @@ export async function getSettings(userId: number) {
       "relations_public",
       "title_badge_id",
       "shown_badge_ids",
+      "frame",
       "theme",
       "background",
       "background_version",
@@ -569,6 +592,7 @@ export async function getSettings(userId: number) {
     ])
     .where("id", "=", userId)
     .executeTakeFirstOrThrow();
+  return { ...settings, badge_unlocks: await badgeUnlocks(db, userId) };
 }
 
 // Only what is given changes, down to each notification switch: one never set follows the
@@ -584,6 +608,7 @@ export async function updateSettings(
     shown_badge_ids?: number[] | null;
     theme?: Theme | null;
     background?: BackgroundPreset | null;
+    frame?: Frame | null;
     user_status?: { emoji: string; text: string; until: number | null } | null;
     pins?: number[];
     showcase?: string | null;
@@ -603,6 +628,7 @@ export async function updateSettings(
       await assertTitleBadge(trx, actor.userId, change.title_badge_id);
     if (change.shown_badge_ids) await assertOwnBadges(trx, actor.userId, change.shown_badge_ids);
     if (change.pins) await assertPinnable(trx, actor.userId, change.pins);
+    if (change.frame !== undefined) await assertFrame(trx, actor.userId, change.frame);
     await trx
       .updateTable("users")
       .set({
@@ -640,6 +666,20 @@ async function assertBackground(
     throw new AppError(403, "cosmetic_locked", "还没有解锁这个背景");
   }
   return user.background;
+}
+
+// As with backgrounds: the frame already worn needs nothing.
+async function assertFrame(trx: Transaction<DB>, userId: number, next: Frame | null) {
+  const user = await trx
+    .selectFrom("users")
+    .select(["frame", "level", "role"])
+    .where("id", "=", userId)
+    .forUpdate()
+    .executeTakeFirstOrThrow();
+  if (next === null || next === user.frame) return;
+  if (!unlockedFrames(user, await badgeUnlocks(trx, userId)).includes(next)) {
+    throw new AppError(403, "cosmetic_locked", "还没有解锁这个头像框");
+  }
 }
 
 // Only a gold or silver badge of one's own makes a title (design §8.8).
@@ -732,16 +772,26 @@ export async function getShowcase(ref: UserRef) {
   return { ...rest, html };
 }
 
-// A badge taken back is no longer worn as their title, nor shown on their card.
+// A badge taken back is no longer worn as their title, nor shown on their card; a frame it alone
+// opened comes off too. Frames opened by levels stay, as they do when a level is lost.
 export async function dropRevokedBadge(trx: Transaction<DB>, userId: number, badgeId: number) {
-  await trx
+  const user = await trx
     .updateTable("users")
     .set({
       title_badge_id: sql`nullif(title_badge_id, ${badgeId})`,
       shown_badge_ids: sql`array_remove(shown_badge_ids, ${badgeId})`,
     })
     .where("id", "=", userId)
-    .execute();
+    .returning(["frame", "level", "role"])
+    .executeTakeFirstOrThrow();
+  const frame = frameOf(user.frame);
+  if (
+    frame !== null &&
+    !("level" in FRAME_LOOKS[frame].unlock) &&
+    !unlockedFrames(user, await badgeUnlocks(trx, userId)).includes(frame)
+  ) {
+    await trx.updateTable("users").set({ frame: null }).where("id", "=", userId).execute();
+  }
 }
 
 // The QQ signature, which the bot looks up when someone first logs in. Shown until they write
@@ -1017,13 +1067,14 @@ export async function userBriefs(ids: number[]) {
       eb.fn.coalesce("title_badge.name", "home.title", eb.val("")).as("title"),
       "title_badge.tier as title_tier",
       USER_STATUS.as("user_status"),
+      "users.frame",
     ])
     .where("users.id", "=", sql<number>`any(${[...new Set(ids)]}::integer[])`)
     .execute();
   const users = new Map(
-    rows.map(({ avatar_version, ...r }) => [
+    rows.map(({ avatar_version, frame, ...r }) => [
       r.id,
-      { ...r, avatar_url: avatarUrl(r.id, avatar_version) },
+      { ...r, frame: frameOf(frame), avatar_url: avatarUrl(r.id, avatar_version) },
     ]),
   );
   return (id: number) => {

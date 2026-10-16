@@ -4,6 +4,8 @@ import { Link, useFetcher, useRevalidator } from "react-router";
 import { cn } from "cn";
 import { ArrowDown, ArrowUp, Award, Check, ImagePlus, Lock, Plus, X } from "~/components/icons";
 import { Backdrop } from "~/components/backdrop";
+import { AvatarFrame } from "~/components/frame";
+import { UserAvatar } from "~/components/user-avatar";
 import { browserApi } from "~/browser-api";
 import { TIER_STYLES } from "~/components/badge-chip";
 import { EmojiButton } from "~/components/emoji-button";
@@ -20,6 +22,9 @@ import {
   BACKGROUND_PRESETS,
   BACKGROUNDS,
   DEFAULT_THEME_NAME,
+  FRAME_LOOKS,
+  FRAMES,
+  frameUnlockLabel,
   PINS_MAX,
   SHOWCASE_MAX,
   STATUS_MAX,
@@ -419,13 +424,13 @@ export function ShowcaseField({ showcase }: { showcase: string | null }) {
 }
 
 // One look to pick: a radio under a preview that moves only while pointed at or chosen. A locked
-// one says the level it opens at.
+// one says what opens it.
 function Tile({
   name,
   value,
   label,
   checked,
-  lockedAt,
+  locked,
   wide,
   children,
 }: {
@@ -433,7 +438,7 @@ function Tile({
   value: string;
   label: string;
   checked: boolean;
-  lockedAt: number | null;
+  locked: string | null;
   wide?: boolean;
   children: ReactNode;
 }) {
@@ -441,7 +446,7 @@ function Tile({
     <label
       className={cn(
         "group/tile flex min-w-0 flex-col items-center gap-1 text-xs",
-        lockedAt === null ? "cursor-pointer" : "cursor-not-allowed",
+        locked === null ? "cursor-pointer" : "cursor-not-allowed",
       )}
     >
       <input
@@ -449,26 +454,26 @@ function Tile({
         name={name}
         value={value}
         defaultChecked={checked}
-        disabled={lockedAt !== null}
+        disabled={locked !== null}
         className="peer sr-only"
       />
       <span
         className={cn(
-          "relative w-full overflow-hidden rounded-lg border ring-primary ring-offset-2 ring-offset-card [--play:paused] group-hover/tile:[--play:running] peer-checked:ring-2 peer-checked:[--play:running] peer-focus-visible:ring-2",
+          "relative w-full overflow-hidden rounded-lg border ring-primary ring-offset-2 ring-offset-card [--play:paused] group-hover/tile:[--play:running] peer-checked:ring-2 peer-checked:[--play:running] peer-focus-visible:ring-2 peer-disabled:*:not-last:opacity-55",
           wide ? "aspect-[2/1]" : "aspect-square",
         )}
       >
         {children}
-        {lockedAt !== null && (
-          <span className="absolute inset-0 flex items-center justify-center gap-0.5 bg-black/40 font-medium text-white">
-            <Lock className="size-3.5" /> L{lockedAt}
+        {locked !== null && (
+          <span className="absolute right-1 bottom-1 flex items-center gap-0.5 rounded-md bg-black/60 px-1 py-px text-2xs font-medium text-white">
+            <Lock className="size-3 shrink-0" /> {locked}
           </span>
         )}
       </span>
       <span
         className={cn(
           "truncate",
-          lockedAt === null ? "text-muted-foreground" : "text-muted-foreground/60",
+          locked === null ? "text-muted-foreground" : "text-muted-foreground/60",
         )}
       >
         {label}
@@ -529,7 +534,7 @@ export function BackgroundField({
           value=""
           label="不使用"
           checked={background === null}
-          lockedAt={null}
+          locked={null}
           wide
         >
           <span className="absolute inset-0 bg-muted" />
@@ -541,10 +546,10 @@ export function BackgroundField({
             value={key}
             label={BACKGROUND_PRESETS[key].name}
             checked={background === key}
-            lockedAt={
+            locked={
               unlocked.backgrounds.includes(key) || background === key
                 ? null
-                : BACKGROUND_PRESETS[key].level
+                : `L${BACKGROUND_PRESETS[key].level}`
             }
             wide
           >
@@ -557,7 +562,7 @@ export function BackgroundField({
             value="custom"
             label="我的图片"
             checked={background === "custom"}
-            lockedAt={null}
+            locked={null}
             wide
           >
             <Backdrop background={urls} place="card" />
@@ -594,6 +599,50 @@ export function BackgroundField({
       {picked && (
         <BackgroundCropper url={picked.url} busy={busy} onCancel={close} onDone={upload} />
       )}
+    </fieldset>
+  );
+}
+
+// Each frame round their own avatar.
+export function FrameField({
+  frame,
+  unlocked,
+  me,
+}: {
+  frame: string | null;
+  unlocked: string[];
+  me: { id: number; display_name: string; avatar_url: string | null };
+}) {
+  return (
+    <fieldset className="flex flex-col gap-1.5 text-sm">
+      <legend className="font-medium">头像框</legend>
+      <div className="mt-1.5 grid grid-cols-4 gap-x-2 gap-y-2.5 sm:grid-cols-6">
+        <Tile name="frame" value="" label="不使用" checked={frame === null} locked={null}>
+          <span className="absolute inset-0 flex items-center justify-center">
+            <UserAvatar user={me} className="size-[52%]" />
+          </span>
+        </Tile>
+        {FRAMES.map((key) => (
+          <Tile
+            key={key}
+            name="frame"
+            value={key}
+            label={FRAME_LOOKS[key].name}
+            checked={frame === key}
+            locked={unlocked.includes(key) || frame === key ? null : frameUnlockLabel(key)}
+          >
+            <span className="absolute inset-0 flex items-center justify-center">
+              <span className="relative size-[52%]">
+                <UserAvatar user={me} className="size-full" />
+                <AvatarFrame frame={key} still={false} />
+              </span>
+            </span>
+          </Tile>
+        ))}
+      </div>
+      <span className="text-meta text-muted-foreground">
+        显示在楼层、资料卡和个人主页的头像上；楼层里静止，点开资料卡时才动
+      </span>
     </fieldset>
   );
 }

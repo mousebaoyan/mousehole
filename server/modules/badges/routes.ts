@@ -1,6 +1,7 @@
 import { createRoute, z } from "@hono/zod-openapi";
 import { reachOf } from "../../platform/access.ts";
 import { actorOf, authorize, createRouter, errorResponse, unix } from "../../platform/http.ts";
+import { EVENT_FRAMES } from "../users/customization.ts";
 import { UserBriefSchema, UserRefSchema } from "../users/schemas.ts";
 import { findUserId } from "../users/service.ts";
 import { TIERS } from "./rules.ts";
@@ -14,6 +15,9 @@ import {
   updateBadge,
 } from "./service.ts";
 
+// The event frame an event badge opens; null for none.
+const EventFrame = z.enum(EVENT_FRAMES).nullable();
+
 const BadgeSchema = z
   .object({
     id: z.number(),
@@ -25,6 +29,10 @@ const BadgeSchema = z
     }),
     multiple: z.boolean().openapi({ description: "能不能得多次" }),
     manual: z.boolean().openapi({ description: "管理员手动授予的活动徽章" }),
+    frame: z
+      .string()
+      .nullable()
+      .openapi({ description: "活动徽章配的活动框，得到的人能用（总体设计 §8.16）" }),
     granted_count: z.number().openapi({ description: "有几个人得到" }),
     granted: z.number().openapi({ description: "自己得到了几次，没登录为 0" }),
   })
@@ -164,7 +172,12 @@ export const badgesRoutes = createRouter()
           required: true,
           content: {
             "application/json": {
-              schema: z.object({ name: NAME, description: DESCRIPTION, tier: z.enum(TIERS) }),
+              schema: z.object({
+                name: NAME,
+                description: DESCRIPTION,
+                tier: z.enum(TIERS),
+                frame: EventFrame.optional(),
+              }),
             },
           },
         },
@@ -187,14 +200,18 @@ export const badgesRoutes = createRouter()
     createRoute({
       method: "patch",
       path: "/admin/badges/{id}",
-      summary: "改活动徽章的名字和说明；自动授予的徽章不能改",
+      summary: "改活动徽章的名字、说明和活动框；自动授予的徽章不能改",
       request: {
         params: IdParam,
         body: {
           required: true,
           content: {
             "application/json": {
-              schema: z.object({ name: NAME.optional(), description: DESCRIPTION.optional() }),
+              schema: z.object({
+                name: NAME.optional(),
+                description: DESCRIPTION.optional(),
+                frame: EventFrame.optional(),
+              }),
             },
           },
         },

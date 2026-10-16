@@ -80,3 +80,59 @@ export const BACKGROUND_CROPS = {
     movingMax: 1024 * 1024,
   },
 };
+
+// Avatar frames drawn by app/components/frame.tsx, and what opens each: a level, a badge, any gold
+// badge, or an event badge an admin gave the frame to.
+export const FRAMES = [
+  "teal",
+  "apricot",
+  "flow",
+  "breath",
+  "laurel",
+  "sprout",
+  "gilt",
+  "trophy",
+  "wreath",
+  "confetti",
+  "medal",
+] as const;
+export type Frame = (typeof FRAMES)[number];
+export const EVENT_FRAMES = ["trophy", "wreath", "confetti", "medal"] as const;
+
+// `by` is what a locked one says opens it.
+type Unlock = { level: number } | { badge: string; by: string } | { gold: true } | { event: true };
+export const FRAME_LOOKS: Record<Frame, { name: string; unlock: Unlock }> = {
+  teal: { name: "青环", unlock: { level: 1 } },
+  apricot: { name: "杏环", unlock: { level: 2 } },
+  flow: { name: "流转", unlock: { level: 3 } },
+  breath: { name: "呼吸", unlock: { level: 4 } },
+  laurel: { name: "桂冠", unlock: { level: 5 } },
+  sprout: { name: "新芽", unlock: { badge: "seed", by: "种子用户" } },
+  gilt: { name: "金边", unlock: { gold: true } },
+  trophy: { name: "奖杯", unlock: { event: true } },
+  wreath: { name: "花环", unlock: { event: true } },
+  confetti: { name: "彩带", unlock: { event: true } },
+  medal: { name: "纪念章", unlock: { event: true } },
+};
+
+// What a locked frame says opens it.
+export function frameUnlockLabel(frame: Frame) {
+  const { unlock } = FRAME_LOOKS[frame];
+  if ("level" in unlock) return `L${unlock.level}`;
+  if ("badge" in unlock) return unlock.by;
+  return "gold" in unlock ? "金徽章" : "活动";
+}
+
+// Which frames someone may pick, given the badges they have.
+export function unlockedFrames(
+  user: { level: number; role: string },
+  badges: { slug: string | null; tier: string; frame: string | null }[],
+) {
+  return FRAMES.filter((key) => {
+    const { unlock } = FRAME_LOOKS[key];
+    if ("level" in unlock) return reaches(user, unlock.level);
+    if ("badge" in unlock) return badges.some((b) => b.slug === unlock.badge);
+    if ("gold" in unlock) return badges.some((b) => b.tier === "gold");
+    return badges.some((b) => b.frame === key);
+  });
+}

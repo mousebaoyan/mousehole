@@ -199,7 +199,7 @@ export default function User({ loaderData, actionData }: Route.ComponentProps) {
   // Someone who keeps their content from guests, seen by a guest (design §8.10).
   return (
     <header className="flex items-center gap-4 px-1 sm:gap-5">
-      <UserAvatar user={user} className="size-16 text-2xl sm:size-20 sm:text-3xl" />
+      <UserAvatar user={user} className="size-16 text-2xl sm:size-20 sm:text-3xl" frame="live" />
       <div className="min-w-0">
         <h1 className="text-xl font-semibold break-all">{user.display_name}</h1>
         <p className="mt-1 text-meta text-muted-foreground">
@@ -273,6 +273,7 @@ function Profile({
             "size-16 text-2xl sm:size-20 sm:text-3xl",
             user.background && "relative -mt-16 ring-4 ring-background sm:-mt-20",
           )}
+          frame="live"
         />
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
