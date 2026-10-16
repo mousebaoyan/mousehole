@@ -635,6 +635,42 @@ export async function markRead(userId: number, ids: number[] | "all") {
   await tellUnread(db, [userId]);
 }
 
+// About a floor someone else wrote, so reading that floor in the thread has seen it too. Likes,
+// boosts and the like are about the reader's own floors, which count as read from the start.
+const SEEN_BY_READING: NotificationType[] = [
+  "reply",
+  "thread_reply",
+  "mention",
+  "watching",
+  "following",
+];
+
+// Floors just read in a thread (an int4multirange) mark what told of them read.
+export async function markReadByFloors(
+  trx: Transaction<DB>,
+  userId: number,
+  threadId: number,
+  floors: string,
+) {
+  const marked = await trx
+    .updateTable("notifications")
+    .set({ read_at: sql<Date>`now()` })
+    .where("user_id", "=", userId)
+    .where("thread_id", "=", threadId)
+    .where("read_at", "is", null)
+    .where("type", "in", SEEN_BY_READING)
+    .where("post_id", "in", (eb) =>
+      eb
+        .selectFrom("posts")
+        .select("id")
+        .where("thread_id", "=", threadId)
+        .where(sql<boolean>`${floors}::int4multirange @> floor`),
+    )
+    .returning("id")
+    .execute();
+  if (marked.length > 0) await tellUnread(trx, [userId]);
+}
+
 // Read ones are kept half a year.
 export async function clearOldNotifications() {
   await db

@@ -17,7 +17,12 @@ import {
 } from "../boards/service.ts";
 import { discardDraft } from "../drafts/service.ts";
 import { onebotToMarkdown, type Segment } from "../qq/onebot.ts";
-import { notifyOnPost, notifyPost, notifyThread } from "../notifications/service.ts";
+import {
+  markReadByFloors,
+  notifyOnPost,
+  notifyPost,
+  notifyThread,
+} from "../notifications/service.ts";
 import { assertNotLinked, findLink, linkSource, postedAt, type Source } from "../qq/service.ts";
 import { indexPost, unindexPost } from "../search/service.ts";
 import { fetchUpload, linkUploads, showImages, uploadName } from "../uploads/service.ts";
@@ -2025,6 +2030,7 @@ export async function recordReading(
     const { added, fresh } = await addReadFloors(trx, viewer.id, threadId, floors);
     if (skipped.length > 0) await addReadFloors(trx, viewer.id, threadId, skipped);
     await countReadsReceived(trx, viewer.id, threadId, fresh);
+    await markReadByFloors(trx, viewer.id, threadId, fresh);
     await countReading(trx, viewer.id, {
       posts: added,
       seconds: Math.min(seconds, MAX_READ_SECONDS),

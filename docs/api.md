@@ -281,7 +281,7 @@ token 由站长在后台创建，只显示一次。每个 token 绑定一个 bot
 | PUT | `/threads/{id}/subscription` | 关注级别：`{ level }`，`watching` 每个新楼层都通知，`normal` 回复我、@我时通知，`muted` 都不通知；没设置过是 `normal`，发帖的人是 `watching` | 成员 / `act` |
 | PUT | `/threads/{id}/bookmark` | 收藏；已经收藏的不变，收藏列表里的位置也不变 | 成员 / `act` |
 | DELETE | `/threads/{id}/bookmark` | 取消收藏 | 成员 / `act` |
-| POST | `/threads/{id}/read` | 记录阅读：`{ floors: [[1, 20], [480, 495]], seconds: 95 }`，读过的楼层区间（含两端）并入已读，超出楼层数的部分不算；自己看不到的楼层（待审核、已隐藏），读过它后面的一楼或者读到能看到的最后一楼时一并算读过，但不计入阅读统计；`seconds` 计入阅读时间，单次最多算 120 秒。只有网页上报，见[总体设计 §8.9](design.md#89-阅读记录)，bot 调用返回 `403` | 登录用户 |
+| POST | `/threads/{id}/read` | 记录阅读：`{ floors: [[1, 20], [480, 495]], seconds: 95 }`，读过的楼层区间（含两端）并入已读，超出楼层数的部分不算；自己看不到的楼层（待审核、已隐藏），读过它后面的一楼或者读到能看到的最后一楼时一并算读过，但不计入阅读统计；`seconds` 计入阅读时间，单次最多算 120 秒。说的是新读到的楼层的通知（回复、@、新楼层、新帖这几类）一并标为已读。只有网页上报，见[总体设计 §8.9](design.md#89-阅读记录)，bot 调用返回 `403` | 登录用户 |
 | GET | `/threads/{id}/aliases` | 匿名的人各是谁：`{ items: [{ number, user }] }`，按编号排；每次查看记操作日志 `thread.reveal` | 管理员，只能在网页上 |
 | GET | `/threads/{id}/stream` | SSE：这个帖子的新回复、编辑和删除，事件名是 `post.created`、`post.updated`、`post.deleted`，`data` 是楼层号；每 20 秒一条心跳注释 | 访客 |
 

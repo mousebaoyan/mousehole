@@ -171,6 +171,33 @@ describe("通知", () => {
     await api.notifications.read.$post({ json: { all: true } }, author.who);
     expect(await count()).toBe(0);
   });
+
+  test("在帖子里读到通知说的那一层就算读过；点赞说的是自己的楼层，读帖子不算", async () => {
+    const poster = await person();
+    const t = await thread(poster.who);
+    await reply(replier.who, t.id, "二楼", t.opening);
+    await reply(replier.who, t.id, `[@楼主](/u/${poster.id})`);
+    await api.posts[":id"].reaction.$put(
+      { param: { id: String(t.opening) }, json: { emoji: "heart" } },
+      replier.who,
+    );
+    const unread = async () => {
+      const res = await api.notifications.$get({ query: { unread_only: "true" } }, poster.who);
+      if (!res.ok) throw new Error(`status ${res.status}`);
+      return (await res.json()).items.filter((n) => n.thread?.id === t.id).map((n) => n.type);
+    };
+    const read = (floors: [number, number][]) =>
+      api.threads[":id"].read.$post(
+        { param: { id: String(t.id) }, json: { floors, seconds: 5 } },
+        poster.who,
+      );
+    expect(await unread()).toEqual(["like", "mention", "reply"]);
+
+    await read([[1, 2]]);
+    expect(await unread()).toEqual(["like", "mention"]);
+    await read([[3, 3]]);
+    expect(await unread()).toEqual(["like"]);
+  });
 });
 
 // Each queued email as its address and subject, taken off the queue.
