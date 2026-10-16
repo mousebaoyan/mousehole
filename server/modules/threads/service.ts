@@ -5,7 +5,7 @@ import { STAFF } from "../../platform/site.ts";
 import { db } from "../../platform/db.ts";
 import { AppError } from "../../platform/errors.ts";
 import { log } from "../../platform/log.ts";
-import { excerpt, renderMarkdown } from "../../platform/markdown.ts";
+import { excerpt, RENDER_VERSION, renderMarkdown } from "../../platform/markdown.ts";
 import { recordAudit } from "../audit/service.ts";
 import {
   countBoard,
@@ -893,6 +893,7 @@ export async function createThread(
         author_id: viewer.id,
         body: markdown,
         html,
+        render_version: RENDER_VERSION,
         via: via(actor, input.source),
         status,
         anonymous,
@@ -1003,6 +1004,7 @@ export async function createPost(
         author_id: viewer.id,
         body: markdown,
         html,
+        render_version: RENDER_VERSION,
         via: via(actor, input.source),
         status,
         anonymous,
@@ -1077,6 +1079,7 @@ export async function editPost(
       .set((eb) => ({
         body: markdown,
         html,
+        render_version: RENDER_VERSION,
         edit_count: eb("edit_count", "+", 1),
         edited_at: sql<Date>`now()`,
       }))
@@ -2051,4 +2054,35 @@ export async function flushViews() {
     FROM (VALUES ${sql.join([...counts].map(([id, n]) => sql`(${id}::integer, ${n}::integer)`))})
       AS v (id, n)
     WHERE threads.id = v.id`.execute(db);
+}
+
+// ---- Rendering again
+
+// At start-up: floors whose html an older renderer wrote (design §8.2), with their search index.
+// A floor edited meanwhile is already current, and its new html stays.
+export async function rerenderPosts() {
+  for (;;) {
+    const stale = await db
+      .selectFrom("posts")
+      .select(["id", "body", "deleted_at"])
+      .where("render_version", "<", RENDER_VERSION)
+      .orderBy("id")
+      .limit(100)
+      .execute();
+    if (stale.length === 0) return;
+    const rendered = await Promise.all(
+      stale.map(async (post) => ({ ...post, ...(await renderMarkdown(post.body, showImages)) })),
+    );
+    await db.transaction().execute(async (trx) => {
+      for (const post of rendered) {
+        const { numUpdatedRows } = await trx
+          .updateTable("posts")
+          .set({ html: post.html, render_version: RENDER_VERSION })
+          .where("id", "=", post.id)
+          .where("render_version", "<", RENDER_VERSION)
+          .executeTakeFirst();
+        if (numUpdatedRows > 0n && post.deleted_at === null) await indexPost(trx, post.id);
+      }
+    });
+  }
 }

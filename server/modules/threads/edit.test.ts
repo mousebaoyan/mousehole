@@ -4,6 +4,8 @@ import { beforeAll, describe, expect, test } from "vitest";
 import { as, createUser, login } from "../../../test/fixtures.ts";
 import { app } from "../../app.ts";
 import { db } from "../../platform/db.ts";
+import { RENDER_VERSION } from "../../platform/markdown.ts";
+import { rerenderPosts } from "./service.ts";
 
 const api = testClient(app).api.v1;
 
@@ -184,5 +186,38 @@ describe("删除", () => {
 
     expect((await api.threads[":id"].$get({ param: { id: String(busy) } })).status).toBe(404);
     expect(await counts("boards", "slug", board)).toBe(0);
+  });
+});
+
+describe("重新渲染", () => {
+  test("旧版渲染的楼层启动时重新渲染并重建索引，删掉的不进索引", async () => {
+    const thread = await newThread(await newBoard());
+    const kept = await reply(thread, "==重点==");
+    const gone = await reply(thread, "删掉的");
+    await api.posts[":id"].$delete({ param: { id: String(gone.id) } }, other);
+    await db
+      .updateTable("posts")
+      .set({ html: "<p>旧的</p>", render_version: 0 })
+      .where("id", "in", [kept.id, gone.id])
+      .execute();
+    await db.deleteFrom("post_search").where("post_id", "=", kept.id).execute();
+
+    await rerenderPosts();
+    const rows = await db
+      .selectFrom("posts")
+      .leftJoin("post_search", "post_search.post_id", "posts.id")
+      .select(["posts.id", "html", "render_version", "post_search.post_id as indexed"])
+      .where("posts.id", "in", [kept.id, gone.id])
+      .orderBy("posts.id")
+      .execute();
+    expect(rows).toEqual([
+      {
+        id: kept.id,
+        html: "<p><mark>重点</mark></p>\n",
+        render_version: RENDER_VERSION,
+        indexed: kept.id,
+      },
+      { id: gone.id, html: "<p>删掉的</p>\n", render_version: RENDER_VERSION, indexed: null },
+    ]);
   });
 });
