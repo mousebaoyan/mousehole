@@ -9,7 +9,8 @@ const MENTION = /^\/u\/(\d+)$/;
 const CARD_REM = 18;
 
 // A post's rendered HTML. A mention opens the person's card, as their avatar does, and an image
-// opens the viewer; with a modifier key, or before the page's script runs, they stay links.
+// opens the viewer; with a modifier key, or before the page's script runs, they stay links. A
+// spoiler tapped stays shown, and a link in one only shows it.
 export function PostBody({ html, className }: { html: string; className?: string }) {
   const area = useRef<HTMLDivElement>(null);
   const cardRoot = useRef<HTMLDivElement>(null);
@@ -19,7 +20,14 @@ export function PostBody({ html, className }: { html: string; className?: string
   useDismiss(card !== null, () => setCard(null), cardRoot);
 
   function onClick(e: MouseEvent) {
-    if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    if (e.button !== 0) return;
+    const spoiler = e.target instanceof Element ? e.target.closest(".spoiler:not(.shown)") : null;
+    if (spoiler) {
+      e.preventDefault();
+      spoiler.classList.add("shown");
+      return;
+    }
+    if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
     const link = e.target instanceof Element ? e.target.closest("a") : null;
     const box = area.current?.getBoundingClientRect();
     if (!link || !box || !body.current) return;

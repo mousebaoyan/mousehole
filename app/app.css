@@ -37,6 +37,7 @@
   --color-link: var(--link);
   --color-success: var(--success);
   --color-warning: var(--warning);
+  --color-important: var(--important);
   --color-gold: var(--gold);
   --color-silver: var(--silver);
   --color-bronze: var(--bronze);
@@ -79,6 +80,7 @@
   --link: #23716a;
   --success: #2d7a4c;
   --warning: #9a5a0c;
+  --important: #7553b0;
   /* Badge tiers (design §8.8). */
   --gold: #b07a12;
   --silver: #64707d;
@@ -110,6 +112,7 @@
   --link: #7cc4b8;
   --success: #6fcf97;
   --warning: #e9b860;
+  --important: #b9a0ec;
   --gold: #e9b860;
   --silver: #aab4bf;
   --bronze: #dd9a6e;
@@ -471,6 +474,211 @@
   margin: 0 0.4em 0 -1.3em;
   vertical-align: -0.1em;
   accent-color: var(--primary);
+}
+
+/* Callouts (design §8.2): a box tinted by its kind, its title in that color after the kind's icon.
+   Unlike a quote, no bar down the side. A folded one opens on its title, a whole row to tap. */
+.prose :where(.callout) {
+  --tone: var(--link);
+  --icon: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><circle cx='12' cy='12' r='10'/><path d='M12 16v-4'/><path d='M12 8h.01'/></svg>");
+  margin: 0.8em 0;
+  border: 1px solid color-mix(in oklab, var(--tone) 24%, transparent);
+  border-radius: 0.6rem;
+  background: color-mix(in oklab, var(--tone) 7%, var(--background));
+  padding: 0.5em 0.9em;
+  & > :where(:nth-child(2)) {
+    margin-top: 0.25em;
+  }
+  & > :where(:last-child) {
+    margin-bottom: 0.1em;
+  }
+  & :where(.callout) {
+    padding-inline: 0.75em;
+  }
+}
+.prose :where(.callout-tip) {
+  --tone: var(--success);
+  --icon: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5'/><path d='M9 18h6'/><path d='M10 22h4'/></svg>");
+}
+.prose :where(.callout-important) {
+  --tone: var(--important);
+  --icon: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M22 17a2 2 0 0 1-2 2H6.828a2 2 0 0 0-1.414.586l-2.202 2.202A.71.71 0 0 1 2 21.286V5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2z'/><path d='M12 15h.01'/><path d='M12 7v4'/></svg>");
+}
+.prose :where(.callout-warning) {
+  --tone: var(--warning);
+  --icon: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3'/><path d='M12 9v4'/><path d='M12 17h.01'/></svg>");
+}
+.prose :where(.callout-caution) {
+  --tone: var(--destructive);
+  --icon: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M12 16h.01'/><path d='M12 8v4'/><path d='M15.312 2a2 2 0 0 1 1.414.586l4.688 4.688A2 2 0 0 1 22 8.688v6.624a2 2 0 0 1-.586 1.414l-4.688 4.688a2 2 0 0 1-1.414.586H8.688a2 2 0 0 1-1.414-.586l-4.688-4.688A2 2 0 0 1 2 15.312V8.688a2 2 0 0 1 .586-1.414l4.688-4.688A2 2 0 0 1 8.688 2z'/></svg>");
+}
+/* A plain fold: no color, no icon, only the chevron. */
+.prose :where(.callout-fold) {
+  --tone: var(--muted-foreground);
+  border-color: var(--border);
+  background: color-mix(in oklab, var(--secondary) 55%, transparent);
+  & > summary {
+    color: var(--foreground);
+    &::before {
+      content: none;
+    }
+  }
+}
+.prose :where(.callout-title, .callout > summary) {
+  display: flex;
+  align-items: center;
+  gap: 0.45em;
+  margin: 0;
+  font-weight: 600;
+  color: var(--tone);
+  &::before {
+    content: "";
+    flex: none;
+    width: 1.05em;
+    height: 1.05em;
+    background: currentColor;
+    mask: var(--icon) center / contain no-repeat;
+  }
+}
+.prose :where(details.callout) {
+  padding-block: 0;
+  & > summary {
+    min-height: 2.5em;
+    margin-inline: -0.9em;
+    padding: 0.35em 0.9em;
+    list-style: none;
+    cursor: pointer;
+    user-select: none;
+    &::-webkit-details-marker {
+      display: none;
+    }
+    &::after {
+      content: "";
+      flex: none;
+      width: 1.1em;
+      height: 1.1em;
+      margin-left: auto;
+      background: var(--muted-foreground);
+      mask: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='m9 18 6-6-6-6'/></svg>")
+        center / contain no-repeat;
+      transition: rotate 150ms ease-out;
+    }
+  }
+  &[open] {
+    padding-bottom: 0.5em;
+    & > summary::after {
+      rotate: 90deg;
+    }
+  }
+  & :where(details.callout) > summary {
+    margin-inline: -0.75em;
+    padding-inline: 0.75em;
+  }
+}
+/* A finger needs a taller row than a pointer. */
+@media (pointer: coarse) {
+  .prose :where(details.callout > summary) {
+    min-height: 2.75rem;
+  }
+}
+
+/* A spoiler is a bar of ink until tapped: focus shows it before the page's script runs, which then
+   keeps it shown (components/post-body.tsx). */
+.prose .spoiler {
+  border-radius: 0.25rem;
+  background: var(--muted-foreground);
+  color: transparent;
+  cursor: pointer;
+  box-decoration-break: clone;
+  transition:
+    color 150ms,
+    background-color 150ms;
+  & > * {
+    visibility: hidden;
+  }
+  &:focus,
+  &.shown {
+    background: color-mix(in oklab, var(--muted-foreground) 14%, transparent);
+    color: inherit;
+    cursor: auto;
+    outline: none;
+    & > * {
+      visibility: visible;
+    }
+  }
+}
+
+/* The sun's apricot, like a highlighter's stroke. */
+.prose :where(mark) {
+  border-radius: 0.2em;
+  background: color-mix(in oklab, var(--brand) 32%, transparent);
+  padding: 0 0.15em;
+  color: inherit;
+  box-decoration-break: clone;
+}
+
+.prose :where(.footnote-ref a) {
+  padding-inline: 0.1em;
+  font-size: 0.8em;
+}
+.prose :where(.footnotes) {
+  margin-top: 1.2em;
+  border-top: 1px solid var(--border);
+  padding-top: 0.4em;
+  font-size: 0.875em;
+  color: var(--muted-foreground);
+  & :where(ol) {
+    margin-block: 0.4em;
+  }
+  & :where(li p) {
+    margin-block: 0.2em;
+  }
+}
+/* Below the sticky header, as floors are. */
+.prose :where(.footnote-ref a, .footnotes li) {
+  scroll-margin-top: 5rem;
+}
+
+/* Formulas are MathML (design §8.2), drawn in the math font Windows or Apple systems have. Others,
+   Android and Linux among them, have none with the MATH table that stretches brackets, so they
+   load this one, once, on the first page with a formula. Not for CJK, which other fonts draw. */
+@font-face {
+  font-family: "Mousehole Math";
+  font-display: swap;
+  src: url("@fontsource/noto-sans-math/files/noto-sans-math-latin-400-normal.woff2") format("woff2");
+  unicode-range: U+0000-2E7F, U+1D400-1D7FF, U+1EE00-1EEFF;
+}
+/* The rest is Temml-Local.css, cut to what its common output needs. A displayed formula scrolls
+   sideways when wider than the column. */
+.prose math {
+  font-family: "Cambria Math", "STIX Two Math", "Mousehole Math", math;
+  font-size: 1.05em;
+  font-style: normal;
+  font-weight: normal;
+  line-height: normal;
+  letter-spacing: normal;
+  direction: ltr;
+}
+.prose :where(.math) {
+  margin: 0.8em 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding-block: 0.2em;
+}
+.prose math.tml-display {
+  display: block;
+  display: block math;
+}
+.prose mtable.tml-jot > mtr > mtd {
+  padding-block: 0.7ex;
+}
+.prose .tml-right {
+  text-align: right;
+  text-align: -webkit-right;
+}
+.prose .tml-left {
+  text-align: left;
+  text-align: -webkit-left;
 }
 
 /* Code colored by highlight.js, in GitHub's light and dark colors like the main site. */
