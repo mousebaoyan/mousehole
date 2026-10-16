@@ -427,7 +427,7 @@ Content-Type: application/json
 | `role` | `owner`、`admin` 或 `member` |
 | `title` | 专属头衔 |
 | `join_time` | 入群时间，Unix 秒 |
-| `last_sent_time` | 最后发言时间，Unix 秒；论坛按小时取整后存 |
+| `last_sent_time` | 最后发言时间，Unix 秒；论坛按小时取整后存。比论坛已有的新、落在今天或昨天（北京时间）的，算这一天签到（总体设计 §8.17） |
 | `is_robot` | 是否机器人 |
 | `in_group` | 仅增量：`true` 进群，`false` 退群 |
 | `left_reason` | 仅增量退群时：`leave` 主动退群，`kick` 被踢 |

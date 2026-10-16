@@ -1,9 +1,10 @@
-import type { Insertable, Transaction } from "kysely";
+import { sql, type Insertable, type Transaction } from "kysely";
 import type { DB, GroupMembers } from "../../../db/types.ts";
 import type { Actor, UserRef } from "../../platform/access.ts";
 import { db } from "../../platform/db.ts";
 import { AppError } from "../../platform/errors.ts";
 import { recordAudit } from "../audit/service.ts";
+import { checkIn } from "../coins/service.ts";
 import {
   applyStanding,
   ensureMembers,
@@ -14,6 +15,7 @@ import {
 import { deriveAccount, mergeRecord, shouldHold, type MemberRecord } from "./rules.ts";
 
 const WRITE_BATCH = 1000;
+const BEIJING_MS = 8 * 3600_000;
 
 async function lockGroup(trx: Transaction<DB>, groupId: number) {
   const group = await trx
@@ -202,6 +204,8 @@ export async function syncMembers(
     const affected = new Set(renamed);
     const robots = new Map<number, boolean>();
     const listed = new Set<number>();
+    // Who spoke later than the forum knew, by the Beijing day they last did: they check in.
+    const spoke = new Map<string, number[]>();
     for (const record of records) {
       const userId = ids.get(record.user_id);
       if (userId === undefined) throw new Error(`No account for QQ ${record.user_id}`);
@@ -221,6 +225,10 @@ export async function syncMembers(
       if (change !== "unchanged") {
         writes.push({ group_id: groupId, user_id: userId, ...row });
         affected.add(userId);
+      }
+      if (row.last_sent_at && row.last_sent_at > (known?.last_sent_at ?? 0)) {
+        const day = new Date(row.last_sent_at.getTime() + BEIJING_MS).toISOString().slice(0, 10);
+        spoke.set(day, [...(spoke.get(day) ?? []), userId]);
       }
     }
 
@@ -258,6 +266,7 @@ export async function syncMembers(
       .where("id", "=", groupId)
       .execute();
     await refreshAccounts(trx, actor, [...affected], robots);
+    for (const [day, userIds] of spoke) await checkIn(trx, userIds, sql<Date>`${day}::date`);
     return counts;
   });
 }

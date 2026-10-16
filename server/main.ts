@@ -8,6 +8,7 @@ import { nonceContext } from "../app/nonce.ts";
 import { app } from "./app.ts";
 import { clearExpiredLogins } from "./modules/auth/service.ts";
 import { checkBadges, syncBadges } from "./modules/badges/service.ts";
+import { settleCoins } from "./modules/coins/service.ts";
 import { clearOldDrafts } from "./modules/drafts/service.ts";
 import { clearOldEvents, EVENTS_CHANNEL, eventsArrived } from "./modules/events/service.ts";
 import {
@@ -51,6 +52,7 @@ every(5 * 60_000, "Checking badges", checkBadges);
 every(3600_000, "Raising levels", promoteActive);
 every(3600_000, "Counting people reached", recountPeopleReached);
 every(3600_000, "Sending weekly letters", () => sendWeeklyLetters());
+every(3600_000, "Settling coins", settleCoins);
 const DAY_MS = 24 * 3600_000;
 every(DAY_MS, "Clearing unused uploads", clearUnusedUploads);
 every(DAY_MS, "Clearing expired logins", clearExpiredLogins);
