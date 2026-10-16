@@ -19,6 +19,9 @@ describe("QQ 消息转 Markdown", () => {
     expect(escapeText("**不是粗体** <b>x</b> a_b `c`")).toBe(
       "\\*\\*不是粗体\\*\\* \\<b\\>x\\</b\\> a\\_b \\`c\\`",
     );
+    expect(escapeText("||剧透|| ==高亮== $x$ a=b")).toBe(
+      "\\|\\|剧透\\|\\| \\==高亮\\== \\$x\\$ a=b",
+    );
     expect(escapeText("看 https://x.com/a_b*c 这个")).toBe("看 https://x.com/a_b*c 这个");
     expect(escapeText("# 标题\n> 引用\n- 列表\n1. 第一")).toBe(
       "\\# 标题\n\\> 引用\n\\- 列表\n1\\. 第一",

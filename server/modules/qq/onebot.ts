@@ -17,8 +17,8 @@ function text(value: unknown) {
 }
 
 // Chat text shows as typed: characters Markdown would act on are escaped, except in links,
-// which escapes would break.
-const INLINE = /[\\`*_[\]<>~|]/g;
+// which escapes would break. A lone "=" does nothing; "==" would highlight.
+const INLINE = /[\\`*_[\]<>~|$]|=(?==)/g;
 // A line that would start a heading, quote, list or setext underline; the number of an ordered
 // list stays, its dot is escaped.
 const LINE_START = /^(\s*)(?:([#>+=-])|(\d+)([.)]))/gm;

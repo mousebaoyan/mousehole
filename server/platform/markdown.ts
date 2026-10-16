@@ -1,12 +1,17 @@
-import MarkdownIt from "markdown-it";
+import { randomBytes } from "node:crypto";
+import MarkdownIt, { type StateBlock, type StateCore, type StateInline } from "markdown-it";
+import footnote from "markdown-it-footnote";
+import mark from "markdown-it-mark";
 import hljs from "highlight.js/lib/core";
+import temml from "temml";
 import { FilterXSS } from "xss";
 import { env } from "./env.ts";
 
 // Markdown is rendered once, when a post is written or edited, and stored next to its source.
-// Raw HTML is off, and the result goes through an allowlist anyway.
+// Raw HTML is off, and the result goes through an allowlist anyway. Design §8.2 lists what the
+// syntax adds to GFM.
 
-const md = new MarkdownIt({ html: false, linkify: true, breaks: true });
+const md = new MarkdownIt({ html: false, linkify: true, breaks: true }).use(mark).use(footnote);
 const { Token } = new md.core.State("", md, {});
 
 const SITE = new URL(env.PUBLIC_URL).origin;
@@ -49,12 +54,233 @@ function loadLanguages() {
   return languages;
 }
 
+// ---- Callouts: GitHub's alerts, "> [!TIP]" opening a quote, with Obsidian's additions: a title
+// after the type, and "-" or "+" right after it to fold the box, shut or open. A fold is a
+// <details>, which opens without the page's script.
+
+const CALLOUTS: Record<string, string> = {
+  note: "说明",
+  tip: "提示",
+  important: "重要",
+  warning: "注意",
+  caution: "警告",
+  fold: "详情",
+};
+const CALLOUT = /^\[!(note|tip|important|warning|caution|fold)\]([+-]?)[ \t]*(.*)$/i;
+
+function callouts(state: StateCore) {
+  const { tokens } = state;
+  for (let i = 0; i < tokens.length; i++) {
+    const open = tokens[i];
+    if (open.type !== "blockquote_open" || tokens[i + 1].type !== "paragraph_open") continue;
+    const paragraph = tokens[i + 2];
+    const [first, ...rest] = paragraph.content.split("\n");
+    const found = CALLOUT.exec(first);
+    if (!found) continue;
+    const kind = found[1].toLowerCase();
+    const fold = found[2] !== "" || kind === "fold";
+    const close = tokens.findIndex(
+      (t, j) => j > i && t.type === "blockquote_close" && t.level === open.level,
+    );
+    open.tag = tokens[close].tag = fold ? "details" : "div";
+    open.attrSet("class", `callout callout-${kind}`);
+    if (found[2] === "+") open.attrSet("open", "");
+
+    const titleOpen = new state.Token("callout_title_open", fold ? "summary" : "p", 1);
+    if (!fold) titleOpen.attrSet("class", "callout-title");
+    const title = new state.Token("inline", "", 0);
+    title.content = found[3].trim() || CALLOUTS[kind];
+    title.children = [];
+    const titleClose = new state.Token("callout_title_close", titleOpen.tag, -1);
+    titleOpen.block = titleClose.block = true;
+    // The marker's line goes; a paragraph that was only the marker goes with it.
+    paragraph.content = rest.join("\n");
+    tokens.splice(i + 1, rest.length > 0 ? 0 : 3, titleOpen, title, titleClose);
+  }
+}
+
+md.core.ruler.after("block", "callout", callouts);
+
+// ---- Spoilers, "||hidden||" as in Discord. The built-in text rule runs on past "|", so this one
+// stands in for it, stopping there as well.
+
+const TEXT_END = /[\n!#$%&*+\-:<=>@[\\\]^_`{}~|]/g;
+
+function plainRun(state: StateInline, silent: boolean) {
+  TEXT_END.lastIndex = state.pos;
+  const end = Math.min(TEXT_END.exec(state.src)?.index ?? state.posMax, state.posMax);
+  if (end === state.pos) return false;
+  if (!silent) state.pending += state.src.slice(state.pos, end);
+  state.pos = end;
+  return true;
+}
+
+function spoiler(state: StateInline, silent: boolean) {
+  const start = state.pos;
+  if (!state.src.startsWith("||", start)) return false;
+  const end = state.src.indexOf("||", start + 2);
+  if (end === -1 || end === start + 2 || end + 2 > state.posMax) return false;
+  if (!silent) {
+    // Focusable, so a tap shows it before the page's script runs.
+    state.push("spoiler_open", "span", 1).attrs = [
+      ["class", "spoiler"],
+      ["tabindex", "0"],
+    ];
+    const max = state.posMax;
+    state.pos = start + 2;
+    state.posMax = end;
+    state.md.inline.tokenize(state);
+    state.posMax = max;
+    state.push("spoiler_close", "span", -1);
+  }
+  state.pos = end + 2;
+  return true;
+}
+
+md.inline.ruler.at("text", plainRun);
+md.inline.ruler.after("text", "spoiler", spoiler);
+
+// ---- Formulas: $…$ in a line, $$…$$ on lines of their own. Temml writes MathML, which browsers
+// lay out themselves, so pages load no script for it. As in Pandoc, a dollar opens only
+// before a non-space and closes only after one and not before a digit, so prices stay text.
+
+const INLINE_MATH = /^\$(?=\S)((?:\\.|[^\\$])+?)(?<=\S)\$(?!\d)/;
+
+function inlineMath(state: StateInline, silent: boolean) {
+  if (state.src[state.pos] !== "$") return false;
+  const found = INLINE_MATH.exec(state.src.slice(state.pos, state.posMax));
+  if (!found) return false;
+  if (!silent) state.push("math_inline", "math", 0).content = found[1];
+  state.pos += found[0].length;
+  return true;
+}
+
+function blockMath(state: StateBlock, startLine: number, endLine: number, silent: boolean) {
+  const start = state.bMarks[startLine] + state.tShift[startLine];
+  if (state.sCount[startLine] - state.blkIndent >= 4 || !state.src.startsWith("$$", start)) {
+    return false;
+  }
+  let line = startLine;
+  let last = state.src.slice(start + 2, state.eMarks[line]);
+  const lines = [last];
+  while (!last.trimEnd().endsWith("$$")) {
+    line++;
+    if (line >= endLine || state.sCount[line] < state.blkIndent) return false;
+    last = state.src.slice(state.bMarks[line] + state.tShift[line], state.eMarks[line]);
+    lines.push(last);
+  }
+  if (silent) return true;
+  const token = state.push("math_block", "math", 0);
+  token.content = lines.join("\n").trimEnd().slice(0, -2);
+  token.map = [startLine, line + 1];
+  token.block = true;
+  state.line = line + 1;
+  return true;
+}
+
+// A formula that doesn't parse shows as written, for its author to see in the preview.
+function formula(tex: string, displayMode: boolean) {
+  try {
+    return temml.renderToString(tex, { displayMode, annotate: true, throwOnError: true });
+  } catch (error) {
+    if (!(error instanceof temml.ParseError)) throw error;
+    const marks = displayMode ? "$$" : "$";
+    return md.utils.escapeHtml(marks + tex + marks);
+  }
+}
+
+md.inline.ruler.after("escape", "math_inline", inlineMath);
+md.block.ruler.before("fence", "math_block", blockMath, {
+  alt: ["paragraph", "reference", "blockquote", "list"],
+});
+md.renderer.rules.math_inline = (tokens, i) => formula(tokens[i].content, false);
+// In a box of its own, which scrolls when the formula is wider than a phone.
+md.renderer.rules.math_block = (tokens, i) =>
+  `<div class="math">${formula(tokens[i].content, true)}</div>\n`;
+
+// ---- Footnotes: the plugin's, without the rule it draws above them. Their ids carry `docId`,
+// as a page shows many posts.
+md.renderer.rules.footnote_block_open = () => '<section class="footnotes">\n<ol>\n';
+
+// What Temml writes and needs kept.
+const MATH_TAGS = [
+  "math",
+  "semantics",
+  "annotation",
+  "mrow",
+  "mi",
+  "mn",
+  "mo",
+  "ms",
+  "mtext",
+  "mspace",
+  "msup",
+  "msub",
+  "msubsup",
+  "mfrac",
+  "msqrt",
+  "mroot",
+  "mover",
+  "munder",
+  "munderover",
+  "mmultiscripts",
+  "mprescripts",
+  "none",
+  "mtable",
+  "mtr",
+  "mtd",
+  "mlabeledtr",
+  "mpadded",
+  "mphantom",
+  "menclose",
+  "mstyle",
+];
+const MATH_ATTRS = [
+  "class",
+  "style",
+  "display",
+  "displaystyle",
+  "scriptlevel",
+  "encoding",
+  "mathvariant",
+  "stretchy",
+  "fence",
+  "form",
+  "separator",
+  "lspace",
+  "rspace",
+  "minsize",
+  "maxsize",
+  "movablelimits",
+  "largeop",
+  "symmetric",
+  "accent",
+  "accentunder",
+  "linethickness",
+  "notation",
+  "width",
+  "height",
+  "depth",
+  "voffset",
+  "columnalign",
+  "rowalign",
+  "columnspacing",
+  "rowspacing",
+  "columnlines",
+  "rowlines",
+  "rowspan",
+  "columnspan",
+];
+
 const sanitizer = new FilterXSS({
   whiteList: {
-    a: ["href", "title", "class", "rel"],
+    ...Object.fromEntries(MATH_TAGS.map((tag) => [tag, MATH_ATTRS])),
+    a: ["href", "title", "class", "rel", "id"],
     blockquote: [],
     br: [],
     code: ["class"],
+    details: ["class", "open"],
+    div: ["class"],
     em: [],
     h1: [],
     h2: [],
@@ -65,13 +291,17 @@ const sanitizer = new FilterXSS({
     hr: [],
     img: ["src", "alt", "title", "width", "height", "loading"],
     input: ["type", "checked", "disabled"],
-    li: ["class"],
+    li: ["class", "id"],
+    mark: [],
     ol: ["start"],
-    p: [],
+    p: ["class"],
     pre: [],
     s: [],
-    span: ["class"],
+    section: ["class"],
+    span: ["class", "tabindex"],
     strong: [],
+    summary: [],
+    sup: ["class"],
     table: [],
     tbody: [],
     td: ["style"],
@@ -80,8 +310,8 @@ const sanitizer = new FilterXSS({
     tr: [],
     ul: [],
   },
-  // Table alignment.
-  css: { whiteList: { "text-align": true } },
+  // Table alignment, and the spacing Temml gives matrix cells.
+  css: { whiteList: { "text-align": true, "padding-left": true, "padding-right": true } },
   stripIgnoreTag: true,
   stripIgnoreTagBody: ["script", "style"],
 });
@@ -158,7 +388,8 @@ export async function renderMarkdown(
   source: string,
   images: (srcs: string[]) => Promise<Map<string, ShownImage>>,
 ) {
-  const tokens = md.parse(source, {});
+  const doc = { docId: randomBytes(3).toString("hex") };
+  const tokens = md.parse(source, doc);
   if (tokens.some((t) => t.type === "fence")) await loadLanguages();
   const found = { mentions: new Set<number>(), links: new Set<string>() };
   const srcs = tokens
@@ -191,7 +422,7 @@ export async function renderMarkdown(
     }
   }
 
-  const html = sanitizer.process(md.renderer.render(tokens, md.options, {}));
+  const html = sanitizer.process(md.renderer.render(tokens, md.options, doc));
   return {
     html,
     mentions: [...found.mentions],
@@ -205,12 +436,25 @@ const ENTITIES = { amp: "&", lt: "<", gt: ">", quot: '"', "#39": "'", "#x27": "'
 
 const graphemes = new Intl.Segmenter("zh", { granularity: "grapheme" });
 
+const SPOILER = /<span class="spoiler"[^>]*>.*?<\/span>/gs;
+// A formula's TeX, which Temml writes alongside its MathML.
+const FORMULA = /<math\b.*?<annotation[^>]*>(.*?)<\/annotation>.*?<\/math>/gs;
+const FOOTNOTE_LINK =
+  /<sup class="footnote-ref">.*?<\/sup>|<a [^>]*class="footnote-backref">.*?<\/a>/g;
+
 // Rendered HTML as plain text: tags dropped, the renderer's escapes undone, spaces collapsed.
+// Spoilers stay hidden, in excerpts and mail as on the page.
 export function plainText(html: string) {
   return (
     html
+      .replaceAll(SPOILER, "▇▇")
+      .replaceAll(FORMULA, " $1 ")
+      .replaceAll(FOOTNOTE_LINK, "")
       // Blocks are kept apart by a space; inline tags just go.
-      .replaceAll(/<\/?(?:p|li|h[1-6]|blockquote|pre|br|hr|td|th)\b[^>]*>/g, " ")
+      .replaceAll(
+        /<\/?(?:p|li|h[1-6]|blockquote|pre|br|hr|td|th|div|details|summary|section)\b[^>]*>/g,
+        " ",
+      )
       .replaceAll(/<[^>]*>/g, "")
       .replaceAll(
         /&(amp|lt|gt|quot|#39|#x27);/g,
