@@ -36,6 +36,8 @@ export async function syncBadges() {
         tier: r.tier,
         grouping: r.grouping,
         multiple: r.multiple ?? false,
+        ladder: r.ladder ?? null,
+        need: r.need ?? null,
         position,
       })),
     )
@@ -46,6 +48,8 @@ export async function syncBadges() {
         tier: eb.ref("excluded.tier"),
         grouping: eb.ref("excluded.grouping"),
         multiple: eb.ref("excluded.multiple"),
+        ladder: eb.ref("excluded.ladder"),
+        need: eb.ref("excluded.need"),
         position: eb.ref("excluded.position"),
       })),
     )

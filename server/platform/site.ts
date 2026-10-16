@@ -12,6 +12,9 @@ export function levelName(level: number) {
   return `L${level} ${LEVEL_NAMES[level]}`;
 }
 
+// Badge tiers (design §8.8), as in "银徽章".
+export const TIER_NAMES: Record<string, string> = { gold: "金", silver: "银", bronze: "铜" };
+
 // Moderators and up (design §6.4). The owner runs the system and may do whatever admins do.
 export const STAFF = ["moderator", "admin", "owner"];
 

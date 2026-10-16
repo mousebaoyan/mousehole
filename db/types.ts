@@ -54,8 +54,10 @@ export interface Badges {
   frame: string | null;
   grouping: string;
   id: Generated<number>;
+  ladder: string | null;
   multiple: Generated<boolean>;
   name: string;
+  need: number | null;
   position: Generated<number>;
   slug: string | null;
   tier: string;

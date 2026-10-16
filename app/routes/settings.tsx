@@ -7,7 +7,6 @@ import { browserApi } from "~/browser-api";
 import { Check, Field, readForm, Section, Time } from "~/components/form-parts";
 import { SettingsForm } from "~/components/settings-form";
 import { Button, buttonVariants } from "~/components/ui/button";
-import { TIER_NAMES } from "~/components/badge-chip";
 import { Input } from "~/components/ui/input";
 import { Select } from "~/components/ui/select";
 import { Textarea } from "~/components/ui/textarea";
@@ -20,7 +19,7 @@ import {
   NOTIFICATION_LABELS,
   NOTIFICATION_TYPES,
 } from "../../server/modules/notifications/types.ts";
-import { BOT_NAME } from "../../server/platform/site.ts";
+import { BOT_NAME, TIER_NAMES } from "../../server/platform/site.ts";
 import { Customize, DEFAULT_STATUS_EMOJI } from "./settings-customize.tsx";
 import { endOfDay, unixNow } from "~/time";
 import { BACKGROUNDS, FRAMES, THEMES } from "../../server/modules/users/customization.ts";

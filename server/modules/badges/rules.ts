@@ -17,8 +17,13 @@ export type Rule = {
   tier: Tier;
   grouping: Grouping;
   multiple?: boolean;
+  ladder?: Ladder;
+  need?: number;
   earned: RawBuilder<{ user_id: number; post_id: number | null }>;
 };
+
+// Counts some badges come one after another along, bronze to gold, each needing more of it.
+export type Ladder = "reply_likes" | "thread_likes" | "accepted" | "positioning" | "streak";
 
 // Floors that count, as p, with their thread as t.
 const SHOWN = sql`posts p JOIN threads t ON t.id = p.thread_id
@@ -57,6 +62,19 @@ function positioningReplies(threads: number) {
 
 function streak(days: number) {
   return people(sql`SELECT id AS user_id FROM users WHERE visit_streak >= ${days}`);
+}
+
+const BY_COUNT: Record<Ladder, (need: number) => Rule["earned"]> = {
+  reply_likes: (need) => likedFloors(false, need),
+  thread_likes: (need) => likedFloors(true, need),
+  accepted,
+  positioning: positioningReplies,
+  streak,
+};
+
+// A badge on a ladder, earned with `need` of its count.
+function counted(ladder: Ladder, need: number) {
+  return { ladder, need, earned: BY_COUNT[ladder](need) };
 }
 
 // The seed badge goes to whoever first logs in before this, Beijing time.
@@ -138,7 +156,7 @@ export const RULES: Rule[] = [
     tier: "bronze",
     grouping: "likes",
     multiple: true,
-    earned: likedFloors(false, 5),
+    ...counted("reply_likes", 5),
   },
   {
     slug: "good_reply",
@@ -147,7 +165,7 @@ export const RULES: Rule[] = [
     tier: "silver",
     grouping: "likes",
     multiple: true,
-    earned: likedFloors(false, 15),
+    ...counted("reply_likes", 15),
   },
   {
     slug: "great_reply",
@@ -156,7 +174,7 @@ export const RULES: Rule[] = [
     tier: "gold",
     grouping: "likes",
     multiple: true,
-    earned: likedFloors(false, 30),
+    ...counted("reply_likes", 30),
   },
   {
     slug: "nice_thread",
@@ -165,7 +183,7 @@ export const RULES: Rule[] = [
     tier: "bronze",
     grouping: "likes",
     multiple: true,
-    earned: likedFloors(true, 5),
+    ...counted("thread_likes", 5),
   },
   {
     slug: "good_thread",
@@ -174,7 +192,7 @@ export const RULES: Rule[] = [
     tier: "silver",
     grouping: "likes",
     multiple: true,
-    earned: likedFloors(true, 15),
+    ...counted("thread_likes", 15),
   },
   {
     slug: "great_thread",
@@ -183,7 +201,7 @@ export const RULES: Rule[] = [
     tier: "gold",
     grouping: "likes",
     multiple: true,
-    earned: likedFloors(true, 30),
+    ...counted("thread_likes", 30),
   },
   {
     slug: "appreciated",
@@ -215,7 +233,7 @@ export const RULES: Rule[] = [
     description: "回复第一次被采纳",
     tier: "bronze",
     grouping: "answers",
-    earned: accepted(1),
+    ...counted("accepted", 1),
   },
   {
     slug: "advisor",
@@ -223,7 +241,7 @@ export const RULES: Rule[] = [
     description: "回复被采纳 10 次",
     tier: "silver",
     grouping: "answers",
-    earned: accepted(10),
+    ...counted("accepted", 10),
   },
   {
     slug: "expert",
@@ -231,7 +249,7 @@ export const RULES: Rule[] = [
     description: "回复被采纳 30 次",
     tier: "gold",
     grouping: "answers",
-    earned: accepted(30),
+    ...counted("accepted", 30),
   },
   {
     slug: "experience",
@@ -249,7 +267,7 @@ export const RULES: Rule[] = [
     description: "在 5 个别人的保研定位帖里回复过",
     tier: "bronze",
     grouping: "answers",
-    earned: positioningReplies(5),
+    ...counted("positioning", 5),
   },
   {
     slug: "positioning_guide",
@@ -257,7 +275,7 @@ export const RULES: Rule[] = [
     description: "在 20 个别人的保研定位帖里回复过",
     tier: "silver",
     grouping: "answers",
-    earned: positioningReplies(20),
+    ...counted("positioning", 20),
   },
   {
     slug: "streak_7",
@@ -265,7 +283,7 @@ export const RULES: Rule[] = [
     description: "连续 7 天访问鼠洞",
     tier: "bronze",
     grouping: "persistence",
-    earned: streak(7),
+    ...counted("streak", 7),
   },
   {
     slug: "streak_30",
@@ -273,7 +291,7 @@ export const RULES: Rule[] = [
     description: "连续 30 天访问鼠洞",
     tier: "silver",
     grouping: "persistence",
-    earned: streak(30),
+    ...counted("streak", 30),
   },
   {
     slug: "streak_100",
@@ -281,7 +299,7 @@ export const RULES: Rule[] = [
     description: "连续 100 天访问鼠洞",
     tier: "gold",
     grouping: "persistence",
-    earned: streak(100),
+    ...counted("streak", 100),
   },
   {
     slug: "anniversary",
