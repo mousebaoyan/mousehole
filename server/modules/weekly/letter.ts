@@ -141,7 +141,7 @@ export async function letterHtml(week: Week) {
         保研路上信息难得，每一条认真的回答，都可能让后来的人少走一段弯路。谢谢你愿意分享。
       </p>
     </div>
-    <p style="margin:24px 0 0;">${mailButton(`去${SITE_NAME}看看`, week.profileUrl)}</p>
+    ${mailButton(`去${SITE_NAME}看看`, week.profileUrl)}
     ${
       week.activated
         ? ""

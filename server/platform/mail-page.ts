@@ -71,11 +71,13 @@ export async function mailPage(preview: string, card: Html | string, footer?: Ht
 }
 
 export function mailButton(label: string, url: string) {
-  return html`<a
-    href="${url}"
-    style="display:inline-block;background:${TEAL};color:#ffffff;text-decoration:none;font-size:15px;padding:10px 22px;border-radius:10px;"
-    >${label}</a
-  >`;
+  return html`<p style="margin:24px 0 0;text-align:center;">
+    <a
+      href="${url}"
+      style="display:inline-block;background:${TEAL};color:#ffffff;text-decoration:none;font-size:15px;padding:10px 22px;border-radius:10px;"
+      >${label}</a
+    >
+  </p>`;
 }
 
 // Why the mail came and how to stop it, as the big senders say it; the link turns this kind off
