@@ -67,9 +67,9 @@ export function authorizeOwner(c: Context<AppEnv>) {
 }
 
 // For putting words and pictures up, which muted members can't: posts, edits, reactions,
-// boosts, uploads.
-export function authorizePosting(c: Context<AppEnv>) {
-  const viewer = authorize(c, "act");
+// boosts, uploads. `archived` as for checkPermission.
+export function authorizePosting(c: Context<AppEnv>, archived = false) {
+  const viewer = checkPermission(c.var.viewer, c.var.bot, "act", archived);
   assertNotMuted(viewer);
   return viewer;
 }

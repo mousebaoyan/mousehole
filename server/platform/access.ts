@@ -50,7 +50,13 @@ const WRITES = new Set<Scope>(["act", "moderate", "admin"]);
 const BOT_ONLY = new Set<Scope>(["sync", "auth", "events"]);
 const ROLES: Partial<Record<Scope, string[]>> = { moderate: STAFF, admin: ["admin", "owner"] };
 
-export function checkPermission(viewer: Viewer | null, bot: Bot | null, need: Scope) {
+// `archived`: what the bot writes carries the group messages it was archived from.
+export function checkPermission(
+  viewer: Viewer | null,
+  bot: Bot | null,
+  need: Scope,
+  archived = false,
+) {
   if (!viewer) throw new AppError(401, "unauthorized", "请先登录");
   if (bot && !bot.scopes.includes(need)) {
     throw new AppError(403, "scope_missing", `这个 token 没有 ${need} 权限`);
@@ -58,7 +64,8 @@ export function checkPermission(viewer: Viewer | null, bot: Bot | null, need: Sc
   if (!bot && BOT_ONLY.has(need)) throw new AppError(403, "forbidden", "只有 bot 能调用这个接口");
 
   if (WRITES.has(need)) {
-    if (viewer.member_status === "frozen") {
+    // What the bot archives was said in the group while they were in it.
+    if (viewer.member_status === "frozen" && !(bot && archived)) {
       throw new AppError(403, "member_frozen", "账号已冻结，只能浏览");
     }
     // Banned people can't log in; this stops bots acting for them.

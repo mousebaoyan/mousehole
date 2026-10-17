@@ -841,7 +841,7 @@ export const threadsRoutes = createRouter()
       },
     }),
     async (c) => {
-      const viewer = authorizePosting(c);
+      const viewer = authorizePosting(c, c.req.valid("json").source !== undefined);
       rateLimit(`thread:${viewer.id}`, THREADS_PER_HOUR, HOUR);
       limitBot(c);
       const reach = reachOf(viewer, c.var.bot);
@@ -876,7 +876,7 @@ export const threadsRoutes = createRouter()
       },
     }),
     async (c) => {
-      const viewer = authorizePosting(c);
+      const viewer = authorizePosting(c, c.req.valid("json").source !== undefined);
       rateLimit(`post:${viewer.id}`, REPLIES_PER_10_MINUTES, 10 * MINUTE);
       limitBot(c);
       const post = await createPost(
@@ -983,8 +983,8 @@ export const threadsRoutes = createRouter()
       },
     }),
     async (c) => {
-      const viewer = authorizePosting(c);
       const { content, source, status, reason } = c.req.valid("json");
+      const viewer = authorizePosting(c, source !== undefined);
       const reach = reachOf(viewer, c.var.bot);
       const id = c.req.valid("param").id;
       if (status !== undefined) {

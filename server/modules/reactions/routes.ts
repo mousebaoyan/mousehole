@@ -68,8 +68,8 @@ export const reactionsRoutes = createRouter()
       responses: changed,
     }),
     async (c) => {
-      const viewer = authorizePosting(c);
       const { emoji, source, created_at } = c.req.valid("json");
+      const viewer = authorizePosting(c, source !== undefined);
       await react(
         actorOf(c, viewer),
         viewer,
@@ -166,9 +166,9 @@ export const reactionsRoutes = createRouter()
       },
     }),
     async (c) => {
-      const viewer = authorizePosting(c);
-      const reach = reachOf(viewer, c.var.bot);
       const { body, source, created_at } = c.req.valid("json");
+      const viewer = authorizePosting(c, source !== undefined);
+      const reach = reachOf(viewer, c.var.bot);
       const boost = await setBoost(
         actorOf(c, viewer),
         viewer,
