@@ -14,6 +14,8 @@ export type FilterChoice = {
   group?: string;
   // A board's dot.
   color?: string;
+  // How many threads it has.
+  count?: number;
 };
 
 // A pill that opens links to the same page with one filter changed, so the filters live in the
@@ -75,7 +77,17 @@ function Choices({ choices }: { choices: FilterChoice[] }) {
           <Link to={c.to} className={cn(menuItem, c.chosen && "font-medium")}>
             {c.color !== undefined && <Dot color={c.color} />}
             {c.label}
-            {c.chosen && <Check className="ml-auto" />}
+            {/* The chosen one is ticked in place of its count, which the page shows. */}
+            {c.chosen ? (
+              <Check className="ml-auto" />
+            ) : (
+              c.count !== undefined &&
+              c.count > 0 && (
+                <span className="ml-auto pl-2 text-xs text-muted-foreground tabular-nums">
+                  {c.count}
+                </span>
+              )
+            )}
           </Link>
         </Fragment>
       ))}

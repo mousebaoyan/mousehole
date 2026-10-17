@@ -36,7 +36,7 @@ import {
 } from "./schemas.ts";
 import { assertRelationsShown, findUserId, relationsShown, userBriefs } from "../users/service.ts";
 import {
-  countUnread,
+  countTabs,
   createPost,
   createThread,
   deletePost,
@@ -637,13 +637,15 @@ export const threadsRoutes = createRouter()
     createRoute({
       method: "get",
       path: "/threads/counts",
-      summary: "当前范围里新和未读的帖子各有几个，列表的标签页用",
+      summary: "当前范围里新、未读和待解答的帖子各有几个，列表的标签页用",
       request: { query: z.object({ board: z.string().optional(), tag: z.string().optional() }) },
       responses: {
         200: {
           description: "数量",
           content: {
-            "application/json": { schema: z.object({ new: z.number(), unread: z.number() }) },
+            "application/json": {
+              schema: z.object({ new: z.number(), unread: z.number(), unsolved: z.number() }),
+            },
           },
         },
         401: errorResponse("没有登录"),
@@ -653,7 +655,7 @@ export const threadsRoutes = createRouter()
     async (c) => {
       const viewer = authorize(c, "read");
       const reach = reachOf(viewer, c.var.bot);
-      return c.json(await countUnread(reach, viewer.id, c.req.valid("query")), 200);
+      return c.json(await countTabs(reach, viewer.id, c.req.valid("query")), 200);
     },
   )
   .openapi(

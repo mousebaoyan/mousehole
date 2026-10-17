@@ -204,6 +204,15 @@ const UNSOLVED = sql<boolean>`threads.kind = 'question' AND threads.accepted_cou
   AND (threads.reply_count = 0 OR NOT EXISTS (SELECT 1 FROM posts
     WHERE posts.thread_id = threads.id AND posts.floor = 1 AND posts.via = 'qq'))`;
 
+// The threads someone started or replied in, deleted replies aside.
+function postedIn(userId: number | null) {
+  return db
+    .selectFrom("posts")
+    .select("posts.thread_id")
+    .where(sql<boolean>`posts.author_id = ${userId}`)
+    .where("posts.deleted_at", "is", null);
+}
+
 // A board and a tag to narrow a list to; either may be left out. Members are told the level a
 // board needs when theirs is short of it.
 async function scopeOf(reach: number, filter: { board?: string; tag?: string }) {
@@ -324,15 +333,7 @@ export async function listThreads(
     if (view === "unread") query = query.where(UNREAD);
     if (view === "read") query = query.where("mine.last_read_at", "is not", null);
     if (view === "bookmarked") query = query.where("mine.bookmarked_at", "is not", null);
-    if (view === "posted") {
-      query = query.where("threads.id", "in", (eb) =>
-        eb
-          .selectFrom("posts")
-          .select("posts.thread_id")
-          .where(sql<boolean>`posts.author_id = ${userId}`)
-          .where("posts.deleted_at", "is", null),
-      );
-    }
+    if (view === "posted") query = query.where("threads.id", "in", postedIn(userId));
     if (pinFrom !== null) query = query.where("threads.pinned", "<", pinFrom);
     query = query.orderBy(time, "desc").orderBy("threads.id", "desc");
     if (cursor !== undefined) {
@@ -359,8 +360,9 @@ export async function listThreads(
   };
 }
 
-// For the list's tabs: how many threads in this board or tag are new and unread to the reader.
-export async function countUnread(
+// For the list's tabs: how many threads in this board or tag are new and unread to the reader,
+// and how many are unsolved.
+export async function countTabs(
   reach: number,
   userId: number,
   filter: { board?: string; tag?: string },
@@ -372,9 +374,32 @@ export async function countUnread(
     .select([
       sql<number>`(count(*) FILTER (WHERE ${NEW}))::integer`.as("new"),
       sql<number>`(count(*) FILTER (WHERE ${UNREAD}))::integer`.as("unread"),
+      sql<number>`(count(*) FILTER (WHERE ${UNSOLVED}))::integer`.as("unsolved"),
     ])
     .where(inScope(await scopeOf(reach, filter)))
     .executeTakeFirstOrThrow();
+}
+
+// How many threads the reader's own lists have, for the sidebar (design §9).
+export async function countMine(reach: number, userId: number) {
+  const [{ posted }, mine] = await Promise.all([
+    visibleThreads(reach)
+      .select(sql<number>`count(*)::integer`.as("posted"))
+      .where("threads.id", "in", postedIn(userId))
+      .executeTakeFirstOrThrow(),
+    visibleThreads(reach)
+      .innerJoin("thread_users as mine", (join) =>
+        join.onRef("mine.thread_id", "=", "threads.id").on("mine.user_id", "=", userId),
+      )
+      .select([
+        sql<number>`(count(*) FILTER (WHERE mine.bookmarked_at IS NOT NULL))::integer`.as(
+          "bookmarked",
+        ),
+        sql<number>`(count(*) FILTER (WHERE mine.last_read_at IS NOT NULL))::integer`.as("read"),
+      ])
+      .executeTakeFirstOrThrow(),
+  ]);
+  return { posted, ...mine };
 }
 
 // Someone's replies, newest first, with the thread each is in; the cursor is the last one's ID.

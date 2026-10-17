@@ -19,11 +19,12 @@ import { signedUnsubscribe } from "../../platform/mail.ts";
 import { rateLimit } from "../../platform/rate-limit.ts";
 import { getSettings as getSiteSettings } from "../../platform/settings.ts";
 import { UserBriefSchema, UserRefSchema } from "./schemas.ts";
+import { countUserBadges } from "../badges/service.ts";
 import { coinBalance } from "../coins/service.ts";
 import { setCustomName } from "../members/service.ts";
 import { NOTIFICATION_TYPES, notifyPrefs } from "../notifications/service.ts";
 import { exportOwnBoosts } from "../reactions/service.ts";
-import { exportOwnPosts, listPins } from "../threads/service.ts";
+import { countMine, exportOwnPosts, listPins } from "../threads/service.ts";
 import { backgroundOf, BACKGROUNDS_DIR, backgroundUrls, uploadBackground } from "./backgrounds.ts";
 import {
   BACKGROUND_OPACITY,
@@ -75,6 +76,9 @@ const MeSchema = z
     member_status: z.string(),
     activated: z.boolean(),
     coins: z.number().openapi({ description: "鼠币余额" }),
+    counts: z
+      .object({ posted: z.number(), bookmarked: z.number(), read: z.number(), badges: z.number() })
+      .openapi({ description: "侧栏用：发过或回复过、收藏、读过的帖子数，得到的徽章有几种" }),
   })
   .openapi("Me");
 
@@ -135,6 +139,8 @@ const UserSchema = UserBriefSchema.extend({
     followers: z.number(),
     following: z.number(),
     endorsements: z.number(),
+    solved: z.number().openapi({ description: "被采纳的回答数" }),
+    badges: z.number().openapi({ description: "得到的徽章有几种" }),
     people_reached: z.number().openapi({ description: "帮到的人：读过 TA 至少一层的人数" }),
     reads: z.number().openapi({ description: "被读次数：别人第一次读到 TA 的一层算一次" }),
     reads_week: z.number().optional().openapi({ description: "最近 7 天的被读次数，只给本人" }),
@@ -393,6 +399,8 @@ export const usersRoutes = createRouter()
             followers: u.followers,
             following: u.following,
             endorsements: u.endorsements,
+            solved: u.solved,
+            badges: u.badge_count,
             people_reached: u.people_reached,
             reads: u.reads_received,
             ...(viewer?.id === u.id && { reads_week: u.reads_week }),
@@ -970,10 +978,16 @@ export const usersRoutes = createRouter()
       },
     }),
     async (c) => {
-      const { id } = authorize(c, "read");
-      const { activated_at, ...profile } = await getProfile(id);
+      const viewer = authorize(c, "read");
+      const { id } = viewer;
+      const [{ activated_at, ...profile }, coins, mine, badges] = await Promise.all([
+        getProfile(id),
+        coinBalance(id),
+        countMine(reachOf(viewer, c.var.bot), id),
+        countUserBadges(id),
+      ]);
       return c.json(
-        { ...profile, activated: activated_at !== null, coins: await coinBalance(id) },
+        { ...profile, activated: activated_at !== null, coins, counts: { ...mine, badges } },
         200,
       );
     },

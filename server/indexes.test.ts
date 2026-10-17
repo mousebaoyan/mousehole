@@ -134,6 +134,8 @@ describe("热点查询走索引", () => {
     const id = { id: String(thread) };
     const views = ["latest", "hot", "unsolved", "new", "unread", "posted", "bookmarked"] as const;
     for (const view of views) await api.threads.$get({ query: { view } }, member);
+    await api.threads.counts.$get({ query: {} }, member);
+    await api.me.$get({}, member);
     await api.threads.$get({ query: { board: "hot" } });
     await api.threads.$get({ query: { tag: "夏令营" } });
     await api.threads[":id"].$get({ param: id }, member);
