@@ -1,5 +1,6 @@
 import { ArrowDown, ArrowUp, Columns3, Lock, Search } from "~/components/icons";
 import { pageTitle } from "~/share-meta";
+import { cn } from "cn";
 import { useState } from "react";
 import { Form, Link, useRouteLoaderData, useSearchParams } from "react-router";
 import { apiContext } from "../../api.server.ts";
@@ -14,6 +15,10 @@ import { LEVEL_NAMES, levelName } from "../../../server/platform/site.ts";
 
 import type { Route } from "./+types/members.ts";
 import type { loader as adminLoader } from "./layout.tsx";
+
+// The name column stays put while the rest scrolls sideways under it, so it has to paint over the
+// dropdowns in the cells, which are positioned; on phones a line marks its edge.
+const pinned = "sticky left-0 z-10 bg-card px-3 sm:px-4 max-sm:shadow-[inset_-1px_0_var(--border)]";
 
 export function meta() {
   return [{ title: pageTitle("成员", "管理后台") }];
@@ -58,12 +63,12 @@ const EMAIL = [
 
 // The filters on top, each a dropdown; the first choice, any, filters nothing.
 const FILTERS = [
-  { name: "status", label: "状态", any: "全部状态", options: STATUSES, width: "w-36" },
-  { name: "activated", label: "激活", any: "全部账号", options: ACTIVATION, width: "w-28" },
-  { name: "role", label: "角色", any: "全部角色", options: ROLE_FILTERS, width: "w-28" },
-  { name: "level", label: "等级", any: "全部等级", options: LEVELS, width: "w-32" },
-  { name: "seen", label: "最近访问", any: "访问时间不限", options: SEEN, width: "w-40" },
-  { name: "email", label: "邮件提醒", any: "邮件提醒不限", options: EMAIL, width: "w-36" },
+  { name: "status", label: "状态", any: "全部状态", options: STATUSES, width: "sm:w-36" },
+  { name: "activated", label: "激活", any: "全部账号", options: ACTIVATION, width: "sm:w-28" },
+  { name: "role", label: "角色", any: "全部角色", options: ROLE_FILTERS, width: "sm:w-28" },
+  { name: "level", label: "等级", any: "全部等级", options: LEVELS, width: "sm:w-32" },
+  { name: "seen", label: "最近访问", any: "访问时间不限", options: SEEN, width: "sm:w-40" },
+  { name: "email", label: "邮件提醒", any: "邮件提醒不限", options: EMAIL, width: "sm:w-36" },
 ] as const;
 
 // Every column but the name can be hidden; those with a sort are sorted by clicking the heading.
@@ -196,12 +201,45 @@ export default function Members({ loaderData, actionData }: Route.ComponentProps
   const filters = ["q", ...FILTERS.map((f) => f.name)];
   return (
     <>
-      <h1 className="text-xl font-semibold">
-        成员
-        <span className="ml-2 text-sm font-normal text-muted-foreground">共 {total} 人</span>
-      </h1>
-      <Form className="mt-4 flex flex-wrap gap-2">
-        <label className="flex h-9 min-w-48 flex-1 items-center gap-2 rounded-lg border px-3 text-sm focus-within:ring-2 focus-within:ring-ring/40">
+      {/* The column picker sits at the right end of the heading, where its menu always has room
+          to open leftwards, unlike at the end of the filters, which wrap anywhere. */}
+      <div className="flex items-center gap-2">
+        <h1 className="mr-auto text-xl font-semibold">
+          成员
+          <span className="ml-2 text-sm font-normal text-muted-foreground">共 {total} 人</span>
+        </h1>
+        {filters.some((name) => params.get(name)) && (
+          <Link
+            to={href(Object.fromEntries(["page", ...filters].map((name) => [name, ""])))}
+            className="px-2 text-sm text-muted-foreground hover:text-foreground"
+          >
+            清除筛选
+          </Link>
+        )}
+        <Dropdown
+          label="显示的列"
+          triggerClassName="flex h-9 items-center gap-1.5 rounded-lg border px-3 text-sm hover:bg-accent"
+          trigger={
+            <>
+              <Columns3 className="size-4 text-muted-foreground" />列
+            </>
+          }
+        >
+          {() =>
+            COLUMNS.map((c) => (
+              <label
+                key={c.key}
+                className="flex items-center gap-2 rounded-lg px-2.5 py-1.5 hover:bg-accent"
+              >
+                <Checkbox checked={columns.includes(c.key)} onChange={() => toggle(c.key)} />
+                {c.label}
+              </label>
+            ))
+          }
+        </Dropdown>
+      </div>
+      <Form className="mt-4 grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
+        <label className="col-span-2 flex h-9 min-w-48 flex-1 items-center gap-2 rounded-lg border px-3 text-sm focus-within:ring-2 focus-within:ring-ring/40">
           <Search className="size-4 text-muted-foreground" />
           <input
             type="search"
@@ -230,46 +268,17 @@ export default function Members({ loaderData, actionData }: Route.ComponentProps
             className={`${f.width} [&>button]:h-9`}
           />
         ))}
-        <Dropdown
-          label="显示的列"
-          triggerClassName="flex h-9 items-center gap-1.5 rounded-lg border px-3 text-sm hover:bg-accent"
-          trigger={
-            <>
-              <Columns3 className="size-4 text-muted-foreground" />列
-            </>
-          }
-        >
-          {() =>
-            COLUMNS.map((c) => (
-              <label
-                key={c.key}
-                className="flex items-center gap-2 rounded-lg px-2.5 py-1.5 hover:bg-accent"
-              >
-                <Checkbox checked={columns.includes(c.key)} onChange={() => toggle(c.key)} />
-                {c.label}
-              </label>
-            ))
-          }
-        </Dropdown>
-        {filters.some((name) => params.get(name)) && (
-          <Link
-            to={href(Object.fromEntries(["page", ...filters].map((name) => [name, ""])))}
-            className="flex h-9 items-center px-2 text-sm text-muted-foreground hover:text-foreground"
-          >
-            清除筛选
-          </Link>
-        )}
       </Form>
       {actionData && (
         <p role="alert" className="mt-3 text-meta text-destructive">
           {actionData.message}
         </p>
       )}
-      <div className="mt-4 overflow-x-auto rounded-2xl border bg-card">
+      <div className="mt-4 overflow-x-auto overscroll-x-contain rounded-2xl border bg-card">
         <table className="w-full text-sm">
           <thead className="border-b text-left text-meta text-muted-foreground">
             <tr>
-              <th className="sticky left-0 bg-card px-4 py-2 font-medium">成员</th>
+              <th className={cn(pinned, "py-2 font-medium")}>成员</th>
               {shown.map((c) => (
                 <th key={c.key} className="px-3 py-2 font-medium whitespace-nowrap">
                   {"sort" in c ? (
@@ -299,9 +308,12 @@ export default function Members({ loaderData, actionData }: Route.ComponentProps
           <tbody className="divide-y">
             {items.map((m) => (
               <tr key={m.id}>
-                <td className="sticky left-0 bg-card px-4 py-2.5">
-                  <Link to={`/u/${m.id}`} className="flex min-w-40 items-center gap-2.5">
-                    <UserAvatar user={m} className="size-8" />
+                <td className={cn(pinned, "py-2.5")}>
+                  <Link
+                    to={`/u/${m.id}`}
+                    className="flex w-32 items-center gap-2.5 sm:w-auto sm:min-w-40"
+                  >
+                    <UserAvatar user={m} className="size-8 shrink-0" />
                     <span className="min-w-0">
                       <span className="block truncate font-medium">{m.display_name}</span>
                       <span className="text-meta text-muted-foreground">{m.qq ?? "站长账号"}</span>
