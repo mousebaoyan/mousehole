@@ -14,8 +14,7 @@ const tints = [
   "bg-stone-200 text-stone-700 dark:bg-stone-400/25 dark:text-stone-200",
 ];
 
-// The avatar, in the frame they wear where one is asked for (design §8.16): held still in
-// threads, where dozens would move at once, moving on their card and page.
+// The avatar, in the frame they wear where one is asked for (design §8.16).
 export function UserAvatar({
   user,
   thread,
@@ -25,7 +24,7 @@ export function UserAvatar({
   user: Person;
   thread?: number;
   className?: string;
-  frame?: "still" | "live";
+  frame?: boolean;
 }) {
   if (!frame || !("frame" in user) || user.frame === null) {
     return <Face user={user} thread={thread} className={className} />;
@@ -33,7 +32,7 @@ export function UserAvatar({
   return (
     <span className={cn("relative inline-flex size-9 shrink-0 rounded-full", className)}>
       <Face user={user} thread={thread} className="size-full" />
-      <AvatarFrame frame={user.frame} still={frame === "still"} />
+      <AvatarFrame frame={user.frame} />
     </span>
   );
 }
