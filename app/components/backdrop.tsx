@@ -2,10 +2,11 @@ import type { CSSProperties, ReactNode } from "react";
 import { cn } from "cn";
 import type { BackgroundPreset } from "../../server/modules/users/customization.ts";
 
-// What a card's top and a page's banner show behind them (design §8.16): a preset drawn here, or
-// the person's own picture cut for the place. Presets are a few layers of gradients and small
-// inline SVG tiles; only their transforms and opacity move (app.css, .look-motion), and only once
-// their moving version is bought.
+// What lies under a card and the head of a page (design §8.16), as strongly as they chose: a
+// preset drawn here, or the person's own picture, the square cut on cards and on phones and the
+// wide one on wider pages. Presets are a few layers of gradients and small inline SVG tiles; only
+// their transforms and opacity move (app.css, .look-motion), and only once their moving version
+// is bought.
 
 export type Background =
   { preset: BackgroundPreset; moving: boolean } | { card_url: string; profile_url: string };
@@ -13,10 +14,12 @@ export type Background =
 export function Backdrop({
   background,
   place,
+  opacity = 100,
   className,
 }: {
   background: Background;
   place: "card" | "profile";
+  opacity?: number;
   className?: string;
 }) {
   return (
@@ -29,16 +32,23 @@ export function Backdrop({
         "preset" in background && !background.moving && "[--play:paused]",
         className,
       )}
+      style={{ opacity: opacity / 100 }}
     >
       {"preset" in background ? (
         PRESETS[background.preset]()
+      ) : place === "card" ? (
+        <img src={background.card_url} alt="" decoding="async" className="size-full object-cover" />
       ) : (
-        <img
-          src={place === "card" ? background.card_url : background.profile_url}
-          alt=""
-          decoding="async"
-          className="size-full object-cover"
-        />
+        // A browser fetches only the one it shows.
+        <picture className="block size-full">
+          <source media="(max-width: 639px)" srcSet={background.card_url} />
+          <img
+            src={background.profile_url}
+            alt=""
+            decoding="async"
+            className="size-full object-cover"
+          />
+        </picture>
       )}
     </div>
   );

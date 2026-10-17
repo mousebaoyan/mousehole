@@ -33,6 +33,7 @@ import type { loader as settingsLoader } from "./settings.tsx";
 import { LookPreview, type TryOn } from "./settings-preview.tsx";
 import { BackgroundCropper, type Region } from "./background-cropper.tsx";
 import {
+  BACKGROUND_OPACITY,
   BACKGROUND_PRESETS,
   BACKGROUNDS,
   DEFAULT_THEME_NAME,
@@ -623,12 +624,14 @@ function region(r: Region) {
 // does; the field is keyed by what is saved, so it starts again with the new picture chosen.
 function BackgroundField({
   background,
+  opacity,
   urls,
   unlocked,
   owned,
   ...looks
 }: Looks & {
   background: string | null;
+  opacity: number;
   urls: BackgroundUrls | null;
   unlocked: { backgrounds: string[]; upload: boolean };
   owned: string[];
@@ -667,7 +670,8 @@ function BackgroundField({
   }
 
   return (
-    <fieldset className="flex flex-col gap-1.5 text-sm">
+    // How strongly it shows only matters with one, so it hides while none is picked.
+    <fieldset className="flex flex-col gap-1.5 text-sm [&:has([name=background][value='']:checked)_[data-opacity]]:hidden">
       <legend className="font-medium">背景</legend>
       <div className="mt-1.5 grid grid-cols-3 gap-x-2 gap-y-2.5 sm:grid-cols-4 lg:grid-cols-3">
         <Tile
@@ -720,6 +724,21 @@ function BackgroundField({
           </Tile>
         )}
       </div>
+      <label data-opacity className="mt-1 flex items-center gap-2 text-meta text-muted-foreground">
+        <span className="mr-1 text-sm text-foreground">浓淡</span>
+        淡
+        <input
+          type="range"
+          name="background_opacity"
+          aria-label="背景浓淡"
+          min={BACKGROUND_OPACITY.min}
+          max={BACKGROUND_OPACITY.max}
+          step={5}
+          defaultValue={opacity}
+          className="min-w-0 flex-1 accent-primary"
+        />
+        浓
+      </label>
       {focus && (
         <LookDetail
           {...looks}
@@ -926,6 +945,7 @@ export function Customize({
           key={`${settings.background}:${settings.background_urls?.card_url}`}
           {...looks}
           background={settings.background}
+          opacity={settings.background_opacity}
           urls={settings.background_urls}
           unlocked={settings.unlocked}
           owned={settings.owned.backgrounds}

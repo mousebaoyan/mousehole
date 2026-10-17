@@ -470,6 +470,7 @@ export async function getUser(ref: UserRef, viewerId: number | null) {
       "users.theme",
       "users.background",
       "users.background_version",
+      "users.background_opacity",
       boughtWorn("background").as("background_bought"),
       "users.hide_from_guests",
       "users.relations_public",
@@ -579,6 +580,7 @@ export async function getSettings(userId: number) {
       "theme",
       "background",
       "background_version",
+      "background_opacity",
       "level",
       "role",
       sql<{ emoji: string; text: string; until: number | null } | null>`CASE
@@ -660,6 +662,7 @@ export async function updateSettings(
     shown_badge_ids?: number[] | null;
     theme?: Theme | null;
     background?: BackgroundPreset | null;
+    background_opacity?: number;
     frame?: Frame | null;
     user_status?: { emoji: string; text: string; until: number | null } | null;
     pins?: number[];

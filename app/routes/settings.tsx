@@ -88,6 +88,7 @@ export async function action({ request, context }: Route.ActionArgs) {
       shown_badge_ids: field("shown_badges") === "auto" ? null : ids(field("shown_badges")),
       theme: THEMES.find((t) => t === field("theme")) ?? null,
       frame: FRAMES.find((f) => f === field("frame")) ?? null,
+      background_opacity: Number(field("background_opacity")),
       // Their own picture is already saved, by the upload.
       ...(field("background") !== "custom" && {
         background: BACKGROUNDS.find((key) => key === field("background")) ?? null,

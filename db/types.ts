@@ -468,6 +468,7 @@ export interface Users {
   avatar_custom: Generated<boolean>;
   avatar_version: Generated<number>;
   background: string | null;
+  background_opacity: Generated<number>;
   background_version: Generated<number>;
   created_at: Generated<Timestamp>;
   custom_bio: string | null;

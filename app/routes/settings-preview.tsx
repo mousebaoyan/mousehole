@@ -34,6 +34,7 @@ type Settings = {
 // What the form holds of the looks, by the fields' names.
 const NAMES = [
   "background",
+  "background_opacity",
   "frame",
   "theme",
   "status_emoji",
@@ -50,6 +51,7 @@ function readLooks(form: HTMLFormElement): Looks {
   };
   return {
     background: text("background"),
+    background_opacity: text("background_opacity"),
     frame: text("frame"),
     theme: text("theme"),
     status_emoji: text("status_emoji"),
@@ -106,6 +108,7 @@ function fromForm(profile: FullProfile, settings: Settings, looks: Looks): FullP
         : preset
           ? { preset, moving: settings.owned.backgrounds.includes(preset) }
           : null,
+    background_opacity: Number(looks.background_opacity),
     frame: frame
       ? { key: frame, moving: frameMoves(frame, settings.owned.frames.includes(frame)) }
       : null,
@@ -223,7 +226,7 @@ function Strip({ user }: { user: FullProfile }) {
     <span className="relative flex items-center gap-3 overflow-hidden rounded-xl border bg-popover p-2 pr-3 text-left">
       {user.background && (
         <>
-          <Backdrop background={user.background} place="card" />
+          <Backdrop background={user.background} place="card" opacity={user.background_opacity} />
           <span className="absolute inset-0 bg-linear-to-r from-popover from-30% to-popover/40" />
         </>
       )}
@@ -244,27 +247,28 @@ function Strip({ user }: { user: FullProfile }) {
   );
 }
 
-// The top of their page, as small as the card.
+// The head of their page, as small as the card.
 function PageHead({ user }: { user: FullProfile }) {
   return (
     <div
       className={cn(
-        "overflow-hidden rounded-2xl border bg-background p-3 text-left",
+        "relative isolate rounded-2xl border p-3 text-left",
+        user.background ? "on-backdrop bg-card" : "bg-background",
         user.theme && `theme-${user.theme}`,
       )}
     >
       {user.background && (
-        <div className="relative -mx-3 -mt-3 mb-1 aspect-[3/1] overflow-hidden">
-          <Backdrop background={user.background} place="profile" />
-        </div>
+        <Backdrop
+          background={user.background}
+          place="profile"
+          opacity={user.background_opacity}
+          className="-z-10 rounded-2xl"
+        />
       )}
       <div className="flex items-start gap-3">
         <UserAvatar
           user={user}
-          className={cn(
-            "size-12 text-lg",
-            user.background && "relative -mt-7 ring-3 ring-background",
-          )}
+          className={cn("size-12 text-lg", user.background && "ring-3 ring-card")}
           frame="live"
         />
         <div className="min-w-0 flex-1">

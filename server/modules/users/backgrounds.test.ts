@@ -36,7 +36,7 @@ const picture = sharp({ create: { width: 1600, height: 1000, channels: 3, backgr
   .jpeg()
   .toBuffer();
 
-function upload(who: Who, file: Buffer, card = "100,100,1200,600", profile = "0,200,1500,500") {
+function upload(who: Who, file: Buffer, card = "300,0,1000,1000", profile = "0,200,1500,500") {
   return api.me.background.$put(
     { form: { file: new File([new Uint8Array(file)], "背景.jpg"), card, profile } },
     who,
@@ -50,12 +50,16 @@ async function exists(path: string) {
   );
 }
 
-async function background(userId: number) {
+async function profileOf(userId: number) {
   const res = await api.users[":user"].$get({ param: { user: String(userId) } });
   if (!res.ok) throw new Error(`status ${res.status}`);
   const user = await res.json();
   if (user.members_only) throw new Error("members only");
-  return user.background;
+  return user;
+}
+
+async function background(userId: number) {
+  return (await profileOf(userId)).background;
 }
 
 describe("背景", () => {
@@ -68,6 +72,13 @@ describe("背景", () => {
     expect(locked.status).toBe(403);
     expect(await locked.json()).toMatchObject({ error: { code: "cosmetic_locked" } });
     expect(await background(member.id)).toEqual({ preset: "waves", moving: false });
+    expect((await api.me.$patch({ json: { background_opacity: 35 } }, member.who)).status).toBe(
+      200,
+    );
+    expect((await profileOf(member.id)).background_opacity).toBe(35);
+    expect((await api.me.$patch({ json: { background_opacity: 10 } }, member.who)).status).toBe(
+      400,
+    );
 
     await db.updateTable("users").set({ level: 0 }).where("id", "=", member.id).execute();
     expect((await pick("waves")).status).toBe(200);
@@ -78,7 +89,7 @@ describe("背景", () => {
     expect((await pick("stars", moderator.who)).status).toBe(200);
   });
 
-  test("L3 起上传，资料卡和主页各裁一张；换成预设后文件删掉", async () => {
+  test("L3 起上传，裁成方形和横版各一张；换成预设后文件删掉", async () => {
     expect((await upload((await person(2)).who, await picture)).status).toBe(403);
 
     const member = await person(3);
@@ -92,7 +103,7 @@ describe("背景", () => {
     expect(await background(member.id)).toEqual(urls);
     const card = `${BACKGROUNDS_DIR}/${member.id}-card.webp`;
     const profile = `${BACKGROUNDS_DIR}/${member.id}-profile.webp`;
-    expect(await sharp(card).metadata()).toMatchObject({ width: 576, height: 288 });
+    expect(await sharp(card).metadata()).toMatchObject({ width: 800, height: 800 });
     expect(await sharp(profile).metadata()).toMatchObject({ width: 1200, height: 400 });
     const served = await app.request(urls.card_url);
     expect(served.headers.get("cache-control")).toContain("immutable");
@@ -108,14 +119,14 @@ describe("背景", () => {
 
   test("裁的区域超出图片不收；没兑换动态版的动图只留第一帧，兑换后压缩了还太大的不收", async () => {
     const member = await person(3);
-    const outside = await upload(member.who, await picture, "500,500,1200,600");
+    const outside = await upload(member.who, await picture, "700,500,1000,1000");
     expect(outside.status).toBe(400);
     expect(await outside.json()).toMatchObject({ error: { code: "invalid_crop" } });
 
-    // Noise compresses badly: every frame is new. The card's comes to about 780KB.
+    // Noise compresses badly: every frame is new. The square one comes to about 1.3MB.
     const frames = await Promise.all(
       Array.from({ length: 16 }, () =>
-        sharp(randomBytes(432 * 216 * 3), { raw: { width: 432, height: 216, channels: 3 } })
+        sharp(randomBytes(400 * 400 * 3), { raw: { width: 400, height: 400, channels: 3 } })
           .png()
           .toBuffer(),
       ),
@@ -123,7 +134,7 @@ describe("背景", () => {
     const noise = await sharp(frames, { join: { animated: true } })
       .gif({ effort: 1, dither: 0 })
       .toBuffer();
-    const still = await upload(member.who, noise, "0,0,432,216", "0,0,432,144");
+    const still = await upload(member.who, noise, "0,0,400,400", "0,0,390,130");
     if (!still.ok) throw new Error(`status ${still.status}`);
     const urls = await still.json();
     const pages = await sharp(`${BACKGROUNDS_DIR}/${member.id}-card.webp`).metadata();
@@ -139,7 +150,7 @@ describe("背景", () => {
       member.who,
     );
     expect(bought.status).toBe(200);
-    const heavy = await upload(member.who, noise, "0,0,432,216", "0,0,432,144");
+    const heavy = await upload(member.who, noise, "0,0,400,400", "0,0,390,130");
     expect(heavy.status).toBe(400);
     expect(await heavy.json()).toMatchObject({ error: { code: "background_too_large" } });
     expect(await background(member.id)).toEqual(urls);
