@@ -44,11 +44,13 @@ const BotSchema = z.object({
 
 // Per notification type, whether it may go by email and whether it does for people who never
 // set it: on and off are that default, never takes the choice away. Types not here keep the
-// notifications module's own default.
+// notifications module's own default. Unactivated says whether people who never logged in get
+// emails too, the weekly letter among them.
 const EMAIL_POLICIES = ["on", "off", "never"] as const;
 export type EmailPolicy = (typeof EMAIL_POLICIES)[number];
 const NotifySchema = z.object({
   email: z.partialRecord(z.string(), z.enum(EMAIL_POLICIES)).default({}),
+  unactivated: z.boolean().default(false),
 });
 
 // The weekly mail on what people's floors did for others (design §8.15): who gets one, and from

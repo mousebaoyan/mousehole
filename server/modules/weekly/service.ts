@@ -38,7 +38,7 @@ function day(instant: Date) {
 
 // Hourly: once this week's letters are due and not yet sent, sends them.
 export async function sendWeeklyLetters(now = new Date()) {
-  const { weekly } = await getSettings();
+  const { weekly, notify } = await getSettings();
   if (!weekly.enabled) return;
   const { start, end } = lastWeek(now);
   const before = new Date(start.getTime() - 7 * DAY_MS);
@@ -94,7 +94,8 @@ export async function sendWeeklyLetters(now = new Date()) {
     WHERE (coalesce(r.reads, 0) >= ${weekly.min_reads} AND coalesce(l.likes, 0) >= ${weekly.min_likes}
         OR coalesce(a.accepted, 0) > 0)
       AND users.member_status = 'member' AND users.role NOT IN ('bot', 'owner')
-      AND users.notify_email AND users.weekly_email AND users.qq IS NOT NULL`.execute(db);
+      AND users.notify_email AND users.weekly_email AND users.qq IS NOT NULL
+      AND (users.activated_at IS NOT NULL OR ${notify.unactivated})`.execute(db);
 
   const ids = people.map((p) => p.id);
   const { rows: badges } = await sql<{ user_id: number; name: string }>`

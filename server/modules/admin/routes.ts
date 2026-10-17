@@ -73,6 +73,7 @@ const SettingsSchema = z
       email: z
         .record(z.string(), EmailPolicy)
         .openapi({ description: "每类通知是否发邮件；成员没改过的按这里的默认" }),
+      unactivated: z.boolean().openapi({ description: "没登录过论坛的成员也发通知邮件和每周来信" }),
     }),
     weekly: WeeklySettings,
   })
@@ -174,13 +175,20 @@ export const adminRoutes = createRouter()
     }),
     async (c) => {
       authorizeOwner(c);
-      const { site, login, smtp, bot, weekly } = await getSettings();
+      const { site, login, smtp, bot, notify, weekly } = await getSettings();
       const accounts = smtp.accounts.map(({ password, ...rest }) => ({
         ...rest,
         password_set: password !== "",
       }));
       return c.json(
-        { site, login, smtp: { accounts }, bot, notify: { email: await emailPolicies() }, weekly },
+        {
+          site,
+          login,
+          smtp: { accounts },
+          bot,
+          notify: { email: await emailPolicies(), unactivated: notify.unactivated },
+          weekly,
+        },
         200,
       );
     },
@@ -208,7 +216,10 @@ export const adminRoutes = createRouter()
                   .optional(),
                 bot: BotSettings.partial().optional(),
                 notify: z
-                  .object({ email: z.partialRecord(z.enum(NOTIFICATION_TYPES), EmailPolicy) })
+                  .object({
+                    email: z.partialRecord(z.enum(NOTIFICATION_TYPES), EmailPolicy).optional(),
+                    unactivated: z.boolean().optional(),
+                  })
                   .optional(),
                 weekly: WeeklySettings.partial().optional(),
               }),

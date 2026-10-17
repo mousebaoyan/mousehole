@@ -47,15 +47,19 @@ export async function emailPolicies() {
 }
 
 // Whether someone gets a type on the site and by email: what they set, else the default; no
-// email at all with emails turned off, or with the owner allowing none of this type.
+// email at all with emails turned off, with the owner allowing none of this type, or to someone
+// who never logged in unless the owner sends to them too.
 async function switches(type: NotificationType) {
   const prefs = sql`users.notify_prefs -> ${type}`;
-  const policy = policyOf(await getSettings(), type);
+  const settings = await getSettings();
+  const policy = policyOf(settings, type);
   return [
     sql<boolean>`coalesce((${prefs} ->> 'site')::boolean, true)`.as("site"),
     (policy === "never"
       ? sql<boolean>`false`
-      : sql<boolean>`users.notify_email AND coalesce((${prefs} ->> 'email')::boolean, ${policy === "on"})`
+      : sql<boolean>`users.notify_email
+          AND (users.activated_at IS NOT NULL OR ${settings.notify.unactivated})
+          AND coalesce((${prefs} ->> 'email')::boolean, ${policy === "on"})`
     ).as("email"),
   ];
 }
