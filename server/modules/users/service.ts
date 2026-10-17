@@ -18,6 +18,7 @@ import { log } from "../../platform/log.ts";
 import { recordAudit } from "../audit/service.ts";
 import { checkIn, spendCoins } from "../coins/service.ts";
 import { recordEvent } from "../events/service.ts";
+import { RECENT_DAYS } from "../levels/rules.ts";
 import { removeBackground } from "./backgrounds.ts";
 import {
   BACKGROUND_PRESETS,
@@ -212,7 +213,7 @@ async function recordDay(
     .executeTakeFirst();
   if (first) {
     await checkIn(trx, [userId], day);
-    // Days in a row up to the latest, for the badges, kept in users: user_days keeps only 35 days.
+    // Days in a row up to the latest, for the badges, kept in users: user_days keeps only some weeks.
     // An archived day may come before the latest and join the days in a row; they are counted
     // anew then, as far back as user_days goes.
     const latest = sql<Date>`(SELECT max(day) FROM user_days
@@ -299,10 +300,10 @@ export async function countReading(
     .execute();
 }
 
-// Levels look back 30 days and the weekly mail one week; a few more are kept so a day is never
+// Levels look back RECENT_DAYS and the weekly mail one week; a few more are kept so a day is never
 // cut short.
 export async function clearOldDays() {
-  const before = sql<Date>`(now() AT TIME ZONE 'Asia/Shanghai')::date - 35`;
+  const before = sql<Date>`(now() AT TIME ZONE 'Asia/Shanghai')::date - ${RECENT_DAYS + 5}::integer`;
   await db.deleteFrom("user_days").where("day", "<", before).execute();
   await db.deleteFrom("user_reads").where("day", "<", before).execute();
 }

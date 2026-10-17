@@ -15,6 +15,7 @@ import {
 } from "../../platform/mail-page.ts";
 import { excerpt } from "../../platform/markdown.ts";
 import { levelName, readTime, SITE_NAME, TIER_NAMES } from "../../platform/site.ts";
+import { RECENT_DAYS } from "../levels/rules.ts";
 import { anonymousBrief } from "../users/service.ts";
 import { NOTIFICATION_LABELS, type NotificationType } from "./types.ts";
 
@@ -362,7 +363,7 @@ const LEVEL_WHY: Record<number, string> = {
   1: `你已经在${SITE_NAME}读了不少帖子`,
   2: `你开始在${SITE_NAME}参与讨论，也收到了群友的赞`,
   3: `你常来${SITE_NAME}，读得多、回得多，也得到了不少认可`,
-  4: `最近 30 天里，你一直是${SITE_NAME}最活跃的群友之一`,
+  4: `最近 ${RECENT_DAYS} 天里，你一直是${SITE_NAME}最活跃的群友之一`,
 };
 const LEVEL_UNLOCKS: Record<number, string> = {
   1: "每天发帖、回复不再限次数，每层的站外链接也不再限个数",
@@ -371,7 +372,7 @@ const LEVEL_UNLOCKS: Record<number, string> = {
   4: "你举报等级比你低的人的楼层时，这一层会先隐藏，等版主处理",
   5: "你可以编辑等级比你低的人的楼层，锁定和解锁帖子",
 };
-const KEEP_L4 = `${levelName(4)}按最近 30 天算：达不到会降回 ${levelName(3)}，刚升上去的两周内不降。`;
+const KEEP_L4 = `${levelName(4)}按最近 ${RECENT_DAYS} 天算：达不到会降回 ${levelName(3)}，刚升上去的两周内不降。`;
 
 // As the profile shows progress.
 function shown(key: string, n: number) {
