@@ -114,38 +114,43 @@ function ThreadRow({
             />
           )}
           {thread.title}
-          {thread.kind === "poll" && (
-            <ChartBar
-              aria-label="投票"
-              className="ml-1.5 -mt-0.5 inline size-4 text-muted-foreground"
-            />
-          )}
-          {thread.kind === "lottery" && (
-            <Gift
-              aria-label="抽奖"
-              className="ml-1.5 -mt-0.5 inline size-4 text-muted-foreground"
-            />
-          )}
-          {thread.solved && (
-            <CircleCheck
-              aria-label="已解决"
-              className="ml-1.5 -mt-0.5 inline size-4 text-success"
-            />
-          )}
-          {thread.featured && (
-            <Sparkles aria-label="精华" className="ml-1.5 -mt-0.5 inline size-4 text-warning" />
-          )}
-          {fresh && (
-            <span className="ml-2 inline-block size-2 rounded-full bg-primary align-middle">
-              <span className="sr-only">新帖子</span>
-            </span>
-          )}
-          {unread > 0 && (
-            <span className="ml-2 inline-block rounded-full bg-primary px-1.5 align-middle text-2xs font-semibold text-primary-foreground tabular-nums">
-              {unread}
-              <span className="sr-only">层没读过</span>
-            </span>
-          )}
+          {/* The marks keep to the title's last character, through a word joiner, so none is left
+              alone on a line. */}
+          <span className="whitespace-nowrap">
+            {"\u2060"}
+            {thread.kind === "poll" && (
+              <ChartBar
+                aria-label="投票"
+                className="ml-1.5 -mt-0.5 inline size-4 text-muted-foreground"
+              />
+            )}
+            {thread.kind === "lottery" && (
+              <Gift
+                aria-label="抽奖"
+                className="ml-1.5 -mt-0.5 inline size-4 text-muted-foreground"
+              />
+            )}
+            {thread.solved && (
+              <CircleCheck
+                aria-label="已解决"
+                className="ml-1.5 -mt-0.5 inline size-4 text-success"
+              />
+            )}
+            {thread.featured && (
+              <Sparkles aria-label="精华" className="ml-1.5 -mt-0.5 inline size-4 text-warning" />
+            )}
+            {fresh && (
+              <span className="ml-2 inline-block size-2 rounded-full bg-primary align-middle">
+                <span className="sr-only">新帖子</span>
+              </span>
+            )}
+            {unread > 0 && (
+              <span className="ml-2 inline-block rounded-full bg-primary px-1.5 align-middle text-2xs font-semibold text-primary-foreground tabular-nums">
+                {unread}
+                <span className="sr-only">层没读过</span>
+              </span>
+            )}
+          </span>
         </Link>
         <div className="mt-1.5 flex flex-wrap items-center gap-x-2.5 gap-y-1">
           {showBoard && <BoardBadge board={thread.board} />}

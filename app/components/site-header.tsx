@@ -131,7 +131,7 @@ export function SiteHeader({ me, unread: loaded }: { me: Me | null; unread: numb
                   // Keyed by the count, so it pops each time a new one arrives.
                   <span
                     key={unread}
-                    className="absolute top-0.5 right-0 min-w-4 animate-[reaction-pop_400ms_ease-out] rounded-full bg-brand px-1 text-center text-2xs leading-4 font-semibold text-white tabular-nums ring-2 ring-background"
+                    className="absolute -top-0.5 left-1/2 min-w-4 animate-[reaction-pop_400ms_ease-out] rounded-full bg-brand px-1 text-center text-2xs leading-4 font-semibold text-white tabular-nums ring-2 ring-background"
                   >
                     {unread > 99 ? "99+" : unread}
                   </span>
