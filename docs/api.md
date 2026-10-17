@@ -348,7 +348,7 @@ token 由站长在后台创建，只显示一次。每个 token 绑定一个 bot
 | 方法 | 路径 | 说明 | 权限 |
 | --- | --- | --- | --- |
 | GET | `/admin/overview` | 概览：`members`（`total`、`activated`、`frozen`，不算 bot 和站长）、`content`（`threads_today`、`posts_today`：今天公开的帖子和回复，按北京时间；`pending`：待审核；`reports`：待处理的举报）、`events`（`streams`：现在连着的事件流；`polled_at`：最近一次按游标拉取的时间，进程重启后为 `null`）、`storage`（`database`、`uploads`：数据库和上传图片占用的字节数）；群的同步状态见 `/admin/groups` | 管理员 / `admin` |
-| GET | `/admin/settings` | 站点设置，按分组返回：`site`（`banner` 公告横幅，`qq_public` 访客能否看到 QQ 号）、`login`（三种登录方式的开关和口令提示）、`smtp`（`accounts`：发信邮箱，按使用的顺序，每个是 `host`、`port`、`secure`、`user`，密码只返回 `password_set`）、`bot`（`require_operator`）、`notify`（`email`：每类通知的邮件规则，`on` 默认发送、`off` 默认不发、`never` 不发送，成员也不能打开）、`weekly`（每周来信：`enabled`，`min_reads`、`min_likes` 被读和获赞的门槛，`top_likes` 写进信里的楼层至少几个赞） | 站长，只能在网页上操作 |
+| GET | `/admin/settings` | 站点设置，按分组返回：`site`（`banner` 公告横幅，`qq_public` 访客能否看到 QQ 号）、`login`（三种登录方式的开关和口令提示）、`smtp`（`accounts`：发信邮箱，按使用的顺序，每个是 `host`、`port`、`secure`、`user`，密码只返回 `password_set`）、`bot`（`require_operator`）、`notify`（`email`：每类通知的邮件规则，`on` 默认发送、`off` 默认不发、`never` 不发送，成员也不能打开；`unactivated`：未激活的成员也发通知邮件和每周来信，默认 `false`）、`weekly`（每周来信：`enabled`，`min_reads`、`min_likes` 被读和获赞的门槛，`top_likes` 写进信里的楼层至少几个赞） | 站长，只能在网页上操作 |
 | PATCH | `/admin/settings` | 修改站点设置，立即生效：只改带了的分组和字段。`smtp.accounts` 整组替换，最多 10 个；某个邮箱不带 `password` 就沿用这个账号原来的密码；`notify.email` 只改带了的类型。改了的字段连同改前改后的值记进操作日志，密码只记哪个邮箱的改了 | 站长，只能在网页上操作 |
 | POST | `/admin/badges` | 新建活动徽章：`{ name, description, tier, frame }`，名字最多 12 个字，说明最多 60 个字；`frame` 是配的活动框的 key，可以为 `null`（总体设计 §8.16）；重名返回 `409 badge_exists` | 管理员 / `admin` |
 | PATCH | `/admin/badges/{id}` | 改活动徽章的名字、说明、活动框；自动授予的徽章不能改（`403`） | 管理员 / `admin` |

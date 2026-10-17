@@ -66,8 +66,8 @@ const MODERATED_AFTER: Record<string, string> = {
 const MAIL_EXCERPT = 200;
 const CONTEXT_EXCERPT = 60;
 
-// Emails go to the QQ mailbox that comes with every QQ number, so they reach members who never
-// logged in here too: someone whose question was brought over from a group learns of the answers.
+// Emails go to the QQ mailbox that comes with every QQ number, so they can reach members who
+// never logged in here too, when the owner sends to them (design §8.6).
 function mailbox(qq: number) {
   return `${qq}@qq.com`;
 }

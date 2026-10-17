@@ -22,7 +22,12 @@ export async function loader({ context }: Route.LoaderArgs) {
   const res = await context.get(apiContext).admin.settings.$get();
   if (!res.ok) throw new Error("Admin settings failed");
   const { smtp, notify, weekly } = await res.json();
-  return { accounts: smtp.accounts, policies: notify.email, weekly };
+  return {
+    accounts: smtp.accounts,
+    policies: notify.email,
+    unactivated: notify.unactivated,
+    weekly,
+  };
 }
 
 const POLICIES = [
@@ -52,7 +57,9 @@ export async function action({ request, context }: Route.ActionArgs) {
         POLICIES.find((p) => p.value === field(`email.${type}`))?.value,
       ]),
     );
-    const res = await api.admin.settings.$patch({ json: { notify: { email } } });
+    const res = await api.admin.settings.$patch({
+      json: { notify: { email, unactivated: field("unactivated") === "on" } },
+    });
     if (!res.ok) return { ok: false, message: (await res.json()).error.message, notify: true };
     return { ok: true, message: "已保存", notify: true };
   }
@@ -122,6 +129,12 @@ export default function Email({ loaderData, actionData }: Route.ComponentProps) 
           title="邮件通知"
           description="设置每类通知是否发送邮件。成员未修改过的开关使用这里的默认值；选择「不发送」后，成员也不能自行开启"
         >
+          <Check
+            name="unactivated"
+            label="也发给未激活的成员"
+            hint="未激活的成员从没登录过论坛。勾选后，他们也会收到通知邮件和每周来信，比如群里的提问被收录后有了回答"
+            checked={loaderData.unactivated}
+          />
           <ul className="divide-y text-sm">
             {NOTIFICATION_TYPES.map((type) => (
               <li key={type} className="flex items-center gap-3 py-1.5">

@@ -42,7 +42,7 @@ export async function updateSettings(
     login?: Partial<Settings["login"]>;
     smtp?: { accounts: (Omit<SmtpAccount, "password"> & { password?: string })[] };
     bot?: Partial<Settings["bot"]>;
-    notify?: Settings["notify"];
+    notify?: Partial<Settings["notify"]>;
     weekly?: Partial<Settings["weekly"]>;
   },
 ) {
@@ -58,7 +58,11 @@ export async function updateSettings(
       })),
     },
     bot: change.bot && { ...current.bot, ...change.bot },
-    notify: change.notify && { email: { ...current.notify.email, ...change.notify.email } },
+    notify: change.notify && {
+      ...current.notify,
+      ...change.notify,
+      email: { ...current.notify.email, ...change.notify.email },
+    },
     weekly: change.weekly && { ...current.weekly, ...change.weekly },
   };
   const passwords = (next.smtp?.accounts ?? [])
@@ -69,7 +73,12 @@ export async function updateSettings(
       site: next.site && changes(current.site, next.site),
       login: next.login && changes(current.login, next.login),
       bot: next.bot && changes(current.bot, next.bot),
-      notify: next.notify && changes(current.notify.email, next.notify.email),
+      notify:
+        next.notify &&
+        changes(
+          { ...current.notify.email, unactivated: current.notify.unactivated },
+          { ...next.notify.email, unactivated: next.notify.unactivated },
+        ),
       weekly: next.weekly && changes(current.weekly, next.weekly),
       smtp: next.smtp && {
         ...changes(

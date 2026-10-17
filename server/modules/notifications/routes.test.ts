@@ -217,7 +217,8 @@ describe("邮件", () => {
     await mails();
   });
 
-  test("开着邮件的通知发到 QQ 邮箱，没登录过论坛的成员也发；默认不发邮件的类型不发", async () => {
+  test("开着邮件的通知发到 QQ 邮箱；没登录过论坛的成员要站长打开才发；默认不发邮件的类型不发", async () => {
+    const owner = await ownerSession();
     const t = await thread(author.who);
     const newcomer = await createUser();
     await reply(replier.who, t.id, `[@新人](/u/${newcomer.id}) 也来看看`, t.opening);
@@ -226,10 +227,12 @@ describe("邮件", () => {
       .select("qq")
       .where("id", "=", author.id)
       .executeTakeFirstOrThrow();
-    expect(await mails()).toEqual([
-      `${qq}@qq.com 鼠鼠 回复了你：等通知的帖子`,
-      `${newcomer.qq}@qq.com 鼠鼠 提到了你：等通知的帖子`,
-    ]);
+    expect(await mails()).toEqual([`${qq}@qq.com 鼠鼠 回复了你：等通知的帖子`]);
+
+    await api.admin.settings.$patch({ json: { notify: { unactivated: true } } }, owner);
+    await reply(replier.who, t.id, `[@新人](/u/${newcomer.id}) 再看看`);
+    expect(await mails()).toEqual([`${newcomer.qq}@qq.com 鼠鼠 提到了你：等通知的帖子`]);
+    await api.admin.settings.$patch({ json: { notify: { unactivated: false } } }, owner);
 
     await api.posts[":id"].reaction.$put(
       { param: { id: String(t.opening) }, json: { emoji: "heart" } },

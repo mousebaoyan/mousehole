@@ -112,6 +112,19 @@ describe("每周来信", () => {
     expect(answer.body).not.toContain("被读");
   });
 
+  test("没登录过的成员要站长打开才收到，信里告诉他怎么登录", async () => {
+    const person = await member({ reads: 25, likes: 5 });
+    await db.updateTable("users").set({ activated_at: null }).where("id", "=", person.id).execute();
+    await sendAgain();
+    expect(await lettersTo(person.qq)).toEqual([]);
+
+    await api.admin.settings.$patch({ json: { notify: { unactivated: true } } }, owner);
+    await sendAgain();
+    const [letter] = await lettersTo(person.qq);
+    expect(letter.body).toContain("发送「登录」");
+    await api.admin.settings.$patch({ json: { notify: { unactivated: false } } }, owner);
+  });
+
   test("周一 9 点以前不发，一周只发一次；站长关掉或调高门槛后照办", async () => {
     const person = await member({ reads: 40, likes: 4 });
     await sendAgain(new Date(end.getTime() + 8 * HOUR_MS));
