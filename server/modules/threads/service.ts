@@ -198,6 +198,11 @@ const NEW = sql<boolean>`threads.created_at > now() - interval '7 days'
   AND mine.last_read_at IS NULL`;
 const UNREAD = sql<boolean>`mine.last_read_at IS NOT NULL
   AND coalesce(upper(mine.read_floors) - 1, 0) < threads.floor_count`;
+// Questions with no accepted answer. One collected from the groups was answered there once anyone
+// replied, and its asker seldom comes to the forum to accept it (design §8.1).
+const UNSOLVED = sql<boolean>`threads.kind = 'question' AND threads.accepted_count = 0
+  AND (threads.reply_count = 0 OR NOT EXISTS (SELECT 1 FROM posts
+    WHERE posts.thread_id = threads.id AND posts.floor = 1 AND posts.via = 'qq'))`;
 
 // A board and a tag to narrow a list to; either may be left out. Members are told the level a
 // board needs when theirs is short of it.
@@ -314,9 +319,7 @@ export async function listThreads(
       .offset(offset);
     next = () => String(offset + limit);
   } else {
-    if (view === "unsolved") {
-      query = query.where("threads.kind", "=", "question").where("threads.accepted_count", "=", 0);
-    }
+    if (view === "unsolved") query = query.where(UNSOLVED);
     if (view === "new") query = query.where(NEW);
     if (view === "unread") query = query.where(UNREAD);
     if (view === "read") query = query.where("mine.last_read_at", "is not", null);
