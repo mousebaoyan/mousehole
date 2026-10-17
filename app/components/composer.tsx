@@ -136,9 +136,9 @@ const BACKGROUND = [
   { key: "level", label: "本科层次与专业", hint: "只写层次，例如：双非 计算机科学与技术" },
   { key: "rank", label: "专业排名", hint: "例如：3/120（2.5%），写明是综合还是绩点排名" },
   { key: "english", label: "英语", hint: "例如：六级 520" },
-  { key: "awards", label: "竞赛奖项", hint: "没有就写「无」" },
-  { key: "research", label: "科研与论文", hint: "没有就写「无」" },
-  { key: "notes", label: "补充信息", hint: "没有就写「无」" },
+  { key: "awards", label: "竞赛奖项", hint: "如无请填「无」" },
+  { key: "research", label: "科研与论文", hint: "如无请填「无」" },
+  { key: "notes", label: "补充信息", hint: "如无请填「无」" },
 ] as const;
 
 const MAX_SCHOOLS = 10;
@@ -905,8 +905,8 @@ function ThreadFields({
           )}
         >
           {me.coins < QUESTION_COST
-            ? `发问答帖要 ${QUESTION_COST} 个鼠币，现在不够，可以先发讨论帖；每天打开论坛就会签到得鼠币`
-            : `问答帖消耗 ${QUESTION_COST} 个鼠币，现有 ${me.coins} 个`}
+            ? `发布问答帖需要 ${QUESTION_COST} 鼠币，当前余额不足，可以先发讨论帖。每天访问论坛即可签到获得鼠币`
+            : `发布问答帖消耗 ${QUESTION_COST} 鼠币，当前余额 ${me.coins}`}
         </p>
       )}
       {/* Fixed once posted, so said up front (design §8.12); lotteries have none. */}
@@ -1131,7 +1131,7 @@ function PositioningFields({
   return (
     <div className="flex shrink-0 flex-col gap-2 border-t px-4 py-2.5">
       <p className="text-meta text-muted-foreground">
-        每项都要填，没有就写「无」。每所目标院校会生成一行匿名投票，大家从「随便去」到「几乎不可能」里选一项。
+        每项必填，如无请填「无」。每所目标院校会生成一行匿名投票，成员从「随便去」到「几乎不可能」中选择一项。
       </p>
       {BACKGROUND.slice(0, -1).map(field)}
       <div className="flex flex-col gap-1 sm:flex-row sm:gap-3">

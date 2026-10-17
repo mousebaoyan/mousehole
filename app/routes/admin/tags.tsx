@@ -69,7 +69,7 @@ export default function Tags({ loaderData: { tags, edit }, actionData }: Route.C
     <>
       <h1 className="text-xl font-semibold">标签</h1>
       <p className="mt-1 text-meta text-muted-foreground">
-        发帖时只能选择这里的标签；含义重复的标签可以合并
+        发帖时只能选择这里的标签，含义重复的标签可以合并
       </p>
       <Result result={actionData} />
 

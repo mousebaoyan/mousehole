@@ -86,7 +86,7 @@ const ICONS: Record<string, typeof Reply> = {
 // How a lottery went, for whom; see design §8.13.
 const LOTTERY: Record<string, string> = {
   won: "你中奖了",
-  lost: "你参与的抽奖已开奖，这次没有中奖",
+  lost: "你参与的抽奖已开奖，未中奖",
   drawn: "你发起的抽奖已开奖",
   cancelled: "你参与的抽奖已取消",
 };
@@ -164,7 +164,7 @@ export default function Notifications({ loaderData }: Route.ComponentProps) {
       </div>
       {items.length === 0 ? (
         <p className="py-16 text-center text-sm text-muted-foreground">
-          {unread ? "没有未读通知" : "暂无通知"}
+          {unread ? "暂无未读通知" : "暂无通知"}
         </p>
       ) : (
         <ul className="stagger">

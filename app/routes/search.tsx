@@ -158,7 +158,7 @@ export default function Search({ loaderData }: Route.ComponentProps) {
         </div>
       )}
       {q !== "" && results.length === 0 && (
-        <p className="py-16 text-center text-sm text-muted-foreground">没有找到相关的内容</p>
+        <p className="py-16 text-center text-sm text-muted-foreground">未找到相关内容</p>
       )}
       <ul className="stagger">
         <Results results={results} q={q} now={now} />

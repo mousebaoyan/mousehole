@@ -47,7 +47,7 @@ export async function action({ request, context }: Route.ActionArgs) {
       ok: results.every((r) => r.error === null),
       message: results
         .map((r) => (r.error === null ? `${r.user} 已发送` : `${r.user} 发送失败：${r.error}`))
-        .join("；"),
+        .join("，"),
     };
   }
   if (field("intent") === "notify") {
@@ -127,7 +127,7 @@ export default function Email({ loaderData, actionData }: Route.ComponentProps) 
         <input type="hidden" name="intent" value="notify" />
         <Section
           title="邮件通知"
-          description="设置每类通知是否发送邮件。成员未修改过的开关使用这里的默认值；选择「不发送」后，成员也不能自行开启"
+          description="设置每类通知是否发送邮件。成员未修改过的开关使用这里的默认值。选择「不发送」后，成员也不能自行开启"
         >
           <Check
             name="unactivated"
@@ -280,7 +280,7 @@ function Mailboxes({ accounts, busy }: { accounts: Mailbox[]; busy: boolean }) {
                 </Field>
                 <Field
                   label="密码（授权码）"
-                  hint={r.password_set ? "已设置；不修改请留空" : "未设置"}
+                  hint={r.password_set ? "已设置，不修改请留空" : "未设置"}
                 >
                   <Input name={`password.${i}`} type="password" autoComplete="new-password" />
                 </Field>

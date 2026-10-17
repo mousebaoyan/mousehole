@@ -133,7 +133,7 @@ export function BackgroundCropper({
     <Dialog ref={dialog} onClose={onCancel} className="w-[min(36rem,calc(100%-2rem))]">
       <h2 className="font-semibold">裁剪背景</h2>
       <p className="mt-1 text-meta text-muted-foreground">
-        方形用在资料卡和手机上的主页，横版用在宽屏的主页，分别裁剪；拖动调整位置，双指、滚轮或下方的滑块缩放
+        方形用在资料卡和手机上的主页，横版用在宽屏的主页，分别裁剪。拖动调整位置，双指、滚轮或下方的滑块缩放
       </p>
       <fieldset aria-label="裁剪哪一处" className="mt-3 inline-flex rounded-lg bg-secondary p-0.5">
         {PLACES.map((p) => (
