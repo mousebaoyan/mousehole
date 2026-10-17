@@ -12,6 +12,11 @@ describe("搜索分词", () => {
     expect(documentTokens("中")).toBe("中");
   });
 
+  test("汉字前后的数字和英文单独成词", () => {
+    expect(terms("2026年夏令营CS")).toEqual([["2026"], ["年夏", "夏令", "令营"], ["cs"]]);
+    expect(phraseQuery("夏令营")).toBe("'夏令' <-> '令营'");
+  });
+
   test("查询：每个词是一个短语，词之间都要有；相似问题是任意一个", () => {
     expect(phraseQuery("华东师范 cv")).toBe("'华东' <-> '东师' <-> '师范' & 'cv'");
     expect(anyQuery("夏令营夏令")).toBe("'夏令' | '令营' | '营夏'");

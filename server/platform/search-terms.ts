@@ -1,8 +1,9 @@
 // Search terms without a Chinese tokenizer: runs of Han characters become overlapping pairs
 // ("保研夏令营" → 保研 研夏 夏令 令营), other text splits into lowercase words of letters and
-// digits. Documents and queries go through the same steps; see design §8.5.
+// digits, which end where Han begins ("2026年" → 2026 年). Documents and queries go through the
+// same steps; see design §8.5.
 
-const PIECES = /\p{Script=Han}+|[\p{L}\p{N}]+/gu;
+const PIECES = /\p{Script=Han}+|[[\p{L}\p{N}]--\p{Script=Han}]+/gv;
 const HAN = /^\p{Script=Han}/u;
 
 function bigrams(run: string) {
