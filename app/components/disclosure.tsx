@@ -7,7 +7,7 @@ import {
   type ReactNode,
   type RefObject,
 } from "react";
-import { createPortal } from "react-dom";
+import { createPortal, flushSync } from "react-dom";
 import { cn } from "cn";
 import { Input } from "~/components/ui/input";
 
@@ -78,6 +78,20 @@ export function useDismiss(
   }, [open, close, inside]);
 }
 
+// The edge of its trigger a panel lines up with: the one asked for, until the panel would run off
+// the screen there, as one at the end of a row that wraps anywhere on a phone does. `fit` runs
+// once the panel is rendered (flushSync), before the browser paints it. Against clientWidth: a
+// phone widens innerWidth to take in what sticks out.
+export function useEdge(panel: RefObject<HTMLElement | null>, edge: "start" | "end") {
+  const [fitting, setFitting] = useState(edge);
+  function fit() {
+    const box = panel.current?.getBoundingClientRect();
+    if (box && box.right > document.documentElement.clientWidth) setFitting("end");
+    else if (box && box.left < 0) setFitting("start");
+  }
+  return { edge: fitting, fit };
+}
+
 export function Dropdown({
   label,
   trigger,
@@ -88,14 +102,16 @@ export function Dropdown({
   label: string;
   trigger: ReactNode;
   triggerClassName: string;
-  // Which edge of the trigger the menu lines up with.
+  // Which edge of the trigger the menu lines up with, if it fits on the screen.
   align?: "start" | "end";
   // Gets `close` for items that act in place; links close the menu by navigating.
   children: (close: () => void) => ReactNode;
 }) {
   const [open, setOpen] = useState(false);
   const root = useRef<HTMLDivElement>(null);
+  const panel = useRef<HTMLDivElement>(null);
   const id = useId();
+  const { edge, fit } = useEdge(panel, align);
   useDismiss(open, () => setOpen(false), root);
   return (
     <div ref={root} className="relative">
@@ -104,17 +120,25 @@ export function Dropdown({
         aria-label={label}
         aria-expanded={open}
         aria-controls={id}
-        onClick={() => setOpen(!open)}
+        onClick={() => {
+          if (open) {
+            setOpen(false);
+          } else {
+            flushSync(() => setOpen(true));
+            fit();
+          }
+        }}
         className={triggerClassName}
       >
         {trigger}
       </button>
       {open && (
         <div
+          ref={panel}
           id={id}
           className={cn(
             "absolute top-full z-50 mt-2 flex max-h-[min(24rem,70svh)] w-48 flex-col gap-0.5 overflow-y-auto rounded-xl border bg-popover p-1 text-sm text-popover-foreground shadow-lg animate-in fade-in zoom-in-95",
-            align === "start" ? "left-0" : "right-0",
+            edge === "start" ? "left-0" : "right-0",
           )}
         >
           {children(() => setOpen(false))}
