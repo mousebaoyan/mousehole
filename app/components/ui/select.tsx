@@ -2,7 +2,14 @@ import { Fragment, useEffect, useRef, useState, type KeyboardEvent } from "react
 import { flushSync } from "react-dom";
 import { cn } from "cn";
 import { Check, ChevronDown } from "~/components/icons";
-import { matching, menuItem, SEARCH_FROM, SearchBox, useDismiss } from "~/components/disclosure";
+import {
+  matching,
+  menuItem,
+  SEARCH_FROM,
+  SearchBox,
+  useDismiss,
+  useEdge,
+} from "~/components/disclosure";
 
 export type SelectOption = { value: string; label: string; group?: string };
 
@@ -44,6 +51,7 @@ export function Select({
   const list = useRef<HTMLDivElement>(null);
   const input = useRef<HTMLInputElement>(null);
   useDismiss(open, () => setOpen(false), root);
+  const { edge, fit } = useEdge(list, "start");
   const chosen = options.find((o) => o.value === current);
   const searchable = options.length >= SEARCH_FROM;
   const shown = matching(options, query);
@@ -68,9 +76,12 @@ export function Select({
     const box = button.current?.getBoundingClientRect();
     // Upwards when the list would run off the bottom and there is more room above.
     const below = box ? innerHeight - box.bottom : innerHeight;
-    setUp(below < 300 && box !== undefined && box.top > below);
-    setQuery("");
-    setOpen(true);
+    flushSync(() => {
+      setUp(below < 300 && box !== undefined && box.top > below);
+      setQuery("");
+      setOpen(true);
+    });
+    fit();
   }
 
   function close() {
@@ -132,27 +143,32 @@ export function Select({
         </span>
         <ChevronDown className="size-4 shrink-0 text-muted-foreground" />
       </button>
-      {name && (
-        // Takes part in form validation, which a type="hidden" input doesn't; the browser's
-        // message then points at the button.
-        <input
-          ref={input}
-          name={name}
-          value={current}
-          required={required}
-          onChange={() => {}}
-          onFocus={() => button.current?.focus()}
-          tabIndex={-1}
-          aria-hidden
-          className="pointer-events-none absolute inset-x-0 bottom-0 h-px opacity-0"
-        />
-      )}
+      {name &&
+        (required ? (
+          // A text field takes part in form validation, which a hidden input doesn't, and the
+          // browser's message then points at the button. Only when required: a form with more
+          // than one text field isn't sent by Enter in one of them.
+          <input
+            ref={input}
+            name={name}
+            value={current}
+            required
+            onChange={() => {}}
+            onFocus={() => button.current?.focus()}
+            tabIndex={-1}
+            aria-hidden
+            className="pointer-events-none absolute inset-x-0 bottom-0 h-px opacity-0"
+          />
+        ) : (
+          <input ref={input} type="hidden" name={name} value={current} />
+        ))}
       {open && (
         <div
           ref={list}
           className={cn(
             "absolute z-50 flex max-h-72 min-w-full flex-col gap-0.5 overflow-y-auto rounded-xl border bg-popover p-1 text-sm text-popover-foreground shadow-lg animate-in fade-in zoom-in-95",
             up ? "bottom-full mb-1" : "top-full mt-1",
+            edge === "start" ? "left-0" : "right-0",
           )}
         >
           {searchable && (
@@ -191,7 +207,7 @@ export function Select({
               </button>
             </Fragment>
           ))}
-          {shown.length === 0 && <p className="px-2.5 py-1.5 text-muted-foreground">没有匹配的</p>}
+          {shown.length === 0 && <p className="px-2.5 py-1.5 text-muted-foreground">无匹配项</p>}
         </div>
       )}
     </div>

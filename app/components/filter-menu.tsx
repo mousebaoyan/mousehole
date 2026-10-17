@@ -79,7 +79,7 @@ function Choices({ choices }: { choices: FilterChoice[] }) {
           </Link>
         </Fragment>
       ))}
-      {shown.length === 0 && <p className="px-2.5 py-1.5 text-muted-foreground">没有匹配的</p>}
+      {shown.length === 0 && <p className="px-2.5 py-1.5 text-muted-foreground">无匹配项</p>}
     </div>
   );
 }

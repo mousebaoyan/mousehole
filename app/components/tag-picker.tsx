@@ -86,7 +86,7 @@ export function TagPicker({
               );
             })}
             {matching.length === 0 && (
-              <p className="px-2.5 py-2 text-muted-foreground">没有匹配的标签</p>
+              <p className="px-2.5 py-2 text-muted-foreground">无匹配的标签</p>
             )}
           </div>
         </div>

@@ -250,11 +250,6 @@ export default function Members({ loaderData, actionData }: Route.ComponentProps
             className="w-full bg-transparent outline-none"
           />
         </label>
-        {/* Enter in the box sends the form only through a submit button: the dropdowns' value
-            inputs count as text fields, and with several of those the browser won't. */}
-        <button type="submit" className="sr-only">
-          搜索
-        </button>
         {params.get("sort") && <input type="hidden" name="sort" value={sort} />}
         {params.get("order") && <input type="hidden" name="order" value={order} />}
         {FILTERS.map((f) => (
@@ -409,7 +404,7 @@ export default function Members({ loaderData, actionData }: Route.ComponentProps
                   colSpan={shown.length + 1}
                   className="px-4 py-12 text-center text-muted-foreground"
                 >
-                  没有符合条件的成员
+                  暂无符合条件的成员
                 </td>
               </tr>
             )}

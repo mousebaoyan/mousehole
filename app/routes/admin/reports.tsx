@@ -63,7 +63,7 @@ export default function Reports({ loaderData }: Route.ComponentProps) {
       </nav>
       {items.length === 0 && (
         <p className="py-16 text-center text-sm text-muted-foreground">
-          没有{TABS.find((t) => t.status === status)?.label}的举报
+          暂无{TABS.find((t) => t.status === status)?.label}的举报
         </p>
       )}
       <ul className="mt-4 flex flex-col gap-3">

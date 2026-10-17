@@ -72,7 +72,7 @@ export default function Content({ loaderData, actionData }: Route.ComponentProps
       </div>
       {items.length === 0 && (
         <p className="py-16 text-center text-sm text-muted-foreground">
-          没有{TABS.find((t) => t.status === status)?.label}的内容
+          暂无{TABS.find((t) => t.status === status)?.label}的内容
         </p>
       )}
       <ul className="mt-4 flex flex-col gap-3">
@@ -112,7 +112,7 @@ export default function Content({ loaderData, actionData }: Route.ComponentProps
                   <Input
                     name="reason"
                     maxLength={200}
-                    placeholder="不通过的理由，会通知作者；可不填"
+                    placeholder="不通过的理由（选填），会通知作者"
                     aria-label="理由"
                     className="h-8 min-w-0 basis-full sm:basis-72"
                   />

@@ -49,9 +49,9 @@ export default function Board({ loaderData }: Route.ComponentProps) {
   const me = useMe();
   return (
     <>
-      <header className="mb-5 flex items-start gap-4 px-1">
+      <header className="mb-5 flex items-start gap-3 px-1">
         <span
-          className="mt-1.5 size-3 shrink-0 rounded-full"
+          className="mt-2 size-3 shrink-0 rounded-full"
           style={{ backgroundColor: board.color }}
         />
         <div className="flex-1">

@@ -59,7 +59,7 @@ export function EmojiPicker({ onSelect }: { onSelect: (emoji: string) => void })
           加载中…
         </Picker.Loading>
         <Picker.Empty className="absolute inset-0 flex items-center justify-center text-sm text-muted-foreground">
-          没有找到
+          未找到表情
         </Picker.Empty>
         <Picker.List className="pb-1.5 select-none" components={listComponents} />
       </Picker.Viewport>

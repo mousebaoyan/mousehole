@@ -141,14 +141,14 @@ export function LotteryCard({
         <div className="mt-2 flex flex-col gap-1.5">
           <p>
             到时间后由论坛自动开奖，楼主和管理员都无法干预。开奖所用的随机种子在发帖时已确定，下方是它的
-            SHA-256；开奖后公开种子，任何人都可以核对。
+            SHA-256。开奖后公开种子，任何人都可以核对。
           </p>
           <p className="font-mono break-all">种子的 SHA-256：{lottery.seed_hash}</p>
           {lottery.seed && (
             <>
               <p className="font-mono break-all">种子：{lottery.seed}</p>
               <p>
-                复核方法：先确认种子的 SHA-256 与上方一致；再对每位参与者计算"种子:用户 ID"的
+                复核方法：先确认种子的 SHA-256 与上方一致，再对每位参与者计算"种子:用户 ID"的
                 SHA-256，按从小到大排序，依次分配各个奖项。参与名单即按此顺序排列，每人后面标有用户
                 ID。
               </p>

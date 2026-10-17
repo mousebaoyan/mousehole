@@ -52,8 +52,14 @@ const ACTIONS: Record<string, string> = {
   "user.settings": "修改设置",
   "user.rename": "修改名字",
   "user.avatar": "修改头像",
+  "user.background": "上传背景图片",
+  "user.clear": "清除资料内容",
   "user.qq_bio": "推送 QQ 签名",
   "user.level": "设定等级",
+  "badge.create": "新建徽章",
+  "badge.update": "修改徽章",
+  "badge.grant": "授予徽章",
+  "badge.revoke": "收回徽章",
   "member.role": "角色变更",
   "member.role_unlock": "角色改回跟随群",
   "member.freeze": "冻结",
@@ -107,8 +113,8 @@ export default function Logs({ loaderData }: Route.ComponentProps) {
   return (
     <>
       <h1 className="text-xl font-semibold">操作日志</h1>
-      <Form className="mt-4 flex flex-wrap gap-2 text-sm">
-        <label className="flex h-9 min-w-40 flex-1 items-center gap-2 rounded-lg border px-3 focus-within:ring-2 focus-within:ring-ring/40">
+      <Form className="mt-4 grid grid-cols-2 gap-2 text-sm sm:flex sm:flex-wrap">
+        <label className="col-span-2 flex h-9 min-w-40 flex-1 items-center gap-2 rounded-lg border px-3 focus-within:ring-2 focus-within:ring-ring/40">
           <Search className="size-4 text-muted-foreground" />
           <input
             name="actor"
@@ -118,7 +124,7 @@ export default function Logs({ loaderData }: Route.ComponentProps) {
             className="w-full bg-transparent outline-none"
           />
         </label>
-        <label className="flex h-9 w-44 items-center gap-2 rounded-lg border px-3 focus-within:ring-2 focus-within:ring-ring/40">
+        <label className="flex h-9 items-center gap-2 sm:w-44 rounded-lg border px-3 focus-within:ring-2 focus-within:ring-ring/40">
           <input
             name="ip"
             defaultValue={ip}
@@ -127,6 +133,10 @@ export default function Logs({ loaderData }: Route.ComponentProps) {
             className="w-full bg-transparent outline-none"
           />
         </label>
+        {/* With two text boxes, Enter in one sends the form only through a submit button. */}
+        <button type="submit" className="sr-only">
+          搜索
+        </button>
         <Select
           name="action"
           defaultValue={action}
@@ -136,7 +146,7 @@ export default function Logs({ loaderData }: Route.ComponentProps) {
           ]}
           aria-label="动作"
           submitOnChange
-          className="w-40 [&>button]:h-9"
+          className="sm:w-40 [&>button]:h-9"
         />
       </Form>
       <ul className="mt-4 divide-y rounded-2xl border bg-card text-sm">
@@ -199,7 +209,7 @@ export default function Logs({ loaderData }: Route.ComponentProps) {
           );
         })}
         {items.length === 0 && (
-          <li className="px-4 py-12 text-center text-sm text-muted-foreground">没有记录</li>
+          <li className="px-4 py-12 text-center text-sm text-muted-foreground">暂无记录</li>
         )}
       </ul>
       {next_cursor !== null && (

@@ -49,13 +49,13 @@ export default function Site({
 
       <Section title="通用">
         <div className="flex flex-col gap-4">
-          <Field label="公告横幅" hint="显示在每个论坛页面的顶部，最多 200 个字；留空不显示">
+          <Field label="公告横幅" hint="显示在每个论坛页面的顶部，留空则不显示">
             <Input name="banner" defaultValue={site.banner} maxLength={200} />
           </Field>
           <Check
             name="qq_public"
             label="访客也能看到 QQ 号"
-            hint="默认只有成员和 bot 能看到；开启后，个人资料中的 QQ 号对所有人公开"
+            hint="默认仅成员和 bot 可见，开启后个人资料中的 QQ 号对所有人公开"
             checked={site.qq_public}
           />
         </div>
@@ -91,7 +91,7 @@ export default function Site({
         <Check
           name="require_operator"
           label="代表成员操作时必须带 X-Operator"
-          hint="开启后，bot 代表成员操作的请求必须指明发起人；成员同步等 bot 自身的操作不受影响"
+          hint="开启后，bot 代表成员操作的请求必须指明发起人。成员同步等 bot 自身的操作不受影响"
           checked={bot.require_operator}
         />
       </Section>

@@ -215,7 +215,7 @@ export default function Settings({ loaderData, actionData }: Route.ComponentProp
             <Check
               name="relations_public"
               label="公开我的点赞和关注列表"
-              hint="其他成员能在你的主页看到你赞过的内容、你关注和认可的人以及你的粉丝。关闭后只显示数量，你也不会出现在别人的这些名单里"
+              hint="其他成员能在你的主页看到你赞过的内容、你关注和认可的人以及你的粉丝。关闭后只显示数量，你也不会出现在他人的这些名单中"
               checked={settings.relations_public}
             />
           </Section>
@@ -239,7 +239,7 @@ export default function Settings({ loaderData, actionData }: Route.ComponentProp
             <Check
               name="weekly_email"
               label="每周来信"
-              hint="每周一告诉你，上周你的分享被读了多少次、收到了多少赞"
+              hint="每周一汇总你上周的分享被阅读和获赞的次数"
               checked={settings.weekly_email}
             />
             <table className="mt-3 w-full text-sm">
