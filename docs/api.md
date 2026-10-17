@@ -358,7 +358,7 @@ token 由站长在后台创建，只显示一次。每个 token 绑定一个 bot
 | GET | `/admin/groups` | 已关联的群和同步状态：最近一次增量、全量、群资料的时间，被拦下的全量 | 管理员 / `admin` |
 | POST | `/admin/groups` | 关联群：`{ group_id }`；第一个关联的群自动成为主群；已关联返回 `409 group_exists` | 站长，只能在网页上操作 |
 | PATCH | `/admin/groups/{group_id}` | 启用、停用、设为主群：`{ enabled?, is_primary?: true }`；相关成员的成员资格和显示名随即重算 | 站长，只能在网页上操作 |
-| GET | `/admin/members` | 成员列表，新建的在前，每页 50 个：`q`（名字，或者 5–12 位数字时也按 QQ 号）、`status`（`member`、`frozen`）、`role`、`level`、`restricted`（只看禁言或封禁中的）、`cursor`；每人带 `level` 和 `level_locked` | 版主 / `moderate` |
+| GET | `/admin/members` | 成员列表，每页 50 个：`q`（名字或 QQ 昵称包含它；是数字时也按 QQ 号开头）、`status`（`member`、`frozen`）、`activated`（`true`、`false`）、`role`、`level`、`restricted`（只看禁言或封禁中的）、`email`（邮件提醒的总开关）、`seen_within`（N 天内访问过）、`unseen_for`（N 天以上没访问，含从没访问的）、`sort`（`created_at`，默认；`activated_at`、`last_seen_at`、`level`、`thread_count`、`post_count`、`like_received`、`people_reached`、`days_visited`）、`order`（`desc`，默认；`asc`；没有值的总排在最后）、`page`（从 1 起）；返回 `items`、`total`、`pages`，每人带 `level`、`level_locked`、`notify_email`、`created_at`、`activated_at`、`last_seen_at` 和上面几项计数 | 版主 / `moderate` |
 | GET | `/admin/content` | 待审核或已隐藏的内容，最新的在前，每页 30 条：`status`（`pending`，默认；`hidden`）、`cursor`（上一页最后一条的 ID）；帖子以主楼出现，每条带楼层号、帖子、版块、作者和摘要 | 版主 / `moderate` |
 | GET | `/admin/reports` | 举报列表，最新的在前，每页 30 条：`status`（默认 `open`）、`cursor`（上一页最后一条的 ID）；每条带举报人、理由、被举报的楼层（帖子、楼层号、作者、摘要、是否已删除）或短评、处理人 | 版主 / `moderate` |
 | PATCH | `/admin/reports/{id}` | 处理举报：`{ status }`，可选 `resolved`（已处理，内容另外删除或隐藏）、`dismissed`（驳回）；记操作日志 | 版主 / `moderate` |

@@ -61,6 +61,7 @@ export const ClipboardCheck = icon(lucide.ClipboardCheck);
 export const Clock = icon(lucide.Clock);
 export const Code = icon(lucide.Code);
 export const Coins = icon(lucide.Coins);
+export const Columns3 = icon(lucide.Columns3);
 export const Copy = icon(lucide.Copy);
 export const Download = icon(lucide.Download);
 export const Ellipsis = icon(lucide.Ellipsis);
