@@ -35,9 +35,9 @@ function bot(change: Partial<Bot> = {}): Bot {
   };
 }
 
-function code(viewer: Viewer | null, b: Bot | null, need: Scope) {
+function code(viewer: Viewer | null, b: Bot | null, need: Scope, archived = false) {
   try {
-    checkPermission(viewer, b, need);
+    checkPermission(viewer, b, need, archived);
     return "ok";
   } catch (error) {
     if (error instanceof AppError) return error.code;
@@ -65,6 +65,12 @@ describe("权限判定", () => {
     expect(code(frozen, null, "act")).toBe("member_frozen");
     expect(code(frozen, bot(), "act")).toBe("member_frozen");
     expect(code(frozen, bot(), "read")).toBe("ok");
+  });
+
+  test("bot 收录冻结的人在群里时说的话", () => {
+    const frozen = { ...member, member_status: "frozen" };
+    expect(code(frozen, bot(), "act", true)).toBe("ok");
+    expect(code(frozen, null, "act", true)).toBe("member_frozen");
   });
 
   test("被封禁的人，bot 也不能代他写，读不受影响", () => {

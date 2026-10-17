@@ -229,6 +229,28 @@ describe("群消息收录到论坛", () => {
     const res = await api.threads.$post({ json: { ...json, source: source() } }, web);
     expect(res.status).toBe(403);
   });
+  test("退群冻结的人在群里时说的话照样收录，别的写操作不行", async () => {
+    const left = await createUser();
+    await db
+      .updateTable("users")
+      .set({ member_status: "frozen" })
+      .where("id", "=", left.id)
+      .execute();
+    const asLeft = { headers: { ...bot.headers, "x-act-as": `qq:${left.qq}` } };
+    const onebot = [{ type: "text", data: { text: "退群前问的" } }];
+    const res = await api.threads.$post(
+      { json: { board: "qq", title: "退群前问的问题", content: { onebot }, source: source() } },
+      asLeft,
+    );
+    if (!res.ok) throw new Error(`status ${res.status}: ${await res.text()}`);
+    const param = { id: String((await res.json()).id) };
+    const posts = api.threads[":id"].posts;
+    expect(
+      (await posts.$post({ param, json: { content: { onebot }, source: source() } }, asLeft))
+        .status,
+    ).toBe(201);
+    expect((await posts.$post({ param, json: { content: { onebot } } }, asLeft)).status).toBe(403);
+  });
   test("群里的表情回应和短评收录过来：按群里的时间，不提醒楼层作者", async () => {
     const asker = await createUser();
     const asAsker = { headers: { ...bot.headers, "x-act-as": `qq:${asker.qq}` } };
