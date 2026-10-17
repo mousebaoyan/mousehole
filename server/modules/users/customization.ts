@@ -134,12 +134,11 @@ export const FRAME_LOOKS: Record<Frame, { name: string; unlock: Unlock }> = {
   medal: { name: "纪念章", unlock: { event: true } },
 };
 
-// What a locked frame says opens it.
+// The short label on a locked frame's tile: its level, if a level opens it. The badges opening
+// the others take too many words for the tile; it says them once picked.
 export function frameUnlockLabel(frame: Frame) {
   const { unlock } = FRAME_LOOKS[frame];
-  if ("level" in unlock) return `L${unlock.level}`;
-  if ("badge" in unlock) return unlock.by;
-  return "gold" in unlock ? "金徽章" : "活动";
+  return "level" in unlock ? `L${unlock.level}` : null;
 }
 
 // Which frames someone may pick, given the badges they have.
