@@ -26,6 +26,7 @@ import { exportOwnBoosts } from "../reactions/service.ts";
 import { exportOwnPosts, listPins } from "../threads/service.ts";
 import { backgroundOf, BACKGROUNDS_DIR, backgroundUrls, uploadBackground } from "./backgrounds.ts";
 import {
+  BACKGROUND_OPACITY,
   BACKGROUND_PRESETS,
   BACKGROUNDS,
   CLEARABLE,
@@ -91,6 +92,7 @@ const UserSchema = UserBriefSchema.extend({
   bio: z.string(),
   theme: z.string().nullable().openapi({ description: "主题色；null 是默认的海青" }),
   background: BackgroundSchema,
+  background_opacity: z.number().openapi({ description: "背景浓淡，20–100 的百分数" }),
   card: z.string().nullable().optional().openapi({
     description:
       "群名片，取自主群，不在主群时取最早加入的群，都不在为 null；这一项和下面两项只给成员和 bot",
@@ -221,6 +223,7 @@ const SettingsSchema = z
       .nullable()
       .openapi({ description: "背景：预设的 key，上传的为 custom，没有为 null" }),
     background_urls: BackgroundUrls.nullable().openapi({ description: "上传的背景，没有为 null" }),
+    background_opacity: z.number().openapi({ description: "背景浓淡，20–100 的百分数" }),
     frame: z.string().nullable().openapi({ description: "头像框；null 是不用" }),
     unlocked: z.object({
       backgrounds: z.array(z.string()).openapi({ description: "能选的预设背景" }),
@@ -360,6 +363,7 @@ export const usersRoutes = createRouter()
           bio: u.bio,
           theme: u.theme,
           background: backgroundOf(u.id, u.background, u.background_version, u.background_bought),
+          background_opacity: u.background_opacity,
           badges: u.badges,
           // Like a group's member list, which people outside it can't see, unless the site
           // shows QQ numbers to everyone.
@@ -685,6 +689,13 @@ export const usersRoutes = createRouter()
                 background: z.enum(BACKGROUNDS).nullable().optional().openapi({
                   description: "预设背景的 key，null 是不用背景；上传的用 PUT /me/background",
                 }),
+                background_opacity: z
+                  .number()
+                  .int()
+                  .min(BACKGROUND_OPACITY.min)
+                  .max(BACKGROUND_OPACITY.max)
+                  .optional()
+                  .openapi({ description: "背景浓淡，20–100 的百分数" }),
                 user_status: z
                   .object({
                     emoji: z
@@ -834,7 +845,7 @@ export const usersRoutes = createRouter()
       method: "put",
       path: "/me/background",
       summary:
-        "上传背景：multipart 的 file 字段，格式同图片上传；card、profile 是在转正后的原图上裁的区域「x,y,宽,高」，资料卡 2:1、主页 3:1",
+        "上传背景：multipart 的 file 字段，格式同图片上传；card、profile 是在转正后的原图上裁的区域「x,y,宽,高」，card 是方形 1:1（资料卡和手机上的主页），profile 是横版 3:1（宽屏的主页）",
       request: {
         body: {
           required: true,

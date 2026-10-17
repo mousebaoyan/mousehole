@@ -203,26 +203,32 @@ export function FullCard({ profile }: { profile: FullProfile }) {
     { label: "认可", value: relations.endorsements },
   ];
   return (
-    <div className={profile.theme ? `theme-${profile.theme}` : undefined}>
-      {/* Its top, under the avatar and the name, fading into the card. */}
-      {profile.background && (
-        <div className="relative -mx-4 -mt-4 -mb-11 aspect-[2/1] overflow-hidden rounded-t-2xl">
-          <Suspense>
-            <Backdrop background={profile.background} place="card" />
-          </Suspense>
-          <div className="absolute inset-0 bg-linear-to-b from-transparent from-50% to-popover" />
-        </div>
+    <div
+      className={cn(
+        "relative isolate",
+        profile.theme && `theme-${profile.theme}`,
+        profile.background && "on-backdrop [--halo:var(--popover)]",
       )}
-      <div className="relative flex items-center gap-3">
+    >
+      {/* Under the whole card, out to its edges. */}
+      {profile.background && (
+        <Suspense>
+          <Backdrop
+            background={profile.background}
+            place="card"
+            opacity={profile.background_opacity}
+            className="-inset-4 -z-10 rounded-2xl"
+          />
+        </Suspense>
+      )}
+      <div className="flex items-center gap-3">
         <UserAvatar
           user={profile}
           className={cn("size-14 text-xl", profile.background && "ring-3 ring-popover")}
           frame="live"
         />
         <div className="min-w-0 self-end">
-          <p className="truncate font-semibold [text-shadow:0_0_0.5rem_var(--popover)]">
-            {profile.display_name}
-          </p>
+          <p className="truncate font-semibold">{profile.display_name}</p>
           <div className="mt-1 flex flex-wrap gap-1">
             <UserBadges user={profile} />
           </div>

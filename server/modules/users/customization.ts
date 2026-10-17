@@ -71,22 +71,29 @@ export const BACKGROUND_PRESETS: Record<
 export const UPLOAD_LEVEL = 3;
 export const UPLOAD_PRICE = 200;
 
-// What an uploaded picture is cut into: the top of the card and the banner of the page. Still
-// pictures at twice the size they show at; animated ones smaller, and only so large.
+// What an uploaded picture is cut into, each covering all it lies under: a square one for the card
+// and for the page on phones, both about as wide as tall, and a wide one for the page on wider
+// screens. Still pictures at about twice the size they show at; animated ones smaller, and only so
+// large.
 export const BACKGROUND_CROPS = {
   card: {
-    ratio: 2,
-    still: { width: 576, height: 288 },
-    moving: { width: 432, height: 216 },
-    movingMax: 500 * 1024,
+    ratio: 1,
+    label: "方形 1:1",
+    still: { width: 800, height: 800 },
+    moving: { width: 400, height: 400 },
+    movingMax: 800 * 1024,
   },
   profile: {
     ratio: 3,
+    label: "横版 3:1",
     still: { width: 1200, height: 400 },
     moving: { width: 900, height: 300 },
     movingMax: 1024 * 1024,
   },
 };
+
+// How strongly a background shows, in percent: fainter lets the text on it read more easily.
+export const BACKGROUND_OPACITY = { min: 20, max: 100 };
 
 // Avatar frames drawn by app/components/frame.tsx, and what opens each: a level, a badge, any gold
 // badge, or an event badge an admin gave the frame to. Those of badges move; those of levels stand

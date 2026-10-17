@@ -317,6 +317,18 @@
   .btn-icon-lg {
     @apply size-9;
   }
+  /* Content laid on someone's background (design §8.16): a soft glow of the colour beneath,
+     --halo, keeps the text readable however busy the picture; buttons with a colour of their own
+     go without. */
+  .on-backdrop {
+    --halo: var(--card);
+    text-shadow:
+      0 0 1px var(--halo),
+      0 0 3px var(--halo);
+    & .btn:not(.btn-ghost, .btn-link) {
+      text-shadow: none;
+    }
+  }
 }
 
 /* A thin bar along the top while the next page loads, shown only once it takes a moment. Only

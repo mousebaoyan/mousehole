@@ -3,14 +3,11 @@ import { Button } from "~/components/ui/button";
 import { Dialog } from "~/components/ui/dialog";
 import { BACKGROUND_CROPS } from "../../server/modules/users/customization.ts";
 
-// Cutting an uploaded background for the card and for the page (design §8.16), each on its own:
-// dragged to move, pinched, scrolled or slid to zoom.
+// Cutting an uploaded background square and wide (design §8.16), each on its own: dragged to move,
+// pinched, scrolled or slid to zoom.
 
-const PLACES = [
-  { place: "card", label: "资料卡" },
-  { place: "profile", label: "主页" },
-] as const;
-type Place = (typeof PLACES)[number]["place"];
+const PLACES = ["card", "profile"] as const;
+type Place = (typeof PLACES)[number];
 
 export type Region = { left: number; top: number; width: number; height: number };
 type Size = { width: number; height: number };
@@ -136,21 +133,18 @@ export function BackgroundCropper({
     <Dialog ref={dialog} onClose={onCancel} className="w-[min(36rem,calc(100%-2rem))]">
       <h2 className="font-semibold">裁剪背景</h2>
       <p className="mt-1 text-meta text-muted-foreground">
-        资料卡和主页分别裁剪；拖动调整位置，双指、滚轮或下方的滑块缩放
+        方形用在资料卡和手机上的主页，横版用在宽屏的主页，分别裁剪；拖动调整位置，双指、滚轮或下方的滑块缩放
       </p>
       <fieldset aria-label="裁剪哪一处" className="mt-3 inline-flex rounded-lg bg-secondary p-0.5">
         {PLACES.map((p) => (
           <button
-            key={p.place}
+            key={p}
             type="button"
-            aria-pressed={p.place === place}
-            onClick={() => setPlace(p.place)}
+            aria-pressed={p === place}
+            onClick={() => setPlace(p)}
             className="rounded-md px-3 py-1 text-sm text-muted-foreground aria-pressed:bg-card aria-pressed:text-foreground aria-pressed:shadow-sm"
           >
-            {p.label}
-            <span className="ml-1 text-xs text-muted-foreground">
-              {BACKGROUND_CROPS[p.place].ratio}:1
-            </span>
+            {BACKGROUND_CROPS[p].label}
           </button>
         ))}
       </fieldset>
@@ -163,8 +157,9 @@ export function BackgroundCropper({
         onPointerMove={onPointerMove}
         onPointerUp={release}
         onPointerCancel={release}
-        className="relative mt-3 w-full cursor-grab touch-none overflow-hidden rounded-xl bg-muted select-none active:cursor-grabbing"
-        style={{ aspectRatio: ratio }}
+        className="relative mx-auto mt-3 cursor-grab touch-none overflow-hidden rounded-xl bg-muted select-none active:cursor-grabbing"
+        // An upright cut no taller than most of the screen.
+        style={{ aspectRatio: ratio, width: `min(100%, ${60 * ratio}vh)` }}
       >
         <img
           src={url}

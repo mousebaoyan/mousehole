@@ -67,7 +67,7 @@ export async function uploadBackground(
     throw new AppError(
       400,
       "background_too_large",
-      "动图压缩后太大：资料卡的不能超过 500KB，主页的不能超过 1MB，请换一张小一点或短一点的",
+      "动图压缩后太大：方形的不能超过 800KB，横版的不能超过 1MB，请换一张小一点或短一点的",
     );
   }
   await mkdir(BACKGROUNDS_DIR, { recursive: true });

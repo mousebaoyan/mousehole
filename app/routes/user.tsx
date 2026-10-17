@@ -259,18 +259,27 @@ function Profile({
 
   return (
     <div className={cn("flex flex-col gap-6", user.theme && `theme-${user.theme}`)}>
-      {/* A banner, which the avatar overlaps. */}
-      {user.background && (
-        <div className="relative aspect-[3/1] max-h-72 overflow-hidden rounded-2xl">
-          <Backdrop background={user.background} place="profile" />
-        </div>
-      )}
-      <header className="flex items-start gap-4 px-1 sm:gap-5">
+      {/* With a background, a panel it lies under whole; its menus open past the panel's edge,
+          so the backdrop clips itself. */}
+      <header
+        className={cn(
+          "relative isolate flex items-start gap-4 sm:gap-5",
+          user.background ? "on-backdrop rounded-2xl border bg-card p-4 sm:p-5" : "px-1",
+        )}
+      >
+        {user.background && (
+          <Backdrop
+            background={user.background}
+            place="profile"
+            opacity={user.background_opacity}
+            className="-z-10 rounded-2xl"
+          />
+        )}
         <UserAvatar
           user={user}
           className={cn(
             "size-16 text-2xl sm:size-20 sm:text-3xl",
-            user.background && "relative -mt-16 ring-4 ring-background sm:-mt-20",
+            user.background && "ring-4 ring-card",
           )}
           frame="live"
         />
