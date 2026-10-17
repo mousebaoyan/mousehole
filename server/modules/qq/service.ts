@@ -90,6 +90,7 @@ export async function newAnswers(since: Date, until: Date) {
   const { rows } = await sql<{
     id: number;
     title: string;
+    created_at: number;
     asker_id: number;
     display_name: string;
     qq: number;
@@ -97,7 +98,8 @@ export async function newAnswers(since: Date, until: Date) {
     message_id: number;
     count: number;
     floor: number;
-  }>`SELECT t.id, t.title, u.id AS asker_id, u.display_name, u.qq, l.chat_id, l.message_id,
+  }>`SELECT t.id, t.title, extract(epoch FROM t.created_at)::integer AS created_at,
+      u.id AS asker_id, u.display_name, u.qq, l.chat_id, l.message_id,
       count(*)::integer AS count, min(p.floor) AS floor
     FROM posts p
     JOIN threads t ON t.id = p.thread_id
@@ -117,7 +119,7 @@ export async function newAnswers(since: Date, until: Date) {
     HAVING NOT bool_and(coalesce(tu.read_floors @> p.floor, false))
     ORDER BY count DESC, t.id`.execute(db);
   return rows.map((r) => ({
-    thread: { id: r.id, title: r.title },
+    thread: { id: r.id, title: r.title, created_at: r.created_at },
     asker: { id: r.asker_id, display_name: r.display_name, qq: r.qq },
     source: { chat_id: r.chat_id, message_id: r.message_id },
     count: r.count,

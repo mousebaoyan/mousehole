@@ -20,7 +20,11 @@ const AnswersSchema = z
   .object({
     items: z.array(
       z.object({
-        thread: z.object({ id: z.number(), title: z.string() }),
+        thread: z.object({
+          id: z.number(),
+          title: z.string(),
+          created_at: z.number().openapi({ description: "Unix 秒；收录的提问是在群里问的时间" }),
+        }),
         asker: z.object({ id: z.number(), display_name: z.string(), qq: z.number() }),
         source: z
           .object({ chat_id: z.number(), message_id: z.number() })
