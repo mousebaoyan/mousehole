@@ -243,7 +243,7 @@ export function FullCard({ profile }: { profile: FullProfile }) {
           ))}
         </div>
       )}
-      <dl className="mt-3 flex gap-4 text-meta">
+      <dl className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-meta">
         {numbers.map((n) => (
           <div key={n.label} className="flex items-baseline gap-1">
             <dd className="font-semibold tabular-nums">{n.value}</dd>

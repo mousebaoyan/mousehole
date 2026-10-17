@@ -409,7 +409,7 @@ function Profile({
               preventScrollReset
               aria-current={t.tab === tab ? "page" : undefined}
               className={cn(
-                "shrink-0 rounded-full px-3.5 py-1.5 text-sm text-muted-foreground hover:text-foreground",
+                "shrink-0 rounded-full px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground",
                 t.tab === tab && "bg-secondary font-medium text-foreground",
               )}
             >

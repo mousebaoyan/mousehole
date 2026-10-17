@@ -197,8 +197,8 @@ export function PostCard({
                 thread={threadId}
                 className="size-5 text-2xs"
               />
-              {/* Phones have little room on this line for a long group card. */}
-              <span className="max-w-24 truncate sm:max-w-none">
+              {/* A long group card would crowd out the author's name. */}
+              <span className="max-w-24 truncate sm:max-w-40">
                 {shown(replyTo.author).display_name}
               </span>
             </button>

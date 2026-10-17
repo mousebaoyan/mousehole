@@ -68,10 +68,10 @@ export function LotteryCard({
                 <Link
                   key={u.id}
                   to={`/u/${u.id}`}
-                  className="flex items-center gap-1.5 text-sm hover:underline"
+                  className="flex min-w-0 items-center gap-1.5 text-sm hover:underline"
                 >
-                  <UserAvatar user={u} className="size-5" />
-                  {u.display_name}
+                  <UserAvatar user={u} className="size-5 shrink-0" />
+                  <span className="truncate">{u.display_name}</span>
                 </Link>
               ))
             )}
@@ -80,8 +80,9 @@ export function LotteryCard({
       </ol>
 
       {won && (
-        <p className="mt-3 flex items-center gap-1.5 text-sm font-medium text-primary">
-          <PartyPopper className="size-4" /> 你抽中了「{won.name}」，楼主将联系你领奖
+        <p className="mt-3 flex gap-1.5 text-sm font-medium text-primary">
+          <PartyPopper className="mt-0.5 size-4 shrink-0" />
+          <span>你抽中了「{won.name}」，楼主将联系你领奖</span>
         </p>
       )}
 
