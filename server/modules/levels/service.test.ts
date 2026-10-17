@@ -55,12 +55,14 @@ async function levelOf(id: number) {
 
 // What L1 needs: threads entered and floors read, as the reading reports leave them.
 async function readEnough(id: number) {
-  const threads = await Promise.all([1, 2, 3, 4, 5].map(() => thread(other.who)));
+  // By someone new each time, who stays under the hourly limit on threads.
+  const author = await person("user", 1);
+  const threads = await Promise.all(Array.from({ length: 10 }, () => thread(author.who)));
   await db
     .insertInto("thread_users")
     .values(threads.map((t) => ({ user_id: id, thread_id: t, last_read_at: new Date() })))
     .execute();
-  await db.updateTable("users").set({ posts_read: 30 }).where("id", "=", id).execute();
+  await db.updateTable("users").set({ posts_read: 60 }).where("id", "=", id).execute();
   return threads;
 }
 
@@ -78,24 +80,27 @@ describe("等级", () => {
   test("活跃的人够了条件就升级并收到通知；回复自己的帖子不算", async () => {
     const me = await person();
     const threads = await readEnough(me.id);
-    const mine = await thread(me.who);
-    await reply(me.who, mine);
-    await reply(me.who, threads[0]);
-    await reply(me.who, threads[1]);
-    const liked = await reply(me.who, threads[1]);
+    await reply(me.who, await thread(me.who));
+    for (const t of threads.slice(0, 9)) await reply(me.who, t);
+    const liked = await reply(me.who, threads[0]);
     await api.posts[":id"].reaction.$put(
       { param: { id: String(liked) }, json: { emoji: "heart" } },
       other.who,
     );
+    await db
+      .updateTable("users")
+      .set((eb) => ({ like_received: eb("like_received", "+", 4) }))
+      .where("id", "=", me.id)
+      .execute();
 
-    // Two other people's threads: still L1, short of L2.
+    // Nine other people's threads: still L1, short of L2.
     await promoteActive();
     expect(await levelOf(me.id)).toBe(1);
     expect((await progress(me.id, me.who)).next?.items).toContainEqual(
-      expect.objectContaining({ key: "threads_replied", have: 2, need: 3 }),
+      expect.objectContaining({ key: "threads_replied", have: 9, need: 10 }),
     );
 
-    await reply(me.who, threads[2]);
+    await reply(me.who, threads[9]);
     await promoteActive();
     expect(await levelOf(me.id)).toBe(2);
     const inbox = await api.notifications.$get({ query: {} }, me.who);
@@ -109,13 +114,13 @@ describe("等级", () => {
   test("一次升两级：从 L0 直接到 L2", async () => {
     const me = await person();
     const threads = await readEnough(me.id);
-    for (const t of threads.slice(0, 3)) await reply(me.who, t);
-    await db.updateTable("users").set({ like_received: 1 }).where("id", "=", me.id).execute();
+    for (const t of threads) await reply(me.who, t);
+    await db.updateTable("users").set({ like_received: 5 }).where("id", "=", me.id).execute();
     await promoteActive();
     expect(await levelOf(me.id)).toBe(2);
   });
 
-  test("L4 每天复查，最近 30 天不够就降回 L3；刚升两周内和锁定的不降", async () => {
+  test("L4 每天复查，最近 50 天不够就降回 L3；刚升两周内和锁定的不降", async () => {
     const [lapsed, fresh, locked] = await Promise.all([person(), person(), person()]);
     await db
       .updateTable("users")
@@ -138,12 +143,12 @@ describe("等级", () => {
     ]);
   });
 
-  test("禁言过后 30 天内不算满足 L4；进度只给本人和管理员看", async () => {
+  test("禁言过后 50 天内不算满足 L4；进度只给本人和管理员看", async () => {
     const me = await person();
     await db.updateTable("users").set({ level: 3 }).where("id", "=", me.id).execute();
     const days = async () =>
       (await progress(me.id, admin.who)).next?.items.find((i) => i.key === "clean_days")?.have;
-    expect(await days()).toBe(30);
+    expect(await days()).toBe(50);
 
     const moderator = await person("admin");
     await api.users[":user"].restriction.$put(
@@ -170,10 +175,7 @@ describe("等级", () => {
     );
     expect(denied.status).toBe(403);
     await api.users[":user"].level.$put({ param, json: { level: 1, locked: true } }, admin.who);
-    await readEnough(me.id);
-    for (const t of await Promise.all([1, 2, 3].map(() => thread(other.who)))) {
-      await reply(me.who, t);
-    }
+    for (const t of await readEnough(me.id)) await reply(me.who, t);
     await db.updateTable("users").set({ like_received: 5 }).where("id", "=", me.id).execute();
     await promoteActive();
     expect(await progress(me.id, me.who)).toEqual({ level: 1, locked: true, next: null });

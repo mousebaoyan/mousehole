@@ -11,6 +11,7 @@ import {
   TEAL,
 } from "../../platform/mail-page.ts";
 import { BOT_NAME, readTime, SITE_NAME } from "../../platform/site.ts";
+import { RECENT_DAYS } from "../levels/rules.ts";
 
 // The weekly letter (design §8.15): what someone's floors did for others last week, written to
 // thank them. Only what happened is said; a count of nothing is left out.
@@ -73,7 +74,9 @@ function levelLine({ name, keep, missing }: NonNullable<Week["level"]>) {
       return `${m.label} ${time.n} ${time.unit}`;
     })
     .join("、");
-  return keep ? `要保持 ${name}，最近 30 天还差：${left}。` : `离 ${name}还差：${left}。`;
+  return keep
+    ? `要保持 ${name}，最近 ${RECENT_DAYS} 天还差：${left}。`
+    : `离 ${name}还差：${left}。`;
 }
 
 export function subjectOf(week: Week) {

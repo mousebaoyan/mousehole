@@ -11,8 +11,8 @@ export type Totals = {
   read_seconds: number;
 };
 
-// Counted over the last 30 days, for L4. `clean_days` is how many of them were free of any mute
-// or ban, up to 30.
+// Counted over the last 50 days, for L4. `clean_days` is how many of them were free of any mute
+// or ban, up to 50.
 export type Recent = {
   days_visited: number;
   threads_replied: number;
@@ -22,7 +22,7 @@ export type Recent = {
   clean_days: number;
 };
 
-export const RECENT_DAYS = 30;
+export const RECENT_DAYS = 50;
 // A new L4 keeps it this long whatever the last 30 days say.
 export const L4_GRACE_DAYS = 14;
 
@@ -31,29 +31,29 @@ type Needs<Key> = [Key, number][];
 // What L1, L2 and L3 need on top of the levels below.
 const NEEDS: Needs<keyof Totals>[] = [
   [
-    ["threads_entered", 5],
-    ["posts_read", 30],
+    ["threads_entered", 10],
+    ["posts_read", 60],
   ],
   [
-    ["threads_replied", 3],
-    ["likes", 1],
-  ],
-  [
-    ["days_visited", 10],
     ["threads_replied", 10],
-    ["posts_read", 100],
-    ["read_seconds", 3600],
-    ["likes", 10],
+    ["likes", 5],
+  ],
+  [
+    ["days_visited", 30],
+    ["threads_replied", 30],
+    ["posts_read", 300],
+    ["read_seconds", 10_800],
+    ["likes", 30],
   ],
 ];
 
-// What L4 needs in the last 30 days, on top of L3; the same keeps it.
+// What L4 needs in the last 50 days, on top of L3; the same keeps it.
 const L4_NEEDS: Needs<keyof Recent> = [
-  ["days_visited", 15],
-  ["threads_replied", 15],
-  ["posts_read", 200],
-  ["read_seconds", 7200],
-  ["likes", 20],
+  ["days_visited", 35],
+  ["threads_replied", 80],
+  ["posts_read", 1000],
+  ["read_seconds", 36_000],
+  ["likes", 120],
   ["clean_days", RECENT_DAYS],
 ];
 

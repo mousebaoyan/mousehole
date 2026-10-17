@@ -36,6 +36,7 @@ import { ClearButtons, ModerationButtons } from "./user-moderation.tsx";
 import { REACTIONS } from "./reactions.tsx";
 import { levelName, readTime, STAFF, TIER_NAMES } from "../../server/platform/site.ts";
 import { CLEARABLE } from "../../server/modules/users/customization.ts";
+import { RECENT_DAYS } from "../../server/modules/levels/rules.ts";
 
 export function meta({ loaderData }: Route.MetaArgs) {
   const { user, tab, list } = loaderData;
@@ -737,7 +738,7 @@ function LevelProgress({ progress }: { progress: NonNullable<LoaderData["progres
       <h2 className="text-sm font-medium">
         {keep ? `保持 ${levelName(level)}` : `升到 ${levelName(next.level)}`}
         <span className="ml-2 text-meta font-normal text-muted-foreground">
-          {next.level === 4 ? "按最近 30 天计算" : "累计"}
+          {next.level === 4 ? `按最近 ${RECENT_DAYS} 天计算` : "累计"}
         </span>
       </h2>
       <ul className="mt-3 grid gap-x-6 gap-y-3 sm:grid-cols-2">
