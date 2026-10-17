@@ -7,6 +7,8 @@ import {
   ArrowUp,
   Award,
   Check,
+  ChevronRight,
+  Coins,
   ImagePlus,
   Lock,
   Plus,
@@ -104,7 +106,7 @@ function ShownBadgesField({ badges, shown }: { badges: Badge[]; shown: number[] 
       />
       {value !== null &&
         (badges.length === 0 ? (
-          <span className="text-meta text-muted-foreground">获得徽章后可以在这里挑选</span>
+          <span className="text-meta text-muted-foreground">暂无徽章</span>
         ) : (
           <>
             <div className="mt-1 flex flex-wrap gap-1.5">
@@ -137,9 +139,7 @@ function ShownBadgesField({ badges, shown }: { badges: Badge[]; shown: number[] 
                 );
               })}
             </div>
-            <span className="text-meta text-muted-foreground">
-              最多 {SHOWN_BADGES} 枚，按选择的先后排列
-            </span>
+            <span className="text-meta text-muted-foreground">最多展示 {SHOWN_BADGES} 枚</span>
           </>
         ))}
     </div>
@@ -151,7 +151,7 @@ function ThemeField({ theme }: { theme: string | null }) {
   return (
     <fieldset className="flex flex-col gap-1.5 text-sm">
       <legend className="font-medium">主题色</legend>
-      <div className="mt-1.5 flex flex-wrap gap-2 sm:gap-2.5">
+      <div className="mt-1.5 grid grid-cols-9 gap-1 sm:flex sm:gap-2.5">
         {[
           { key: "", name: DEFAULT_THEME_NAME },
           ...THEMES.map((key) => ({ key, name: THEME_NAMES[key] })),
@@ -170,14 +170,14 @@ function ThemeField({ theme }: { theme: string | null }) {
               defaultChecked={(theme ?? "") === t.key}
               className="peer sr-only"
             />
-            <span className="flex size-8 items-center justify-center rounded-full bg-primary sm:size-9 text-primary-foreground ring-primary ring-offset-2 ring-offset-card peer-checked:ring-2 peer-focus-visible:ring-2 [&>svg]:hidden peer-checked:[&>svg]:block">
+            <span className="flex size-7 items-center justify-center rounded-full bg-primary text-primary-foreground sm:size-9 ring-primary ring-offset-2 ring-offset-card peer-checked:ring-2 peer-focus-visible:ring-2 [&>svg]:hidden peer-checked:[&>svg]:block">
               <Check className="size-4" />
             </span>
             <span className="text-xs text-muted-foreground">{t.name}</span>
           </label>
         ))}
       </div>
-      <span className="text-meta text-muted-foreground">用在你的资料卡和个人主页上</span>
+      <span className="text-meta text-muted-foreground">用于你的资料卡和个人主页</span>
     </fieldset>
   );
 }
@@ -185,7 +185,7 @@ function ThemeField({ theme }: { theme: string | null }) {
 // When a status clears by itself, from now. One already set keeps its time unless changed.
 const CLEARS = [
   { value: "never", label: "不清除" },
-  { value: "today", label: "今天过后清除" },
+  { value: "today", label: "今天结束后清除" },
   { value: "3d", label: "3 天后清除" },
   { value: "7d", label: "一周后清除" },
 ];
@@ -309,7 +309,7 @@ function PinsField({ pins, userId }: { pins: Pin[]; userId: number }) {
         </Button>
       )}
       <span className="text-meta text-muted-foreground">
-        挑最多 {PINS_MAX} 个自己的帖子，展示在个人主页上
+        选择自己的帖子展示在个人主页上，最多 {PINS_MAX} 个
       </span>
       <Dialog
         ref={dialog}
@@ -369,7 +369,7 @@ function ThreadChoices({
   if (cursor === null && data.threads.length === 0) {
     return (
       <li className="px-2 py-6 text-center text-meta text-muted-foreground">
-        暂无可选的帖子，匿名发布的不能选
+        暂无可选的帖子，匿名帖子不可选
       </li>
     );
   }
@@ -424,12 +424,12 @@ function ThreadChoices({
 
 function ShowcaseField({ showcase }: { showcase: string | null }) {
   return (
-    <Field label="展柜" hint="显示在个人主页上，支持 Markdown，但不显示图片">
+    <Field label="展柜" hint="显示在个人主页上，支持 Markdown，不显示图片">
       <Textarea
         name="showcase"
         defaultValue={showcase ?? ""}
         maxLength={SHOWCASE_MAX}
-        placeholder="介绍一下自己：方向、经历、去向……"
+        placeholder="介绍你的方向、经历和去向"
         className="min-h-28"
       />
     </Field>
@@ -452,7 +452,7 @@ function Tile({
   value: string;
   label: string;
   checked: boolean;
-  lock: { label: string; trying: boolean; onTry: () => void } | null;
+  lock: { label: string | null; trying: boolean; onTry: () => void } | null;
   onPick: () => void;
   wide?: boolean;
   children: ReactNode;
@@ -478,8 +478,9 @@ function Tile({
           )}
         >
           {children}
-          <span className="absolute right-1 bottom-1 flex items-center gap-0.5 rounded-md bg-black/60 px-1 py-px text-2xs font-medium whitespace-nowrap text-white">
-            <Lock className="size-3 shrink-0" /> {lock.label}
+          <span className="absolute right-1 bottom-1 flex items-center gap-0.5 rounded-md bg-black/60 px-1 py-0.5 text-2xs leading-none font-medium whitespace-nowrap text-white">
+            <Lock className="size-3 shrink-0" />
+            {lock.label}
           </span>
         </span>
         <span className="truncate text-muted-foreground/60">{label}</span>
@@ -511,7 +512,8 @@ function Tile({
 
 type Buy = (look: Look, price: number, what: string) => void;
 
-// Disabled until the look is unlocked and there are coins enough.
+// Disabled until the look is unlocked and there are coins enough; the balance is shown above the
+// looks.
 function BuyButton({
   look,
   what,
@@ -529,19 +531,15 @@ function BuyButton({
   onBuy: Buy;
   children?: ReactNode;
 }) {
-  const short = price - coins;
   return (
-    <span className="inline-flex items-center gap-2">
-      <Button
-        type="button"
-        size="sm"
-        disabled={locked || short > 0}
-        onClick={() => onBuy(look, price, what)}
-      >
-        <Sparkles /> {children} · {price} 鼠币
-      </Button>
-      {!locked && short > 0 && <span className="text-muted-foreground">还差 {short} 鼠币</span>}
-    </span>
+    <Button
+      type="button"
+      size="sm"
+      disabled={locked || price > coins}
+      onClick={() => onBuy(look, price, what)}
+    >
+      <Sparkles /> {children} · {price} 鼠币
+    </Button>
   );
 }
 
@@ -568,47 +566,45 @@ function LookDetail({
   const seeing =
     tryOn !== null && tryOn.moving && tryOn.look.kind === look.kind && tryOn.look.key === look.key;
   return (
-    <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-lg bg-muted/60 px-3 py-2 text-meta">
-      <span className="font-medium">{name}</span>
-      {lock !== null && (
-        <span className="inline-flex items-center gap-1 text-muted-foreground">
-          <Lock className="size-3.5" /> {lock}
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg bg-muted/60 px-3 py-2 text-meta">
+      <span className="mr-auto flex min-w-0 flex-col">
+        <span className="font-medium">{name}</span>
+        {lock !== null && (
+          <span className="inline-flex items-center gap-1 text-muted-foreground">
+            <Lock className="size-3.5 shrink-0" /> {lock}
+          </span>
+        )}
+        {moving && owned && (
+          <span className="inline-flex items-center gap-1 text-muted-foreground">
+            <Sparkles className="size-3.5 shrink-0" /> 已兑换动态版
+          </span>
+        )}
+      </span>
+      {moving && !owned && (
+        <span className="flex items-center gap-1">
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            aria-pressed={seeing}
+            onClick={() =>
+              onTryOn(
+                seeing ? (lock === null ? null : { look, moving: false }) : { look, moving: true },
+              )
+            }
+          >
+            {seeing ? "查看静态版" : "查看动态版"}
+          </Button>
+          <BuyButton
+            look={look}
+            what={`「${name}」的动态版`}
+            price={moving.price}
+            coins={coins}
+            locked={lock !== null}
+            onBuy={onBuy}
+          />
         </span>
       )}
-      {moving &&
-        (owned ? (
-          <span className="inline-flex items-center gap-1 text-muted-foreground">
-            <Sparkles className="size-3.5" /> 已兑换动态版
-          </span>
-        ) : (
-          <>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              aria-pressed={seeing}
-              onClick={() =>
-                onTryOn(
-                  seeing
-                    ? lock === null
-                      ? null
-                      : { look, moving: false }
-                    : { look, moving: true },
-                )
-              }
-            >
-              {seeing ? "看静态的" : "看动态的"}
-            </Button>
-            <BuyButton
-              look={look}
-              what={`「${name}」的动态版`}
-              price={moving.price}
-              coins={coins}
-              locked={lock !== null}
-              onBuy={onBuy}
-            />
-          </>
-        ))}
     </div>
   );
 }
@@ -750,7 +746,7 @@ function BackgroundField({
           owned={owned.includes(focus)}
         />
       )}
-      <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1.5">
+      <div className="mt-1 flex flex-wrap gap-2">
         <label
           className={buttonVariants({
             variant: "outline",
@@ -771,13 +767,6 @@ function BackgroundField({
             className="sr-only"
           />
         </label>
-        <span className="text-meta text-muted-foreground">
-          {!unlocked.upload
-            ? `L${UPLOAD_LEVEL} 起可以上传自己的图片`
-            : owned.includes("custom")
-              ? "支持动图"
-              : "动图只留第一帧"}
-        </span>
         {unlocked.upload && !owned.includes("custom") && (
           <BuyButton
             look={{ kind: "background", key: "custom" }}
@@ -791,6 +780,13 @@ function BackgroundField({
           </BuyButton>
         )}
       </div>
+      <span className="text-meta text-muted-foreground">
+        {!unlocked.upload
+          ? `L${UPLOAD_LEVEL} 解锁上传图片`
+          : owned.includes("custom")
+            ? "支持动图"
+            : "动图仅显示第一帧"}
+      </span>
       {picked && (
         <BackgroundCropper url={picked.url} busy={busy} onCancel={close} onDone={upload} />
       )}
@@ -802,8 +798,8 @@ function BackgroundField({
 function frameLock(frame: Frame) {
   const { unlock } = FRAME_LOOKS[frame];
   if ("level" in unlock) return `L${unlock.level} 解锁`;
-  if ("badge" in unlock) return `得到「${unlock.by}」徽章后解锁`;
-  return "gold" in unlock ? "得到一枚金徽章后解锁" : "得到配了它的活动徽章后解锁";
+  if ("badge" in unlock) return `获得「${unlock.by}」徽章后解锁`;
+  return "gold" in unlock ? "获得任意金徽章后解锁" : "获得对应的活动徽章后解锁";
 }
 
 // Each frame round their own avatar.
@@ -908,7 +904,7 @@ export function Customize({
   const { revalidate } = useRevalidator();
 
   async function buy(look: Look, price: number, what: string) {
-    const choice = await chooseDialog(`用 ${price} 鼠币兑换${what}？兑换后一直有。`, [
+    const choice = await chooseDialog(`使用 ${price} 鼠币兑换${what}？兑换后永久有效。`, [
       { value: "", label: "取消", variant: "ghost" },
       { value: "buy", label: "兑换", variant: "default" },
     ]);
@@ -922,8 +918,8 @@ export function Customize({
     const worn = look.kind === "frame" ? settings.frame : settings.background;
     toast(
       look.key === "custom"
-        ? "已兑换，现在可以上传动图了"
-        : `已兑换${what}${worn === look.key ? "" : "，保存后换上"}`,
+        ? "兑换成功，现在可以上传动图"
+        : `已兑换${what}${worn === look.key ? "" : "，保存后生效"}`,
     );
     await revalidate();
   }
@@ -941,6 +937,15 @@ export function Customize({
       )}
       <div className="flex flex-col gap-5 max-lg:mt-3">
         <StatusField status={settings.user_status} now={now} />
+        <p className="flex items-center gap-1.5 rounded-lg bg-muted/60 px-3 py-2 text-meta text-muted-foreground">
+          <Coins className="size-4" />
+          我的鼠币
+          <span className="font-semibold text-foreground tabular-nums">{settings.coins}</span>
+          <Link to="/coins" className="ml-auto inline-flex items-center hover:text-foreground">
+            明细
+            <ChevronRight className="size-4" />
+          </Link>
+        </p>
         <BackgroundField
           key={`${settings.background}:${settings.background_urls?.card_url}`}
           {...looks}
