@@ -235,6 +235,7 @@ function dayOf(day: string, year: number) {
 }
 
 function lookName({ kind, key }: { kind: string; key: string }) {
+  if (kind === "avatar") return "动态头像";
   if (key === "custom") return "上传动图";
   const frame = FRAMES.find((f) => f === key);
   const preset = BACKGROUNDS.find((b) => b === key);

@@ -238,7 +238,11 @@ const SettingsSchema = z
       upload: z.boolean().openapi({ description: "能不能上传自己的背景" }),
     }),
     owned: z
-      .object({ backgrounds: z.array(z.string()), frames: z.array(z.string()) })
+      .object({
+        backgrounds: z.array(z.string()),
+        frames: z.array(z.string()),
+        avatar: z.boolean().openapi({ description: "兑换了动态头像" }),
+      })
       .openapi({ description: "兑换了的动态版，key 的列表；上传背景的为 custom" }),
     coins: z.number().openapi({ description: "鼠币余额" }),
     user_status: z
@@ -276,6 +280,7 @@ async function settingsJson(userId: number) {
     owned: {
       backgrounds: looks.filter((l) => l.kind === "background").map((l) => l.key),
       frames: looks.filter((l) => l.kind === "frame").map((l) => l.key),
+      avatar: looks.some((l) => l.kind === "avatar"),
     },
     coins: await coinBalance(userId),
     notify_prefs: await notifyPrefs(settings.notify_prefs),
@@ -822,7 +827,8 @@ export const usersRoutes = createRouter()
     createRoute({
       method: "put",
       path: "/me/avatar",
-      summary: "上传头像：multipart 的 file 字段，最大 20MB，裁成 96px 的方图；之后不再跟着 QQ",
+      summary:
+        "上传头像：multipart 的 file 字段，最大 20MB，裁成 96px 的方图；之后不再跟着 QQ。兑换了动态头像的，动图照常会动，压缩后超过 200KB 的不收",
       request: {
         body: {
           required: true,
@@ -837,7 +843,7 @@ export const usersRoutes = createRouter()
       },
       responses: {
         200: { description: "新头像", content: { "application/json": { schema: AvatarSchema } } },
-        400: errorResponse("不是能识别的图片"),
+        400: errorResponse("不是能识别的图片，或者动图压缩后还太大（avatar_too_large）"),
         413: errorResponse("超过 20MB"),
         429: errorResponse("上传太频繁"),
       },
@@ -893,7 +899,7 @@ export const usersRoutes = createRouter()
       method: "post",
       path: "/me/looks",
       summary:
-        "用鼠币兑换动态版，换上照常用 PATCH /me；上传背景的（key 为 custom）兑换后可以上传动图",
+        "用鼠币兑换动态版，换上照常用 PATCH /me；上传背景的（key 为 custom）和头像（kind 为 avatar）兑换后可以上传动图",
       request: {
         body: {
           required: true,
@@ -905,6 +911,7 @@ export const usersRoutes = createRouter()
                   key: z.enum([...BACKGROUNDS, "custom"]),
                 }),
                 z.object({ kind: z.literal("frame"), key: z.enum(FRAMES) }),
+                z.object({ kind: z.literal("avatar"), key: z.literal("custom") }),
               ]),
             },
           },

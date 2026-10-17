@@ -71,6 +71,11 @@ export const BACKGROUND_PRESETS: Record<
 export const UPLOAD_LEVEL = 3;
 export const UPLOAD_PRICE = 200;
 
+// Animated avatars once bought, open to all as uploading an avatar is; they show everywhere, so
+// only so large.
+export const MOVING_AVATAR_PRICE = 200;
+export const MOVING_AVATAR_MAX = 200 * 1024;
+
 // What an uploaded picture is cut into, each covering all it lies under: a square one for the card
 // and for the page on phones, both about as wide as tall, and a wide one for the page on wider
 // screens. Still pictures at about twice the size they show at; animated ones smaller, and only so
@@ -161,10 +166,13 @@ export function frameMoves(frame: Frame, bought: boolean) {
 
 // A look to buy the moving version of; "custom" is their own picture.
 export type Look =
-  { kind: "background"; key: BackgroundPreset | "custom" } | { kind: "frame"; key: Frame };
+  | { kind: "background"; key: BackgroundPreset | "custom" }
+  | { kind: "frame"; key: Frame }
+  | { kind: "avatar"; key: "custom" };
 
 // What its moving version costs and the level opening the look, if it has one.
 export function movingLook(look: Look) {
+  if (look.kind === "avatar") return { level: 0, price: MOVING_AVATAR_PRICE };
   if (look.kind === "frame") {
     const { unlock } = FRAME_LOOKS[look.key];
     return "level" in unlock ? priced(unlock) : null;

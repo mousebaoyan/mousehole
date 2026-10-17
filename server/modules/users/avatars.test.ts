@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import { rm, stat, utimes } from "node:fs/promises";
 import { testClient } from "hono/testing";
 import { sql } from "kysely";
@@ -25,6 +26,12 @@ function qqAvatar(color: string) {
       .toBuffer();
     return new Response(new Uint8Array(png));
   });
+}
+
+function gif(frames: Buffer[]) {
+  return sharp(frames, { join: { animated: true } })
+    .gif({ effort: 1, dither: 0 })
+    .toBuffer();
 }
 
 async function aDayLater(path: string) {
@@ -92,6 +99,51 @@ describe("头像", () => {
     const restored = await api.me.avatar.$delete({}, me);
     if (!restored.ok) throw new Error(`status ${restored.status}`);
     expect(await restored.json()).toEqual({ avatar_url: `/avatars/${user.id}.webp?v=2` });
+  });
+
+  test("没兑换动态头像时动图只留第一帧；兑换后照常动，压缩后超过 200KB 的不收", async () => {
+    const user = await createUser();
+    const me = as(await login(user.id));
+    const blink = await gif(
+      await Promise.all(
+        ["#e07b53", "#5a7fa6"].map((background) =>
+          sharp({ create: { width: 120, height: 120, channels: 3, background } })
+            .png()
+            .toBuffer(),
+        ),
+      ),
+    );
+    const upload = (file: Buffer) =>
+      api.me.avatar.$put({ form: { file: new File([new Uint8Array(file)], "动.gif") } }, me);
+    const pages = async () => (await sharp(`${AVATARS_DIR}/${user.id}.webp`).metadata()).pages ?? 1;
+
+    expect((await upload(blink)).status).toBe(200);
+    expect(await pages()).toBe(1);
+
+    await db
+      .insertInto("coin_balances")
+      .values({ user_id: user.id, coins: 200 })
+      .onConflict((oc) => oc.column("user_id").doUpdateSet({ coins: 200 }))
+      .execute();
+    const bought = await api.me.looks.$post({ json: { kind: "avatar", key: "custom" } }, me);
+    expect(bought.status).toBe(200);
+    expect(await bought.json()).toMatchObject({ owned: { avatar: true }, coins: 0 });
+    expect((await upload(blink)).status).toBe(200);
+    expect(await pages()).toBe(2);
+
+    // Noise compresses badly: every frame is new.
+    const noise = await gif(
+      await Promise.all(
+        Array.from({ length: 60 }, () =>
+          sharp(randomBytes(96 * 96 * 3), { raw: { width: 96, height: 96, channels: 3 } })
+            .png()
+            .toBuffer(),
+        ),
+      ),
+    );
+    const heavy = await upload(noise);
+    expect(heavy.status).toBe(400);
+    expect(await heavy.json()).toMatchObject({ error: { code: "avatar_too_large" } });
   });
 
   test("不是图片的文件上传不了", async () => {
