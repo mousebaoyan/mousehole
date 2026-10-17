@@ -287,6 +287,30 @@ describe("读帖子", () => {
     expect(missing.status).toBe(404);
   });
 
+  test("收录来的问答帖有了回复就不算待解答", async () => {
+    const board = await newBoard();
+    const asked = await newThread(board);
+    const collected = await newThread(board);
+    const unanswered = await newThread(board);
+    // Made questions here rather than paying a coin for each.
+    await db
+      .updateTable("threads")
+      .set({ kind: "question" })
+      .where("id", "in", [asked, collected, unanswered])
+      .execute();
+    await db
+      .updateTable("posts")
+      .set({ via: "qq" })
+      .where("thread_id", "in", [collected, unanswered])
+      .where("floor", "=", 1)
+      .execute();
+    await replied(asked, "论坛上的回答");
+    await replied(collected, "群里的回答");
+
+    const unsolved = await list({ board, view: "unsolved" });
+    expect(unsolved.items.map((t) => t.id)).toEqual([asked, unanswered]);
+  });
+
   test("浏览数：同一个人一分钟内只算一次", async () => {
     const thread = await newThread(await newBoard());
     recordView(thread, "u1");
