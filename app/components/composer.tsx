@@ -479,7 +479,8 @@ export function ComposerProvider({
 const HEIGHT_KEY = "composer-height";
 const MIN_HEIGHT = 240;
 const COLLAPSED_HEIGHT = 48;
-// Room for a poll's or lottery's settings and a few options or prizes besides the text.
+// Room for a new thread's title, board and tags, or a poll's or lottery's settings and a few
+// options or prizes, besides the text.
 const SETUP_HEIGHT = 560;
 
 function clampHeight(height: number) {
@@ -638,10 +639,7 @@ function Composer({
     return clamped;
   }
 
-  const open =
-    withPoll || withLottery || withPositioning
-      ? Math.max(height, clampHeight(SETUP_HEIGHT))
-      : height;
+  const open = target.mode === "thread" ? Math.max(height, clampHeight(SETUP_HEIGHT)) : height;
   const shown = collapsed ? COLLAPSED_HEIGHT : open;
   return (
     <>
