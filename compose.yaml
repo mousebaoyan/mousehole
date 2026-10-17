@@ -2,6 +2,9 @@
 services:
   postgres:
     image: postgres:18
+    # A test run takes about 50 connections, and worktrees run theirs at the same time as each
+    # other and beside the dev servers.
+    command: postgres -c max_connections=300
     environment:
       POSTGRES_USER: mousehole
       POSTGRES_PASSWORD: mousehole

@@ -33,6 +33,7 @@ let member = as("");
 let memberId = 0;
 let thread = 0;
 
+// Filling a year takes seconds on its own, and more beside other test files or another run.
 beforeAll(async () => {
   const admin = as(await login((await createUser("admin")).id));
   await api.boards.$post({ json: { slug: "hot", name: "热门" } }, admin);
@@ -63,7 +64,7 @@ beforeAll(async () => {
     admin,
   );
   await fill(await createUser(), memberId);
-});
+}, 60_000);
 
 // A year of threads, ten floors each, with what a reader leaves behind: reading records,
 // bookmarks and notifications. Written directly, as the API would take too long.
