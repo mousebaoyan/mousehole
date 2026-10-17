@@ -54,6 +54,45 @@ describe("后台的成员页", () => {
     expect(await members({ restricted: "true" })).toEqual(["夜猫子-清华"]);
   });
 
+  test("按激活、邮件开关和最近访问筛选，按列排序，没有的值排在最后", async () => {
+    const day = 24 * 3600_000;
+    const people = [
+      { name: "排序甲", activated: true, seen: Date.now(), posts: 5, email: true },
+      { name: "排序乙", activated: false, seen: null, posts: 9, email: false },
+      { name: "排序丙", activated: true, seen: Date.now() - 40 * day, posts: 1, email: true },
+    ];
+    for (const p of people) {
+      const { id } = await named(p.name);
+      await db
+        .updateTable("users")
+        .set({
+          activated_at: p.activated ? new Date() : null,
+          last_seen_at: p.seen === null ? null : new Date(p.seen),
+          post_count: p.posts,
+          notify_email: p.email,
+        })
+        .where("id", "=", id)
+        .execute();
+    }
+    const q = "排序";
+    expect(await members({ q, activated: "false" })).toEqual(["排序乙"]);
+    expect(await members({ q, email: "false" })).toEqual(["排序乙"]);
+    expect(await members({ q, seen_within: "7" })).toEqual(["排序甲"]);
+    expect(await members({ q, unseen_for: "30" })).toEqual(["排序丙", "排序乙"]);
+    expect(await members({ q, sort: "post_count" })).toEqual(["排序乙", "排序甲", "排序丙"]);
+    expect(await members({ q, sort: "post_count", order: "asc" })).toEqual([
+      "排序丙",
+      "排序甲",
+      "排序乙",
+    ]);
+    expect(await members({ q, sort: "last_seen_at" })).toEqual(["排序甲", "排序丙", "排序乙"]);
+    expect(await members({ q, sort: "last_seen_at", order: "asc" })).toEqual([
+      "排序丙",
+      "排序甲",
+      "排序乙",
+    ]);
+  });
+
   test("管理员设置角色：锁定，记日志；不能改自己和 bot；版主不能设置", async () => {
     const user = await named("要当版主的人");
     const param = { user: String(user.id) };

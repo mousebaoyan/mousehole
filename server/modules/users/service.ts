@@ -919,47 +919,51 @@ export async function saveRole(trx: Transaction<DB>, userId: number, role: strin
 
 const MEMBERS_PAGE = 50;
 
-// For staff: newest accounts first, found by name or QQ number, and by standing, role or a
-// restriction in force; the cursor is the last one's ID.
+export const MEMBER_SORTS = [
+  "created_at",
+  "activated_at",
+  "last_seen_at",
+  "level",
+  "thread_count",
+  "post_count",
+  "like_received",
+  "people_reached",
+  "days_visited",
+] as const;
+
+// For staff: found by name, QQ nickname or the start of a QQ number, narrowed by standing,
+// activation, role, level, a restriction in force, the email switch and the last visit, sorted
+// by any of MEMBER_SORTS with those never seen or activated last, and a page of them at a time.
 export async function listMembers(filter: {
   q?: string;
   status?: "member" | "frozen";
+  activated?: boolean;
   role?: string;
   level?: number;
   restricted?: boolean;
-  cursor?: number;
+  email?: boolean;
+  seen_within?: number;
+  unseen_for?: number;
+  sort: (typeof MEMBER_SORTS)[number];
+  order: "asc" | "desc";
+  page: number;
 }) {
-  let query = db
-    .selectFrom("users")
-    .select([
-      "id",
-      "display_name",
-      "avatar_version",
-      "qq",
-      "role",
-      "role_locked",
-      "level",
-      "level_locked",
-      "member_status",
-      "activated_at",
-      "restriction",
-      "restricted_until",
-      "last_seen_at",
-      "thread_count",
-      "post_count",
-    ])
-    .orderBy("id", "desc")
-    .limit(MEMBERS_PAGE);
-  const { q } = filter;
+  let query = db.selectFrom("users");
+  const { q, seen_within, unseen_for } = filter;
   if (q !== undefined) {
     const name = `%${q.replaceAll(/[\\%_]/g, "\\$&")}%`;
     query = query.where((eb) =>
-      /^\d{5,12}$/.test(q)
-        ? eb.or([eb("display_name", "ilike", name), eb("qq", "=", Number(q))])
-        : eb("display_name", "ilike", name),
+      eb.or([
+        eb("display_name", "ilike", name),
+        eb("qq_nickname", "ilike", name),
+        ...(/^\d+$/.test(q) ? [eb(sql<string>`qq::text`, "like", `${q}%`)] : []),
+      ]),
     );
   }
   if (filter.status !== undefined) query = query.where("member_status", "=", filter.status);
+  if (filter.activated !== undefined) {
+    query = query.where("activated_at", filter.activated ? "is not" : "is", null);
+  }
   if (filter.role !== undefined) query = query.where("role", "=", filter.role);
   if (filter.level !== undefined) query = query.where("level", "=", filter.level);
   if (filter.restricted) {
@@ -969,15 +973,60 @@ export async function listMembers(filter: {
         eb.or([eb("restricted_until", "is", null), eb("restricted_until", ">", sql<Date>`now()`)]),
       );
   }
-  if (filter.cursor !== undefined) query = query.where("id", "<", filter.cursor);
-  const rows = await query.execute();
-  const last = rows.at(-1);
+  if (filter.email !== undefined) query = query.where("notify_email", "=", filter.email);
+  if (seen_within !== undefined) {
+    query = query.where(
+      "last_seen_at",
+      ">",
+      sql<Date>`now() - make_interval(days => ${seen_within})`,
+    );
+  }
+  if (unseen_for !== undefined) {
+    query = query.where((eb) =>
+      eb.or([
+        eb("last_seen_at", "is", null),
+        eb("last_seen_at", "<=", sql<Date>`now() - make_interval(days => ${unseen_for})`),
+      ]),
+    );
+  }
+  const [rows, { total }] = await Promise.all([
+    query
+      .select([
+        "id",
+        "display_name",
+        "avatar_version",
+        "qq",
+        "role",
+        "role_locked",
+        "level",
+        "level_locked",
+        "member_status",
+        "restriction",
+        "restricted_until",
+        "notify_email",
+        "created_at",
+        "activated_at",
+        "last_seen_at",
+        "thread_count",
+        "post_count",
+        "like_received",
+        "people_reached",
+        "days_visited",
+      ])
+      .orderBy(filter.sort, (ob) => (filter.order === "asc" ? ob.asc() : ob.desc()).nullsLast())
+      .orderBy("id", filter.order)
+      .limit(MEMBERS_PAGE)
+      .offset((filter.page - 1) * MEMBERS_PAGE)
+      .execute(),
+    query.select(sql<number>`count(*)::integer`.as("total")).executeTakeFirstOrThrow(),
+  ]);
   return {
     items: rows.map(({ avatar_version, ...r }) => ({
       ...r,
       avatar_url: avatarUrl(r.id, avatar_version),
     })),
-    next_cursor: rows.length === MEMBERS_PAGE && last ? String(last.id) : null,
+    total,
+    pages: Math.ceil(total / MEMBERS_PAGE),
   };
 }
 

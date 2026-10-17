@@ -51,6 +51,7 @@ import {
   getUser,
   listMembers,
   listPeople,
+  MEMBER_SORTS,
   MAX_BIO,
   RELATION_LISTS,
   restoreQqAvatar,
@@ -971,18 +972,41 @@ export const usersRoutes = createRouter()
       method: "get",
       path: "/admin/members",
       summary:
-        "成员列表，新建的在前，每页 50 个：按名字或 QQ 号找，按成员资格、角色、等级、是否受限筛选",
+        "成员列表，每页 50 个：按名字、QQ 昵称或 QQ 号开头找，按成员资格、激活、角色、等级、受限、邮件开关和最近访问筛选，按任一列排序",
       request: {
         query: z.object({
           q: z.string().trim().min(1).max(30).optional(),
           status: z.enum(["member", "frozen"]).optional(),
+          activated: z
+            .enum(["true", "false"])
+            .optional()
+            .transform((v) => (v === undefined ? undefined : v === "true")),
           role: z.enum(["user", "moderator", "admin", "owner", "bot"]).optional(),
           level: z.coerce.number().int().min(0).max(5).optional(),
           restricted: z
             .enum(["true", "false"])
             .optional()
             .transform((v) => v === "true"),
-          cursor: z.coerce.number().int().optional(),
+          email: z
+            .enum(["true", "false"])
+            .optional()
+            .transform((v) => (v === undefined ? undefined : v === "true"))
+            .openapi({ description: "邮件提醒的总开关" }),
+          seen_within: z.coerce
+            .number()
+            .int()
+            .min(1)
+            .optional()
+            .openapi({ description: "最近 N 天内访问过" }),
+          unseen_for: z.coerce
+            .number()
+            .int()
+            .min(1)
+            .optional()
+            .openapi({ description: "N 天以上没访问，包括从没访问过的" }),
+          sort: z.enum(MEMBER_SORTS).default("created_at"),
+          order: z.enum(["asc", "desc"]).default("desc"),
+          page: z.coerce.number().int().min(1).default(1),
         }),
       },
       responses: {
@@ -1002,16 +1026,22 @@ export const usersRoutes = createRouter()
                     level: z.number(),
                     level_locked: z.boolean(),
                     member_status: z.string(),
-                    activated: z.boolean(),
                     restriction: z
                       .object({ type: z.string(), until: z.number().nullable() })
                       .nullable(),
+                    notify_email: z.boolean(),
+                    created_at: z.number(),
+                    activated_at: z.number().nullable(),
                     last_seen_at: z.number().nullable(),
                     thread_count: z.number(),
                     post_count: z.number(),
+                    like_received: z.number(),
+                    people_reached: z.number(),
+                    days_visited: z.number(),
                   }),
                 ),
-                next_cursor: z.string().nullable(),
+                total: z.number(),
+                pages: z.number(),
               }),
             },
           },
@@ -1021,18 +1051,20 @@ export const usersRoutes = createRouter()
     }),
     async (c) => {
       authorize(c, "moderate");
-      const page = await listMembers(c.req.valid("query"));
+      const { items, total, pages } = await listMembers(c.req.valid("query"));
       return c.json(
         {
-          items: page.items.map(
-            ({ activated_at, restriction, restricted_until, last_seen_at, ...m }) => ({
+          items: items.map(
+            ({ restriction, restricted_until, created_at, activated_at, last_seen_at, ...m }) => ({
               ...m,
-              activated: activated_at !== null,
               restriction: restrictionJson(restrictionOf(restriction, restricted_until)),
+              created_at: unix(created_at),
+              activated_at: activated_at && unix(activated_at),
               last_seen_at: last_seen_at && unix(last_seen_at),
             }),
           ),
-          next_cursor: page.next_cursor,
+          total,
+          pages,
         },
         200,
       );
