@@ -370,6 +370,8 @@ describe("提问在论坛上的新回答", () => {
       source: { chat_id: GROUP, message_id: from.message_ids[0] },
       count: 2,
     });
+    expect(item.thread.created_at).toBeGreaterThanOrEqual(since);
+    expect(item.thread.created_at).toBeLessThanOrEqual(justNow() + 2);
     expect(item.url).toMatch(new RegExp(`/t/${threadId}\\?floor=${first}$`));
     expect(await answers(threadId, since, since + 1)).toEqual([]);
 
