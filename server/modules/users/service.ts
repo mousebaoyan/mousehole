@@ -25,6 +25,7 @@ import {
   FRAME_LOOKS,
   frameMoves,
   FRAMES,
+  MOVING_AVATAR_MAX,
   movingLook,
   reaches,
   SHOWN_BADGES,
@@ -1273,7 +1274,7 @@ async function fetchAvatar(qq: number) {
   const data = await readCapped(res.body, MAX_AVATAR, () => {
     throw new Error("QQ avatar too large");
   });
-  return processAvatar(data);
+  return (await processAvatar(data, false)).file;
 }
 
 async function modifiedAt(path: string) {
@@ -1305,8 +1306,19 @@ async function saveAvatar(id: number, avatar: Buffer, custom: boolean, actor?: A
   return avatarUrl(id, avatar_version);
 }
 
-export async function uploadAvatar(actor: Actor, file: Buffer) {
-  return saveAvatar(actor.userId, await processAvatar(file), true, actor);
+// Animated pictures keep moving once their moving version is bought.
+export async function uploadAvatar(actor: Actor, picture: Buffer) {
+  const bought = await db
+    .selectFrom("user_looks")
+    .select("key")
+    .where("user_id", "=", actor.userId)
+    .where("kind", "=", "avatar")
+    .executeTakeFirst();
+  const { animated, file } = await processAvatar(picture, bought !== undefined);
+  if (animated && file.length > MOVING_AVATAR_MAX) {
+    throw new AppError(400, "avatar_too_large", "动图压缩后超过 200KB，请换一张小一点或短一点的");
+  }
+  return saveAvatar(actor.userId, file, true, actor);
 }
 
 // Back to the QQ avatar, fetched right away so the page shows it.

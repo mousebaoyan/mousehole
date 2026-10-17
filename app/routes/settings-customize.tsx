@@ -514,7 +514,7 @@ type Buy = (look: Look, price: number, what: string) => void;
 
 // Disabled until the look is unlocked and there are coins enough; the balance is shown above the
 // looks.
-function BuyButton({
+export function BuyButton({
   look,
   what,
   price,
@@ -884,6 +884,18 @@ function FrameField({
 
 type Settings = Exclude<Awaited<ReturnType<typeof settingsLoader>>, Response>["settings"];
 
+// Asks first; false when they think better of it or it fails, which a toast says.
+export async function buyLook(look: Look, price: number, what: string) {
+  const choice = await chooseDialog(`使用 ${price} 鼠币兑换${what}？兑换后永久有效。`, [
+    { value: "", label: "取消", variant: "ghost" },
+    { value: "buy", label: "兑换", variant: "default" },
+  ]);
+  if (choice !== "buy") return false;
+  const res = await browserApi.me.looks.$post({ json: look });
+  if (!res.ok) toast((await res.json()).error.message);
+  return res.ok;
+}
+
 // The section itself: the looks, and the preview of them beside, sharing what is tried on. A
 // moving look bought is worn once saved, as any other change here; it is the one picked.
 export function Customize({
@@ -901,16 +913,7 @@ export function Customize({
   const { revalidate } = useRevalidator();
 
   async function buy(look: Look, price: number, what: string) {
-    const choice = await chooseDialog(`使用 ${price} 鼠币兑换${what}？兑换后永久有效。`, [
-      { value: "", label: "取消", variant: "ghost" },
-      { value: "buy", label: "兑换", variant: "default" },
-    ]);
-    if (choice !== "buy") return;
-    const res = await browserApi.me.looks.$post({ json: look });
-    if (!res.ok) {
-      toast((await res.json()).error.message);
-      return;
-    }
+    if (!(await buyLook(look, price, what))) return;
     setTryOn(null);
     const worn = look.kind === "frame" ? settings.frame : settings.background;
     toast(

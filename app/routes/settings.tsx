@@ -20,9 +20,15 @@ import {
   NOTIFICATION_TYPES,
 } from "../../server/modules/notifications/types.ts";
 import { BOT_NAME, TIER_NAMES } from "../../server/platform/site.ts";
-import { Customize, DEFAULT_STATUS_EMOJI } from "./settings-customize.tsx";
+import { BuyButton, buyLook, Customize, DEFAULT_STATUS_EMOJI } from "./settings-customize.tsx";
 import { endOfDay, unixNow } from "~/time";
-import { BACKGROUNDS, FRAMES, THEMES } from "../../server/modules/users/customization.ts";
+import {
+  BACKGROUNDS,
+  FRAMES,
+  MOVING_AVATAR_PRICE,
+  THEMES,
+  type Look,
+} from "../../server/modules/users/customization.ts";
 
 export function meta() {
   return [{ title: pageTitle("设置") }];
@@ -160,7 +166,11 @@ export default function Settings({ loaderData, actionData }: Route.ComponentProp
         <SettingsForm result={actionData ?? undefined}>
           <Section {...SECTIONS.profile}>
             <div className="flex flex-col gap-4">
-              <AvatarField custom={settings.avatar_custom} />
+              <AvatarField
+                custom={settings.avatar_custom}
+                moving={settings.owned.avatar}
+                coins={settings.coins}
+              />
               <Field label="名字" hint="不填时使用 QQ 群名片">
                 <Input
                   name="custom_name"
@@ -382,8 +392,16 @@ function Device({ session: s }: { session: Session }) {
 }
 
 // The picture goes straight to /api/v1, like images in posts; the page then loads again, and the
-// header shows the new avatar too.
-function AvatarField({ custom }: { custom: boolean }) {
+// header shows the new avatar too. Animated ones keep moving once bought (design §8.16).
+function AvatarField({
+  custom,
+  moving,
+  coins,
+}: {
+  custom: boolean;
+  moving: boolean;
+  coins: number;
+}) {
   const me = useMe();
   const { revalidate } = useRevalidator();
   const [uploading, setUploading] = useState(false);
@@ -402,40 +420,63 @@ function AvatarField({ custom }: { custom: boolean }) {
     setUploading(false);
   }
 
+  async function buy(look: Look, price: number, what: string) {
+    if (!(await buyLook(look, price, what))) return;
+    toast("兑换成功，现在可以上传动图");
+    await revalidate();
+  }
+
   return (
     <div className="flex items-center gap-4">
-      <UserAvatar user={me} className="size-16 text-lg" />
-      <div className="flex flex-wrap items-center gap-2">
-        <label
-          className={buttonVariants({
-            variant: "outline",
-            size: "sm",
-            className: "cursor-pointer has-disabled:pointer-events-none has-disabled:opacity-50",
-          })}
-        >
-          {uploading ? "上传中…" : "上传头像"}
-          <input
-            type="file"
-            accept="image/*"
-            disabled={uploading}
-            onChange={(e) => {
-              const file = e.target.files?.[0];
-              e.target.value = "";
-              if (file) void upload(file);
-            }}
-            className="sr-only"
-          />
-        </label>
-        {custom && (
-          <Button
-            variant="ghost"
-            size="sm"
-            disabled={revert.state !== "idle"}
-            onClick={() => void revert.submit({ intent: "qq-avatar" }, { method: "post" })}
+      <UserAvatar user={me} className="size-16 shrink-0 text-lg" />
+      <div className="flex flex-col gap-1.5">
+        <div className="flex flex-wrap items-center gap-2">
+          <label
+            className={buttonVariants({
+              variant: "outline",
+              size: "sm",
+              className: "cursor-pointer has-disabled:pointer-events-none has-disabled:opacity-50",
+            })}
           >
-            改回 QQ 头像
-          </Button>
-        )}
+            {uploading ? "上传中…" : "上传头像"}
+            <input
+              type="file"
+              accept="image/*"
+              disabled={uploading}
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                e.target.value = "";
+                if (file) void upload(file);
+              }}
+              className="sr-only"
+            />
+          </label>
+          {!moving && (
+            <BuyButton
+              look={{ kind: "avatar", key: "custom" }}
+              what="动态头像"
+              price={MOVING_AVATAR_PRICE}
+              coins={coins}
+              locked={false}
+              onBuy={buy}
+            >
+              兑换动图
+            </BuyButton>
+          )}
+          {custom && (
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={revert.state !== "idle"}
+              onClick={() => void revert.submit({ intent: "qq-avatar" }, { method: "post" })}
+            >
+              改回 QQ 头像
+            </Button>
+          )}
+        </div>
+        <span className="text-meta text-muted-foreground">
+          {moving ? "支持动图" : "动图仅显示第一帧"}
+        </span>
       </div>
     </div>
   );
