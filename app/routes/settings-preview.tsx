@@ -221,7 +221,7 @@ function Strip({ user }: { user: FullProfile }) {
           <span className="absolute inset-0 bg-linear-to-r from-popover from-30% to-popover/40" />
         </>
       )}
-      <UserAvatar user={user} className="relative size-10" frame="live" />
+      <UserAvatar user={user} className="relative size-10" frame />
       <span className="relative min-w-0 flex-1">
         <span className="block truncate text-sm font-semibold">{user.display_name}</span>
         {user.user_status && (
@@ -260,7 +260,7 @@ function PageHead({ user }: { user: FullProfile }) {
         <UserAvatar
           user={user}
           className={cn("size-12 text-lg", user.background && "ring-3 ring-card")}
-          frame="live"
+          frame
         />
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1">

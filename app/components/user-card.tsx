@@ -130,7 +130,7 @@ function PersonCard({
         aria-expanded={open}
         aria-label={`${user.display_name} 的资料卡`}
         onClick={() => setOpen(!open)}
-        className={cn("group/card cursor-pointer", className)}
+        className={cn("cursor-pointer", className)}
       >
         {children}
       </button>
@@ -185,7 +185,7 @@ function CardBody({ profile }: { profile: Profile }) {
   return (
     <>
       <div className="flex items-center gap-3">
-        <UserAvatar user={profile} className="size-14 text-xl" frame="live" />
+        <UserAvatar user={profile} className="size-14 text-xl" frame />
         <p className="min-w-0 truncate font-semibold">{profile.display_name}</p>
       </div>
       <p className="mt-3 text-meta text-muted-foreground">TA 的资料和发言仅成员可见</p>
@@ -225,7 +225,7 @@ export function FullCard({ profile }: { profile: FullProfile }) {
         <UserAvatar
           user={profile}
           className={cn("size-14 text-xl", profile.background && "ring-3 ring-popover")}
-          frame="live"
+          frame
         />
         <div className="min-w-0 self-end">
           <p className="truncate font-semibold">{profile.display_name}</p>

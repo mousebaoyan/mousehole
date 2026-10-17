@@ -157,7 +157,7 @@ export function PostCard({
               user={author}
               thread={threadId}
               className="size-10 shrink-0 max-sm:size-9"
-              frame="still"
+              frame
             />
             <span className="truncate text-body font-semibold">{author.display_name}</span>
           </UserCard>

@@ -863,10 +863,7 @@ function FrameField({
             <span className="absolute inset-0 flex items-center justify-center">
               <span className="relative size-[52%]">
                 <UserAvatar user={me} className="size-full" />
-                <AvatarFrame
-                  frame={{ key, moving: frameMoves(key, owned.includes(key)) }}
-                  still={false}
-                />
+                <AvatarFrame frame={{ key, moving: frameMoves(key, owned.includes(key)) }} />
               </span>
             </span>
           </Tile>
