@@ -1,8 +1,17 @@
 import { Link, redirect } from "react-router";
 import { cn } from "cn";
 import { apiContext } from "../api.server.ts";
-import { Sparkles } from "~/components/icons";
-import { buttonVariants } from "~/components/ui/button";
+import type { ReactNode } from "react";
+import {
+  CalendarCheck,
+  ChevronRight,
+  CircleCheck,
+  CircleQuestionMark,
+  Coins as CoinsIcon,
+  Heart,
+  Sparkles,
+  type LucideIcon,
+} from "~/components/icons";
 import { UserAvatar } from "~/components/user-avatar";
 import { UserBadges } from "~/components/user-badges";
 import { pageTitle } from "~/share-meta";
@@ -63,35 +72,55 @@ export default function Coins({ loaderData }: Route.ComponentProps) {
       <header className="px-1">
         <h1 className="text-xl font-semibold">鼠币</h1>
         <p className="mt-1 text-meta text-muted-foreground">
-          被别人认可就能攒鼠币，用来兑换装扮的动态版。鼠币只在自己账上，不能转给别人。
+          发言获得认可即可积累鼠币，用于兑换装扮的动态版和发布问答帖。鼠币不可转赠。
         </p>
       </header>
-      <div className="grid gap-4 sm:grid-cols-[14rem_minmax(0,1fr)]">
-        <div className="flex flex-col items-start rounded-2xl border bg-card p-5">
-          <p className="text-meta text-muted-foreground">我的鼠币</p>
-          <p className="mt-1 text-3xl font-semibold tabular-nums">{ledger.coins}</p>
-          <Link
-            to="/settings#customize"
-            className={buttonVariants({ variant: "outline", size: "sm", className: "mt-auto" })}
-          >
-            <Sparkles /> 兑换动态版
-          </Link>
+      <div className="rounded-2xl border bg-card p-5">
+        <div className="flex items-center gap-3">
+          <span className="flex size-11 items-center justify-center rounded-xl bg-primary/10 text-primary">
+            <CoinsIcon className="size-5.5" />
+          </span>
+          <div>
+            <p className="text-meta text-muted-foreground">我的鼠币</p>
+            <p className="text-2xl leading-tight font-semibold tabular-nums">{ledger.coins}</p>
+          </div>
         </div>
-        <div className="rounded-2xl border bg-card p-5 text-sm">
-          <h2 className="font-medium">怎么挣</h2>
-          <ul className="mt-2 flex flex-col gap-1.5">
-            <Rule amount={`+${CHECK_IN}`}>签到：每天打开论坛，或者在群里发过言</Rule>
-            <Rule amount={`每人 +${PER_LIKER}`}>获赞：一个人一天只算一次</Rule>
-            <Rule amount={`+${ACCEPTED}`}>回复被采纳：每天最多一次</Rule>
-          </ul>
-          <p className="mt-2 text-meta text-muted-foreground">
-            获赞和采纳在第二天凌晨结算，匿名的、删掉的楼层不算；发帖和回复不给鼠币。
-          </p>
-          <h2 className="mt-4 font-medium">怎么花</h2>
-          <ul className="mt-2 flex flex-col gap-1.5">
-            <Rule amount="">兑换背景和头像框的动态版，在设置的个性化里</Rule>
-            <Rule amount={`−${QUESTION_COST}`}>发问答帖</Rule>
-          </ul>
+        <div className="mt-4 grid gap-x-8 gap-y-4 border-t pt-4 sm:grid-cols-2">
+          <div>
+            <h2 className="text-meta text-muted-foreground">获得</h2>
+            <ul className="mt-1">
+              <Rule icon={CalendarCheck} title="每日签到" hint="访问论坛或在群里发言">
+                +{CHECK_IN}
+              </Rule>
+              <Rule icon={Heart} title="楼层获赞" hint="每位成员每天计一次">
+                +{PER_LIKER}/人
+              </Rule>
+              <Rule icon={CircleCheck} title="回复被采纳" hint="每天最多计一次">
+                +{ACCEPTED}
+              </Rule>
+            </ul>
+            <p className="mt-1 text-meta text-muted-foreground">
+              获赞和采纳次日到账，匿名楼层和已删除的楼层不计入。
+            </p>
+          </div>
+          <div>
+            <h2 className="text-meta text-muted-foreground">使用</h2>
+            <ul className="mt-1">
+              <Rule icon={CircleQuestionMark} title="发布问答帖" hint="提问并采纳最佳回答">
+                −{QUESTION_COST}
+              </Rule>
+              <li>
+                <Link
+                  to="/settings#customize"
+                  className="-mx-2 flex items-center gap-3 rounded-xl px-2 py-2 hover:bg-accent/60"
+                >
+                  <RuleIcon icon={Sparkles} />
+                  <RuleText title="兑换动态版" hint="前往个性化设置兑换背景和头像框" />
+                  <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
+                </Link>
+              </li>
+            </ul>
+          </div>
         </div>
       </div>
       <Leaders period={period} leaders={leaders} />
@@ -104,11 +133,39 @@ export default function Coins({ loaderData }: Route.ComponentProps) {
   );
 }
 
-function Rule({ amount, children }: { amount: string; children: string }) {
+function RuleIcon({ icon: Icon }: { icon: LucideIcon }) {
   return (
-    <li className="flex items-baseline gap-3">
-      <span className="min-w-0 flex-1">{children}</span>
-      <span className="shrink-0 font-semibold text-primary tabular-nums">{amount}</span>
+    <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-secondary text-muted-foreground">
+      <Icon className="size-4" />
+    </span>
+  );
+}
+
+function RuleText({ title, hint }: { title: string; hint: string }) {
+  return (
+    <span className="min-w-0 flex-1">
+      <span className="block text-sm font-medium">{title}</span>
+      <span className="block text-meta text-muted-foreground">{hint}</span>
+    </span>
+  );
+}
+
+function Rule({
+  icon,
+  title,
+  hint,
+  children,
+}: {
+  icon: LucideIcon;
+  title: string;
+  hint: string;
+  children: ReactNode;
+}) {
+  return (
+    <li className="flex items-center gap-3 py-2">
+      <RuleIcon icon={icon} />
+      <RuleText title={title} hint={hint} />
+      <span className="shrink-0 font-semibold text-primary tabular-nums">{children}</span>
     </li>
   );
 }
@@ -135,11 +192,11 @@ function Leaders({ period, leaders }: { period: string; leaders: Loaded["leaders
           ))}
         </nav>
       </div>
-      <p className="mt-1 text-meta text-muted-foreground">按这段时间挣到的鼠币排，花掉的不扣</p>
+      <p className="mt-1 text-meta text-muted-foreground">按期间内获得的鼠币排名</p>
       {leaders === null ? (
-        <p className="py-8 text-center text-sm text-muted-foreground">排行榜只给成员看</p>
+        <p className="py-8 text-center text-sm text-muted-foreground">排行榜仅对成员开放</p>
       ) : leaders.length === 0 ? (
-        <p className="py-8 text-center text-sm text-muted-foreground">还没有人挣到鼠币</p>
+        <p className="py-8 text-center text-sm text-muted-foreground">暂无成员获得鼠币</p>
       ) : (
         <ol className="mt-2 -mx-2">
           {leaders.map((l, i) => (
@@ -190,7 +247,7 @@ function what(e: Entry) {
     case "check_in":
       return "签到";
     case "liked":
-      return `获赞，${e.amount} 人`;
+      return `获赞（${e.amount} 人）`;
     case "accepted":
       return "回复被采纳";
     case "question":
@@ -213,9 +270,9 @@ function Ledger({ items, next, year }: { items: Entry[]; next: string | null; ye
   return (
     <div className="rounded-2xl border bg-card p-5">
       <h2 className="font-semibold">明细</h2>
-      <p className="mt-1 text-meta text-muted-foreground">只有你自己看得到</p>
+      <p className="mt-1 text-meta text-muted-foreground">仅自己可见</p>
       {items.length === 0 ? (
-        <p className="py-8 text-center text-sm text-muted-foreground">还没有记录</p>
+        <p className="py-8 text-center text-sm text-muted-foreground">暂无记录</p>
       ) : (
         <ul className="mt-2 divide-y">
           {items.map((e, i) => (
@@ -241,7 +298,7 @@ function Ledger({ items, next, year }: { items: Entry[]; next: string | null; ye
           to={next}
           className="mt-2 block text-center text-meta text-muted-foreground hover:text-foreground"
         >
-          更早的
+          更早的记录
         </Link>
       )}
     </div>
