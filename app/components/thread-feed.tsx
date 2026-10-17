@@ -8,7 +8,8 @@ import { ThreadList, ThreadRows } from "~/components/thread-list";
 import { useBoards, useTags, type Board } from "~/forum";
 import { useNearView } from "~/near-view";
 
-// New and unread are the reader's own (design §8.9): only for someone signed in, with how many.
+// New and unread are the reader's own (design §8.9): only for someone signed in, with how many;
+// so is how many are unsolved.
 const VIEWS = [
   { view: "latest", label: "最新", own: false },
   { view: "new", label: "新", own: true },
@@ -56,7 +57,7 @@ const KINDS = [
 
 // The tags as filter choices, grouped by kind; the lists and search both offer them.
 export function tagChoices(
-  tags: { id: number; name: string; kind: string }[],
+  tags: { id: number; name: string; kind: string; thread_count: number }[],
   chosen: string | null,
   to: (name: string) => string,
 ) {
@@ -68,6 +69,7 @@ export function tagChoices(
         label: `#${t.name}`,
         chosen: t.name === chosen,
         group: k.label,
+        count: t.thread_count,
       })),
   );
 }
@@ -82,7 +84,7 @@ function listUrl(board: string | null, tag: string | null, view: ThreadView) {
 
 type Page = { threads: ThreadItem[]; next_cursor: string | null; now: number };
 
-export type Counts = { new: number; unread: number };
+export type Counts = { new: number; unread: number; unsolved: number };
 
 // The board and tag filters stack, and both keep the current view. `counts` is null for guests.
 export function ThreadFeed({
@@ -116,6 +118,7 @@ export function ThreadFeed({
                 label: b.name,
                 color: b.color,
                 chosen: b.slug === slug,
+                count: b.thread_count,
               })),
             ]}
           />
@@ -135,7 +138,7 @@ export function ThreadFeed({
           className="-mx-1 flex overflow-x-auto px-1 [scrollbar-width:none] max-sm:w-full"
         >
           {VIEWS.filter((v) => !v.own || counts).map((v) => {
-            const count = v.view === "new" || v.view === "unread" ? counts?.[v.view] : undefined;
+            const count = v.view === "latest" || v.view === "hot" ? undefined : counts?.[v.view];
             return (
               <Link
                 key={v.view}
@@ -148,7 +151,14 @@ export function ThreadFeed({
               >
                 {v.label}
                 {count !== undefined && count > 0 && (
-                  <span className="ml-1 text-primary tabular-nums">{count}</span>
+                  <span
+                    className={cn(
+                      "ml-1 tabular-nums",
+                      v.own ? "text-primary" : "text-muted-foreground",
+                    )}
+                  >
+                    {count}
+                  </span>
                 )}
               </Link>
             );

@@ -180,6 +180,16 @@ export async function getBadge(id: number, viewerId: number | null, reach: numbe
   };
 }
 
+// How many different badges someone has.
+export async function countUserBadges(userId: number) {
+  const row = await db
+    .selectFrom("user_badges")
+    .select(sql<number>`count(DISTINCT badge_id)::integer`.as("badges"))
+    .where("user_id", "=", userId)
+    .executeTakeFirstOrThrow();
+  return row.badges;
+}
+
 // Floors a badge earned more than once lists, latest first.
 const FLOORS_SHOWN = 10;
 

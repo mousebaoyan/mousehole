@@ -205,6 +205,7 @@
 | 回复某一条的楼层 | `posts_reply_to` |
 | 列表里每个帖子的参与者 | `posts_floor` |
 | 用户的帖子和回复 | `threads_author`、`posts_author` |
+| 个人主页上被采纳的回答数 | `posts_accepted`（`author_id`，只含被采纳、没删的） |
 | 全量同步时取出一个群的成员 | `group_members` 主键 |
 | 重算一个人的成员资格 | `group_members_user` |
 | 未读通知数 | `notifications_unread` |

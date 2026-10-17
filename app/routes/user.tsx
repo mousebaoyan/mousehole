@@ -257,6 +257,12 @@ function Profile({
     { label: "读过的帖子", value: stats.threads_read },
     { label: "读过的回复", value: stats.posts_read },
   ];
+  const tabCounts: Partial<Record<Tab, number>> = {
+    threads: stats.threads,
+    posts: stats.posts,
+    solved: stats.solved,
+    badges: stats.badges,
+  };
 
   return (
     <div className={cn("flex flex-col gap-6", user.theme && `theme-${user.theme}`)}>
@@ -415,6 +421,9 @@ function Profile({
               )}
             >
               {t.label}
+              {(tabCounts[t.tab] ?? 0) > 0 && (
+                <span className="ml-1 text-muted-foreground tabular-nums">{tabCounts[t.tab]}</span>
+              )}
             </Link>
           ))}
           <Link

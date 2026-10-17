@@ -181,7 +181,7 @@ describe("新、未读和已读", () => {
     expect(await list("new")).toEqual([untouched]);
     expect(await list("unread")).toEqual([replied, partly]);
     expect(await list("read")).toEqual([partly, replied]);
-    expect(await counts()).toEqual({ new: 1, unread: 2 });
+    expect(await counts()).toEqual({ new: 1, unread: 2, unsolved: 0 });
 
     await report(replied, [[2, 2]], 5);
     await db
@@ -189,8 +189,26 @@ describe("新、未读和已读", () => {
       .set({ created_at: sql<Date>`now() - interval '8 days'` })
       .where("id", "=", untouched)
       .execute();
-    expect(await counts()).toEqual({ new: 0, unread: 1 });
+    expect(await counts()).toEqual({ new: 0, unread: 1, unsolved: 0 });
     expect(await list("read")).toEqual([replied, partly]);
+  });
+
+  test("侧栏的数量只算看得到的帖子", async () => {
+    const who = as(await login((await createUser()).id));
+    const shown = await newThread(0);
+    const hidden = await newThread(0);
+    for (const thread of [shown, hidden]) {
+      await report(thread, [[1, 1]], 5, who);
+      await api.threads[":id"].bookmark.$put({ param: { id: String(thread) } }, who);
+      await api.threads[":id"].posts.$post(
+        { param: { id: String(thread) }, json: { content: { markdown: "回复" } } },
+        who,
+      );
+    }
+    await db.updateTable("threads").set({ status: "hidden" }).where("id", "=", hidden).execute();
+    const me = await api.me.$get({}, who);
+    if (!me.ok) throw new Error(`status ${me.status}`);
+    expect((await me.json()).counts).toEqual({ posted: 1, bookmarked: 1, read: 1, badges: 0 });
   });
 
   test("要登录", async () => {
