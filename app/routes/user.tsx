@@ -509,7 +509,10 @@ function Showcase({ html }: { html: string }) {
         ref={box}
         className={cn(!open && "max-h-64 overflow-hidden", long && !open && "mask-b-from-70%")}
       >
-        <PostBody html={html} className={cn(PROSE, "mt-0 [&>:first-child]:mt-0!")} />
+        <PostBody
+          html={html}
+          className={cn(PROSE, "mt-0 [&>:first-child]:mt-0! [&>:last-child]:mb-0!")}
+        />
       </div>
       {long && (
         <button
