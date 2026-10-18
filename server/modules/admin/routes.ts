@@ -21,6 +21,7 @@ import { databaseBytes, updateSettings } from "./service.ts";
 const SiteSettings = z.object({
   banner: z.string().trim().max(200).openapi({ description: "公告横幅，空字符串不显示" }),
   qq_public: z.boolean().openapi({ description: "访客也能看到 QQ 号" }),
+  summaries: z.boolean().openapi({ description: "显示 AI 总结，并给插件派写总结的活" }),
 });
 
 const LoginSettings = z.object({

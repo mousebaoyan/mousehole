@@ -25,6 +25,7 @@ export async function action({ request, context }: Route.ActionArgs) {
       site: {
         banner: field("banner"),
         qq_public: on("qq_public"),
+        summaries: on("summaries"),
       },
       login: {
         code: on("code"),
@@ -52,12 +53,20 @@ export default function Site({
           <Field label="公告横幅" hint="显示在每个论坛页面的顶部，留空则不显示">
             <Input name="banner" defaultValue={site.banner} maxLength={200} />
           </Field>
-          <Check
-            name="qq_public"
-            label="访客也能看到 QQ 号"
-            hint="默认仅成员和 bot 可见，开启后个人资料中的 QQ 号对所有人公开"
-            checked={site.qq_public}
-          />
+          <div>
+            <Check
+              name="qq_public"
+              label="访客也能看到 QQ 号"
+              hint="默认仅成员和 bot 可见，开启后个人资料中的 QQ 号对所有人公开"
+              checked={site.qq_public}
+            />
+            <Check
+              name="summaries"
+              label="AI 总结"
+              hint={`回复较多的帖子在标题下面显示 AI 整理的总结，由${BOT_NAME} 生成`}
+              checked={site.summaries}
+            />
+          </div>
         </div>
       </Section>
 

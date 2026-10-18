@@ -37,6 +37,8 @@ import {
   ThreadSchema,
 } from "./schemas.ts";
 import { threadSuggestions } from "./suggestions.ts";
+import { SummarySchema, summaryJson } from "../summaries/schemas.ts";
+import { threadSummary } from "../summaries/service.ts";
 import { assertRelationsShown, findUserId, relationsShown, userBriefs } from "../users/service.ts";
 import {
   countTabs,
@@ -133,6 +135,13 @@ const ThreadDetailSchema = ThreadSchema.extend({
     .array(SuggestionSchema)
     .optional()
     .openapi({ description: "待处理的修改建议，先提的在前；只给楼主和版主" }),
+  summary: SummarySchema.nullable().optional().openapi({
+    description: "AI 总结；打开了 AI 总结时才有，没有总结、被关闭或者访客不能看时为 null",
+  }),
+  summary_disabled: z
+    .boolean()
+    .optional()
+    .openapi({ description: "版主关闭了这个帖子的总结；打开了 AI 总结时只给版主" }),
 }).openapi("ThreadDetail");
 
 const PostSchema = z
@@ -690,10 +699,15 @@ export const threadsRoutes = createRouter()
       if (!bot && counted !== null) recordView(id, counted);
       // Its author and moderators decide on changes suggested for it.
       const decides = viewer !== null && (reader.staff || viewer.id === thread.author_id);
+      const summarized = await threadSummary(id, reader);
       return c.json(
         {
           ...threadDetailJson(thread, viewer !== null),
           ...(decides && { suggestions: (await threadSuggestions(id)).map(suggestionJson) }),
+          ...(summarized && {
+            summary: summarized.summary && summaryJson(summarized.summary),
+            ...(reader.staff && { summary_disabled: summarized.disabled }),
+          }),
         },
         200,
       );

@@ -15,6 +15,7 @@ import {
   Pin,
   PinOff,
   Shield,
+  Sparkle,
   Sparkles,
   VenetianMask,
   X,
@@ -32,6 +33,7 @@ import { ago } from "~/time";
 import type { ThreadDetail } from "~/api-types";
 import { ReviewItems } from "./review-items.tsx";
 import { SuggestionChanges } from "./suggestion-changes.tsx";
+import { ThreadSummary } from "./thread-summary.tsx";
 
 // The title and what is known about the thread. Its author can retitle and retag it; moderators
 // also pin, feature, lock, move and review it. `power` is what the reader's level gives them over
@@ -237,6 +239,18 @@ export function ThreadHeader({
                     >
                       <ArrowRightLeft /> 移动到…
                     </button>
+                    {thread.summary_disabled !== undefined && (
+                      <button
+                        type="button"
+                        className={menuItem}
+                        onClick={() => {
+                          close();
+                          submit("summary", { disabled: String(!thread.summary_disabled) });
+                        }}
+                      >
+                        <Sparkle /> {thread.summary_disabled ? "恢复 AI 总结" : "关闭 AI 总结"}
+                      </button>
+                    )}
                     <ReviewItems status={thread.status} close={close} onReview={change} />
                     {reveal && (
                       <button
@@ -297,6 +311,7 @@ export function ThreadHeader({
           {save.data.message}
         </p>
       )}
+      {thread.summary && <ThreadSummary summary={thread.summary} />}
       {thread.suggestions && thread.suggestions.length > 0 && (
         <section aria-labelledby="suggestions" className="mt-4 rounded-2xl border bg-card">
           <h2

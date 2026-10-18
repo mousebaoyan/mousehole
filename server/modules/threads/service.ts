@@ -27,6 +27,7 @@ import {
 } from "../notifications/service.ts";
 import { assertNotLinked, findLink, linkSource, postedAt, type Source } from "../qq/service.ts";
 import { indexPost, unindexPost } from "../search/service.ts";
+import { dropCitingSummary } from "../summaries/service.ts";
 import { fetchUpload, linkUploads, showImages, uploadName } from "../uploads/service.ts";
 import {
   countLikes,
@@ -1595,6 +1596,7 @@ async function withdrawPost(
     .innerJoin("threads", "threads.id", "posts.thread_id")
     .select([
       "posts.thread_id",
+      "posts.floor",
       "posts.author_id",
       "posts.reply_to_id",
       "posts.anonymous",
@@ -1604,6 +1606,7 @@ async function withdrawPost(
     .where("posts.id", "=", postId)
     .executeTakeFirstOrThrow();
   await countReply(trx, post, -1);
+  await dropCitingSummary(trx, post.thread_id, post.floor);
   await postDeleted(trx, postId, byId, reason);
 }
 

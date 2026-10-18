@@ -35,6 +35,9 @@ const SiteSchema = z.object({
   banner: z.string().default(""),
   // QQ numbers show to members and bots; this shows them to guests as well.
   qq_public: z.boolean().default(false),
+  // AI summaries of busy threads show on their pages, and the bot plugin is given threads to
+  // write them for (design §8.18).
+  summaries: z.boolean().default(false),
 });
 
 const BotSchema = z.object({

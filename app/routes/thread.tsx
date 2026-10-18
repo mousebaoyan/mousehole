@@ -131,6 +131,14 @@ export async function action({ params, request, context }: Route.ActionArgs) {
       return { ok: true as const, floor, message: "修改建议已提交，楼主或版主同意后生效" };
     return { ok: false as const, message: (await res.json()).error.message };
   }
+  if (text("intent") === "summary") {
+    const res = await api.threads[":id"].summary.$patch({
+      param: thread,
+      json: { disabled: text("disabled") === "true" },
+    });
+    if (res.ok) return { ok: true as const, floor };
+    return { ok: false as const, message: (await res.json()).error.message };
+  }
   if (text("intent") === "decide-suggestion") {
     const res = await api.suggestions[":id"].$patch({
       param: { id: text("suggestion_id") },
