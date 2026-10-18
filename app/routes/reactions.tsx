@@ -118,7 +118,7 @@ export function ReactionSummary({
               </button>
             ))}
           </div>
-          <ul className="max-h-72 overflow-y-auto py-1">
+          <ul className="max-h-72 overflow-y-auto overscroll-contain py-1">
             {!list.data && (
               <li className="px-3 py-2 animate-pulse text-muted-foreground">加载中…</li>
             )}

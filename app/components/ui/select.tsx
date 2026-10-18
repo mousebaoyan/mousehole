@@ -166,7 +166,7 @@ export function Select({
         <div
           ref={list}
           className={cn(
-            "absolute z-50 flex max-h-72 min-w-full flex-col gap-0.5 overflow-y-auto rounded-xl border bg-popover p-1 text-sm text-popover-foreground shadow-lg animate-in fade-in zoom-in-95",
+            "absolute z-50 flex max-h-72 min-w-full flex-col gap-0.5 overflow-y-auto overscroll-contain rounded-xl border bg-popover p-1 text-sm text-popover-foreground shadow-lg animate-in fade-in zoom-in-95",
             up ? "bottom-full mb-1" : "top-full mt-1",
             edge === "start" ? "left-0" : "right-0",
           )}

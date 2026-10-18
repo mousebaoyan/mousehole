@@ -7,7 +7,7 @@ import {
   type ReactNode,
   type RefObject,
 } from "react";
-import { createPortal, flushSync } from "react-dom";
+import { flushSync } from "react-dom";
 import { cn } from "cn";
 import { Input } from "~/components/ui/input";
 
@@ -137,7 +137,7 @@ export function Dropdown({
           ref={panel}
           id={id}
           className={cn(
-            "absolute top-full z-50 mt-2 flex max-h-[min(24rem,70svh)] w-48 flex-col gap-0.5 overflow-y-auto rounded-xl border bg-popover p-1 text-sm text-popover-foreground shadow-lg animate-in fade-in zoom-in-95",
+            "absolute top-full z-50 mt-2 flex max-h-[min(24rem,70svh)] w-48 flex-col gap-0.5 overflow-y-auto overscroll-contain rounded-xl border bg-popover p-1 text-sm text-popover-foreground shadow-lg animate-in fade-in zoom-in-95",
             edge === "start" ? "left-0" : "right-0",
           )}
         >
@@ -158,7 +158,10 @@ export function Drawer({
   children: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
-  useDismiss(open, () => setOpen(false));
+  const dialog = useRef<HTMLDialogElement>(null);
+  useEffect(() => {
+    if (open) dialog.current?.showModal();
+  }, [open]);
   return (
     <>
       <button
@@ -170,22 +173,26 @@ export function Drawer({
       >
         {trigger}
       </button>
-      {/* Portaled: the header's backdrop-filter would otherwise trap position: fixed. */}
-      {open &&
-        createPortal(
-          <div className="fixed inset-0 z-50 lg:hidden">
-            <button
-              type="button"
-              aria-label="关闭"
-              onClick={() => setOpen(false)}
-              className="absolute inset-0 bg-black/30 animate-in fade-in"
-            />
-            <div className="absolute inset-y-0 left-0 w-72 overflow-y-auto bg-background p-4 pt-6 shadow-xl animate-in slide-in-from-left">
-              {children}
-            </div>
-          </div>,
-          document.body,
-        )}
+      {/* A modal in the top layer, which the header's backdrop-filter can't trap as it would a
+          position: fixed box. Esc closes it as well. */}
+      {open && (
+        <dialog
+          ref={dialog}
+          aria-label={label}
+          onClose={() => setOpen(false)}
+          className="m-0 h-dvh max-h-none w-dvw max-w-none bg-transparent p-0 text-foreground backdrop:bg-transparent"
+        >
+          <button
+            type="button"
+            aria-label="关闭"
+            onClick={() => dialog.current?.close()}
+            className="absolute inset-0 bg-black/30 animate-in fade-in"
+          />
+          <div className="absolute inset-y-0 left-0 w-72 overflow-y-auto bg-background p-4 pt-6 shadow-xl animate-in slide-in-from-left">
+            {children}
+          </div>
+        </dialog>
+      )}
     </>
   );
 }
