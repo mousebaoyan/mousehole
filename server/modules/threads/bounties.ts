@@ -42,6 +42,8 @@ export async function startBounties() {
     .select("threads.id")
     .where("threads.bounty_at", "is", null)
     .where("threads.locked", "=", false)
+    // Its replies would be anonymous, and those earn nothing.
+    .where("threads.anonymous_replies", "=", false)
     .where("threads.created_at", "<", sql<Date>`now() - interval '1 day'`)
     .where("threads.created_at", ">", sql<Date>`now() - ${LASTS}`)
     .where((eb) =>
