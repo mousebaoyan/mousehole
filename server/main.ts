@@ -18,6 +18,7 @@ import {
 } from "./modules/notifications/service.ts";
 import { promoteActive, recheckL4 } from "./modules/levels/service.ts";
 import { indexMissingPosts } from "./modules/search/service.ts";
+import { startBounties } from "./modules/threads/bounties.ts";
 import { drawDue } from "./modules/threads/lotteries.ts";
 import { flushViews, recordView, rerenderPosts } from "./modules/threads/service.ts";
 import { clearUnusedUploads } from "./modules/uploads/service.ts";
@@ -52,6 +53,7 @@ every(5 * 60_000, "Checking badges", checkBadges);
 every(3600_000, "Raising levels", promoteActive);
 every(3600_000, "Counting people reached", recountPeopleReached);
 every(3600_000, "Sending weekly letters", () => sendWeeklyLetters());
+every(3600_000, "Starting bounties", startBounties);
 every(3600_000, "Settling coins", settleCoins);
 const DAY_MS = 24 * 3600_000;
 every(DAY_MS, "Clearing unused uploads", clearUnusedUploads);

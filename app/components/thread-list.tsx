@@ -1,7 +1,15 @@
 import type { ReactNode } from "react";
 import { Link } from "react-router";
 import { cn } from "cn";
-import { ChartBar, CircleCheck, Gift, MessageSquare, Pin, Sparkles } from "~/components/icons";
+import {
+  ChartBar,
+  CircleCheck,
+  Gift,
+  HandCoins,
+  MessageSquare,
+  Pin,
+  Sparkles,
+} from "~/components/icons";
 import type { ThreadItem } from "~/api-types";
 import { BoardBadge } from "~/components/board-badge";
 import { UserAvatar } from "~/components/user-avatar";
@@ -138,6 +146,9 @@ function ThreadRow({
             )}
             {thread.featured && (
               <Sparkles aria-label="精华" className="ml-1.5 -mt-0.5 inline size-4 text-warning" />
+            )}
+            {thread.bounty_until !== null && (
+              <HandCoins aria-label="悬赏中" className="ml-1.5 -mt-0.5 inline size-4 text-gold" />
             )}
             {fresh && (
               <span className="ml-2 inline-block size-2 rounded-full bg-primary align-middle">

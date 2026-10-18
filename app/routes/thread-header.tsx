@@ -8,6 +8,7 @@ import {
   Eye,
   EyeOff,
   FilePen,
+  HandCoins,
   Lock,
   LockOpen,
   MessageSquare,
@@ -29,11 +30,12 @@ import { Dialog } from "~/components/ui/dialog";
 import { Select } from "~/components/ui/select";
 import { toast } from "~/components/ui/toast";
 import { usePostableBoards } from "~/forum";
-import { ago } from "~/time";
+import { ago, stamp } from "~/time";
 import type { ThreadDetail } from "~/api-types";
 import { ReviewItems } from "./review-items.tsx";
 import { SuggestionChanges } from "./suggestion-changes.tsx";
 import { ThreadSummary } from "./thread-summary.tsx";
+import { BOUNTY_ANSWER, BOUNTY_REPLY } from "../../server/modules/coins/rules.ts";
 
 // The title and what is known about the thread. Its author can retitle and retag it; moderators
 // also pin, feature, lock, move and review it. `power` is what the reader's level gives them over
@@ -304,6 +306,15 @@ export function ThreadHeader({
               <EyeOff className="size-4 shrink-0" /> 已隐藏，仅作者和版主可见
             </>
           )}
+        </p>
+      )}
+      {thread.bounty_until !== null && (
+        <p className="mt-3 flex gap-2 rounded-xl bg-gold/10 px-3 py-2 text-meta">
+          <HandCoins className="mt-px size-4 shrink-0 text-gold" />
+          <span>
+            悬赏中：回复得 {BOUNTY_REPLY} 鼠币，被采纳再得 {BOUNTY_ANSWER} 鼠币 ·{" "}
+            <span className="whitespace-nowrap">{stamp(thread.bounty_until, now)} 截止</span>
+          </span>
         </p>
       )}
       {save.data && !save.data.ok && (

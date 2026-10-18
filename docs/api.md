@@ -55,10 +55,10 @@
 // last_read_floor 是自己读过的最高一楼，没打开过为 0，只在登录时返回；帖子详情里还有 read_floors，是读过的楼层区间，例如 [[1, 20], [480, 495]]，
 // 以及 bookmarked（是否收藏）和 notify_level（关注级别，见 /threads/{id}/subscription），也只在登录时返回；
 // 帖子详情里的 poll 是投票帖的投票（见下面的「投票」），lottery 是抽奖帖的抽奖（见下面的「抽奖」），其他类型为 null；
-// status：visible 公开，pending 待审核，hidden 已隐藏，后两种只有作者和版主能看到
+// status：visible 公开，pending 待审核，hidden 已隐藏，后两种只有作者和版主能看到；bounty_until 是悬赏的截止时间（总体设计 §8.19），没有悬赏或已经结束时为 null
 { "id": 42, "board": { "slug": "qa", "name": "保研问答", "color": "#e07b53" }, "kind": "question",
   "title": "rank 30% 能冲夏令营吗", "author": { … }, "posters": [ { … } ], "tags": ["夏令营"],
-  "status": "visible", "pinned": 0, "featured": false, "locked": false, "solved": false,
+  "status": "visible", "pinned": 0, "featured": false, "locked": false, "solved": false, "bounty_until": null,
   "reply_count": 5, "floor_count": 6, "view_count": 120, "like_count": 3, "last_read_floor": 4,
   "last_post_at": 1760000000, "created_at": 1759990000, "url": "https://bbs.mousebaoyan.cn/t/42" }
 
@@ -211,7 +211,7 @@ token 由站长在后台创建，只显示一次。每个 token 绑定一个 bot
 | DELETE | `/me/avatar` | 头像改回跟着 QQ，立刻拉一次 QQ 头像，返回 `{ avatar_url }`；拉取失败返回 `502 fetch_failed`，头像不变 | 成员 / `act` |
 | PUT | `/me/background` | 上传背景（总体设计 §8.16）：multipart 的 `file` 字段，格式和大小同图片上传；`card`、`profile` 是在原图（按 EXIF 转正以后）上裁的区域 `x,y,宽,高`，单位像素，`card` 是方形 1:1（资料卡和手机上的主页用），`profile` 是横版 3:1（宽屏的主页用）。返回 `{ card_url, profile_url }`。L3 以下返回 `403 cosmetic_locked`；裁的区域超出图片返回 `400 invalid_crop`；没兑换上传背景的动态版时动图只留第一帧；动图压缩后方形超过 800KB 或横版超过 1MB 返回 `400 background_too_large`；每人每小时最多 10 次 | 没被禁言的成员 / `act` |
 | POST | `/me/looks` | 用鼠币兑换动态版（总体设计 §8.16）：`{ kind, key }`，`kind` 为 `background`、`frame` 或 `avatar`，上传背景的和动态头像的 `key` 为 `custom`，兑换后可以上传动图。只是兑换，换上照常用 `PATCH /me`。返回设置，同 `GET /me/settings`。这一款没有动态版返回 `400 invalid_request`；还没够得上这一款的等级返回 `403 cosmetic_locked`；鼠币不够返回 `403 coins_insufficient`；兑换过了返回 `409 look_owned` | 成员，只能在网页上 |
-| GET | `/me/coins` | 鼠币余额和明细（总体设计 §8.17），每页 50 条，最新的在前：`{ coins, items, next_cursor }`，每条 `{ amount, reason, day, created_at, thread, look }`：`reason` 为 `check_in`、`liked`、`accepted`、`question`、`look`，`day` 是 `YYYY-MM-DD`；`thread` 是发的问答帖 `{ id, title }`，`look` 是兑换的 `{ kind, key }`，其他为 `null` | 已登录 / `read` |
+| GET | `/me/coins` | 鼠币余额和明细（总体设计 §8.17），每页 50 条，最新的在前：`{ coins, items, next_cursor }`，每条 `{ amount, reason, day, created_at, thread, look }`：`reason` 为 `check_in`、`liked`、`accepted`、`bounty`、`question`、`look`，`day` 是 `YYYY-MM-DD`；`thread` 是发的问答帖或回答的悬赏 `{ id, title }`，`look` 是兑换的 `{ kind, key }`，其他为 `null` | 已登录 / `read` |
 | GET | `/me/export` | 导出自己的全部内容，作为附件 `mousehole-{id}.json` 下载：`user`（`id`、`qq`、`display_name`、`bio`）、`posts`（发过的主楼和回复，Markdown 原文，含待审核和已隐藏的，不含删掉的；`floor` 为 1 的就是自己发的帖子）、`boosts`、`bookmarks`；每小时最多 3 次 | 已登录，只能在网页上 |
 | GET | `/me/drafts` | 自己的草稿，最近改过的在前：`thread`（回复的帖子 `{ id, title }`，发帖的为 `null`）、`title`、`excerpt`（正文前 100 个字）、`updated_at` | 已登录，只能在网页上 |
 | GET | `/me/drafts/{key}` | 一份草稿，`key` 为 `new` 是发帖的，为帖子 ID 是回复这个帖子的：`title`、`board`、`kind`、`poll`（写了一半的投票，选项可以是空的；截止时间是 `days`（选了几天后截止，发帖时从那时算起）或 `closes_at`（自定义的时间），其余字段同发帖；没有为 `null`）、`lottery`（写了一半的抽奖，奖品可以是空的；开奖时间是 `days` 或 `draws_at`，同投票；没有为 `null`）、`positioning`（写了一半的保研定位：`fields` 各项背景、`schools` 目标院校，都可以是空的；没有为 `null`）、`tags`、`author_anonymous`、`anonymous_replies`、`body`、`reply_to`（`{ id, floor, name }` 或 `null`）、`updated_at`；没有返回 `404 draft_not_found` | 已登录，只能在网页上 |
@@ -388,6 +388,7 @@ token 由站长在后台创建，只显示一次。每个 token 绑定一个 bot
 | GET | `/bot/summaries/due` | 该写 AI 总结的帖子（总体设计 §8.18），最近有动静的在前：`limit`（1–50，默认 10）。返回 `{ items: [{ thread_id, replies }] }`；后台关着 AI 总结时为空 | `read` |
 | GET | `/bot/summaries/{thread}/source` | 写总结用的内容：`thread`（`id`、`kind`、`title`、`board`（版块名）、`tags`、`positioning`：是不是保研定位帖）、`replies`（现在的回复数，推送时带回来）、`posts`：公开、没删的楼层，按楼层号排，每层 `{ floor, op, accepted, likes, text }`，`op` 是不是楼主写的，`text` 是正文的纯文字，图片写成"[图片]"，最多 1000 个字。不带名字，也不带投票的结果。帖子不该写总结时返回 `404` | `read` |
 | PUT | `/bot/summaries/{thread}` | 推送写好的总结：`{ lead, points, replies }`，`lead` 最多 80 个字，`points` 1–5 条，每条 `{ text, floors }`，`text` 最多 80 个字，`floors` 1–5 个这个帖子里有的楼层号；`replies` 是取内容时的回复数。覆盖原来的；这个帖子的总结被版主关闭了返回 `409 summary_disabled`，后台关着 AI 总结返回 `403` | `moderate` |
+| GET | `/bot/bounties` | 开始悬赏的问题（总体设计 §8.19），给插件每天在群里发：`since`、`until`（Unix 秒，算 `[since, until)` 里开始的，`until` 默认现在）。返回 `{ items, reward }`：`items` 是到现在还没有别人回复的，先开始的在前，每项 `{ thread: { id, title, kind }, board: { slug, name }, url, until }`，`until` 是悬赏的截止时间；`reward` 是奖励的鼠币，`{ reply, answer }` | `read` |
 | GET | `/bot/events` | SSE 事件流，见第 5 节 | `events` |
 | GET | `/bot/events/batch` | 按游标拉取事件：`after`、`limit`（1–500，默认 100）、`types`，返回 `{ items: [{ id, type, data, created_at }], next_after }`，`next_after` 是下次的 `after` | `events` |
 

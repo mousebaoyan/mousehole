@@ -382,6 +382,7 @@ export interface Threads {
   author_anonymous: Generated<boolean>;
   author_id: number;
   board_id: number;
+  bounty_at: Timestamp | null;
   created_at: Generated<Timestamp>;
   deleted_at: Timestamp | null;
   featured: Generated<boolean>;

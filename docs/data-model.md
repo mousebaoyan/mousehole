@@ -75,6 +75,7 @@
 - 投票（[总体设计 §8.11](design.md#811-投票)）：`threads.kind = 'poll'` 的帖子在 `polls` 里有一行，和帖子在同一个事务里建，`poll_options` 按 `position` 排。`polls.closes_at` 是截止时间，`closed_at` 是提前结束的时间，二者有一个到了就算结束。分行投票（总体设计 §8.11）的各行存在 `polls.rows`（`text[]`，普通投票为 `NULL`），每行各有一组 `poll_options`，`row` 是第几行（普通投票都是 0），同一行内按 `position` 排；`polls.preset` 是生成它的预设，目前只有保研定位 `positioning`（总体设计 §8.14），普通投票为 `NULL`。每人每个选项一行 `poll_votes`，改票是删掉自己的再插入新的；`poll_options.vote_count` 和 `polls.voter_count` 冗余计数，投票时先锁住 `polls` 那一行，同一个投票的票按顺序计。取自己投了什么走 `poll_votes_voter`。
 - 修改建议（[总体设计 §6.6](design.md#66-等级)）：`thread_suggestions` 每条一行，`title`、`board_id`、`tags`（标签名，`text[]`）为 `NULL` 的是没建议改的。`status` 取 `open`（待处理）、`accepted`、`rejected`，处理时写 `handler_id`、`handled_at`。部分唯一索引 `thread_suggestions_open` 保证同一个人对同一个帖子只有一条待处理的，帖子页按它取待处理的建议。同意时先锁住这一行，确认还是 `open`，再在同一个事务里改帖子。
 - AI 总结（[总体设计 §8.18](design.md#818-ai-总结)）：每个帖子最多一行 `thread_summaries`，由 `summaries` 模块写。`lead` 和 `points`（jsonb，`[{ text, floors }]`）是插件写的总结，`floors` 冗余出全部引用的楼层号，`replies` 是写的时候的回复数，用来判断要不要重写。版主关闭时只留一行 `disabled = true`、`lead` 为 `NULL`。删除或隐藏楼层时在同一个事务里删掉引用了这一层的总结（`floors` 包含它，`disabled` 为假）。
+- 悬赏（[总体设计 §8.19](design.md#819-悬赏)）：`threads.bounty_at` 是开始悬赏的时间，每小时从最近 3 天发的帖子里（走 `threads_recent`）找出该悬赏的写上；悬赏 3 天，截止时间按它算。结算时从 `threads_bounty` 找悬赏过的帖子。
 - 抽奖（[总体设计 §8.13](design.md#813-抽奖)）：`threads.kind = 'lottery'` 的帖子在 `lotteries` 里有一行，和帖子在同一个事务里建。`prizes` 是按顺序排的奖项（jsonb，`[{ name, winners }]`），发出后不改。`seed` 是建抽奖时生成的 32 个随机字节（十六进制），开奖前不出现在任何接口和日志里；`seed_hash` 是它的 SHA-256，一开始就公布。点按钮参与的每人一行 `lottery_entries`；回复参与的开奖前现查回复（公开、没删、楼层号大于 1、不晚于 `draws_at`），开奖时才写进 `lottery_entries`。每分钟查一次到点的抽奖（走 `lotteries_due`），逐个在事务里锁住那一行开奖：先删掉开奖时不符合条件的参与者，这时 `lottery_entries` 就是参与开奖的全部人，再按 `SHA-256(seed:用户 ID)` 排序，依次给前面的人填上 `prize`（中的是第几个奖项），最后写 `drawn_at`。取消写 `cancelled_at`，之后不再开奖。
 
 ## 互动与通知
@@ -131,11 +132,11 @@
 
 表：`coin_ledger`、`coin_balances`（[总体设计 §8.17](design.md#817-鼠币)）。只由 `coins` 模块写入；它不调用别的模块，签到、发问答帖和兑换由 `users`、`members`、`threads` 在各自的事务里调用它导出的函数。
 
-- `coin_ledger` 是只追加的流水：`amount` 挣为正、花为负；`reason` 取 `check_in`、`liked`、`accepted`、`question`、`look`；`day` 是北京时间的日期，签到、获赞、采纳是算的那一天，花的是花的那天；发问答帖记 `thread_id`，兑换记 `look_kind`、`look_key`。
-- 签到、获赞、采纳每人每天各一行，靠部分唯一索引 `(user_id, reason, day) WHERE reason IN ('check_in', 'liked', 'accepted')` 和 `ON CONFLICT DO NOTHING`：网页和群同步同一天各来一次、结算重跑，都不会多发。获赞那一行的 `amount` 是这一天给了赞的人数。
+- `coin_ledger` 是只追加的流水：`amount` 挣为正、花为负；`reason` 取 `check_in`、`liked`、`accepted`、`bounty`、`question`、`look`；`day` 是北京时间的日期，签到、获赞、采纳、悬赏是算的那一天，花的是花的那天；发问答帖和悬赏记 `thread_id`，兑换记 `look_kind`、`look_key`。
+- 签到、获赞、采纳、悬赏每人每天各一行，靠部分唯一索引 `(user_id, reason, day) WHERE reason IN ('check_in', 'liked', 'accepted', 'bounty')` 和 `ON CONFLICT DO NOTHING`：网页和群同步同一天各来一次、结算重跑，都不会多发。获赞那一行的 `amount` 是这一天给了赞的人数。
 - `coin_balances` 每人一行余额，`CHECK (coins >= 0)`，和流水在同一个事务里改：挣的用 `INSERT … ON CONFLICT DO UPDATE SET coins = coins + n`；花的用 `UPDATE … SET coins = coins - n WHERE user_id = … AND coins >= n`，没改到一行就是不够，返回 `403 coins_insufficient`。没有这一行就是 0。
 - 签到：`users` 记新的一天（`recordDay`，见上面的阅读统计）时调用 `checkIn`；成员同步写入的 `group_members.last_sent_at` 往后移时，也给那一天签到。都只认今天和昨天；冻结的账号、bot 和站长不签到。
-- 结算：每小时的任务看 `job_runs` 里 `coins` 结算到了哪天，昨天还没结算就结算，一天一个事务。获赞：`reactions.created_at` 落在那天、给赞的人不是 bot、楼层没删没隐藏也不匿名、作者是成员的，按（作者，给赞的人）去重计数；采纳：`posts.accepted_at` 落在那天、同样条件的楼层，有就记一次。
+- 结算：每小时的任务看 `job_runs` 里 `coins` 结算到了哪天，昨天还没结算就结算，一天一个事务。获赞：`reactions.created_at` 落在那天、给赞的人不是 bot、楼层没删没隐藏也不匿名、作者是成员的，按（作者，给赞的人）去重计数；采纳：`posts.accepted_at` 落在那天、同样条件的楼层，有就记一次。悬赏：悬赏期间发的、不是楼主的、不是收录来的回复，`created_at` 或 `accepted_at` 落在那天的，每人取一条，被采纳的优先，记上它的帖子。
 - 明细按 `(user_id, id DESC)` 分页。排行榜现算：按 `day` 的范围汇总 `amount > 0` 的流水，走 `coin_ledger (day)`。
 
 ## 图片

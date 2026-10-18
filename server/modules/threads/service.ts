@@ -124,6 +124,7 @@ function selectThreads(from: ReturnType<typeof openableThreads>, userId: number 
       "threads.created_at",
       "threads.author_anonymous",
       "threads.anonymous_replies",
+      "threads.bounty_at",
       "boards.slug as board_slug",
       "boards.name as board_name",
       "boards.color as board_color",
