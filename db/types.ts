@@ -414,7 +414,7 @@ export interface ThreadSuggestions {
   id: Generated<number>;
   reason: string | null;
   status: Generated<string>;
-  tags: string[] | null;
+  tag_ids: number[] | null;
   thread_id: number;
   title: string | null;
   user_id: number;

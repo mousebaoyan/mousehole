@@ -38,13 +38,13 @@ export async function suggestChange(
       ? null
       : await getBoard(input.board, reach);
   if (board) assertMayPost(viewer, board);
-  if (input.tags) await findTags(input.tags);
   const title = input.title !== undefined && input.title !== thread.title ? input.title : null;
   const boardId = board?.id ?? null;
   const tags =
     input.tags && input.tags.toSorted().join() !== thread.tags.toSorted().join()
       ? input.tags
       : null;
+  const tagIds = tags && (await findTags(tags));
   if (title === null && boardId === null && tags === null) {
     throw new AppError(400, "invalid_request", "建议的标题、版块和标签都和现在一样");
   }
@@ -57,7 +57,7 @@ export async function suggestChange(
         user_id: viewer.id,
         title,
         board_id: boardId,
-        tags,
+        tag_ids: tagIds,
         reason: input.reason || null,
       })
       .onConflict((oc) =>
@@ -85,7 +85,9 @@ function selectSuggestions() {
       "s.id",
       "s.user_id",
       "s.title",
-      "s.tags",
+      sql<string[] | null>`CASE WHEN s.tag_ids IS NOT NULL THEN (
+        SELECT coalesce(array_agg(tags.name ORDER BY tags.name), '{}')
+        FROM tags WHERE tags.id = ANY (s.tag_ids)) END`.as("tags"),
       "s.reason",
       "s.created_at",
       jsonObjectFrom(
@@ -200,10 +202,18 @@ export async function decideSuggestion(
     if (s.status !== "open") {
       throw new AppError(409, "suggestion_handled", "这条修改建议已经处理过了");
     }
+    // Those still there: one deleted or merged into another since drops out.
+    const tags =
+      s.tag_ids &&
+      (await trx
+        .selectFrom("tags")
+        .select(["id", "name"])
+        .where(sql<boolean>`id = ANY (${s.tag_ids}::integer[])`)
+        .execute());
     if (status === "accepted") {
       await saveThreadChange(trx, thread, s.user_id, {
         title: s.title ?? undefined,
-        tagIds: s.tags && (await findTags(s.tags)),
+        tagIds: tags && tags.map((t) => t.id),
         board_id: s.board_id ?? undefined,
       });
     }
@@ -216,7 +226,13 @@ export async function decideSuggestion(
       action: status === "accepted" ? "suggestion.accept" : "suggestion.reject",
       target_type: "thread",
       target_id: thread.id,
-      data: { suggestion: id, by: s.user_id, title: s.title, board_id: s.board_id, tags: s.tags },
+      data: {
+        suggestion: id,
+        by: s.user_id,
+        title: s.title,
+        board_id: s.board_id,
+        tags: tags && tags.map((t) => t.name),
+      },
     });
     await notifySuggestion(trx, s.user_id, viewer.id, thread.id, status);
     if (status === "accepted") {
