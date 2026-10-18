@@ -13,7 +13,7 @@ import { env } from "./env.ts";
 
 // Raised whenever the HTML written for the same Markdown changes; start-up then renders the floors
 // written before again.
-export const RENDER_VERSION = 3;
+export const RENDER_VERSION = 4;
 
 const md = new MarkdownIt({ html: false, linkify: true, breaks: true }).use(mark).use(footnote);
 const { Token } = new md.core.State("", md, {});
@@ -433,19 +433,6 @@ export async function renderMarkdown(
   for (const [i, token] of tokens.entries()) {
     if (token.type === "inline" && token.children) {
       token.children = inline(token.children, found, shown);
-      // A paragraph of nothing but images is set apart from the text, centered.
-      const children = token.children;
-      if (
-        tokens[i - 1].type === "paragraph_open" &&
-        children.some((t) => t.type === "shown_image") &&
-        children.every(
-          (t) =>
-            t.type === "shown_image" ||
-            t.type === "softbreak" ||
-            (t.type === "text" && !t.content.trim()),
-        )
-      )
-        tokens[i - 1].attrJoin("class", "images");
       // `- [x] done` in a list.
       const first = token.children.at(0);
       const task = first?.type === "text" ? TASK.exec(first.content) : null;
