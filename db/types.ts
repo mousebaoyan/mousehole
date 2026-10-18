@@ -399,6 +399,20 @@ export interface Threads {
   view_count: Generated<number>;
 }
 
+export interface ThreadSuggestions {
+  board_id: number | null;
+  created_at: Generated<Timestamp>;
+  handled_at: Timestamp | null;
+  handler_id: number | null;
+  id: Generated<number>;
+  reason: string | null;
+  status: Generated<string>;
+  tags: string[] | null;
+  thread_id: number;
+  title: string | null;
+  user_id: number;
+}
+
 export interface ThreadTags {
   last_post_at: Timestamp;
   tag_id: number;
@@ -548,6 +562,7 @@ export interface DB {
   settings: Settings;
   tags: Tags;
   thread_aliases: ThreadAliases;
+  thread_suggestions: ThreadSuggestions;
   thread_tags: ThreadTags;
   thread_users: ThreadUsers;
   threads: Threads;

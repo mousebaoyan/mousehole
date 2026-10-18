@@ -864,7 +864,7 @@ async function assertWithinL0(
 
 // Starting threads in a board, or moving them there: some boards are for moderators, some want a
 // level, for reading them and for posting (design §8.1).
-function assertMayPost(
+export function assertMayPost(
   viewer: Viewer,
   board: { post_role: string; read_level: number; post_level: number },
 ) {
@@ -877,7 +877,7 @@ function assertMayPost(
 // The power a level gives over someone else's content, from L3 up: the viewer's level when the
 // writer is below it and not a moderator or admin, else 0. Nothing anonymous, whose writer's
 // level would show in what is allowed.
-async function levelPower(viewer: Viewer, authorId: number, anonymous: boolean) {
+export async function levelPower(viewer: Viewer, authorId: number, anonymous: boolean) {
   if (viewer.level < 3 || anonymous || authorId === viewer.id) return 0;
   const author = await db
     .selectFrom("users")
@@ -1100,7 +1100,7 @@ function forbidden(message: string) {
 }
 
 // Authors change their own content; moderators anyone's. A locked thread is moderators' only.
-function assertMayChange(staff: boolean, viewer: Viewer, authorId: number, locked: boolean) {
+export function assertMayChange(staff: boolean, viewer: Viewer, authorId: number, locked: boolean) {
   if (staff) return;
   if (authorId !== viewer.id) throw forbidden("只能修改自己发的内容");
   if (locked) throw new AppError(403, "thread_locked", "帖子已锁定");
@@ -1226,7 +1226,7 @@ export type ThreadChange = {
 };
 
 // Authors may retitle and retag; moderators may do anything. Pinning and featuring are theirs
-// alone; moving and locking also go to L3 and L5 over those below them.
+// alone; moving and locking also go to L4 and L5 over those below them.
 export async function editThread(
   actor: Actor,
   viewer: Viewer,
@@ -1238,12 +1238,12 @@ export async function editThread(
   const reader: Reader = { reach, id: viewer.id, staff };
   const { title, tags, board: slug, locked, ...moderation } = change;
   const thread = await getThread(threadId, reader);
-  // L3 changes the title, tags and board of threads by those below them, L5 also locks them; a
-  // locked one only L5 may change.
+  // L4 changes the title, tags and board of threads by those below them, L5 also locks them; a
+  // locked one only L5 may change. L3 only suggests (suggestions.ts).
   const power = staff ? 0 : await levelPower(viewer, thread.author_id, thread.author_anonymous);
-  if (power < 3) assertMayChange(staff, viewer, thread.author_id, thread.locked);
+  if (power < 4) assertMayChange(staff, viewer, thread.author_id, thread.locked);
   else if (thread.locked && power < 5) throw new AppError(403, "thread_locked", "帖子已锁定");
-  if (!staff && (Object.keys(moderation).length > 0 || (slug !== undefined && power < 3))) {
+  if (!staff && (Object.keys(moderation).length > 0 || (slug !== undefined && power < 4))) {
     throw forbidden("只有版主能置顶、加精和移动自己的帖子");
   }
   if (!staff && locked !== undefined && power < 5) {
@@ -1254,80 +1254,13 @@ export async function editThread(
   const tagIds = tags === undefined ? null : await findTags(tags);
 
   await db.transaction().execute(async (trx) => {
-    const old = await trx
-      .selectFrom("threads")
-      .select(["title", "board_id", "reply_count", "last_post_at"])
-      .where("id", "=", threadId)
-      .forUpdate()
-      .executeTakeFirstOrThrow();
-
-    let retitled: number | null = null;
-    if (title !== undefined && title !== old.title) {
-      // A new title is an edit of the opening post, kept in its history with the old title.
-      const opening = await trx
-        .updateTable("posts")
-        .set((eb) => ({ edit_count: eb("edit_count", "+", 1), edited_at: sql<Date>`now()` }))
-        .where("thread_id", "=", threadId)
-        .where("floor", "=", 1)
-        .returning(["id", "edit_count", "body"])
-        .executeTakeFirstOrThrow();
-      await trx
-        .insertInto("post_revisions")
-        .values({
-          post_id: opening.id,
-          rev: opening.edit_count,
-          title: old.title,
-          body: opening.body,
-          editor_id: viewer.id,
-        })
-        .execute();
-      retitled = opening.id;
-    }
-
-    if (tagIds !== null) {
-      const current = await trx
-        .selectFrom("thread_tags")
-        .select("tag_id")
-        .where("thread_id", "=", threadId)
-        .execute();
-      const had = current.map((r) => r.tag_id);
-      const removed = had.filter((id) => !tagIds.includes(id));
-      const added = tagIds.filter((id) => !had.includes(id));
-      if (removed.length > 0) {
-        await trx
-          .deleteFrom("thread_tags")
-          .where("thread_id", "=", threadId)
-          .where("tag_id", "in", removed)
-          .execute();
-      }
-      if (added.length > 0) {
-        await trx
-          .insertInto("thread_tags")
-          .values(
-            added.map((tag_id) => ({
-              thread_id: threadId,
-              tag_id,
-              last_post_at: old.last_post_at,
-            })),
-          )
-          .execute();
-      }
-      if (thread.status === "visible") {
-        await countTags(trx, removed, -1);
-        await countTags(trx, added, 1);
-      }
-    }
-
-    if (board && board.id !== old.board_id && thread.status === "visible") {
-      await countBoard(trx, old.board_id, { threads: -1, posts: -old.reply_count });
-      await countBoard(trx, board.id, { threads: 1, posts: old.reply_count });
-    }
-
-    const columns = { title, board_id: board?.id, locked, ...moderation };
-    if (Object.values(columns).some((v) => v !== undefined)) {
-      await trx.updateTable("threads").set(columns).where("id", "=", threadId).execute();
-    }
-    if (retitled !== null) await indexPost(trx, retitled);
+    await saveThreadChange(trx, thread, viewer.id, {
+      title,
+      tagIds,
+      board_id: board?.id,
+      locked,
+      ...moderation,
+    });
     await recordAudit(trx, actor, {
       action: "thread.update",
       target_type: "thread",
@@ -1336,6 +1269,97 @@ export async function editThread(
     });
   });
   return getThread(threadId, reader);
+}
+
+// A change to a thread, in the transaction that makes it. A new title is an edit of the opening
+// post by `editorId`, kept in its history with the old title; counts follow the tags and board.
+export async function saveThreadChange(
+  trx: Transaction<DB>,
+  thread: { id: number; status: string },
+  editorId: number,
+  change: {
+    tagIds: number[] | null;
+    title?: string;
+    board_id?: number;
+    pinned?: number;
+    featured?: boolean;
+    locked?: boolean;
+  },
+) {
+  const { tagIds, title, board_id, pinned, featured, locked } = change;
+  const columns = { title, board_id, pinned, featured, locked };
+  const old = await trx
+    .selectFrom("threads")
+    .select(["title", "board_id", "reply_count", "last_post_at"])
+    .where("id", "=", thread.id)
+    .forUpdate()
+    .executeTakeFirstOrThrow();
+
+  let retitled: number | null = null;
+  if (title !== undefined && title !== old.title) {
+    const opening = await trx
+      .updateTable("posts")
+      .set((eb) => ({ edit_count: eb("edit_count", "+", 1), edited_at: sql<Date>`now()` }))
+      .where("thread_id", "=", thread.id)
+      .where("floor", "=", 1)
+      .returning(["id", "edit_count", "body"])
+      .executeTakeFirstOrThrow();
+    await trx
+      .insertInto("post_revisions")
+      .values({
+        post_id: opening.id,
+        rev: opening.edit_count,
+        title: old.title,
+        body: opening.body,
+        editor_id: editorId,
+      })
+      .execute();
+    retitled = opening.id;
+  }
+
+  if (tagIds !== null) {
+    const current = await trx
+      .selectFrom("thread_tags")
+      .select("tag_id")
+      .where("thread_id", "=", thread.id)
+      .execute();
+    const had = current.map((r) => r.tag_id);
+    const removed = had.filter((id) => !tagIds.includes(id));
+    const added = tagIds.filter((id) => !had.includes(id));
+    if (removed.length > 0) {
+      await trx
+        .deleteFrom("thread_tags")
+        .where("thread_id", "=", thread.id)
+        .where("tag_id", "in", removed)
+        .execute();
+    }
+    if (added.length > 0) {
+      await trx
+        .insertInto("thread_tags")
+        .values(
+          added.map((tag_id) => ({
+            thread_id: thread.id,
+            tag_id,
+            last_post_at: old.last_post_at,
+          })),
+        )
+        .execute();
+    }
+    if (thread.status === "visible") {
+      await countTags(trx, removed, -1);
+      await countTags(trx, added, 1);
+    }
+  }
+
+  if (board_id !== undefined && board_id !== old.board_id && thread.status === "visible") {
+    await countBoard(trx, old.board_id, { threads: -1, posts: -old.reply_count });
+    await countBoard(trx, board_id, { threads: 1, posts: old.reply_count });
+  }
+
+  if (Object.values(columns).some((v) => v !== undefined)) {
+    await trx.updateTable("threads").set(columns).where("id", "=", thread.id).execute();
+  }
+  if (retitled !== null) await indexPost(trx, retitled);
 }
 
 // Authors can take back a thread nobody has replied to; moderators can remove any.

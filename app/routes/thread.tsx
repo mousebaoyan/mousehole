@@ -117,6 +117,28 @@ export async function action({ params, request, context }: Route.ActionArgs) {
     if (res.ok) return { ok: true as const, floor };
     return { ok: false as const, message: (await res.json()).error.message };
   }
+  if (text("intent") === "suggest") {
+    const res = await api.threads[":id"].suggestions.$post({
+      param: thread,
+      json: {
+        title: text("title"),
+        board: text("board"),
+        tags: form.getAll("tags").filter((t) => typeof t === "string"),
+        reason: text("reason") || undefined,
+      },
+    });
+    if (res.ok)
+      return { ok: true as const, floor, message: "修改建议已提交，楼主或版主同意后生效" };
+    return { ok: false as const, message: (await res.json()).error.message };
+  }
+  if (text("intent") === "decide-suggestion") {
+    const res = await api.suggestions[":id"].$patch({
+      param: { id: text("suggestion_id") },
+      json: { status: text("decision") === "accepted" ? "accepted" : "rejected" },
+    });
+    if (res.ok) return { ok: true as const, floor };
+    return { ok: false as const, message: (await res.json()).error.message };
+  }
   if (text("intent") === "react") {
     const emoji = REACTIONS.find((r) => r.key === text("emoji"))?.key;
     const res = emoji
@@ -368,10 +390,11 @@ function ThreadPage({
           <ThreadHeader
             thread={thread}
             current={current}
+            now={now}
             editable={
               staff ||
               (authored && !thread.locked) ||
-              (power >= 3 && (!thread.locked || power >= 5))
+              (power >= 4 && (!thread.locked || power >= 5))
             }
             staff={staff}
             power={power}

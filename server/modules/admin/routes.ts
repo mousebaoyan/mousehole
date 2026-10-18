@@ -12,6 +12,7 @@ import { getSettings } from "../../platform/settings.ts";
 import { botListening } from "../events/service.ts";
 import { emailPolicies, NOTIFICATION_TYPES } from "../notifications/service.ts";
 import { countOpenReports } from "../moderation/service.ts";
+import { countOpenSuggestions } from "../threads/suggestions.ts";
 import { contentStats } from "../threads/service.ts";
 import { uploadBytes } from "../uploads/service.ts";
 import { memberStats } from "../users/service.ts";
@@ -115,6 +116,7 @@ export const adminRoutes = createRouter()
                   posts_today: z.number().openapi({ description: "今天公开的回复" }),
                   pending: z.number().openapi({ description: "待审核的帖子和回复" }),
                   reports: z.number().openapi({ description: "待处理的举报" }),
+                  suggestions: z.number().openapi({ description: "待处理的修改建议" }),
                 }),
                 events: z.object({
                   streams: z.number().openapi({ description: "现在连着的事件流" }),
@@ -138,10 +140,11 @@ export const adminRoutes = createRouter()
     }),
     async (c) => {
       authorize(c, "admin");
-      const [members, content, reports, database, uploads] = await Promise.all([
+      const [members, content, reports, suggestions, database, uploads] = await Promise.all([
         memberStats(),
         contentStats(),
         countOpenReports(),
+        countOpenSuggestions(),
         databaseBytes(),
         uploadBytes(),
       ]);
@@ -149,7 +152,7 @@ export const adminRoutes = createRouter()
       return c.json(
         {
           members,
-          content: { ...content, reports },
+          content: { ...content, reports, suggestions },
           events: {
             streams: events.streams,
             polled_at: events.polled_at && unix(events.polled_at),

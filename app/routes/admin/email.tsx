@@ -12,7 +12,11 @@ import { SettingsForm } from "~/components/settings-form";
 import {
   NOTIFICATION_LABELS,
   NOTIFICATION_TYPES,
+  SITE_ONLY,
 } from "../../../server/modules/notifications/types.ts";
+
+// Types told on the site only have no emails to set.
+const EMAILED = NOTIFICATION_TYPES.filter((type) => !SITE_ONLY.has(type));
 
 export function meta() {
   return [{ title: pageTitle("邮件", "管理后台") }];
@@ -52,7 +56,7 @@ export async function action({ request, context }: Route.ActionArgs) {
   }
   if (field("intent") === "notify") {
     const email = Object.fromEntries(
-      NOTIFICATION_TYPES.map((type) => [
+      EMAILED.map((type) => [
         type,
         POLICIES.find((p) => p.value === field(`email.${type}`))?.value,
       ]),
@@ -136,7 +140,7 @@ export default function Email({ loaderData, actionData }: Route.ComponentProps) 
             checked={loaderData.unactivated}
           />
           <ul className="divide-y text-sm">
-            {NOTIFICATION_TYPES.map((type) => (
+            {EMAILED.map((type) => (
               <li key={type} className="flex items-center gap-3 py-1.5">
                 <span className="flex-1">{NOTIFICATION_LABELS[type]}</span>
                 <Select

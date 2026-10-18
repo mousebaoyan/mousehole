@@ -31,9 +31,12 @@ import {
   LotterySchema,
   pollJson,
   PollSchema,
+  SuggestionSchema,
+  suggestionJson,
   threadJson,
   ThreadSchema,
 } from "./schemas.ts";
+import { threadSuggestions } from "./suggestions.ts";
 import { assertRelationsShown, findUserId, relationsShown, userBriefs } from "../users/service.ts";
 import {
   countTabs,
@@ -126,6 +129,10 @@ const ThreadDetailSchema = ThreadSchema.extend({
     description:
       "自己的关注级别：watching 每个新楼层都通知，normal 回复我、@我时通知，muted 都不通知；只在登录时有",
   }),
+  suggestions: z
+    .array(SuggestionSchema)
+    .optional()
+    .openapi({ description: "待处理的修改建议，先提的在前；只给楼主和版主" }),
 }).openapi("ThreadDetail");
 
 const PostSchema = z
@@ -674,13 +681,22 @@ export const threadsRoutes = createRouter()
     async (c) => {
       const { id } = c.req.valid("param");
       const { viewer, bot } = c.var;
-      const thread = await getThread(id, readerOf(c));
+      const reader = readerOf(c);
+      const thread = await getThread(id, reader);
       // People reading, not bots fetching.
       // Requests from inside the server, such as the guest page cache refreshing a page, have
       // no reader to count.
-      const reader = viewer ? `u${viewer.id}` : clientIp(c);
-      if (!bot && reader !== null) recordView(id, reader);
-      return c.json(threadDetailJson(thread, viewer !== null), 200);
+      const counted = viewer ? `u${viewer.id}` : clientIp(c);
+      if (!bot && counted !== null) recordView(id, counted);
+      // Its author and moderators decide on changes suggested for it.
+      const decides = viewer !== null && (reader.staff || viewer.id === thread.author_id);
+      return c.json(
+        {
+          ...threadDetailJson(thread, viewer !== null),
+          ...(decides && { suggestions: (await threadSuggestions(id)).map(suggestionJson) }),
+        },
+        200,
+      );
     },
   )
   .openapi(

@@ -18,6 +18,7 @@ import { Checkbox } from "~/components/ui/checkbox";
 import {
   NOTIFICATION_LABELS,
   NOTIFICATION_TYPES,
+  SITE_ONLY,
 } from "../../server/modules/notifications/types.ts";
 import { BOT_NAME, TIER_NAMES } from "../../server/platform/site.ts";
 import { BuyButton, buyLook, Customize, DEFAULT_STATUS_EMOJI } from "./settings-customize.tsx";
@@ -266,16 +267,19 @@ export default function Settings({ loaderData, actionData }: Route.ComponentProp
                     <td className="py-2">{NOTIFICATION_LABELS[type]}</td>
                     {(["site", "email"] as const).map((where) => {
                       const checked = settings.notify_prefs[type][where];
+                      const none = SITE_ONLY.has(type)
+                        ? "这类通知只在站内显示"
+                        : "站长关闭了这类邮件";
                       return (
                         <td key={where}>
                           {checked === null ? (
                             <span
-                              title="站长关闭了这类邮件"
+                              title={none}
                               className="flex h-10 items-center justify-center text-muted-foreground"
                             >
                               —
                               <span className="sr-only">
-                                {NOTIFICATION_LABELS[type]}：站长关闭了这类邮件
+                                {NOTIFICATION_LABELS[type]}：{none}
                               </span>
                             </span>
                           ) : (

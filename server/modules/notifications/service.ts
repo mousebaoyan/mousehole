@@ -16,7 +16,7 @@ import {
   type Standing,
   type Told,
 } from "./reminders.ts";
-import { NOTIFICATION_TYPES, type NotificationType } from "./types.ts";
+import { NOTIFICATION_TYPES, SITE_ONLY, type NotificationType } from "./types.ts";
 
 export { NOTIFICATION_TYPES };
 
@@ -37,6 +37,7 @@ const EMAIL_BY_DEFAULT = new Set<NotificationType>([
 ]);
 
 function policyOf(settings: Settings, type: NotificationType): EmailPolicy {
+  if (SITE_ONLY.has(type)) return "never";
   return settings.notify.email[type] ?? (EMAIL_BY_DEFAULT.has(type) ? "on" : "off");
 }
 
@@ -85,7 +86,7 @@ export async function notifyPrefs(saved: Record<string, { site?: boolean; email?
 // Written in the transaction that caused it. Nobody hears of their own doing, nor anyone who left
 // the groups or muted the thread, nor the owner, who has no QQ and is in no group. Each type shows on the site and goes by email, as each person
 // set it.
-async function notify(trx: Transaction<DB>, userIds: number[], notice: Notice) {
+async function notify(trx: Transaction<DB>, userIds: number[], notice: Notice | SiteNotice) {
   const ids = [...new Set(userIds)].filter((id) => id !== notice.actorId);
   if (ids.length === 0) return;
   const recipients = await trx
@@ -139,7 +140,31 @@ async function notify(trx: Transaction<DB>, userIds: number[], notice: Notice) {
     );
   }
   const byEmail = recipients.filter((r) => r.email);
-  if (byEmail.length > 0) await queueMail(trx, await floorReminders(trx, byEmail, notice));
+  if (byEmail.length > 0 && notice.type !== "suggestion") {
+    await queueMail(trx, await floorReminders(trx, byEmail, notice));
+  }
+}
+
+// About a thread rather than a floor, and on the site only.
+type SiteNotice = Omit<Notice, "type" | "postId"> & { type: "suggestion"; postId: null };
+
+// A change suggested for someone's thread (new), what became of a suggestion (accepted or
+// rejected), or a moderator accepting one for someone's thread (applied); design §6.6.
+export async function notifySuggestion(
+  trx: Transaction<DB>,
+  userId: number,
+  actorId: number,
+  threadId: number,
+  kind: "new" | "accepted" | "rejected" | "applied",
+) {
+  await notify(trx, [userId], {
+    type: "suggestion",
+    actorId,
+    actorAlias: null,
+    threadId,
+    postId: null,
+    data: { kind },
+  });
 }
 
 // Going up a level, automatically or from an admin (design §6.6); going down is not told, nor

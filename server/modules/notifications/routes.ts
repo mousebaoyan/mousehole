@@ -9,7 +9,7 @@ const NotificationSchema = z
     id: z.number(),
     type: z.string().openapi({
       description:
-        "reply 回复了我的楼层，mention @了我，like 赞了我的楼层，boost 给我的楼层留了短评，watching 关注的帖子有新楼层，following 关注的人发了新帖，solved 我的回答被采纳，moderation 审核了我的内容，level 我升级了（data 带 level）",
+        "reply 回复了我的楼层，mention @了我，like 赞了我的楼层，boost 给我的楼层留了短评，watching 关注的帖子有新楼层，following 关注的人发了新帖，solved 我的回答被采纳，moderation 审核了我的内容，suggestion 修改建议（data.kind：new 有人建议修改我的帖子，accepted、rejected 我的建议被同意或未被同意，applied 版主照建议修改了我的帖子），level 我升级了（data 带 level）",
     }),
     actor: WriterSchema.nullable().openapi({ description: "最近触发的人；匿名时是编号" }),
     count: z.number().openapi({ description: "合并了几次：点赞、短评按楼层，新楼层按帖子" }),

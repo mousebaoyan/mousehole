@@ -1,9 +1,10 @@
 // What people are told of; see design §8.6. reply: someone replied to my floor; thread_reply: to
 // my thread without naming a floor; mention: @ me; like and boost: on my floor; watching: a new
 // floor in a thread I watch; following: a new thread by someone I follow; solved: my answer was
-// accepted; moderation: something of mine was approved, rejected, hidden or shown again; level: I
-// went up a level; lottery: one I entered or started was drawn or called off; badge: I earned a
-// badge. In the order settings list them. Pages use this file too, so it imports nothing.
+// accepted; moderation: something of mine was approved, rejected, hidden or shown again;
+// suggestion: a change suggested for my thread, or what became of mine; level: I went up a level;
+// lottery: one I entered or started was drawn or called off; badge: I earned a badge. In the order
+// settings list them. Pages use this file too, so it imports nothing.
 export const NOTIFICATION_TYPES = [
   "reply",
   "thread_reply",
@@ -14,6 +15,7 @@ export const NOTIFICATION_TYPES = [
   "following",
   "solved",
   "moderation",
+  "suggestion",
   "level",
   "lottery",
   "badge",
@@ -31,7 +33,11 @@ export const NOTIFICATION_LABELS: Record<NotificationType, string> = {
   following: "关注的人发新帖",
   solved: "回答被采纳",
   moderation: "内容被审核或隐藏",
+  suggestion: "修改建议",
   level: "升级",
   lottery: "抽奖开奖或取消",
   badge: "获得徽章",
 };
+
+// Told on the site only, never by email (design §6.6).
+export const SITE_ONLY = new Set<NotificationType>(["suggestion"]);

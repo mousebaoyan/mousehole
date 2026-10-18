@@ -33,12 +33,16 @@ export default function Overview({ loaderData }: Route.ComponentProps) {
   const { members, content, events, storage, groups } = loaderData;
   // What waits for someone links to where it is handled.
   const stats = [
-    { label: "成员", value: members.total, note: `已激活 ${members.activated.toLocaleString()}` },
-    { label: "已冻结", value: members.frozen },
+    {
+      label: "成员",
+      value: members.total,
+      note: `已激活 ${members.activated.toLocaleString()} · 已冻结 ${members.frozen.toLocaleString()}`,
+    },
     { label: "今天的帖子", value: content.threads_today },
     { label: "今天的回复", value: content.posts_today },
     { label: "待审核", value: content.pending, to: "/admin/content" },
     { label: "待处理的举报", value: content.reports, to: "/admin/reports" },
+    { label: "待处理的修改建议", value: content.suggestions, to: "/admin/suggestions" },
   ];
   return (
     <>
