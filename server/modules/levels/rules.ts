@@ -23,7 +23,7 @@ export type Recent = {
 };
 
 export const RECENT_DAYS = 50;
-// A new L4 keeps it this long whatever the last 30 days say.
+// A new L4 keeps it this long whatever its recent days say.
 export const L4_GRACE_DAYS = 14;
 
 type Needs<Key> = [Key, number][];
@@ -93,7 +93,7 @@ function listed<Key extends keyof Totals | keyof Recent>(
 }
 
 // Each requirement of a level from L1 to L4, with what someone has towards it: L1–L3 over all
-// time, L4 over the last 30 days, which is also what an L4 needs to keep it.
+// time, L4 over the last RECENT_DAYS days, which is also what an L4 needs to keep it.
 export function requirements(level: number, totals: Totals, recent: Recent) {
   return level === 4 ? listed(recent, L4_NEEDS) : listed(totals, NEEDS[level - 1]);
 }

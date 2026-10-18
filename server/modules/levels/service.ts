@@ -18,7 +18,7 @@ import {
 
 const DAY_MS = 86_400_000;
 const SINCE = sql<Date>`now() - make_interval(days => ${RECENT_DAYS})`;
-// The last 30 days in Beijing time, today included.
+// The last RECENT_DAYS days in Beijing time, today included.
 const FIRST_DAY = sql<Date>`(now() AT TIME ZONE 'Asia/Shanghai')::date - ${RECENT_DAYS - 1}::integer`;
 
 // Other people's threads someone replied in publicly, each counted once.
@@ -74,7 +74,7 @@ function selectStanding() {
 
 type Row = Awaited<ReturnType<ReturnType<typeof selectStanding>["execute"]>>[number];
 
-// How many of the last 30 days were free of any mute or ban.
+// How many of the last RECENT_DAYS days were free of any mute or ban.
 function cleanDays(row: Row) {
   if (restrictionOf(row.restriction, row.restricted_until)) return 0;
   if (row.restricted_through === null) return RECENT_DAYS;
@@ -138,8 +138,8 @@ export async function promoteActive() {
   }
 }
 
-// Daily: an L4 whose last 30 days no longer earn it goes back to L3, untold; not in its first two
-// weeks.
+// Daily: an L4 whose last RECENT_DAYS days no longer earn it goes back to L3, untold; not in its
+// first two weeks.
 export async function recheckL4() {
   const rows = await automatic()
     .where("users.level", "=", 4)
