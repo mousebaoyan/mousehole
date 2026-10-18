@@ -95,7 +95,7 @@ describe("版块", () => {
     expect((await slugs()).filter((s) => [a, b, c].includes(s))).toEqual([c, a, b]);
   });
 
-  test("有过帖子的版块不能删，删掉帖子也不行；空版块可以删", async () => {
+  test("有过帖子的版块不能删，删掉帖子也不行；空版块可以删，草稿里选了它的也行", async () => {
     const used = await newBoard();
     const thread = await newThread(used);
     await db
@@ -107,9 +107,14 @@ describe("版块", () => {
     expect(refused.status).toBe(409);
 
     const empty = await newBoard();
+    const json = { title: "想发在这里", board: empty, body: "写了一半" };
+    await api.me.drafts[":key"].$put({ param: { key: "new" }, json }, admin);
     const res = await api.boards[":slug"].$delete({ param: { slug: empty } }, admin);
     expect(res.status).toBe(204);
     expect(await slugs()).not.toContain(empty);
+    const draft = await api.me.drafts[":key"].$get({ param: { key: "new" } }, admin);
+    if (!draft.ok) throw new Error(`status ${draft.status}`);
+    expect(await draft.json()).toMatchObject({ title: "想发在这里", board: null });
   });
 });
 
