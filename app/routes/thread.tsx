@@ -57,6 +57,13 @@ export async function loader({ params, request, context }: Route.LoaderArgs) {
   if (threadRes.status === 401 || threadRes.status === 403) {
     throw data((await threadRes.json()).error.message, { status: threadRes.status });
   }
+  // Merged into another (design §8.20): on to where the floor asked for is now.
+  if (afterRes.status === 404) {
+    const { thread_id, floor } = await afterRes.json();
+    if (thread_id !== undefined && floor !== undefined) {
+      return redirect(`/t/${thread_id}${floor > 1 ? `?floor=${floor}` : ""}`, 301);
+    }
+  }
   if (!threadRes.ok || !afterRes.ok) throw data("帖子不存在", { status: 404 });
   const thread = await threadRes.json();
   const after = (await afterRes.json()).items;

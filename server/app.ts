@@ -19,6 +19,7 @@ import { reactionsRoutes } from "./modules/reactions/routes.ts";
 import { searchRoutes } from "./modules/search/routes.ts";
 import { summariesRoutes } from "./modules/summaries/routes.ts";
 import { bountyRoutes } from "./modules/threads/bounty-routes.ts";
+import { mergeRoutes } from "./modules/threads/merge-routes.ts";
 import { lotteryRoutes } from "./modules/threads/lottery-routes.ts";
 import { pollRoutes } from "./modules/threads/poll-routes.ts";
 import { serveSitemap, threadsRoutes } from "./modules/threads/routes.ts";
@@ -47,6 +48,7 @@ const api = createRouter()
   .route("/", lotteryRoutes)
   .route("/", suggestionRoutes)
   .route("/", bountyRoutes)
+  .route("/", mergeRoutes)
   .route("/", summariesRoutes)
   .route("/", draftsRoutes)
   .route("/", uploadsRoutes)

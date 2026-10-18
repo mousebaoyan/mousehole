@@ -233,3 +233,13 @@ export async function dropCitingSummary(trx: Transaction<DB>, threadId: number, 
     .where(sql<boolean>`${floor} = ANY(floors)`)
     .execute();
 }
+
+// Floors merged in or numbered anew (design §8.20) leave the summary citing the wrong ones: it
+// goes, to be written again. One turned off stays off.
+export async function dropSummary(trx: Transaction<DB>, threadId: number) {
+  await trx
+    .deleteFrom("thread_summaries")
+    .where("thread_id", "=", threadId)
+    .where("disabled", "=", false)
+    .execute();
+}

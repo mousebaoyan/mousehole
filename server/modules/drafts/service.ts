@@ -175,6 +175,28 @@ export async function discardDraft(trx: Transaction<DB>, userId: number, threadI
   await trx.deleteFrom("drafts").where("user_id", "=", userId).where(ofThread(threadId)).execute();
 }
 
+// Replies being written to a thread merged into another (design §8.20) go on there, unless their
+// writer has one for that thread already, which is kept.
+export async function moveDrafts(trx: Transaction<DB>, threadId: number, intoId: number) {
+  await trx
+    .updateTable("drafts")
+    .set({ thread_id: intoId })
+    .where("thread_id", "=", threadId)
+    .where((eb) =>
+      eb.not(
+        eb.exists(
+          eb
+            .selectFrom("drafts as kept")
+            .select("kept.user_id")
+            .whereRef("kept.user_id", "=", "drafts.user_id")
+            .where("kept.thread_id", "=", intoId),
+        ),
+      ),
+    )
+    .execute();
+  await trx.deleteFrom("drafts").where("thread_id", "=", threadId).execute();
+}
+
 export async function clearOldDrafts() {
   await db
     .deleteFrom("drafts")

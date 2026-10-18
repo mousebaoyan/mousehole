@@ -121,6 +121,7 @@ function headline(n: Item) {
     case "solved":
       return `${who} 采纳了你的回答`;
     case "moderation":
+      if (n.data.action === "merge") return `${who} 把你的帖子合并到了另一个帖子`;
       return `${who} ${MODERATED[n.data.action] ?? "处理了你的"}${n.post?.floor === 1 ? "帖子" : "回复"}${n.data.reason ? `：${n.data.reason}` : ""}`;
     case "suggestion":
       return `${who} ${SUGGESTED[n.data.kind]}`;

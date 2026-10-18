@@ -55,6 +55,7 @@ const MODERATED: Record<string, string> = {
   reject: "未通过你的内容",
   hide: "隐藏了你的内容",
   unhide: "恢复了你的内容",
+  merge: "把你的帖子合并到了另一个帖子",
 };
 const NOT_SHOWN = "现在别人看不到它。对处理有疑问，可以在群里找版主。";
 const MODERATED_AFTER: Record<string, string> = {
@@ -62,6 +63,7 @@ const MODERATED_AFTER: Record<string, string> = {
   reject: NOT_SHOWN,
   hide: NOT_SHOWN,
   unhide: "现在大家又能看到它了。",
+  merge: "你的主楼成了这个帖子里的一层，原来的回复也都在这里。",
 };
 
 // Characters of the floor in an email, and of the floor it replied to.

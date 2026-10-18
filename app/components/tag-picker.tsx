@@ -4,7 +4,7 @@ import { SearchBox, useDismiss } from "~/components/disclosure";
 import { Button } from "~/components/ui/button";
 import { useTags } from "~/forum";
 
-const MAX_TAGS = 5;
+export const MAX_TAGS = 5;
 
 const TAG_GROUPS = [
   { kind: "topic", label: "话题" },

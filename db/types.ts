@@ -376,6 +376,12 @@ export interface ThreadAliases {
   user_id: number;
 }
 
+export interface ThreadMerges {
+  created_at: Generated<Timestamp>;
+  post_ids: number[];
+  thread_id: number;
+}
+
 export interface Threads {
   accepted_count: Generated<number>;
   anonymous_replies: Generated<boolean>;
@@ -573,6 +579,7 @@ export interface DB {
   settings: Settings;
   tags: Tags;
   thread_aliases: ThreadAliases;
+  thread_merges: ThreadMerges;
   thread_suggestions: ThreadSuggestions;
   thread_summaries: ThreadSummaries;
   thread_tags: ThreadTags;

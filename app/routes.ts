@@ -5,6 +5,7 @@ export default [
     index("routes/home.tsx"),
     route("b/:slug", "routes/board.tsx"),
     route("t/:id", "routes/thread.tsx"),
+    route("t/:id/merge", "routes/thread-merge.tsx"),
     route("my/:list", "routes/my-threads.tsx"),
     route("u/:id", "routes/user.tsx"),
     route("badges", "routes/badges.tsx"),
