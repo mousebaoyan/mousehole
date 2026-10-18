@@ -699,16 +699,13 @@
 .prose :where(hr) {
   margin-block: 1.5em;
 }
-/* Images sit in the line, so a paragraph of them shows side by side; their size on the page was
-   worked out when the post was written. A paragraph of only images is centered. */
+/* Images sit in the line, so a paragraph of them shows side by side, from the left like the text;
+   their size on the page was worked out when the post was written. */
 .prose :where(img) {
   display: inline-block;
   margin: 0.15em 0;
   border-radius: 0.4rem;
   vertical-align: bottom;
-}
-.prose :where(p.images) {
-  text-align: center;
 }
 /* A table fills the column, and one too wide for it scrolls sideways in its box. Cells keep a few
    characters' width besides their padding, since Chinese may break after any one of them and a

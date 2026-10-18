@@ -54,14 +54,6 @@ describe("Markdown 渲染", () => {
     expect(out).toContain('<a href="https://example.com/a.png"');
   });
 
-  test("只有图片的段落居中，夹着文字或站外图片的不算", async () => {
-    const a = "![a](/uploads/ab/a.webp)";
-    const b = "![b](/uploads/ab/b.webp)";
-    expect(await html(`${a} ${b}\n${a}`)).toMatch(/^<p class="images">/);
-    expect(await html(`看图 ${a}`)).toMatch(/^<p>/);
-    expect(await html(`${a} ![c](https://example.com/c.png)`)).toMatch(/^<p>/);
-  });
-
   test("提及：链接到 /u/ID、文字以 @ 开头的才算，去重", async () => {
     const { html: out, mentions } = await render(
       "[@鼠鼠](/u/7) [@鼠鼠](/u/7) [@阿柒](/u/8) [主页](/u/9)",
