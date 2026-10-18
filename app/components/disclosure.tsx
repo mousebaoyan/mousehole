@@ -188,7 +188,7 @@ export function Drawer({
             onClick={() => dialog.current?.close()}
             className="absolute inset-0 bg-black/30 animate-in fade-in"
           />
-          <div className="absolute inset-y-0 left-0 w-72 overflow-y-auto bg-background p-4 pt-6 shadow-xl animate-in slide-in-from-left">
+          <div className="absolute inset-y-0 left-0 w-72 overflow-y-auto bg-background p-4 pt-6 [scrollbar-width:none] shadow-xl animate-in slide-in-from-left">
             {children}
           </div>
         </dialog>
