@@ -1,5 +1,6 @@
 import { z } from "@hono/zod-openapi";
 import { unix } from "../../platform/http.ts";
+import { BOUNTY_DAYS } from "../coins/rules.ts";
 import { UserBriefSchema, WriterSchema } from "../users/schemas.ts";
 import type { Lottery } from "./lotteries.ts";
 import type { Poll } from "./polls.ts";
@@ -26,6 +27,10 @@ export const ThreadSchema = z
     featured: z.boolean(),
     locked: z.boolean(),
     solved: z.boolean().openapi({ description: "问答帖有被采纳的回答" }),
+    bounty_until: z
+      .number()
+      .nullable()
+      .openapi({ description: "悬赏的截止时间；没有悬赏或已经结束时为 null" }),
     reply_count: z.number(),
     floor_count: z.number(),
     view_count: z.number(),
@@ -41,6 +46,12 @@ export const ThreadSchema = z
 
 type ThreadItem = NonNullable<ReturnType<Awaited<ReturnType<typeof threadsByIds>>["get"]>>;
 
+function bountyUntil(started: Date | null) {
+  if (started === null) return null;
+  const until = started.getTime() + BOUNTY_DAYS * 86_400_000;
+  return until > Date.now() ? Math.floor(until / 1000) : null;
+}
+
 // What is the reader's own comes only to someone signed in.
 export function threadJson(t: ThreadItem, signedIn: boolean) {
   return {
@@ -55,6 +66,7 @@ export function threadJson(t: ThreadItem, signedIn: boolean) {
     featured: t.featured,
     locked: t.locked,
     solved: t.accepted_count > 0,
+    bounty_until: bountyUntil(t.bounty_at),
     reply_count: t.reply_count,
     floor_count: t.floor_count,
     view_count: t.view_count,

@@ -8,6 +8,7 @@ import {
   CircleCheck,
   CircleQuestionMark,
   Coins as CoinsIcon,
+  HandCoins,
   Heart,
   Sparkles,
   type LucideIcon,
@@ -18,6 +19,8 @@ import { pageTitle } from "~/share-meta";
 import type { Route } from "./+types/coins.ts";
 import {
   ACCEPTED,
+  BOUNTY_ANSWER,
+  BOUNTY_REPLY,
   CHECK_IN,
   PER_LIKER,
   PERIODS,
@@ -98,9 +101,16 @@ export default function Coins({ loaderData }: Route.ComponentProps) {
               <Rule icon={CircleCheck} title="回复被采纳" hint="每天最多计一次">
                 +{ACCEPTED}
               </Rule>
+              <Rule
+                icon={HandCoins}
+                title="回答悬赏的问题"
+                hint={`被采纳再得 ${BOUNTY_ANSWER}，每天最多计一次`}
+              >
+                +{BOUNTY_REPLY}
+              </Rule>
             </ul>
             <p className="mt-1 text-meta text-muted-foreground">
-              获赞和采纳次日到账，匿名楼层和已删除的楼层不计入。
+              获赞、采纳和悬赏次日到账，匿名楼层和已删除的楼层不计入。
             </p>
           </div>
           <div>
@@ -251,6 +261,17 @@ function what(e: Entry) {
       return `获赞（${e.amount} 人）`;
     case "accepted":
       return "回复被采纳";
+    case "bounty":
+      return e.thread ? (
+        <>
+          回答悬赏{" "}
+          <Link to={`/t/${e.thread.id}`} className="text-link hover:underline">
+            {e.thread.title}
+          </Link>
+        </>
+      ) : (
+        "回答悬赏"
+      );
     case "question":
       return e.thread ? (
         <>

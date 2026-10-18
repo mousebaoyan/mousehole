@@ -12,7 +12,7 @@ const EntrySchema = z
     amount: z.number().openapi({ description: "挣为正、花为负" }),
     reason: z.string().openapi({
       description:
-        "check_in 签到、liked 获赞、accepted 回复被采纳、question 发问答帖、look 兑换动态版",
+        "check_in 签到、liked 获赞、accepted 回复被采纳、bounty 回答悬赏、question 发问答帖、look 兑换动态版",
     }),
     day: z
       .string()
@@ -21,7 +21,7 @@ const EntrySchema = z
     thread: z
       .object({ id: z.number(), title: z.string() })
       .nullable()
-      .openapi({ description: "发的问答帖" }),
+      .openapi({ description: "发的问答帖，或者回答的悬赏" }),
     look: z
       .object({ kind: z.string(), key: z.string() })
       .nullable()

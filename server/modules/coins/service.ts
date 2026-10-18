@@ -2,10 +2,18 @@ import { sql, type RawBuilder, type Transaction } from "kysely";
 import type { DB } from "../../../db/types.ts";
 import { db } from "../../platform/db.ts";
 import { AppError } from "../../platform/errors.ts";
-import { ACCEPTED, CHECK_IN, PER_LIKER, type Period } from "./rules.ts";
+import {
+  ACCEPTED,
+  BOUNTY_ANSWER,
+  BOUNTY_DAYS,
+  BOUNTY_REPLY,
+  CHECK_IN,
+  PER_LIKER,
+  type Period,
+} from "./rules.ts";
 
-// Coins (design §8.17): earned for coming by, for others' reactions and for accepted answers, and
-// spent on questions and moving looks. Other modules call in within their own transactions; this
+// Coins (design §8.17): earned for coming by, for others' reactions, for accepted answers and for
+// answering bounties, and spent on questions and moving looks. Other modules call in within their own transactions; this
 // one calls none of them.
 
 const PAGE = 50;
@@ -21,7 +29,7 @@ const CREDIT = sql`INSERT INTO coin_balances (user_id, coins)
   SELECT user_id, sum(amount) FROM fresh GROUP BY user_id
   ON CONFLICT (user_id) DO UPDATE SET coins = coin_balances.coins + excluded.coins`;
 const ONCE_A_DAY = sql`ON CONFLICT (user_id, reason, day)
-  WHERE reason IN ('check_in', 'liked', 'accepted') DO NOTHING`;
+  WHERE reason IN ('check_in', 'liked', 'accepted', 'bounty') DO NOTHING`;
 
 // Coming by on a Beijing day, on the site or in the groups. Only today and yesterday count, so a
 // sync bringing up long ago earns nothing.
@@ -71,9 +79,10 @@ export async function settleCoins() {
   for (const { day } of rows) await settleDay(day);
 }
 
-// What a day brought: one coin for each person who reacted to someone's floors, and ten if any
-// answer of theirs was accepted. Only what is still there counts: reactions taken back, answers
-// no longer accepted, floors deleted, hidden or anonymous don't.
+// What a day brought: one coin for each person who reacted to someone's floors, ten if any answer
+// of theirs was accepted, and for a bounty (design §8.19) one if they replied to it on the forum
+// that day, five if such a reply was accepted, one of the two. Only what is still there counts:
+// reactions taken back, answers no longer accepted, floors deleted, hidden or anonymous don't.
 async function settleDay(day: string) {
   const start = sql<Date>`(${day}::date::timestamp AT TIME ZONE 'Asia/Shanghai')`;
   const end = sql<Date>`${start} + interval '1 day'`;
@@ -83,7 +92,7 @@ async function settleDay(day: string) {
     await sql`
       WITH earned AS (
         SELECT p.author_id AS user_id, 'liked'::text AS reason,
-          count(DISTINCT r.user_id)::integer * ${PER_LIKER} AS amount
+          count(DISTINCT r.user_id)::integer * ${PER_LIKER} AS amount, NULL::integer AS thread_id
         FROM reactions r
         JOIN posts p ON p.id = r.post_id JOIN threads t ON t.id = p.thread_id
         JOIN users giver ON giver.id = r.user_id
@@ -91,12 +100,27 @@ async function settleDay(day: string) {
           AND giver.role <> 'bot' AND ${shown}
         GROUP BY p.author_id
         UNION ALL
-        SELECT DISTINCT p.author_id, 'accepted', ${ACCEPTED}::integer
+        SELECT DISTINCT p.author_id, 'accepted', ${ACCEPTED}::integer, NULL::integer
         FROM posts p JOIN threads t ON t.id = p.thread_id
         WHERE p.accepted_at >= ${start} AND p.accepted_at < ${end} AND ${shown}
+        UNION ALL
+        SELECT * FROM (
+          SELECT DISTINCT ON (p.author_id) p.author_id, 'bounty',
+            CASE WHEN p.accepted_at >= ${start} AND p.accepted_at < ${end}
+              THEN ${BOUNTY_ANSWER} ELSE ${BOUNTY_REPLY} END::integer,
+            p.thread_id
+          FROM posts p JOIN threads t ON t.id = p.thread_id
+          WHERE t.bounty_at IS NOT NULL AND p.created_at >= t.bounty_at
+            AND p.created_at < t.bounty_at + make_interval(days => ${BOUNTY_DAYS})
+            AND p.floor > 1 AND p.author_id <> t.author_id AND p.via <> 'qq' AND ${shown}
+            AND (p.created_at >= ${start} AND p.created_at < ${end}
+              OR p.accepted_at >= ${start} AND p.accepted_at < ${end})
+          ORDER BY p.author_id, (p.accepted_at >= ${start} AND p.accepted_at < ${end}) IS TRUE DESC,
+            p.id
+        ) bounties
       ), fresh AS (
-        INSERT INTO coin_ledger (user_id, amount, reason, day)
-        SELECT earned.user_id, earned.amount, earned.reason, ${day}::date
+        INSERT INTO coin_ledger (user_id, amount, reason, day, thread_id)
+        SELECT earned.user_id, earned.amount, earned.reason, ${day}::date, earned.thread_id
         FROM earned JOIN users u ON u.id = earned.user_id WHERE ${EARNER}
         ${ONCE_A_DAY}
         RETURNING user_id, amount)
