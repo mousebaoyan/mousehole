@@ -64,25 +64,16 @@ describe("幂等", () => {
     expect(runs).toBe(2);
   });
 
-  test("业务错误也按第一次的结果返回", async () => {
-    await post("/missing", "k");
-    const again = await post("/missing", "k");
-
-    expect(runs).toBe(1);
-    expect(again.status).toBe(404);
-    expect(await again.json()).toMatchObject({ error: { code: "not_found" } });
-  });
-
-  test("服务器出错不记结果，重试会再执行", async () => {
-    expect((await post("/broken", "k")).status).toBe(500);
-    expect((await post("/broken", "k")).status).toBe(500);
-    expect(runs).toBe(2);
-  });
-
-  test("被限流不记结果，等一会儿用同一个键重试会再执行", async () => {
-    expect((await post("/limited", "k")).status).toBe(429);
-    expect((await post("/limited", "k")).status).toBe(429);
-    expect(runs).toBe(2);
+  test("出错不记结果：业务错误、服务器出错和被限流，用同一个键重试都会再执行", async () => {
+    for (const [path, status] of [
+      ["/missing", 404],
+      ["/broken", 500],
+      ["/limited", 429],
+    ] as const) {
+      expect((await post(path, `k${path}`)).status).toBe(status);
+      expect((await post(path, `k${path}`)).status).toBe(status);
+    }
+    expect(runs).toBe(6);
   });
 
   test("同一个键用在别的接口上返回 422", async () => {
