@@ -223,11 +223,18 @@
   * {
     @apply border-border outline-ring/50;
   }
-  /* Desktop screens are read from further away, so everything sized in rem grows a little. */
+  /* Desktop screens are read from further away, so everything sized in rem grows a little. The
+     scrollbar's room is kept while a modal hides it, so the page doesn't shift sideways. */
   html {
+    scrollbar-gutter: stable;
     @variant lg {
       font-size: 106.25%;
     }
+  }
+  /* The page stays put behind a modal: the wheel or a finger on the dark around it, or going on
+     past the end of a list in it, would scroll the page instead. */
+  html:has(dialog:modal) {
+    overflow: hidden;
   }
   /* Titles, names and posts are written by members: a long link or word breaks rather than
      running out of its box. */

@@ -54,7 +54,7 @@ export function EmojiPicker({ onSelect }: { onSelect: (emoji: string) => void })
         placeholder="搜索表情"
         className="m-2 h-8 shrink-0 rounded-lg bg-secondary px-2.5 text-sm outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring/40"
       />
-      <Picker.Viewport className="relative flex-1 outline-none">
+      <Picker.Viewport className="relative flex-1 overscroll-contain outline-none">
         <Picker.Loading className="absolute inset-0 flex items-center justify-center text-sm text-muted-foreground">
           加载中…
         </Picker.Loading>

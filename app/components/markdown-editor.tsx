@@ -426,7 +426,7 @@ export function MarkdownEditor({
           }}
           aria-label={label}
           placeholder="支持 Markdown，输入 @ 提及成员，可以粘贴或拖入图片"
-          className="min-h-0 flex-1 resize-none bg-transparent px-4 py-3 text-body leading-7 outline-none placeholder:text-muted-foreground"
+          className="min-h-0 flex-1 resize-none overscroll-contain bg-transparent px-4 py-3 text-body leading-7 outline-none placeholder:text-muted-foreground"
         />
         {uploadError !== null && (
           <p role="alert" className="border-t px-4 py-1.5 text-meta text-destructive">
@@ -437,7 +437,7 @@ export function MarkdownEditor({
           <ul
             aria-label="提及"
             className={cn(
-              "absolute inset-x-2 z-10 max-h-48 space-y-0.5 overflow-y-auto rounded-xl border bg-popover p-1 text-sm text-popover-foreground shadow-lg",
+              "absolute inset-x-2 z-10 max-h-48 space-y-0.5 overflow-y-auto overscroll-contain rounded-xl border bg-popover p-1 text-sm text-popover-foreground shadow-lg",
               mention?.above && "-translate-y-full",
             )}
             style={{ top: mention?.y }}
@@ -471,7 +471,7 @@ export function MarkdownEditor({
             <PenLine /> 继续编辑
           </Button>
         </div>
-        <div className="min-h-0 flex-1 overflow-y-auto bg-secondary/40 px-4 py-1">
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-secondary/40 px-4 py-1">
           {value.trim() && data?.html ? (
             <div className={PROSE} dangerouslySetInnerHTML={{ __html: data.html }} />
           ) : (

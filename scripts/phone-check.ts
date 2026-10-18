@@ -96,6 +96,8 @@ for (const path of paths.length > 0 ? paths : PAGES) {
     await trigger.click();
     report(`「${name}」展开后超出屏幕`, await offscreen(".z-50"));
     await page.keyboard.press("Escape");
+    // A dialog's close event comes in a task after the key's; the menus close at once.
+    await page.evaluate(() => new Promise((resolve) => setTimeout(resolve)));
     if ((await trigger.getAttribute("aria-expanded")) === "true") await trigger.click();
   }
 }

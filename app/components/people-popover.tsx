@@ -41,7 +41,7 @@ export function PeoplePopover({
       {open && (
         <ul
           className={cn(
-            "absolute top-full z-30 mt-2 max-h-72 w-[min(18rem,calc(100vw-2rem))] overflow-y-auto rounded-xl border bg-popover py-1 text-sm text-popover-foreground shadow-lg animate-in fade-in zoom-in-95",
+            "absolute top-full z-30 mt-2 max-h-72 w-[min(18rem,calc(100vw-2rem))] overflow-y-auto overscroll-contain rounded-xl border bg-popover py-1 text-sm text-popover-foreground shadow-lg animate-in fade-in zoom-in-95",
             align === "left" ? "left-0" : "right-0",
           )}
         >

@@ -717,7 +717,7 @@ function Composer({
             {withPoll && <PollSettings poll={content.poll} onChange={setPoll} />}
             {withLottery && <LotterySettings lottery={content.lottery} onChange={setLottery} />}
             {/* Scrolls when a poll's options or lottery's prizes leave the editor too little room. */}
-            <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+            <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain">
               {withPoll && <PollOptions poll={content.poll} onChange={setPoll} />}
               {withLottery && <LotteryPrizes lottery={content.lottery} onChange={setLottery} />}
               {withPositioning && (
