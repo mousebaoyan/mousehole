@@ -19,8 +19,7 @@ import { Backdrop } from "~/components/backdrop";
 import { BoardBadge } from "~/components/board-badge";
 import { PostBody } from "~/components/post-body";
 import { PROSE } from "~/components/prose";
-import { More } from "~/components/thread-feed";
-import { ThreadList } from "~/components/thread-list";
+import { ThreadPages } from "~/components/thread-feed";
 import { UserAvatar } from "~/components/user-avatar";
 import { UserBadges } from "~/components/user-badges";
 import { StatusLine } from "~/components/user-status";
@@ -109,7 +108,7 @@ export async function loader({ params, request, context }: Route.LoaderArgs) {
   const posts = postsRes?.ok ? await postsRes.json() : null;
   const likes = likesRes?.ok ? await likesRes.json() : null;
   const people = peopleRes?.ok ? await peopleRes.json() : null;
-  // Shaped like the thread lists' pages, which `More` loads the next of.
+  // Shaped like the thread lists' pages, which `ThreadPages` loads the next of.
   return {
     user: await userRes.json(),
     showcase: await showcaseRes.json(),
@@ -437,9 +436,7 @@ function Profile({
           (threads.length === 0 ? (
             <Empty />
           ) : (
-            <ThreadList threads={threads} now={now} showBoard>
-              {next_cursor !== null && <More cursor={next_cursor} showBoard />}
-            </ThreadList>
+            <ThreadPages first={{ threads, next_cursor, now }} showBoard />
           ))}
         {posts &&
           (posts.length === 0 ? (

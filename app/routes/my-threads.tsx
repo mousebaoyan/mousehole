@@ -1,8 +1,7 @@
 import { pageTitle } from "~/share-meta";
 import { data, redirect } from "react-router";
 import { apiContext } from "../api.server.ts";
-import { More } from "~/components/thread-feed";
-import { ThreadList } from "~/components/thread-list";
+import { ThreadPages } from "~/components/thread-feed";
 import { unixNow } from "~/time";
 import type { Route } from "./+types/my-threads.ts";
 
@@ -46,9 +45,7 @@ export default function MyThreads({ loaderData }: Route.ComponentProps) {
       {threads.length === 0 ? (
         <p className="py-16 text-center text-sm text-muted-foreground">{list.empty}</p>
       ) : (
-        <ThreadList threads={threads} now={now} showBoard>
-          {next_cursor !== null && <More cursor={next_cursor} showBoard />}
-        </ThreadList>
+        <ThreadPages first={{ threads, next_cursor, now }} showBoard />
       )}
     </section>
   );
