@@ -55,8 +55,9 @@ export const idempotency = createMiddleware<AppEnv>(async (c, next) => {
 
   await next();
   const { status } = c.res;
-  // A server error or a rate limit is not a result: forget the key so a retry runs again.
-  if (status >= 500 || status === 429) {
+  // An error did nothing, and the bot may send it again put right: forget the key so a retry
+  // runs again.
+  if (status >= 400) {
     await db
       .deleteFrom("idempotency_keys")
       .where((eb) => eb.and(id))
