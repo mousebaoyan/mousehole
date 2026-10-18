@@ -361,6 +361,7 @@ function Profile({
           )}
           {staff && !self && (
             <ClearButtons
+              name={user.display_name}
               background={user.background !== null}
               status={user.user_status !== null}
               showcase={showcase.showcase_html !== null}
