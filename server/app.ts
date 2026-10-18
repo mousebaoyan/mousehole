@@ -20,6 +20,7 @@ import { searchRoutes } from "./modules/search/routes.ts";
 import { lotteryRoutes } from "./modules/threads/lottery-routes.ts";
 import { pollRoutes } from "./modules/threads/poll-routes.ts";
 import { serveSitemap, threadsRoutes } from "./modules/threads/routes.ts";
+import { suggestionRoutes } from "./modules/threads/suggestion-routes.ts";
 import { serveUpload, uploadsRoutes } from "./modules/uploads/routes.ts";
 import { serveAvatar, serveBackground, usersRoutes } from "./modules/users/routes.ts";
 import { weeklyRoutes } from "./modules/weekly/routes.ts";
@@ -42,6 +43,7 @@ const api = createRouter()
   .route("/", threadsRoutes)
   .route("/", pollRoutes)
   .route("/", lotteryRoutes)
+  .route("/", suggestionRoutes)
   .route("/", draftsRoutes)
   .route("/", uploadsRoutes)
   .route("/", qqRoutes)

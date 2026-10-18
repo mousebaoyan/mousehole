@@ -98,32 +98,34 @@ describe("等级的权限", () => {
     expect((await poll((await person(2)).who)).status).toBe(201);
   });
 
-  test("L3 能改等级比自己低的人的帖子的标题和版块，只能移到自己能发帖的版块", async () => {
-    const [low, peer, l3, moderator] = await Promise.all([
+  test("L4 能改等级比自己低的人的帖子的标题和版块，只能移到自己能发帖的版块；L3 不能直接改", async () => {
+    const [low, peer, l3, l4, moderator] = await Promise.all([
       person(1),
+      person(4),
       person(3),
-      person(3),
+      person(4),
       person(0, "moderator"),
     ]);
     const theirs = await threadBy(low.who);
-    expect((await patch(theirs.id, l3.who, { title: "改个更清楚的标题" })).status).toBe(200);
-    expect((await patch(theirs.id, l3.who, { board: "staff" })).status).toBe(403);
-    expect((await patch(theirs.id, l3.who, { locked: true })).status).toBe(403);
+    expect((await patch(theirs.id, l3.who, { title: "改个更清楚的标题" })).status).toBe(403);
+    expect((await patch(theirs.id, l4.who, { title: "改个更清楚的标题" })).status).toBe(200);
+    expect((await patch(theirs.id, l4.who, { board: "staff" })).status).toBe(403);
+    expect((await patch(theirs.id, l4.who, { locked: true })).status).toBe(403);
 
     // Not over equals, moderators, or anyone anonymous.
     for (const author of [peer, moderator]) {
       const thread = await threadBy(author.who);
-      expect((await patch(thread.id, l3.who, { title: "改个更清楚的标题" })).status).toBe(403);
+      expect((await patch(thread.id, l4.who, { title: "改个更清楚的标题" })).status).toBe(403);
     }
     const hidden = await threadBy(low.who, true);
-    expect((await patch(hidden.id, l3.who, { title: "改个更清楚的标题" })).status).toBe(403);
+    expect((await patch(hidden.id, l4.who, { title: "改个更清楚的标题" })).status).toBe(403);
   });
 
-  test("L5 能锁定等级比自己低的人的帖子，编辑他们的楼层；锁定后 L3 不能再改", async () => {
-    const [low, l3, l5] = await Promise.all([person(1), person(3), person(5)]);
+  test("L5 能锁定等级比自己低的人的帖子，编辑他们的楼层；锁定后 L4 不能再改", async () => {
+    const [low, l4, l5] = await Promise.all([person(1), person(4), person(5)]);
     const theirs = await threadBy(low.who);
     expect((await patch(theirs.id, l5.who, { locked: true })).status).toBe(200);
-    expect((await patch(theirs.id, l3.who, { title: "改个更清楚的标题" })).status).toBe(403);
+    expect((await patch(theirs.id, l4.who, { title: "改个更清楚的标题" })).status).toBe(403);
 
     const posts = await api.threads[":id"].posts.$get({
       param: { id: String(theirs.id) },
@@ -136,7 +138,7 @@ describe("等级的权限", () => {
         { param: { id: String(opening.id) }, json: { content: { markdown: "改过的正文" } } },
         who,
       );
-    expect((await edit(l3.who)).status).toBe(403);
+    expect((await edit(l4.who)).status).toBe(403);
     expect((await edit(l5.who)).status).toBe(200);
   });
 

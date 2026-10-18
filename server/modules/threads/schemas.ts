@@ -4,12 +4,15 @@ import { UserBriefSchema, WriterSchema } from "../users/schemas.ts";
 import type { Lottery } from "./lotteries.ts";
 import type { Poll } from "./polls.ts";
 import type { threadsByIds } from "./service.ts";
+import type { Suggestion } from "./suggestions.ts";
+
+export const BoardBriefSchema = z.object({ slug: z.string(), name: z.string(), color: z.string() });
 
 // A thread as lists show it; also used by search results.
 export const ThreadSchema = z
   .object({
     id: z.number(),
-    board: z.object({ slug: z.string(), name: z.string(), color: z.string() }),
+    board: BoardBriefSchema,
     kind: z
       .string()
       .openapi({ description: "discussion：讨论；question：问答；poll：投票；lottery：抽奖" }),
@@ -126,4 +129,29 @@ export const LotterySchema = z
 
 export function lotteryJson(l: Lottery) {
   return { ...l, draws_at: unix(l.draws_at), drawn_at: l.drawn_at && unix(l.drawn_at) };
+}
+
+// A change waiting for a thread's author or a moderator (design §6.6).
+export const SuggestionSchema = z
+  .object({
+    id: z.number(),
+    user: UserBriefSchema.openapi({ description: "提建议的人" }),
+    title: z.string().nullable(),
+    board: BoardBriefSchema.nullable(),
+    tags: z.array(z.string()).nullable(),
+    reason: z.string().nullable(),
+    created_at: z.number(),
+  })
+  .openapi("Suggestion", { description: "待处理的修改建议；没建议改的字段为 null" });
+
+export function suggestionJson(s: Suggestion) {
+  return {
+    id: s.id,
+    user: s.user,
+    title: s.title,
+    board: s.board,
+    tags: s.tags,
+    reason: s.reason,
+    created_at: unix(s.created_at),
+  };
 }

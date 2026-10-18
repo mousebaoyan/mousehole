@@ -38,6 +38,7 @@ export type LucideIcon = ReturnType<typeof icon>;
 
 export const ArrowDown = icon(lucide.ArrowDown);
 export const ArrowLeft = icon(lucide.ArrowLeft);
+export const ArrowRight = icon(lucide.ArrowRight);
 export const ArrowRightLeft = icon(lucide.ArrowRightLeft);
 export const ArrowUp = icon(lucide.ArrowUp);
 export const AtSign = icon(lucide.AtSign);

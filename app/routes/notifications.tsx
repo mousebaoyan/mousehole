@@ -4,6 +4,7 @@ import {
   BellRing,
   CheckCheck,
   CircleCheck,
+  FilePen,
   Gift,
   Heart,
   Reply,
@@ -78,6 +79,7 @@ const ICONS: Record<string, typeof Reply> = {
   following: UserPlus,
   solved: CircleCheck,
   moderation: ShieldCheck,
+  suggestion: FilePen,
   level: TrendingUp,
   lottery: Gift,
   badge: Award,
@@ -97,6 +99,14 @@ const MODERATED: Record<string, string> = {
   reject: "未通过你的",
   hide: "隐藏了你的",
   unhide: "恢复了你的",
+};
+
+// What became of a change suggested for a thread; see design §6.6.
+const SUGGESTED: Record<string, string> = {
+  new: "建议修改你的帖子",
+  accepted: "同意了你的修改建议",
+  rejected: "未同意你的修改建议",
+  applied: "按修改建议修改了你的帖子",
 };
 
 // What happened, in a sentence; merged ones count people or floors.
@@ -120,6 +130,8 @@ function headline(n: Item) {
       return `${who} 采纳了你的回答`;
     case "moderation":
       return `${who} ${MODERATED[n.data.action] ?? "处理了你的"}${n.post?.floor === 1 ? "帖子" : "回复"}${n.data.reason ? `：${n.data.reason}` : ""}`;
+    case "suggestion":
+      return `${who} ${SUGGESTED[n.data.kind]}`;
     case "level":
       return `你已升级到 ${levelName(Number(n.data.level))}`;
     case "lottery":

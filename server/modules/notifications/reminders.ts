@@ -23,9 +23,10 @@ import { NOTIFICATION_LABELS, type NotificationType } from "./types.ts";
 
 type Person = { id: number; qq: number };
 
-// About something done to a floor; levels, lotteries and badges are told by their own.
+// About something done to a floor; levels, lotteries and badges are told by their own, and
+// suggestions on the site only.
 export type Notice = {
-  type: Exclude<NotificationType, "level" | "lottery" | "badge">;
+  type: Exclude<NotificationType, "level" | "lottery" | "badge" | "suggestion">;
   actorId: number;
   // Their number in the thread when they did it anonymously (design §8.12).
   actorAlias: number | null;
@@ -368,8 +369,8 @@ const LEVEL_WHY: Record<number, string> = {
 const LEVEL_UNLOCKS: Record<number, string> = {
   1: "每天发帖、回复不再限次数，每层的站外链接也不再限个数",
   2: "你可以发投票帖和抽奖帖了",
-  3: "你可以帮忙修改等级比你低的人发的帖子的标题、版块和标签",
-  4: "你举报等级比你低的人的楼层时，这一层会先隐藏，等版主处理",
+  3: "你可以建议修改等级比你低的人发的帖子的标题、版块和标签，楼主或版主同意后生效",
+  4: "你可以直接修改等级比你低的人发的帖子的标题、版块和标签；举报他们的楼层时，这一层会先隐藏，等版主处理",
   5: "你可以编辑等级比你低的人的楼层，锁定和解锁帖子",
 };
 const KEEP_L4 = `${levelName(4)}按最近 ${RECENT_DAYS} 天算：达不到会降回 ${levelName(3)}，刚升上去的两周内不降。`;
