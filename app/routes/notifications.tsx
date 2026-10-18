@@ -16,6 +16,7 @@ import {
 import { pageTitle } from "~/share-meta";
 import { useRef } from "react";
 import {
+  data,
   Form,
   Link,
   redirect,
@@ -45,7 +46,8 @@ export async function loader({ request, context }: Route.LoaderArgs) {
   const res = await context.get(apiContext).notifications.$get({
     query: { unread_only: unread ? "true" : "false", cursor: search.get("cursor") ?? undefined },
   });
-  if (!res.ok) return redirect("/login");
+  if (res.status === 401) return redirect("/login");
+  if (!res.ok) throw data((await res.json()).error.message, { status: res.status });
   const page = await res.json();
   return { unread, items: page.items, next_cursor: page.next_cursor, now: unixNow() };
 }
@@ -249,15 +251,15 @@ function Row({ item: n, now }: { item: Item; now: number }) {
 
 // The next page loads when its link comes near the screen, as the thread lists do.
 function More({ cursor }: { cursor: string }) {
-  const { load, state, data } = useFetcher<typeof loader>();
+  const { load, state, data: page } = useFetcher<typeof loader>();
   const link = useRef<HTMLAnchorElement>(null);
   const { search } = useLocation();
   const params = new URLSearchParams(search);
   params.set("cursor", cursor);
   const href = `/notifications?${params}`;
-  useNearView(link, state === "idle" && !data, () => void load(href));
+  useNearView(link, state === "idle" && !page, () => void load(href));
 
-  if (!data) {
+  if (!page) {
     return (
       <li className="py-4 text-center text-meta">
         <a ref={link} href={href} className="text-muted-foreground hover:text-foreground">
@@ -268,8 +270,8 @@ function More({ cursor }: { cursor: string }) {
   }
   return (
     <>
-      <Rows items={data.items} now={data.now} />
-      {data.next_cursor !== null && <More cursor={data.next_cursor} />}
+      <Rows items={page.items} now={page.now} />
+      {page.next_cursor !== null && <More cursor={page.next_cursor} />}
     </>
   );
 }

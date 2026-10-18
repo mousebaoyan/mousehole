@@ -58,6 +58,7 @@ export const notificationsRoutes = createRouter()
           },
         },
         401: errorResponse("没有登录"),
+        403: errorResponse("不是成员"),
       },
     }),
     async (c) => {
@@ -84,6 +85,7 @@ export const notificationsRoutes = createRouter()
           content: { "application/json": { schema: z.object({ count: z.number() }) } },
         },
         401: errorResponse("没有登录"),
+        403: errorResponse("不是成员"),
       },
     }),
     async (c) => c.json({ count: await countUnread(authorize(c, "act").id) }, 200),
@@ -106,7 +108,11 @@ export const notificationsRoutes = createRouter()
           },
         },
       },
-      responses: { 204: { description: "已标为已读" }, 401: errorResponse("没有登录") },
+      responses: {
+        204: { description: "已标为已读" },
+        401: errorResponse("没有登录"),
+        403: errorResponse("不是成员"),
+      },
     }),
     async (c) => {
       const viewer = authorize(c, "act");
