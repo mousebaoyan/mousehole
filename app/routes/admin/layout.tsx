@@ -93,7 +93,10 @@ export default function AdminLayout({ loaderData: { rank } }: Route.ComponentPro
           </div>
         </div>
         {/* A sidebar on wide screens, a row that scrolls sideways on phones. */}
-        <nav ref={nav} className="-mx-1 flex gap-1 overflow-x-auto px-1 text-sm md:flex-col">
+        <nav
+          ref={nav}
+          className="-mx-1 flex gap-1 overflow-x-auto px-1 text-sm [scrollbar-width:none] md:flex-col"
+        >
           {pages
             .filter((p) => RANKS.indexOf(p.from) <= RANKS.indexOf(rank))
             .map((p) => (

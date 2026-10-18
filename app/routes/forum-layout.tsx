@@ -48,7 +48,7 @@ export default function ForumLayout({
         <p className="bg-brand/10 px-4 py-2 text-center text-meta text-brand-strong">{banner}</p>
       )}
       <div className="mx-auto flex max-w-7xl gap-8 px-2 sm:px-5">
-        <aside className="sticky top-14 hidden h-[calc(100svh-3.5rem)] w-52 shrink-0 overflow-y-auto py-6 lg:block">
+        <aside className="sticky top-14 hidden h-[calc(100svh-3.5rem)] w-52 shrink-0 overflow-y-auto py-6 [scrollbar-width:none] lg:block">
           <ForumNav />
         </aside>
         <div className="min-w-0 flex-1 pt-4 pb-16 sm:pt-6">
