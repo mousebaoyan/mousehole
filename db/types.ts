@@ -413,6 +413,16 @@ export interface ThreadSuggestions {
   user_id: number;
 }
 
+export interface ThreadSummaries {
+  created_at: Generated<Timestamp>;
+  disabled: Generated<boolean>;
+  floors: Generated<number[]>;
+  lead: string | null;
+  points: Json | null;
+  replies: Generated<number>;
+  thread_id: number;
+}
+
 export interface ThreadTags {
   last_post_at: Timestamp;
   tag_id: number;
@@ -563,6 +573,7 @@ export interface DB {
   tags: Tags;
   thread_aliases: ThreadAliases;
   thread_suggestions: ThreadSuggestions;
+  thread_summaries: ThreadSummaries;
   thread_tags: ThreadTags;
   thread_users: ThreadUsers;
   threads: Threads;

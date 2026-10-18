@@ -126,6 +126,7 @@ export const Sigma = icon(lucide.Sigma);
 export const Smartphone = icon(lucide.Smartphone);
 export const Smile = icon(lucide.Smile);
 export const Snowflake = icon(lucide.Snowflake);
+export const Sparkle = icon(lucide.Sparkle);
 export const Sparkles = icon(lucide.Sparkles);
 export const Sun = icon(lucide.Sun);
 export const Superscript = icon(lucide.Superscript);
