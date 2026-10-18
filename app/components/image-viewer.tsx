@@ -40,10 +40,17 @@ export function ImageViewer({
   const [loaded, setLoaded] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
   const pointers = useRef(new Map<number, { x: number; y: number }>());
-  const gesture = useRef<{ view: View; moved: boolean; spread: number; startX: number } | null>(
-    null,
-  );
+  const gesture = useRef<{
+    view: View;
+    moved: boolean;
+    spread: number;
+    startX: number;
+    onImage: boolean;
+  } | null>(null);
   const lastTap = useRef(0);
+  // Set by a tap on the dark; the viewer closes on the click that follows, as closing sooner leaves
+  // that click to the page below, where it can open an image again.
+  const closing = useRef(false);
   const image = images[index];
 
   useEffect(() => dialog.current?.showModal(), []);
@@ -94,7 +101,10 @@ export function ImageViewer({
   function onDown(e: PointerEvent<HTMLDivElement>) {
     e.currentTarget.setPointerCapture(e.pointerId);
     pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
-    gesture.current = { view, moved: false, spread: spread(), startX: e.clientX };
+    // Its target before the capture, which sends the rest of the pointer's events to the stage.
+    const onImage = e.target instanceof HTMLImageElement;
+    gesture.current = { view, moved: false, spread: spread(), startX: e.clientX, onImage };
+    closing.current = false;
     setDragging(true);
   }
 
@@ -130,7 +140,7 @@ export function ImageViewer({
       zoomAt(view.scale > 1 ? 1 : 2.5, e.clientX, e.clientY);
     } else {
       lastTap.current = e.timeStamp;
-      if (!(e.target instanceof HTMLImageElement)) onClose();
+      closing.current = !g.onImage;
     }
   }
 
@@ -157,6 +167,10 @@ export function ImageViewer({
         onPointerMove={onMove}
         onPointerUp={onUp}
         onPointerCancel={onUp}
+        onClick={() => {
+          if (closing.current) onClose();
+        }}
+        role="presentation"
         className="flex h-full w-full touch-none items-center justify-center overflow-hidden select-none"
       >
         <img
