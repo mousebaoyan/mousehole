@@ -572,7 +572,7 @@ export async function getThread(id: number, reader: Reader) {
     }
     const above = reader.reach === GUEST ? undefined : await boardLevel(id);
     if (above !== undefined && above > reader.reach) throw needsLevelToRead(above);
-    throw threadNotFound();
+    throw (await mergedAway(id, 1)) ?? threadNotFound();
   }
   const [thread] = await withUsers([row]);
   return {
@@ -580,6 +580,27 @@ export async function getThread(id: number, reader: Reader) {
     poll: thread.kind === "poll" ? await getPoll(id, reader.id) : null,
     lottery: thread.kind === "lottery" ? await getLottery(id, reader.id) : null,
   };
+}
+
+// A thread merged into another (design §8.20) tells where a floor of it is now; one past its last
+// floor leads to its opening post.
+async function mergedAway(id: number, floor: number) {
+  const now = await db
+    .selectFrom("thread_merges")
+    .innerJoin("posts", (join) =>
+      join.on(
+        sql<boolean>`posts.id = coalesce(thread_merges.post_ids[${floor}], thread_merges.post_ids[1])`,
+      ),
+    )
+    .select(["posts.thread_id", "posts.floor"])
+    .where("thread_merges.thread_id", "=", id)
+    .executeTakeFirst();
+  return (
+    now &&
+    new AppError(404, "thread_merged", "这个帖子已合并到另一个帖子", {
+      details: { thread_id: now.thread_id, floor: now.floor },
+    })
+  );
 }
 
 // The level a thread's board needs to be read, for a member it is out of reach of.
@@ -680,7 +701,8 @@ async function withPostUsers(rows: PostRow[]) {
   }));
 }
 
-async function assertVisible(threadId: number, reader: Reader) {
+// `floor` is the one wanted, should the thread have been merged into another.
+async function assertVisible(threadId: number, reader: Reader, floor = 1) {
   const thread = await openableThreads(reader)
     .select([
       "threads.id",
@@ -695,7 +717,7 @@ async function assertVisible(threadId: number, reader: Reader) {
     ])
     .where("threads.id", "=", threadId)
     .executeTakeFirst();
-  if (!thread) throw threadNotFound();
+  if (!thread) throw (await mergedAway(threadId, floor)) ?? threadNotFound();
   return thread;
 }
 
@@ -739,7 +761,7 @@ export async function listPosts(
   reader: Reader,
   range: { after: number } | { before: number },
 ) {
-  await assertVisible(threadId, reader);
+  await assertVisible(threadId, reader, "after" in range ? range.after + 1 : range.before - 1);
   let query = selectPosts(reader).where("posts.thread_id", "=", threadId).limit(FLOOR_BATCH);
   query =
     "after" in range
@@ -1496,7 +1518,7 @@ async function withdrawThread(
 
 // A thread in or out of its board's, tags' and author's counts, with the replies in it. Anonymous
 // threads stay out of the author's, which would otherwise rise as one is posted and give them away.
-async function countThread(
+export async function countThread(
   trx: Transaction<DB>,
   threadId: number,
   thread: { board_id: number; author_id: number; author_anonymous: boolean; reply_count: number },

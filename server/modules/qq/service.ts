@@ -83,6 +83,16 @@ export async function linkSource(
   }
 }
 
+// A thread's floors merged into another (design §8.20) take their messages along: quoting one in
+// the group carries on in the thread they are in now.
+export async function moveLinks(trx: Transaction<DB>, threadId: number, intoId: number) {
+  await trx
+    .updateTable("qq_message_links")
+    .set({ thread_id: intoId })
+    .where("thread_id", "=", threadId)
+    .execute();
+}
+
 // Answers written on the forum to questions archived from a group, for the plugin to tell each
 // asker in the group (design §8.6): only boards every member reads, and not anonymous threads,
 // whose askers it would name. Askers who left the groups or have read every one aren't told.

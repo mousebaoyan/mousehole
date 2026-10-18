@@ -563,6 +563,15 @@ export async function markReadByFloors(
   if (marked.length > 0) await tellUnread(trx, [userId]);
 }
 
+// Notices of a thread merged into another (design §8.20) lead to the floors where they are now.
+export async function moveNotifications(trx: Transaction<DB>, threadId: number, intoId: number) {
+  await trx
+    .updateTable("notifications")
+    .set({ thread_id: intoId })
+    .where("thread_id", "=", threadId)
+    .execute();
+}
+
 // Read ones are kept half a year.
 export async function clearOldNotifications() {
   await db

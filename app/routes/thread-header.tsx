@@ -11,6 +11,7 @@ import {
   HandCoins,
   Lock,
   LockOpen,
+  Merge,
   MessageSquare,
   Pencil,
   Pin,
@@ -36,6 +37,7 @@ import { ReviewItems } from "./review-items.tsx";
 import { SuggestionChanges } from "./suggestion-changes.tsx";
 import { ThreadSummary } from "./thread-summary.tsx";
 import { BOUNTY_ANSWER, BOUNTY_REPLY } from "../../server/modules/coins/rules.ts";
+import { whyUnmergeable } from "../../server/modules/threads/merge-rules.ts";
 
 // The title and what is known about the thread. Its author can retitle and retag it; moderators
 // also pin, feature, lock, move and review it. `power` is what the reader's level gives them over
@@ -241,6 +243,11 @@ export function ThreadHeader({
                     >
                       <ArrowRightLeft /> 移动到…
                     </button>
+                    {whyUnmergeable(thread) === null && (
+                      <Link to={`/t/${thread.id}/merge`} className={menuItem} onClick={close}>
+                        <Merge /> 合并帖子…
+                      </Link>
+                    )}
                     {thread.summary_disabled !== undefined && (
                       <button
                         type="button"

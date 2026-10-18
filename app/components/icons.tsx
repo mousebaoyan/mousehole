@@ -96,6 +96,7 @@ export const Mail = icon(lucide.Mail);
 export const Maximize = icon(lucide.Maximize);
 export const Maximize2 = icon(lucide.Maximize2);
 export const Menu = icon(lucide.Menu);
+export const Merge = icon(lucide.Merge);
 export const MessageCircle = icon(lucide.MessageCircle);
 export const MessageSquare = icon(lucide.MessageSquare);
 export const MessageSquareCode = icon(lucide.MessageSquareCode);

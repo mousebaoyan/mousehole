@@ -11,6 +11,7 @@ import {
   clientIp,
   createRouter,
   errorResponse,
+  ErrorSchema,
   readerOf,
   type AppEnv,
   requireWeb,
@@ -271,6 +272,15 @@ function postJson(p: Post, form: "html" | "markdown", extras: Extras) {
 
 const IdParam = z.object({ id: z.coerce.number().int() });
 const AnswerParams = z.object({ id: z.coerce.number().int(), post: z.coerce.number().int() });
+
+// Not found; a thread merged into another (design §8.20) also tells where a floor of it is now.
+function notFoundOrMerged(description: string) {
+  const schema = ErrorSchema.extend({
+    thread_id: z.number().optional(),
+    floor: z.number().optional(),
+  });
+  return { description, content: { "application/json": { schema } } };
+}
 
 const FLOOR_EVENTS = new Set(["post.created", "post.updated", "post.deleted"]);
 
@@ -684,7 +694,7 @@ export const threadsRoutes = createRouter()
         200: threadResponse,
         401: errorResponse("楼主设置了不给访客看，访客要登录后查看"),
         403: errorResponse("等级不够看这个版块（level_required），message 里有要几级"),
-        404: errorResponse("帖子不存在"),
+        404: notFoundOrMerged("帖子不存在；合并到了另一个帖子的是 thread_merged，带上主楼现在在哪"),
       },
     }),
     async (c) => {
@@ -767,7 +777,9 @@ export const threadsRoutes = createRouter()
           description: "不足 20 层说明这个方向到头了",
           content: { "application/json": { schema: z.object({ items: z.array(PostSchema) }) } },
         },
-        404: errorResponse("帖子不存在"),
+        404: notFoundOrMerged(
+          "帖子不存在；合并到了另一个帖子的是 thread_merged，带上 after 的下一楼（或 before 的上一楼）现在在哪",
+        ),
       },
     }),
     async (c) => {

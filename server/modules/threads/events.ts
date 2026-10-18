@@ -178,3 +178,21 @@ export async function lotteryDrawn(
     url: link(lottery.thread.id, 1),
   });
 }
+
+// A thread merged into another (design §8.20): the plugin goes on in the one kept. Its opening
+// post, a floor there now, is where the link leads.
+export async function threadMerged(
+  trx: Transaction<DB>,
+  threadId: number,
+  openingPostId: number,
+  byId: number,
+) {
+  const f = await floorOf(trx, openingPostId);
+  await recordEvent(trx, "thread.merged", {
+    thread_id: threadId,
+    into: { id: f.thread_id, title: f.title, kind: f.kind },
+    board: { slug: f.board_slug, name: f.board_name },
+    by: await person(trx, byId),
+    url: link(f.thread_id, f.floor),
+  });
+}

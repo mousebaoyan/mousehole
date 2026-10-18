@@ -28,6 +28,8 @@ const ACTIONS: Record<string, string> = {
   "thread.hide": "隐藏帖子",
   "thread.unhide": "恢复帖子",
   "thread.reveal": "查看匿名身份",
+  "thread.merge": "合并帖子",
+  "thread.renumber": "重排楼层号",
   "suggestion.create": "建议修改帖子",
   "suggestion.accept": "同意修改建议",
   "suggestion.reject": "不同意修改建议",
