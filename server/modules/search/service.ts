@@ -190,7 +190,9 @@ export async function search(reach: number, q: string, filter: SearchFilter, off
 }
 
 // The threads most like a question, for the bot to point to before anyone answers it again.
-// Any shared token counts; the score is between 0 and 1.
+// Any shared token counts, against the post's length, as long posts have nearly every token;
+// the score is between 0 and 1. Not ts_rank_cd: over the hundreds of tokens of a long question
+// it takes minutes.
 export async function similar(reach: number, text: string) {
   const query = anyQuery(text);
   if (query === "") return [];
@@ -200,7 +202,7 @@ export async function similar(reach: number, text: string) {
       visiblePosts(reach)
         .select([
           "posts.thread_id",
-          sql<number>`ts_rank_cd(post_search.document, ${tsquery}, 32)`.as("score"),
+          sql<number>`ts_rank(post_search.document, ${tsquery}, 1 | 32)`.as("score"),
         ])
         .where(sql<boolean>`post_search.document @@ ${tsquery}`)
         .as("matches"),

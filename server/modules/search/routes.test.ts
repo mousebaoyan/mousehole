@@ -129,4 +129,14 @@ describe("搜索", () => {
     expect(best.score).toBeGreaterThan(0);
     expect(best.score).toBeLessThan(1);
   });
+
+  test("相似问题：长帖子里什么词都有，也排不过问同一件事的短帖子", async () => {
+    const asked = await thread("浙大计院夏令营机试考什么", "求问机试的题型和难度");
+    const story = ["浙大的夏令营我也报了", "机试考了图论和动态规划", "计院的面试问了项目"];
+    await thread("我的保研复盘", Array.from({ length: 40 }, (_, i) => story[i % 3]).join("，"));
+    const res = await api.search.similar.$get({
+      query: { text: "浙江大学计算机学院的夏令营机试都考些什么？" },
+    });
+    expect((await res.json()).items[0].thread.id).toBe(asked);
+  });
 });
