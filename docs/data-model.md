@@ -54,7 +54,7 @@
 
 ## 帖子与楼层
 
-表：`threads`、`posts`、`post_revisions`、`drafts`、`thread_aliases`、`polls`、`poll_options`、`poll_votes`、`lotteries`、`lottery_entries`、`thread_suggestions`、`thread_summaries`。
+表：`threads`、`posts`、`post_revisions`、`drafts`、`thread_aliases`、`polls`、`poll_options`、`poll_votes`、`lotteries`、`lottery_entries`、`thread_suggestions`、`thread_summaries`、`thread_merges`。
 
 - 帖子里的每一层都是 `posts` 的一行，主楼是 `floor = 1` 的那层，没有楼中楼。`reply_to_id` 记回复的是同一帖子里的哪一层，`reply_count` 冗余有几条回复它，和发帖在同一个事务里更新。
 - 列表里的参与者：楼主加最近 20 层里最近回复的 4 个人。列表查询时按 `posts_floor` 倒着取，每个帖子最多读 20 行，不另存。
@@ -76,6 +76,7 @@
 - 修改建议（[总体设计 §6.6](design.md#66-等级)）：`thread_suggestions` 每条一行，`title`、`board_id`、`tags`（标签名，`text[]`）为 `NULL` 的是没建议改的。`status` 取 `open`（待处理）、`accepted`、`rejected`，处理时写 `handler_id`、`handled_at`。部分唯一索引 `thread_suggestions_open` 保证同一个人对同一个帖子只有一条待处理的，帖子页按它取待处理的建议。同意时先锁住这一行，确认还是 `open`，再在同一个事务里改帖子。
 - AI 总结（[总体设计 §8.18](design.md#818-ai-总结)）：每个帖子最多一行 `thread_summaries`，由 `summaries` 模块写。`lead` 和 `points`（jsonb，`[{ text, floors }]`）是插件写的总结，`floors` 冗余出全部引用的楼层号，`replies` 是写的时候的回复数，用来判断要不要重写。版主关闭时只留一行 `disabled = true`、`lead` 为 `NULL`。删除或隐藏楼层时在同一个事务里删掉引用了这一层的总结（`floors` 包含它，`disabled` 为假）。
 - 悬赏（[总体设计 §8.19](design.md#819-悬赏)）：`threads.bounty_at` 是开始悬赏的时间，每小时从最近 3 天发的帖子里（走 `threads_recent`）找出该悬赏的写上；悬赏 3 天，截止时间按它算。结算时从 `threads_bounty` 找悬赏过的帖子。
+- 合并（[总体设计 §8.20](design.md#820-合并帖子)）：在一个事务里按 ID 从小到大锁住两个帖子的行，把被并帖的楼层、`qq_message_links`、`thread_users`、`notifications`、`drafts` 改到留下的帖子，重排楼层号，重算两边的计数，被并帖设上 `deleted_at`。重排楼层号时先把这个帖子的楼层号都改成负数再按 `(created_at, id)` 编号，避开 `posts_floor` 唯一索引的冲突；`read_floors` 按新旧楼层号的对照换算，被并帖主楼的检索数据去掉标题重建，被并帖的 `thread_tags` 删掉，AI 总结删掉。`thread_merges` 每个被并帖一行：`thread_id`、`into_id`、`post_ids`（`integer[]`，按原来的楼层号排的楼层 ID）、`merged_by`、`created_at`。打开被并帖的旧地址时，按 `post_ids` 取出原来那一楼的楼层，跳到它现在所在的帖子和楼层，被并帖后来又被并走、重排过也对得上。重排楼层号单独做时也是同样的步骤。
 - 抽奖（[总体设计 §8.13](design.md#813-抽奖)）：`threads.kind = 'lottery'` 的帖子在 `lotteries` 里有一行，和帖子在同一个事务里建。`prizes` 是按顺序排的奖项（jsonb，`[{ name, winners }]`），发出后不改。`seed` 是建抽奖时生成的 32 个随机字节（十六进制），开奖前不出现在任何接口和日志里；`seed_hash` 是它的 SHA-256，一开始就公布。点按钮参与的每人一行 `lottery_entries`；回复参与的开奖前现查回复（公开、没删、楼层号大于 1、不晚于 `draws_at`），开奖时才写进 `lottery_entries`。每分钟查一次到点的抽奖（走 `lotteries_due`），逐个在事务里锁住那一行开奖：先删掉开奖时不符合条件的参与者，这时 `lottery_entries` 就是参与开奖的全部人，再按 `SHA-256(seed:用户 ID)` 排序，依次给前面的人填上 `prize`（中的是第几个奖项），最后写 `drawn_at`。取消写 `cancelled_at`，之后不再开奖。
 
 ## 互动与通知

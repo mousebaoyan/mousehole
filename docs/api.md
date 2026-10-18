@@ -93,7 +93,7 @@
 
 // 通知。type：reply 回复了我的楼层，thread_reply 回复了我的帖子、没指定哪一层，mention @了我，like 赞了我的楼层，boost 给我的楼层留了短评，
 // watching 关注的帖子有新楼层，following 关注的人发了新帖，solved 我的回答被采纳，
-// moderation 版主审核或隐藏了我的内容（data 带 action：approve 通过、reject 不通过、hide 隐藏、unhide 恢复，以及 reason），
+// moderation 版主审核或隐藏了我的内容（data 带 action：approve 通过、reject 不通过、hide 隐藏、unhide 恢复、merge 并进了别的帖子（thread 是留下的帖子），以及 reason），
 // level 我升级了（data 带 level，没有 actor、thread、post，都为 null），
 // lottery 抽奖开奖或取消了（data 带 result：won 中奖、lost 没中、drawn 自己发起的开奖了、cancelled 取消了；中奖的还带 prize，奖项名；没有 actor、post），
 // badge 得到了徽章（data 带 badge：id、name、tier；能得多次的带上那一层的 thread、post，其余没有 actor、thread、post）。
@@ -274,12 +274,14 @@ token 由站长在后台创建，只显示一次。每个 token 绑定一个 bot
 | GET | `/threads` | 帖子列表，每页 30 个，`limit` 可以改小：`board`、`tag`、`author`、`kind`、`view`、`cursor`；版块或标签不存在返回 404。`view` 默认 `latest`（按最后回复），还可以是 `created`（按发布时间）、`hot`（热门）、`unsolved`（待解答：在论坛上发的、没有采纳的问答帖，收录来的不算）；以下几种要登录：`new`（最近 7 天发布、自己还没打开过）、`unread`（读过、之后有新楼层）、`read`（读过的，按最后阅读时间）、`posted`（自己发过或回复过的，删掉的回复不算，按最后回复）、`bookmarked`（收藏的，按收藏时间）。`latest` 的第一页先列置顶的帖子：首页是全站置顶，版块页还有版块内置顶；按标签筛选时不置顶 | 访客 |
 | GET | `/threads/counts` | 当前范围里新、未读和待解答的帖子各有几个：`board`、`tag`，返回 `{ new, unread, unsolved }` | 成员 |
 | POST | `/threads` | 发帖：`board`、`title`（4–80 个字）、`content`、`kind`（不带时用版块的默认类型）、`tags`（最多 5 个，只能用已有的）、`source` 和 `created_at`（2.5 节）、`anonymous`（楼主匿名）、`anonymous_replies`（楼主以外的人回复时匿名），后两个发出后不能改。`kind` 为 `poll` 时要带 `poll`，别的类型不能带：`options`（2–20 个，每个最多 50 个字，不能重复）、`rows`（分行投票的各行，1–10 个，每个最多 30 个字，不能重复；带了就只能单选）、`multiple`、`max_choices`（多选时最多选几项，要少于选项数，`null` 不限）、`anonymous`（匿名投票）、`results`（`voted` 或 `always`）、`closes_at`（截止时间，Unix 秒，10 分钟以后、一年以内，`null` 不限），发出后都不能改。`poll.preset` 为 `positioning` 时是保研定位：只带 `rows`（目标院校），选项、单选、匿名、结果可见方式和不限截止时间由论坛按预设生成，带了别的返回 `400`。`kind` 为 `lottery` 时要带 `lottery`，别的类型不能带，也不能匿名：`prizes`（1–10 个奖项，每个 `{ name, winners }`：奖品最多 50 个字，抽 1–100 人）、`entry`（`button` 或 `reply`，默认 `button`）、`min_level`（0–5，默认 0）、`draws_at`（开奖时间，Unix 秒，10 分钟以后、一年以内），发出后都不能改。L2 起才能发投票帖和抽奖帖（保研定位除外），否则返回 `403 level_required`。`kind` 为 `question` 时消耗 1 鼠币（总体设计 §8.17），不够返回 `403 coins_insufficient`；带 `source` 的不扣。只有版主能发的版块返回 `403 forbidden`。先审后发的版块里，版主以外的人发的帖子 `status` 为 `pending`，通过后才公开 | 成员 / `act` |
-| GET | `/threads/{id}` | 帖子详情；楼层（包括主楼）用 `/threads/{id}/posts` 取。楼主和版主还带 `suggestions`：待处理的修改建议，先提的在前，每条是 `id`、`user`（提建议的人）、`title`、`board`（`{ slug, name, color }`）、`tags`、`reason`、`created_at`，没建议改的字段为 `null`。打开了 AI 总结时带 `summary`（总体设计 §8.18）：`lead`（讨论的是什么，一句话）、`points`（要点，每条 `{ text, floors }`，`floors` 是出处的楼层号）、`replies`（根据几条回复写的）、`created_at`，没有总结、被关闭或者访客不能看时为 `null`；版主还带 `summary_disabled`：这个帖子的总结是否被关闭。楼主设置了不给访客看时，访客得到 `401 login_required` | 访客 |
+| GET | `/threads/{id}` | 帖子详情；被并进别的帖子的返回 `404 thread_merged`，带 `into`（`thread_id`、`floor`：它的主楼现在在哪个帖子的第几楼）；楼层（包括主楼）用 `/threads/{id}/posts` 取。楼主和版主还带 `suggestions`：待处理的修改建议，先提的在前，每条是 `id`、`user`（提建议的人）、`title`、`board`（`{ slug, name, color }`）、`tags`、`reason`、`created_at`，没建议改的字段为 `null`。打开了 AI 总结时带 `summary`（总体设计 §8.18）：`lead`（讨论的是什么，一句话）、`points`（要点，每条 `{ text, floors }`，`floors` 是出处的楼层号）、`replies`（根据几条回复写的）、`created_at`，没有总结、被关闭或者访客不能看时为 `null`；版主还带 `summary_disabled`：这个帖子的总结是否被关闭。楼主设置了不给访客看时，访客得到 `401 login_required` | 访客 |
 | PATCH | `/threads/{id}` | 只改带了的字段：楼主可以改 `title`、`tags`；版主还可以改 `board`（移动版块）、`pinned`（0–2）、`featured`、`locked`、`status`（`visible` 或 `hidden`，见下面的「审核」）和 `reason`（隐藏的理由，最多 200 个字，会告诉作者）。L4 起可以改等级比自己低的人的 `title`、`tags`、`board`（只能移到自己能发帖的版块），L5 还可以改 `locked`；版主的和匿名的帖子不行（总体设计 §6.6）。改标题记在主楼的编辑记录里；锁定后只有版主和 L5 能改 | 楼主、版主、L4 / `act`、`moderate` |
 | PATCH | `/threads/{id}/summary` | 关闭或恢复这个帖子的 AI 总结：`{ disabled }`。关闭时删掉已有的总结，之后不再写；恢复后按规则重写。记操作日志 | 版主 / `moderate` |
 | POST | `/threads/{id}/suggestions` | 建议修改（总体设计 §6.6）：`{ title?, board?, tags?, reason? }`，`reason` 最多 100 个字；只算和现在不一样的字段，一项都没改返回 `400`。帖子要是等级比自己低的人发的（不含版主的和匿名的），版块只能选自己能发帖的；锁定的帖子返回 `403 thread_locked`；对这个帖子已有待处理的建议返回 `409 suggestion_exists`。楼主收到站内通知 | L3 / `act` |
 | PATCH | `/suggestions/{id}` | 处理修改建议：`{ status }`，`accepted` 照建议修改，`rejected` 不改；已经处理过的返回 `409 suggestion_handled`，帖子被删了返回 `404`。新标题记在主楼的编辑记录里，算提建议的人改的；记操作日志。提建议的人收到站内通知，版主处理的楼主也收到 | 楼主、版主 / `act`、`moderate` |
 | DELETE | `/threads/{id}` | 删除帖子；有人回复后楼主不能删，只有版主能删 | 楼主、版主 / `act`、`moderate` |
+| POST | `/threads/{id}/merge` | 把这个帖子并进另一个（总体设计 §8.20）：`{ into, title?, board?, tags?, kind? }`，`into` 是留下的帖子，其余是合并后留下的帖子的设置，不带的保持它原来的；`tags` 不带时是两边的合起来，超过 5 个返回 `400`；`kind` 是 `discussion` 或 `question`。两个帖子有一个不能合并的（类型、匿名、不公开、已删除，或者是同一个）返回 `400`。返回 `{ thread_id, floor }`：留下的帖子和被并帖的主楼现在在第几楼 | 版主 / `moderate` |
+| POST | `/threads/{id}/renumber` | 按发的时间重排楼层号（总体设计 §8.20），主楼还是 1 楼；返回 `{ moved }`，换了号的层数 | 版主 / `moderate` |
 | PUT | `/threads/{id}/answers/{post}` | 采纳一层回答（总体设计 §8.1）：只能是问答帖子里公开、没删的回复（不含主楼），否则 `400`；可以采纳几层，已经采纳的不变；帖子待审核或已隐藏时返回 `403`。每采纳一层，回答的人收到通知，产生 `thread.solved` 事件；锁定后只有版主能改。返回帖子详情 | 楼主、版主 / `act`、`moderate` |
 | DELETE | `/threads/{id}/answers/{post}` | 取消采纳这一层，没采纳的不变；被采纳的回答被删除时也自动取消 | 同上 |
 | PUT | `/threads/{id}/poll/vote` | 投票：`{ options }`，选项 ID；再投就换掉原来的，空数组是撤票。分行投票每行最多选一项，可以只投其中几行。单选选了几项、分行投票同一行选了几项、超过 `max_choices`、选项不在这个投票里返回 `400`；投票已结束返回 `403 poll_closed`，帖子锁定返回 `403 thread_locked`，待审核或已隐藏返回 `403`；不是投票帖返回 `404 poll_not_found`。返回投票 | 没被禁言的成员 / `act` |
@@ -485,6 +487,7 @@ data: {"post":{…},"thread":{…},"author":{…},"url":"https://bbs.mousebaoyan
 | `post.created` | 新回复公开 | `post`（`id`、`floor`、`body`）、`thread`（`id`、`title`）、`author`、`reply_to`（被回复的那一层：`id`、`floor`、`author`，没有为 `null`）、`url` |
 | `post.updated` | 回复或主楼被编辑 | `post`、`thread`、`editor` |
 | `post.deleted` | 回复或帖子被删除、隐藏；删除帖子时是它的主楼 | `post_id`、`thread_id`、`floor`、`by`、`reason` |
+| `thread.merged` | 帖子被并进另一个帖子 | `thread_id`（被并帖）、`into`（留下的帖子：`id`、`title`、`kind`）、`board`（`slug`、`name`）、`by`、`url` |
 | `thread.solved` | 采纳答案 | `thread`（`id`、`title`）、`post`（`id`、`floor`、`body`）、`answerer`、`url` |
 | `content.pending` | 先审后发的版块有新内容等待审核；帖子是它的主楼 | `thread`（`id`、`title`）、`board`、`post`（`id`、`floor`、`body`）、`author`、`url` |
 | `member.activated` | 成员第一次登录；插件收到后查这个人的 QQ 个性签名，推给 `/bot/users/{user}/bio` | `user` |
