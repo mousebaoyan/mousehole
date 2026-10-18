@@ -34,6 +34,7 @@ type Question = {
   choices: Choice[];
   // Present when the answer is text: what the box says while empty.
   placeholder?: string;
+  required?: boolean;
   // The value of the button chosen, null for one with an empty value or Esc; and the text.
   answer: (value: string | null, text: string) => void;
 };
@@ -69,12 +70,19 @@ export async function confirmDialog(text: string, action: string) {
   return value !== null;
 }
 
-// Null when cancelled; the text may be empty.
-export async function promptDialog(text: string, placeholder: string, action: string) {
+// For taking something of someone's away with a reason. Null when cancelled; the text may be
+// empty unless required.
+export async function promptDialog(
+  text: string,
+  placeholder: string,
+  action: string,
+  required = false,
+) {
   const answer = await ask({
     text,
     placeholder,
-    choices: [CANCEL, { value: "ok", label: action, variant: "default" }],
+    required,
+    choices: [CANCEL, { value: "ok", label: action, variant: "destructive" }],
   });
   return answer.value === null ? null : answer.text;
 }
@@ -118,13 +126,14 @@ function Asking({ question }: { question: Question }) {
             ref={reply}
             aria-label={question.text}
             placeholder={question.placeholder}
+            required={question.required}
             maxLength={200}
             className="mt-3 min-h-20"
           />
         )}
         <div className="mt-4 flex justify-end gap-2">
           {question.choices.map((c) => (
-            <Button key={c.label} value={c.value} variant={c.variant}>
+            <Button key={c.label} value={c.value} variant={c.variant} formNoValidate={!c.value}>
               {c.label}
             </Button>
           ))}
