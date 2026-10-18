@@ -1,7 +1,8 @@
+import { type Loaded, Pages } from "~/components/pages";
 import { Search as SearchIcon, X } from "~/components/icons";
 import { pageTitle } from "~/share-meta";
-import { Fragment, useRef } from "react";
-import { data, Form, Link, useFetcher, useLocation } from "react-router";
+import { Fragment } from "react";
+import { data, Form, Link } from "react-router";
 import { apiContext } from "../api.server.ts";
 import { cn } from "cn";
 import { BoardBadge } from "~/components/board-badge";
@@ -9,7 +10,6 @@ import { Dot, FILTER, FilterMenu } from "~/components/filter-menu";
 import { tagChoices } from "~/components/thread-feed";
 import { UserAvatar } from "~/components/user-avatar";
 import { useBoards, useTags } from "~/forum";
-import { useNearView } from "~/near-view";
 import { ago, unixNow } from "~/time";
 import type { Route } from "./+types/search.ts";
 
@@ -118,8 +118,11 @@ export async function loader({ request, context }: Route.LoaderArgs) {
 
 type Result = Route.ComponentProps["loaderData"]["results"][number];
 
+// The pages of results each entry of the history showed (components/pages.tsx).
+const kept = new Map<string, Loaded<typeof loader>[]>();
+
 export default function Search({ loaderData }: Route.ComponentProps) {
-  const { filters, authorName, results, users, next_cursor, now } = loaderData;
+  const { filters, authorName, results, users } = loaderData;
   const { q } = filters;
   return (
     <section>
@@ -161,8 +164,9 @@ export default function Search({ loaderData }: Route.ComponentProps) {
         <p className="py-16 text-center text-sm text-muted-foreground">未找到相关内容</p>
       )}
       <ul className="stagger">
-        <Results results={results} q={q} now={now} />
-        {next_cursor !== null && <More cursor={next_cursor} />}
+        <Pages<typeof loader> kept={kept} first={loaderData} next={(page) => page.next_cursor}>
+          {(page) => <Results results={page.results} q={page.filters.q} now={page.now} />}
+        </Pages>
       </ul>
     </section>
   );
@@ -297,30 +301,4 @@ function Marked({ text, q }: { text: string; q: string }) {
         {i % 2 === 1 ? <mark className="rounded-sm bg-brand/20 text-inherit">{part}</mark> : part}
       </Fragment>
     ));
-}
-
-// The next page loads when its link comes near the screen, as the thread lists do.
-function More({ cursor }: { cursor: string }) {
-  const { load, state, data: page } = useFetcher<typeof loader>();
-  const link = useRef<HTMLAnchorElement>(null);
-  const { search } = useLocation();
-  const params = new URLSearchParams(search);
-  params.set("cursor", cursor);
-  const href = `/search?${params}`;
-  useNearView(link, state === "idle" && !page, () => void load(href));
-  if (!page) {
-    return (
-      <li className="py-4 text-center text-meta">
-        <a ref={link} href={href} className="text-muted-foreground hover:text-foreground">
-          {state === "loading" ? "加载中…" : "加载更多"}
-        </a>
-      </li>
-    );
-  }
-  return (
-    <>
-      <Results results={page.results} q={page.filters.q} now={page.now} />
-      {page.next_cursor !== null && <More cursor={page.next_cursor} />}
-    </>
-  );
 }
