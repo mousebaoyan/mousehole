@@ -27,6 +27,10 @@ function count(n: number) {
   return n < 1000 ? String(n) : COUNT.format(n).toLowerCase();
 }
 
+// The highest floor of each thread read in this tab (routes/reading.ts): a list that Back brings
+// back as it was (components/pages.tsx) was loaded before.
+export const readHere = new Map<number, number>();
+
 // Threads published this recently and never opened are new; see design §8.9.
 const NEW_SECONDS = 7 * 86_400;
 
@@ -37,18 +41,8 @@ function heat(n: number) {
   return HEAT[Math.min(String(n).length, HEAT.length) - 1];
 }
 
-// `children` are more rows, for lists that grow as they are scrolled.
-export function ThreadList({
-  threads,
-  now,
-  showBoard = true,
-  children,
-}: {
-  threads: ThreadItem[];
-  now: number;
-  showBoard?: boolean;
-  children?: ReactNode;
-}) {
+// The rows go in `children`: a page of them, or more for lists that grow as they are scrolled.
+export function ThreadList({ children }: { children: ReactNode }) {
   return (
     <>
       <div
@@ -61,10 +55,7 @@ export function ThreadList({
         <span className="text-center">浏览</span>
         <span className="text-center">活动</span>
       </div>
-      <ul className="stagger">
-        <ThreadRows threads={threads} now={now} showBoard={showBoard} />
-        {children}
-      </ul>
+      <ul className="stagger">{children}</ul>
     </>
   );
 }
@@ -92,7 +83,10 @@ function ThreadRow({
 }) {
   const active = ago(thread.last_post_at, now);
   // Members' reading is tracked; guests have the browser's history of visited links.
-  const lastRead = thread.last_read_floor;
+  const lastRead =
+    thread.last_read_floor === undefined
+      ? undefined
+      : Math.max(thread.last_read_floor, readHere.get(thread.id) ?? 0);
   // The first floor not read yet, past the highest one read.
   const next =
     lastRead !== undefined && lastRead > 0 && lastRead < thread.floor_count ? lastRead + 1 : null;

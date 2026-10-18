@@ -11,9 +11,10 @@ import {
 } from "~/components/icons";
 import { pageTitle } from "~/share-meta";
 import { useEffect, useRef, useState } from "react";
-import { data, Link, useFetcher, useLocation } from "react-router";
+import { data, Link } from "react-router";
 import { cn } from "cn";
 import { apiContext } from "../api.server.ts";
+import { Pages } from "~/components/pages";
 import { BadgeChip, TIER_STYLES } from "~/components/badge-chip";
 import { Backdrop } from "~/components/backdrop";
 import { BoardBadge } from "~/components/board-badge";
@@ -26,7 +27,6 @@ import { StatusLine } from "~/components/user-status";
 import { RelationButtons, useRelations } from "~/components/user-card";
 import { useMe } from "~/forum";
 import { restrictionText } from "~/restriction";
-import { useNearView } from "~/near-view";
 import { ago, unixNow } from "~/time";
 import type { InferResponseType } from "hono/client";
 import type { Api } from "~/api-types";
@@ -126,6 +126,10 @@ export async function loader({ params, request, context }: Route.LoaderArgs) {
 }
 
 type LoaderData = Route.ComponentProps["loaderData"];
+// A page of floors or people, as the next pages of those tabs load.
+type ListPage = Pick<LoaderData, "posts" | "people" | "next_cursor" | "now">;
+// The pages of those tabs each entry of the history showed (components/pages.tsx).
+const kept = new Map<string, ListPage[]>();
 // A floor of theirs, or one they liked, which says with what and when.
 type UserPost = InferResponseType<Api["users"][":user"]["posts"]["$get"], 200>["items"][number] & {
   emoji?: string;
@@ -443,8 +447,13 @@ function Profile({
             <Empty />
           ) : (
             <ul className="stagger">
-              <PostRows posts={posts} now={now} />
-              {next_cursor !== null && <MoreRows cursor={next_cursor} />}
+              <Pages<ListPage>
+                kept={kept}
+                first={{ posts, people, next_cursor, now }}
+                next={(page) => page.next_cursor}
+              >
+                {(page) => page.posts && <PostRows posts={page.posts} now={page.now} />}
+              </Pages>
             </ul>
           ))}
         {summary && <Summary summary={summary} now={now} />}
@@ -468,8 +477,13 @@ function Profile({
               <Empty />
             ) : (
               <ul className="stagger">
-                <PeopleRows people={people} now={now} />
-                {next_cursor !== null && <MoreRows cursor={next_cursor} />}
+                <Pages<ListPage>
+                  kept={kept}
+                  first={{ posts, people, next_cursor, now }}
+                  next={(page) => page.next_cursor}
+                >
+                  {(page) => page.people && <PeopleRows people={page.people} now={page.now} />}
+                </Pages>
               </ul>
             )}
           </>
@@ -625,34 +639,6 @@ function PostRows({ posts, now }: { posts: UserPost[]; now: number }) {
       </p>
     </li>
   ));
-}
-
-// The next page of a list loads when its link comes near the screen, as lists of threads do.
-function MoreRows({ cursor }: { cursor: string }) {
-  const { load, state, data: page } = useFetcher<typeof loader>();
-  const link = useRef<HTMLAnchorElement>(null);
-  const { pathname, search } = useLocation();
-  const query = new URLSearchParams(search);
-  query.set("cursor", cursor);
-  const href = `${pathname}?${query}`;
-  useNearView(link, state === "idle" && !page, () => void load(href));
-
-  if (!page) {
-    return (
-      <li className="py-4 text-center text-meta">
-        <a ref={link} href={href} className="text-muted-foreground hover:text-foreground">
-          {state === "loading" ? "加载中…" : "加载更多"}
-        </a>
-      </li>
-    );
-  }
-  return (
-    <>
-      {page.posts && <PostRows posts={page.posts} now={page.now} />}
-      {page.people && <PeopleRows people={page.people} now={page.now} />}
-      {page.next_cursor !== null && <MoreRows cursor={page.next_cursor} />}
-    </>
-  );
 }
 
 function PeopleRows({ people, now }: { people: Person[]; now: number }) {

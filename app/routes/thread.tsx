@@ -5,7 +5,7 @@ import { apiContext } from "../api.server.ts";
 import type { PostItem, UserBrief } from "~/api-types";
 import { useComposer } from "~/components/composer";
 import { CopyLinkButton } from "~/components/copy-link-button";
-import { ThreadList } from "~/components/thread-list";
+import { ThreadList, ThreadRows } from "~/components/thread-list";
 import { Button } from "~/components/ui/button";
 import { useMe } from "~/forum";
 import { useNearView } from "~/near-view";
@@ -560,7 +560,9 @@ function ThreadPage({
             <section className="mt-12">
               <h2 className="px-3 font-semibold sm:px-4">推荐帖子</h2>
               <div className="mt-3">
-                <ThreadList threads={suggested} now={now} />
+                <ThreadList>
+                  <ThreadRows threads={suggested} now={now} showBoard />
+                </ThreadList>
               </div>
             </section>
           )}

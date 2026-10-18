@@ -1,13 +1,12 @@
+import { type Loaded, Pages } from "~/components/pages";
 import { Award } from "~/components/icons";
 import { pageTitle } from "~/share-meta";
-import { useRef } from "react";
-import { data, Link, useFetcher, useLocation } from "react-router";
+import { data, Link } from "react-router";
 import { cn } from "cn";
 import { apiContext } from "../api.server.ts";
 import { TIER_STYLES } from "~/components/badge-chip";
 import { TIER_NAMES } from "../../server/platform/site.ts";
 import { UserAvatar } from "~/components/user-avatar";
-import { useNearView } from "~/near-view";
 import { ago, unixNow } from "~/time";
 import type { Route } from "./+types/badge.ts";
 
@@ -26,8 +25,11 @@ export async function loader({ params, request, context }: Route.LoaderArgs) {
 
 type Holder = Route.ComponentProps["loaderData"]["items"][number];
 
+// The pages of holders each entry of the history showed (components/pages.tsx).
+const kept = new Map<string, Loaded<typeof loader>[]>();
+
 export default function Badge({ loaderData }: Route.ComponentProps) {
-  const { badge, items, next, now } = loaderData;
+  const { badge, items } = loaderData;
   return (
     <section className="flex flex-col gap-5">
       <Link to="/badges" className="px-1 text-meta text-muted-foreground hover:text-foreground">
@@ -56,8 +58,9 @@ export default function Badge({ loaderData }: Route.ComponentProps) {
         <p className="py-12 text-center text-sm text-muted-foreground">暂无人获得</p>
       ) : (
         <ul className="stagger">
-          <Holders items={items} now={now} />
-          {next !== null && <More cursor={next} />}
+          <Pages<typeof loader> kept={kept} first={loaderData} next={(page) => page.next}>
+            {(page) => <Holders items={page.items} now={page.now} />}
+          </Pages>
         </ul>
       )}
     </section>
@@ -77,27 +80,4 @@ function Holders({ items, now }: { items: Holder[]; now: number }) {
       </Link>
     </li>
   ));
-}
-
-// The next page loads when its link comes near the screen, as other lists do.
-function More({ cursor }: { cursor: number }) {
-  const { load, state, data: page } = useFetcher<typeof loader>();
-  const link = useRef<HTMLAnchorElement>(null);
-  const href = `${useLocation().pathname}?cursor=${cursor}`;
-  useNearView(link, state === "idle" && !page, () => void load(href));
-  if (!page) {
-    return (
-      <li className="py-4 text-center text-meta">
-        <a ref={link} href={href} className="text-muted-foreground hover:text-foreground">
-          {state === "loading" ? "加载中…" : "加载更多"}
-        </a>
-      </li>
-    );
-  }
-  return (
-    <>
-      <Holders items={page.items} now={page.now} />
-      {page.next !== null && <More cursor={page.next} />}
-    </>
-  );
 }

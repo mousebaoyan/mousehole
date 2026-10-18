@@ -14,23 +14,13 @@ import {
   UserPlus,
 } from "~/components/icons";
 import { pageTitle } from "~/share-meta";
-import { useRef } from "react";
-import {
-  data,
-  Form,
-  Link,
-  redirect,
-  useFetcher,
-  useLocation,
-  useNavigation,
-  useSubmit,
-} from "react-router";
+import { data, Form, Link, redirect, useNavigation, useSubmit } from "react-router";
 import { cn } from "cn";
 import { apiContext } from "../api.server.ts";
+import { type Loaded, Pages } from "~/components/pages";
 import { Button } from "~/components/ui/button";
 import { UserAvatar } from "~/components/user-avatar";
 import { useMe } from "~/forum";
-import { useNearView } from "~/near-view";
 import { ago, unixNow } from "~/time";
 import type { Route } from "./+types/notifications.ts";
 import { levelName } from "../../server/platform/site.ts";
@@ -145,8 +135,11 @@ function headline(n: Item) {
   }
 }
 
+// The pages of notifications each entry of the history showed (components/pages.tsx).
+const kept = new Map<string, Loaded<typeof loader>[]>();
+
 export default function Notifications({ loaderData }: Route.ComponentProps) {
-  const { unread, items, next_cursor, now } = loaderData;
+  const { unread, items } = loaderData;
   const navigation = useNavigation();
   return (
     <section>
@@ -182,8 +175,9 @@ export default function Notifications({ loaderData }: Route.ComponentProps) {
         </p>
       ) : (
         <ul className="stagger">
-          <Rows items={items} now={now} />
-          {next_cursor !== null && <More cursor={next_cursor} />}
+          <Pages<typeof loader> kept={kept} first={loaderData} next={(page) => page.next_cursor}>
+            {(page) => <Rows items={page.items} now={page.now} />}
+          </Pages>
         </ul>
       )}
     </section>
@@ -195,10 +189,15 @@ function Rows({ items, now }: { items: Item[]; now: number }) {
 }
 
 // Opening an unread one marks it read on the way.
+// Opened in this tab: a list that Back brings back as it was (components/pages.tsx) was loaded
+// before.
+const readHere = new Set<number>();
+
 function Row({ item: n, now }: { item: Item; now: number }) {
   const submit = useSubmit();
   const me = useMe();
   const Icon = ICONS[n.type] ?? Reply;
+  const read = n.read || readHere.has(n.id);
   // A lottery goes to its thread, and a badge earned for a floor to that floor; other badges to
   // the badge's page; a level to one's profile, where the next one's progress is.
   const to = n.thread
@@ -210,7 +209,7 @@ function Row({ item: n, now }: { item: Item; now: number }) {
     <li
       className={cn(
         "relative flex gap-3 rounded-xl px-3 py-3.5 before:absolute before:inset-x-3 before:bottom-0 before:h-px before:bg-border/70 last:before:hidden transition-colors hover:bg-accent/60 sm:px-4",
-        !n.read && "bg-brand/[0.06]",
+        !read && "bg-brand/[0.06]",
       )}
     >
       {/* Levels, lotteries and badges have nobody behind them, so their icon takes the avatar's place. */}
@@ -230,13 +229,14 @@ function Row({ item: n, now }: { item: Item; now: number }) {
         <Link
           to={to}
           onClick={(e) => {
-            if (n.read) return;
+            if (read) return;
             e.preventDefault();
+            readHere.add(n.id);
             void submit({ id: n.id, to }, { method: "post", action: "/notifications" });
           }}
-          className={cn("text-body after:absolute after:inset-0", !n.read && "font-medium")}
+          className={cn("text-body after:absolute after:inset-0", !read && "font-medium")}
         >
-          {!n.read && <span className="sr-only">未读：</span>}
+          {!read && <span className="sr-only">未读：</span>}
           {headline(n)}
         </Link>
         {n.thread && <p className="mt-0.5 truncate text-meta font-medium">{n.thread.title}</p>}
@@ -246,32 +246,5 @@ function Row({ item: n, now }: { item: Item; now: number }) {
       </div>
       <span className="shrink-0 text-xs text-muted-foreground">{ago(n.created_at, now)}</span>
     </li>
-  );
-}
-
-// The next page loads when its link comes near the screen, as the thread lists do.
-function More({ cursor }: { cursor: string }) {
-  const { load, state, data: page } = useFetcher<typeof loader>();
-  const link = useRef<HTMLAnchorElement>(null);
-  const { search } = useLocation();
-  const params = new URLSearchParams(search);
-  params.set("cursor", cursor);
-  const href = `/notifications?${params}`;
-  useNearView(link, state === "idle" && !page, () => void load(href));
-
-  if (!page) {
-    return (
-      <li className="py-4 text-center text-meta">
-        <a ref={link} href={href} className="text-muted-foreground hover:text-foreground">
-          {state === "loading" ? "加载中…" : "加载更多"}
-        </a>
-      </li>
-    );
-  }
-  return (
-    <>
-      <Rows items={page.items} now={page.now} />
-      {page.next_cursor !== null && <More cursor={page.next_cursor} />}
-    </>
   );
 }

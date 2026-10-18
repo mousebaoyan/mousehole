@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { browserApi } from "~/browser-api";
+import { readHere } from "~/components/thread-list";
 
 const TICK_MS = 500;
 // On screen this long, a floor counts as read and its dot fades.
@@ -95,6 +96,7 @@ export function useReading(threadId: number, initial: Ranges | undefined) {
         done.push(floor);
       }
       if (done.length > 0) {
+        readHere.set(threadId, Math.max(readHere.get(threadId) ?? 0, ...done));
         setState((s) => ({ ...s, read: new Set([...s.read, ...done]) }));
       }
       if (Date.now() - lastSent >= REPORT_MS) void send();
