@@ -145,6 +145,31 @@ describe("修改建议", () => {
     expect(await told(low.who)).toEqual([["new", thread]]);
   });
 
+  test("建议的标签改名后照样适用，删掉的略过；建议的版块删掉后不影响其余部分", async () => {
+    const [low, l3] = await Promise.all([person(1), person(3)]);
+    async function tag(name: string) {
+      const res = await api.tags.$post({ json: { name, kind: "topic" } }, admin);
+      if (!res.ok) throw new Error(`status ${res.status}`);
+      return String((await res.json()).id);
+    }
+    const [renamed, deleted] = await Promise.all([tag("要改名的标签"), tag("要删的标签")]);
+    await api.boards.$post({ json: { slug: "sg-gone", name: "要删的版块" } }, admin);
+    const thread = await threadBy(low.who);
+    await suggest(thread, l3.who, { board: "sg-gone", tags: ["要改名的标签", "要删的标签"] });
+    await api.tags[":id"].$patch({ param: { id: renamed }, json: { name: "改过名的标签" } }, admin);
+    await api.tags[":id"].$delete({ param: { id: deleted } }, admin);
+    const board = await api.boards[":slug"].$delete({ param: { slug: "sg-gone" } }, admin);
+    expect(board.status).toBe(204);
+
+    const [suggestion] = (await detail(thread, low.who)).suggestions ?? [];
+    expect(suggestion).toMatchObject({ board: null, tags: ["改过名的标签"] });
+    expect((await decide(suggestion.id, low.who, "accepted")).status).toBe(204);
+    expect(await detail(thread, low.who)).toMatchObject({
+      board: { slug: "sg" },
+      tags: ["改过名的标签"],
+    });
+  });
+
   test("版主同意的楼主也收到通知；未同意的不改，只告诉提建议的人", async () => {
     const [low, l3, other, moderator] = await Promise.all([
       person(1),
