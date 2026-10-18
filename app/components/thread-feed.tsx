@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useFetcher, useLocation } from "react-router";
 import { cn } from "cn";
 import type { Api, ThreadItem } from "~/api-types";
@@ -168,40 +168,64 @@ export function ThreadFeed({
       {threads.length === 0 ? (
         <p className="py-16 text-center text-sm text-muted-foreground">暂无帖子</p>
       ) : (
-        <ThreadList threads={threads} now={now} showBoard={board === null}>
-          {next_cursor !== null && <More cursor={next_cursor} showBoard={board === null} />}
-        </ThreadList>
+        <ThreadPages first={{ threads, next_cursor, now }} showBoard={board === null} />
       )}
     </section>
   );
 }
 
-// The next page loads when its link comes near the screen; without JavaScript the link opens it.
-// Each page brings the link to the one after it.
-export function More({ cursor, showBoard }: { cursor: string; showBoard: boolean }) {
+// What each entry of the history showed of a list that went past its first page, for Back: the
+// router loads only the first page again, and <ScrollRestoration> can return to a place further
+// down only if the pages above it are there. The first page comes back as it was too, as one
+// changed meanwhile no longer leads on to the pages after it. Older entries are let go.
+const kept = new Map<string, Page[]>();
+const KEPT = 10;
+
+// A list of threads whose next page loads when its link comes near the screen; without JavaScript
+// the link opens it. Each entry of the history, as a filter makes, has its own.
+export function ThreadPages({ first, showBoard }: { first: Page; showBoard: boolean }) {
+  const { key } = useLocation();
+  return <Pages key={key} first={first} showBoard={showBoard} />;
+}
+
+function Pages({ first, showBoard }: { first: Page; showBoard: boolean }) {
+  const { key, pathname, search } = useLocation();
+  const [restored] = useState(() => kept.get(key));
+  const [more, setMore] = useState(() => restored?.slice(1) ?? []);
   const { load, state, data } = useFetcher<Page>();
+  const [added, setAdded] = useState(data);
+  if (data !== added) {
+    setAdded(data);
+    if (data) setMore([...more, data]);
+  }
+  const top = restored?.[0] ?? first;
+  useEffect(() => {
+    if (more.length === 0) return;
+    kept.set(key, [top, ...more]);
+    for (const old of [...kept.keys()].slice(0, -KEPT)) kept.delete(old);
+  }, [key, top, more]);
+
   const link = useRef<HTMLAnchorElement>(null);
-  const { pathname, search } = useLocation();
+  const cursor = (more.at(-1) ?? top).next_cursor;
   const params = new URLSearchParams(search);
-  params.set("cursor", cursor);
+  if (cursor !== null) params.set("cursor", cursor);
   const href = `${pathname}?${params}`;
   // The home page is an index route, which fetchers reach only with ?index.
   const url = pathname === "/" ? `/?index&${params}` : href;
-  useNearView(link, state === "idle" && !data, () => void load(url));
+  useNearView(link, cursor !== null && state === "idle", () => void load(url));
 
-  if (!data) {
-    return (
-      <li className="py-4 text-center text-meta">
-        <a ref={link} href={href} className="text-muted-foreground hover:text-foreground">
-          {state === "loading" ? "加载中…" : "加载更多"}
-        </a>
-      </li>
-    );
-  }
   return (
-    <>
-      <ThreadRows threads={data.threads} now={data.now} showBoard={showBoard} />
-      {data.next_cursor !== null && <More cursor={data.next_cursor} showBoard={showBoard} />}
-    </>
+    <ThreadList threads={top.threads} now={top.now} showBoard={showBoard}>
+      {more.map((page, i) => (
+        <ThreadRows key={i} threads={page.threads} now={page.now} showBoard={showBoard} />
+      ))}
+      {cursor !== null && (
+        <li className="py-4 text-center text-meta">
+          <a ref={link} href={href} className="text-muted-foreground hover:text-foreground">
+            {state === "loading" ? "加载中…" : "加载更多"}
+          </a>
+        </li>
+      )}
+    </ThreadList>
   );
 }
