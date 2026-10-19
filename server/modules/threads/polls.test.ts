@@ -212,13 +212,16 @@ describe("投票", () => {
       anonymous: true,
       results: "voted",
     });
-    expect(poll?.options.filter((o) => o.row === 1).map((o) => o.label)).toEqual([
+    const row = poll?.options.filter((o) => o.row === 1) ?? [];
+    expect(row.map((o) => o.label)).toEqual([
       "随便去",
       "努把力",
       "看运气",
       "有点难",
       "几乎不可能",
+      "不清楚",
     ]);
+    expect(row.map((o) => o.abstain)).toEqual([false, false, false, false, false, true]);
   });
 
   test("实名投票投过的人能看谁投了哪一项；匿名投票和访客看不到", async () => {

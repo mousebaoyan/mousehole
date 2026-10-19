@@ -188,7 +188,7 @@ function grade(position: number, count: number) {
 
 // A poll of rows (design §8.11): each row its own set of the same options, one choice a row.
 // While voting, a row's options are buttons to press and press again to take back; after, a row
-// is a bar in the grades' colors.
+// is a bar in the grades' colors, without the votes of an option that abstains (design §8.14).
 function Rows({
   poll,
   rows,
@@ -204,7 +204,7 @@ function Rows({
   setChosen: (chosen: number[]) => void;
   mine: number[];
 }) {
-  const grades = poll.options.filter((o) => o.row === 0).map((o) => o.label);
+  const grades = poll.options.filter((o) => o.row === 0 && !o.abstain).map((o) => o.label);
   return (
     <>
       {!picking && (
@@ -223,7 +223,8 @@ function Rows({
       <ul className="flex flex-col gap-3">
         {rows.map((label, row) => {
           const options = poll.options.filter((o) => o.row === row);
-          const total = options.reduce((sum, o) => sum + (o.votes ?? 0), 0);
+          const counted = options.filter((o) => !o.abstain);
+          const total = counted.reduce((sum, o) => sum + (o.votes ?? 0), 0);
           const voted = options.find((o) => mine.includes(o.id));
           return (
             <li key={label} className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
@@ -231,7 +232,7 @@ function Rows({
                 {label}
               </span>
               {picking ? (
-                <span className="flex min-w-0 flex-1 gap-1">
+                <span className="grid min-w-0 flex-1 grid-cols-3 gap-1 sm:flex">
                   {options.map((o) => {
                     const on = chosen.includes(o.id);
                     const others = chosen.filter((c) => !options.some((x) => x.id === c));
@@ -246,6 +247,7 @@ function Rows({
                           on
                             ? "border-primary bg-primary text-primary-foreground"
                             : "bg-background hover:bg-accent",
+                          o.abstain && "border-dashed",
                         )}
                       >
                         {o.label}
@@ -257,7 +259,7 @@ function Rows({
                 <span className="min-w-0 flex-1">
                   <span className="flex items-center gap-2">
                     <span className="flex h-2.5 min-w-0 flex-1 gap-px overflow-hidden rounded-full bg-secondary">
-                      {options.map(
+                      {counted.map(
                         (o, i) =>
                           (o.votes ?? 0) > 0 && (
                             <span
@@ -265,7 +267,7 @@ function Rows({
                               title={`${o.label} ${o.votes} 票`}
                               style={{
                                 width: `${((o.votes ?? 0) / total) * 100}%`,
-                                background: grade(i, options.length),
+                                background: grade(i, counted.length),
                               }}
                             />
                           ),
@@ -278,7 +280,7 @@ function Rows({
                     )}
                   </span>
                   <span className="mt-1 flex flex-wrap gap-x-2.5 text-xs text-muted-foreground tabular-nums">
-                    {options.map(
+                    {counted.map(
                       (o) =>
                         (o.votes ?? 0) > 0 && (
                           <span key={o.id}>

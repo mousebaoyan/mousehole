@@ -1192,7 +1192,7 @@ function PositioningFields({
   return (
     <div className="flex shrink-0 flex-col gap-2 border-t px-4 py-2.5">
       <p className="text-meta text-muted-foreground">
-        每项必填，如无请填「无」。每所目标院校会生成一行匿名投票，成员从「随便去」到「几乎不可能」中选择一项。
+        每项必填，如无请填「无」。每所目标院校会生成一行匿名投票，成员从「随便去」到「几乎不可能」中选择一项，无法判断时可选「不清楚」，不计入结果。
       </p>
       {BACKGROUND.slice(0, -1).map(field)}
       <div className="flex flex-col gap-1 sm:flex-row sm:gap-3">
