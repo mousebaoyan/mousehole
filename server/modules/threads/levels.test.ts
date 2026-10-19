@@ -2,6 +2,7 @@ import { testClient } from "hono/testing";
 import { beforeAll, describe, expect, test } from "vitest";
 import { as, createUser, login, nextQq } from "../../../test/fixtures.ts";
 import { app } from "../../app.ts";
+import { db } from "../../platform/db.ts";
 import { createBotToken } from "../auth/service.ts";
 
 const api = testClient(app).api.v1;
@@ -68,11 +69,21 @@ function poll(who: Who) {
 }
 
 describe("等级的权限", () => {
-  test("L0 每层最多 2 个站外链接，每天最多 3 个帖子；群里同步来的不算", async () => {
+  test("L0 每层最多 2 个站外链接，发出后改也一样，每天最多 3 个帖子；群里同步来的不算", async () => {
     const newcomer = await person(0);
     const links = "[一](https://a.example) [二](https://b.example) https://c.example";
     expect((await newThread(newcomer.who, { markdown: links })).status).toBe(403);
     for (let i = 0; i < 3; i++) expect((await newThread(newcomer.who)).status).toBe(201);
+    const { id } = await db
+      .selectFrom("posts")
+      .select("id")
+      .where("author_id", "=", newcomer.id)
+      .executeTakeFirstOrThrow();
+    const edited = await api.posts[":id"].$patch(
+      { param: { id: String(id) }, json: { content: { markdown: links } } },
+      newcomer.who,
+    );
+    expect(edited.status).toBe(403);
     const fourth = await newThread(newcomer.who);
     expect(fourth.status).toBe(403);
     if (fourth.ok) throw new Error("posted");
