@@ -102,6 +102,9 @@ export const PollSchema = z
         row: z.number().openapi({ description: "第几行，从 0 起；普通投票都是 0" }),
         label: z.string(),
         votes: z.number().nullable().openapi({ description: "票数；还看不到结果时为 null" }),
+        abstain: z.boolean().openapi({
+          description: "弃权，即保研定位的「不清楚」：算投过票，不计入这一行的结果",
+        }),
       }),
     ),
     my_votes: z

@@ -26,15 +26,17 @@ export type PollSpec =
   // 保研定位 (design §8.14): the poster names the schools, the forum sets the rest.
   | { preset: "positioning"; rows: string[] };
 
-// How hard each school would be, easiest first.
+// How hard each school would be, easiest first; then 不清楚 for a voter who can't tell, which
+// counts as having voted but not toward the school's results.
 const POSITIONING_GRADES = ["随便去", "努把力", "看运气", "有点难", "几乎不可能"];
+const UNSURE = "不清楚";
 
 export async function createPoll(trx: Transaction<DB>, threadId: number, spec: PollSpec) {
   const poll =
     spec.preset === "positioning"
       ? {
           ...spec,
-          options: POSITIONING_GRADES,
+          options: [...POSITIONING_GRADES, UNSURE],
           multiple: false,
           max_choices: null,
           anonymous: true,
@@ -76,7 +78,7 @@ export async function getPoll(threadId: number, viewerId: number | null) {
     db.selectFrom("polls").selectAll().where("thread_id", "=", threadId).executeTakeFirstOrThrow(),
     db
       .selectFrom("poll_options")
-      .select(["id", "row", "label", "vote_count"])
+      .select(["id", "row", "position", "label", "vote_count"])
       .where("thread_id", "=", threadId)
       .orderBy("row")
       .orderBy("position")
@@ -107,6 +109,7 @@ export async function getPoll(threadId: number, viewerId: number | null) {
       row: o.row,
       label: o.label,
       votes: shown ? o.vote_count : null,
+      abstain: poll.preset === "positioning" && o.position === POSITIONING_GRADES.length,
     })),
     my_votes: viewerId === null ? null : mine.map((v) => v.option_id),
   };

@@ -69,11 +69,12 @@
 // 投票（总体设计 §8.11）。results：voted 投过票或结束后才看得到结果，always 随时公开；
 // 还看不到结果时每项的 votes 为 null，voter_count（一共多少人投了票）总是有；closes_at 为 null 是不限时间；
 // rows 是分行投票的各行，普通投票为 null；分行投票的每行各有一组选项，row 是第几行（从 0 起），普通投票都是 0；
-// preset 是生成它的预设，positioning 保研定位（总体设计 §8.14），普通投票为 null；
+// preset 是生成它的预设，positioning 保研定位（总体设计 §8.14），普通投票为 null；abstain 为 true 的选项是弃权（保研定位的"不清楚"），
+// 算投过票，不计入这一行的结果；
 // my_votes 是自己投的选项，没投为 []，访客为 null
 { "multiple": true, "max_choices": 2, "anonymous": false, "results": "voted", "rows": null, "preset": null,
   "closes_at": 1760600000, "closed": false, "voter_count": 12,
-  "options": [ { "id": 5, "row": 0, "label": "1–3 个", "votes": 4 }, { "id": 6, "row": 0, "label": "4–6 个", "votes": 9 } ],
+  "options": [ { "id": 5, "row": 0, "label": "1–3 个", "votes": 4, "abstain": false }, { "id": 6, "row": 0, "label": "4–6 个", "votes": 9, "abstain": false } ],
   "my_votes": [6] }
 
 // 抽奖（总体设计 §8.13）。entry：button 点按钮参与，reply 开奖前回复过就算参与；min_level 参与要几级（版主和管理员不受限制）；
