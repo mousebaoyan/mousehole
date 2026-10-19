@@ -248,8 +248,8 @@ export async function mergeTag(actor: Actor, id: number, into: number) {
     if (!from || !target) throw tagNotFound();
 
     await sql`
-      INSERT INTO thread_tags (thread_id, tag_id, last_post_at)
-      SELECT thread_id, ${into}, last_post_at FROM thread_tags WHERE tag_id = ${id}
+      INSERT INTO thread_tags (thread_id, tag_id)
+      SELECT thread_id, ${into} FROM thread_tags WHERE tag_id = ${id}
       ON CONFLICT DO NOTHING`.execute(trx);
     await trx.deleteFrom("thread_tags").where("tag_id", "=", id).execute();
     await trx.deleteFrom("tags").where("id", "=", id).execute();

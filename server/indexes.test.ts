@@ -85,8 +85,8 @@ async function fill(author: { id: number }, reader: number) {
     db,
   );
   await sql`
-    INSERT INTO thread_tags (thread_id, tag_id, last_post_at)
-    SELECT threads.id, tags.id, threads.last_post_at FROM threads, tags
+    INSERT INTO thread_tags (thread_id, tag_id)
+    SELECT threads.id, tags.id FROM threads, tags
     WHERE threads.title LIKE '填充帖子%' AND threads.id % 3 = 0`.execute(db);
   await sql`
     INSERT INTO users (qq, display_name)

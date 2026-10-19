@@ -963,7 +963,7 @@ export async function createThread(
         created_at: at,
         last_post_at: at,
       })
-      .returning(["id", "last_post_at"])
+      .returning("id")
       .executeTakeFirstOrThrow();
     // A question costs a coin (design §8.17); one collected from the groups was asked there.
     if (kind === "question" && !input.source) {
@@ -997,13 +997,7 @@ export async function createThread(
     if (tagIds.length > 0) {
       await trx
         .insertInto("thread_tags")
-        .values(
-          tagIds.map((tag_id) => ({
-            thread_id: thread.id,
-            tag_id,
-            last_post_at: thread.last_post_at,
-          })),
-        )
+        .values(tagIds.map((tag_id) => ({ thread_id: thread.id, tag_id })))
         .execute();
     }
     await trx
@@ -1315,7 +1309,7 @@ export async function saveThreadChange(
   const columns = { title, board_id, pinned, featured, locked };
   const old = await trx
     .selectFrom("threads")
-    .select(["title", "board_id", "reply_count", "last_post_at"])
+    .select(["title", "board_id", "reply_count"])
     .where("id", "=", thread.id)
     .forUpdate()
     .executeTakeFirstOrThrow();
@@ -1361,13 +1355,7 @@ export async function saveThreadChange(
     if (added.length > 0) {
       await trx
         .insertInto("thread_tags")
-        .values(
-          added.map((tag_id) => ({
-            thread_id: thread.id,
-            tag_id,
-            last_post_at: old.last_post_at,
-          })),
-        )
+        .values(added.map((tag_id) => ({ thread_id: thread.id, tag_id })))
         .execute();
     }
     if (thread.status === "visible") {
@@ -1575,22 +1563,12 @@ async function publishPost(
   if (announce) {
     // An archived floor is as old as its messages, maybe older than the thread's last activity.
     const at = post.via === "qq" ? sql<Date>`${post.created_at}` : sql<Date>`now()`;
-    const bumped = await trx
+    await trx
       .updateTable("threads")
       .set({ last_post_at: at, last_poster_id: post.author_id })
       .where("id", "=", post.thread_id)
       .where("last_post_at", "<=", at)
-      .returning("last_post_at")
-      .executeTakeFirst();
-    if (bumped) {
-      await trx
-        .updateTable("thread_tags")
-        .set({ last_post_at: bumped.last_post_at })
-        .where("thread_id", "=", post.thread_id)
-        .execute();
-    }
-  }
-  if (announce) {
+      .execute();
     await postCreated(trx, postId);
     // Content brought over from the groups tells nobody (design §8.6).
     if (post.via === "qq") return;
