@@ -1,4 +1,5 @@
 import { testClient } from "hono/testing";
+import { sql } from "kysely";
 import { beforeAll, describe, expect, test } from "vitest";
 import { as, createUser, login, nextQq } from "../../../test/fixtures.ts";
 import { app } from "../../app.ts";
@@ -345,6 +346,43 @@ describe("读帖子", () => {
 
     const unsolved = await list({ board, view: "unsolved" });
     expect(unsolved.items.map((t) => t.id)).toEqual([asked]);
+  });
+
+  test("投票还没结束的投票帖和保研定位帖也算待解答，提前结束或过了截止时间的不算", async () => {
+    const board = await newBoard();
+    async function poll(json: { options: string[] } | { preset: "positioning"; rows: string[] }) {
+      const res = await api.threads.$post(
+        {
+          json: {
+            board,
+            title: "帖子标题",
+            content: { markdown: "正文" },
+            kind: "poll",
+            poll: json,
+          },
+        },
+        admin,
+      );
+      if (!res.ok) throw new Error(`status ${res.status}: ${await res.text()}`);
+      return (await res.json()).id;
+    }
+    const open = await poll({ options: ["能", "不能"] });
+    const closed = await poll({ options: ["能", "不能"] });
+    const expired = await poll({ options: ["能", "不能"] });
+    const positioning = await poll({ preset: "positioning", rows: ["浙江大学"] });
+    const res = await api.threads[":id"].poll.close.$post({ param: { id: String(closed) } }, admin);
+    expect(res.status).toBe(200);
+    await db
+      .updateTable("polls")
+      .set({ closes_at: sql<Date>`now() - interval '1 minute'` })
+      .where("thread_id", "=", expired)
+      .execute();
+
+    const unsolved = await list({ board, view: "unsolved" });
+    expect(unsolved.items.map((t) => t.id)).toEqual([positioning, open]);
+    const counts = await api.threads.counts.$get({ query: { board } }, member);
+    if (!counts.ok) throw new Error(`status ${counts.status}`);
+    expect((await counts.json()).unsolved).toBe(2);
   });
 
   test("浏览数：同一个人一分钟内只算一次", async () => {
