@@ -159,7 +159,7 @@ export const statsRoutes = createRouter()
       method: "get",
       path: "/admin/stats",
       summary:
-        "数据页：活跃、成员、留存、访问、内容、阅读、登录、邮件、带宽和排行，按北京时间逐天，不算 bot 和站长",
+        "数据页：活跃、成员、留存、访问、内容、阅读、登录、邮件、搜索、带宽和排行，按北京时间逐天，不算 bot 和站长",
       request: {
         query: z.object({
           range: z.coerce
@@ -243,6 +243,18 @@ export const statsRoutes = createRouter()
                     }),
                   )
                   .openapi({ description: "这一段的邮件，按类，发得多的在前" }),
+                searches: z
+                  .object({
+                    most: z
+                      .array(z.object({ term: z.string(), searches: z.number() }))
+                      .openapi({ description: "搜得最多的词，前 20" }),
+                    unfound: z.array(z.object({ term: z.string(), searches: z.number() })).openapi({
+                      description: "没有结果的词，前 20；searches 是没有结果的次数",
+                    }),
+                  })
+                  .openapi({
+                    description: "这一段网页上搜的词，转成小写；每人每天搜同一个词算一次",
+                  }),
                 top: z
                   .object({
                     threads: z.array(

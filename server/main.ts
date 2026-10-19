@@ -18,7 +18,7 @@ import {
   unreadChanged,
 } from "./modules/notifications/service.ts";
 import { promoteActive, recheckL4 } from "./modules/levels/service.ts";
-import { indexMissingPosts } from "./modules/search/service.ts";
+import { clearOldSearchTerms, indexMissingPosts } from "./modules/search/service.ts";
 import { countVisits } from "./modules/stats/routes.ts";
 import { clearOldStats, flushVisits, summarizeDays } from "./modules/stats/service.ts";
 import { startBounties } from "./modules/threads/bounties.ts";
@@ -71,6 +71,7 @@ every(DAY_MS, "Rechecking L4", recheckL4);
 every(DAY_MS, "Clearing old active days", clearOldDays);
 every(DAY_MS, "Clearing old stats", clearOldStats);
 every(DAY_MS, "Clearing old mail log", clearOldMail);
+every(DAY_MS, "Clearing old search terms", clearOldSearchTerms);
 
 // A thread served from the guest page cache skips the loader that counts its view.
 function countCachedView(c: Context) {

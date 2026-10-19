@@ -148,6 +148,8 @@ export default function Stats({ loaderData: stats }: Route.ComponentProps) {
 
       <Mail mail={stats.mail} />
 
+      <Searches searches={stats.searches} />
+
       <Bandwidth stats={stats} dates={dates} />
 
       <Top top={stats.top} />
@@ -612,7 +614,7 @@ function Top({ top }: { top: Stats["top"] }) {
             items={top.threads.map((t) => ({
               key: String(t.id),
               label: (
-                <Link to={`/t/${t.id}`} className="hover:underline">
+                <Link to={`/t/${t.id}`} title={t.title} className="hover:underline">
                   {t.title}
                 </Link>
               ),
@@ -772,6 +774,37 @@ function Mail({ mail }: { mail: Stats["mail"] }) {
           </table>
         </div>
       )}
+    </Section>
+  );
+}
+
+// Search terms, each opening the search page for it.
+function termsListed(terms: Stats["searches"]["most"]) {
+  return terms.map((t) => ({
+    key: t.term,
+    label: (
+      <Link
+        to={`/search?q=${encodeURIComponent(t.term)}`}
+        title={t.term}
+        className="hover:underline"
+      >
+        {t.term}
+      </Link>
+    ),
+    count: t.searches,
+  }));
+}
+
+function Searches({ searches }: { searches: Stats["searches"] }) {
+  return (
+    <Section
+      title="搜索"
+      description="网页上搜索的词，不记录是谁搜的。同一人一天内搜同一个词只算一次"
+    >
+      <div className="grid gap-6 sm:grid-cols-2">
+        <TopList title="搜得最多的词" items={termsListed(searches.most)} />
+        <TopList title="没有结果的词" items={termsListed(searches.unfound)} />
+      </div>
     </Section>
   );
 }
