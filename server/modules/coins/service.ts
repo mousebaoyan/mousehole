@@ -82,7 +82,8 @@ export async function settleCoins() {
 // What a day brought: one coin for each person who reacted to someone's floors, ten if any answer
 // of theirs was accepted, and for a bounty (design §8.19) one if they replied to it on the forum
 // that day, five if such a reply was accepted, one of the two. Only what is still there counts:
-// reactions taken back, answers no longer accepted, floors deleted, hidden or anonymous don't.
+// reactions taken back, answers no longer accepted, floors deleted, hidden or anonymous don't. An
+// asker accepting their own reply marks the question solved and earns nothing (design §8.1).
 async function settleDay(day: string) {
   const start = sql<Date>`(${day}::date::timestamp AT TIME ZONE 'Asia/Shanghai')`;
   const end = sql<Date>`${start} + interval '1 day'`;
@@ -103,6 +104,7 @@ async function settleDay(day: string) {
         SELECT DISTINCT p.author_id, 'accepted', ${ACCEPTED}::integer, NULL::integer
         FROM posts p JOIN threads t ON t.id = p.thread_id
         WHERE p.accepted_at >= ${start} AND p.accepted_at < ${end} AND ${shown}
+          AND p.author_id <> t.author_id
         UNION ALL
         SELECT * FROM (
           SELECT DISTINCT ON (p.author_id) p.author_id, 'bounty',

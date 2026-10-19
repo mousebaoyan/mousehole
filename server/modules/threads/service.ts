@@ -406,8 +406,8 @@ export async function countMine(reach: number, userId: number) {
   return { posted, ...mine };
 }
 
-// Someone's replies, newest first, with the thread each is in; the cursor is the last one's ID.
-// Someone's replies, or only their accepted answers.
+// Someone's replies, newest first, with the thread each is in, or only their answers accepted in
+// other people's questions; the cursor is the last one's ID.
 export async function listUserPosts(
   reach: number,
   authorId: number,
@@ -430,7 +430,11 @@ export async function listUserPosts(
     .where("posts.floor", ">", 1)
     .where("posts.status", "=", "visible")
     .where("posts.deleted_at", "is", null)
-    .$if(solved, (qb) => qb.where("posts.accepted_at", "is not", null))
+    .$if(solved, (qb) =>
+      qb
+        .where("posts.accepted_at", "is not", null)
+        .whereRef("posts.author_id", "<>", "threads.author_id"),
+    )
     .orderBy("posts.id", "desc")
     .limit(PAGE_SIZE);
   if (cursor !== undefined) query = query.where("posts.id", "<", cursor);

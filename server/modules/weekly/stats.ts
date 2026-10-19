@@ -77,7 +77,7 @@ export async function weeklyStats(until: Date) {
       FROM ${likes} AND ${named}
       GROUP BY p.author_id ORDER BY count DESC, p.author_id LIMIT ${PLACES}`),
     most_accepted: await ranked(sql`SELECT p.author_id AS id, count(*)::integer AS count
-      FROM ${SHOWN} AND ${named} AND ${within(sql`p.accepted_at`)}
+      FROM ${SHOWN} AND ${named} AND ${within(sql`p.accepted_at`)} AND p.author_id <> t.author_id
       GROUP BY p.author_id ORDER BY count DESC, p.author_id LIMIT ${PLACES}`),
     most_replies: await ranked(sql`SELECT p.author_id AS id, count(*)::integer AS count
       FROM ${SHOWN} AND ${named} AND p.floor > 1 AND ${within(sql`p.created_at`)}

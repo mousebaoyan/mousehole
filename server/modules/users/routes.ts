@@ -141,7 +141,7 @@ const UserSchema = UserBriefSchema.extend({
     followers: z.number(),
     following: z.number(),
     endorsements: z.number(),
-    solved: z.number().openapi({ description: "被采纳的回答数" }),
+    solved: z.number().openapi({ description: "在别人的问答帖里被采纳的回答数" }),
     badges: z.number().openapi({ description: "得到的徽章有几种" }),
     people_reached: z.number().openapi({ description: "帮到的人：读过 TA 至少一层的人数" }),
     reads: z.number().openapi({ description: "被读次数：别人第一次读到 TA 的一层算一次" }),

@@ -139,7 +139,7 @@ describe("鼠币", () => {
     expect(rows).toEqual([]);
   });
 
-  test("获赞一个人一天只算一次，采纳一天最多一次；撤回的、删掉的、匿名的不算，结算过的不再改", async () => {
+  test("获赞一个人一天只算一次，采纳一天最多一次；撤回的、删掉的、匿名的、楼主采纳自己的不算，结算过的不再改", async () => {
     const author = await person();
     const asker = await person();
     const [fan, friend, other] = [await person(), await person(), await person()];
@@ -158,7 +158,12 @@ describe("鼠币", () => {
     await api.posts[":id"].$delete({ param: { id: String(removed) } }, author.who);
 
     const question = await thread(asker.who, "qa");
-    for (const answer of [await reply(author.who, question), await reply(author.who, question)]) {
+    const answers = [
+      await reply(author.who, question),
+      await reply(author.who, question),
+      await reply(asker.who, question),
+    ];
+    for (const answer of answers) {
       const accepted = await api.threads[":id"].answers[":post"].$put(
         { param: { id: String(question), post: String(answer) } },
         asker.who,
@@ -180,6 +185,7 @@ describe("鼠币", () => {
       { reason: "accepted", amount: 10, day: yesterday },
     ]);
     expect(await coins(author.id)).toBe(14);
+    expect((await ledger(asker.id)).map((l) => l.reason)).not.toContain("accepted");
 
     await react(other.who, first);
     await db.updateTable("reactions").set({ created_at: YESTERDAY_NOON }).execute();
