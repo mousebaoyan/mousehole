@@ -66,6 +66,10 @@ function setPost(post: number, status: "visible" | "hidden", reason?: string) {
   );
 }
 
+function remove(path: "posts" | "threads", id: number) {
+  return api[path][":id"].$delete({ param: { id: String(id) } }, moderator);
+}
+
 async function counts(slug: string, thread: number) {
   const board = await db
     .selectFrom("boards")
@@ -214,6 +218,22 @@ describe("隐藏和恢复", () => {
     expect(await counts(board, thread.id)).toEqual({ threads: 1, posts: 1, replies: 1 });
     await setThread(thread.id, "hidden");
     await api.threads[":id"].$delete({ param: { id: String(thread.id) } }, moderator);
+    expect(await counts(board, thread.id)).toEqual({ threads: 0, posts: 0, replies: 1 });
+  });
+
+  test("几个人同时隐藏、删除同一层，或者同时删除同一个帖子，计数只扣一次", async () => {
+    const board = await newBoard("after");
+    const thread = await newThread(board);
+    const post = await reply(thread.id);
+    await reply(thread.id);
+    await Promise.all([
+      setPost(post.id, "hidden", "广告"),
+      setPost(post.id, "hidden", "广告"),
+      remove("posts", post.id),
+    ]);
+    expect(await counts(board, thread.id)).toEqual({ threads: 1, posts: 1, replies: 1 });
+
+    await Promise.all([remove("threads", thread.id), remove("threads", thread.id)]);
     expect(await counts(board, thread.id)).toEqual({ threads: 0, posts: 0, replies: 1 });
   });
 

@@ -1395,12 +1395,16 @@ export async function deleteThread(
     throw forbidden("帖子已有回复，不能删除；如需删除请联系版主");
   }
   await db.transaction().execute(async (trx) => {
-    await trx
+    // As the row was, locked: someone else may have just deleted or hidden it.
+    const deleted = await trx
       .updateTable("threads")
       .set({ deleted_at: sql<Date>`now()` })
       .where("id", "=", threadId)
-      .execute();
-    if (thread.status === "visible") await withdrawThread(trx, threadId, viewer.id, null);
+      .where("deleted_at", "is", null)
+      .returning(sql<string>`old.status`.as("status"))
+      .executeTakeFirst();
+    if (!deleted) throw threadNotFound();
+    if (deleted.status === "visible") await withdrawThread(trx, threadId, viewer.id, null);
     await recordAudit(trx, actor, {
       action: "thread.delete",
       target_type: "thread",
@@ -1428,18 +1432,21 @@ export async function deletePost(
   assertMayChange(staff, viewer, post.author_id, thread.locked);
 
   await db.transaction().execute(async (trx) => {
-    // A deleted answer is no longer accepted.
+    // A deleted answer is no longer accepted. As the row was, locked, as in deleteThread.
     const deleted = await trx
       .updateTable("posts")
       .set({ deleted_at: sql<Date>`now()`, accepted_at: null })
       .where("id", "=", postId)
       .where("deleted_at", "is", null)
-      .returning(sql<boolean>`old.accepted_at IS NOT NULL`.as("accepted"))
+      .returning([
+        sql<boolean>`old.accepted_at IS NOT NULL`.as("accepted"),
+        sql<string>`old.status`.as("status"),
+      ])
       .executeTakeFirst();
     if (!deleted) throw new AppError(404, "post_not_found", "回复不存在");
     if (deleted.accepted) await countAnswers(trx, post.thread_id, -1);
     await unindexPost(trx, postId);
-    if (post.status === "visible") await withdrawPost(trx, postId, viewer.id, null);
+    if (deleted.status === "visible") await withdrawPost(trx, postId, viewer.id, null);
     await recordAudit(trx, actor, {
       action: "post.delete",
       target_type: "post",
@@ -1663,9 +1670,18 @@ export async function reportHolds(viewer: Viewer, post: Awaited<ReturnType<typeo
   return (await levelPower(viewer, post.author_id, "anonymous" in post.author)) >= 4;
 }
 
+// Whether it held it: one hidden or deleted meanwhile is left as it is.
 export async function holdReported(trx: Transaction<DB>, postId: number, reporterId: number) {
-  await trx.updateTable("posts").set({ status: "hidden" }).where("id", "=", postId).execute();
-  await withdrawPost(trx, postId, reporterId, "被举报，等待版主处理");
+  const held = await trx
+    .updateTable("posts")
+    .set({ status: "hidden" })
+    .where("id", "=", postId)
+    .where("status", "=", "visible")
+    .where("deleted_at", "is", null)
+    .returning("id")
+    .executeTakeFirst();
+  if (held) await withdrawPost(trx, postId, reporterId, "被举报，等待版主处理");
+  return held !== undefined;
 }
 
 // A held floor comes back when its report is dismissed, unless a moderator dealt with it since.
@@ -1704,17 +1720,23 @@ export async function setThreadStatus(
 ) {
   const reader: Reader = { reach, id: viewer.id, staff: true };
   const thread = await getThread(threadId, reader);
-  if (thread.status === status) return;
   const opening = await db
     .selectFrom("posts")
     .select(["id", "body"])
     .where("thread_id", "=", threadId)
     .where("floor", "=", 1)
     .executeTakeFirstOrThrow();
-  const action = statusAction(thread.status, status);
-  const mentions = action === "approve" ? await mentionsOf(opening.body) : [];
   await db.transaction().execute(async (trx) => {
-    await trx.updateTable("threads").set({ status }).where("id", "=", threadId).execute();
+    // What it was, the row locked: another moderator may have just changed it.
+    const { from } = await trx
+      .updateTable("threads")
+      .set({ status })
+      .where("id", "=", threadId)
+      .returning(sql<string>`old.status`.as("from"))
+      .executeTakeFirstOrThrow();
+    if (from === status) return;
+    const action = statusAction(from, status);
+    const mentions = action === "approve" ? await mentionsOf(opening.body) : [];
     await trx.updateTable("posts").set({ status }).where("id", "=", opening.id).execute();
     if (status === "visible") {
       await publishThread(trx, threadId, action === "approve" ? { mentions } : null);
@@ -1750,11 +1772,19 @@ export async function setPostStatus(
     throw new AppError(400, "invalid_request", "主楼的状态随帖子变化，请修改帖子的状态");
   }
   assertPublic(await assertVisible(post.thread_id, reader));
-  if (post.status === status) return;
-  const action = statusAction(post.status, status);
-  const mentions = action === "approve" ? await mentionsOf(post.body) : [];
   await db.transaction().execute(async (trx) => {
-    await trx.updateTable("posts").set({ status }).where("id", "=", postId).execute();
+    // As in setThreadStatus; deleted meanwhile, it is gone.
+    const changed = await trx
+      .updateTable("posts")
+      .set({ status })
+      .where("id", "=", postId)
+      .where("deleted_at", "is", null)
+      .returning(sql<string>`old.status`.as("from"))
+      .executeTakeFirst();
+    if (!changed) throw new AppError(404, "post_not_found", "回复不存在");
+    if (changed.from === status) return;
+    const action = statusAction(changed.from, status);
+    const mentions = action === "approve" ? await mentionsOf(post.body) : [];
     if (status === "visible") {
       await publishPost(trx, postId, action === "approve" ? { mentions } : null);
     } else if (action === "hide") {
