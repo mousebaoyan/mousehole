@@ -95,6 +95,40 @@ export async function flushVisits() {
       asset_bytes = coalesce(s.asset_bytes, 0) + excluded.asset_bytes`.execute(db);
 }
 
+// ---- Someone's visits, for the owner to check who used an account (design §10.1).
+
+const VISITS_PAGE = 50;
+const OTHERS = 20;
+
+// Newest first; `next` is the offset of the following page.
+export async function listVisits(userId: number, offset: number) {
+  const rows = await db
+    .selectFrom("visits")
+    .select([sql<string>`day::text`.as("day"), "ip", "user_agent", "views"])
+    .where("user_id", "=", userId)
+    .orderBy("day", "desc")
+    .orderBy("views", "desc")
+    .offset(offset)
+    .limit(VISITS_PAGE)
+    .execute();
+  return {
+    items: rows.map((v) => ({ ...v, device: deviceSummary(v.user_agent) })),
+    next: rows.length === VISITS_PAGE ? offset + VISITS_PAGE : null,
+  };
+}
+
+// The other accounts seen at the addresses someone used, those sharing the most first.
+export async function othersAtAddresses(userId: number) {
+  const { rows } = await sql<{ user_id: number; ips: string[] }>`
+    SELECT v.user_id, array_agg(DISTINCT host(v.ip) ORDER BY host(v.ip)) AS ips
+    FROM visits v
+    WHERE v.ip IN (SELECT ip FROM visits WHERE user_id = ${userId}) AND v.user_id <> ${userId}
+    GROUP BY v.user_id
+    ORDER BY count(DISTINCT v.ip) DESC, max(v.day) DESC, v.user_id
+    LIMIT ${OTHERS}`.execute(db);
+  return rows;
+}
+
 // A guest is an address and browser nobody signed in from that day, which leaves out the pages
 // people opened before logging in.
 const GUEST = sql<boolean>`v.user_id IS NULL AND NOT EXISTS (
