@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { Link } from "react-router";
 import { cn } from "cn";
 import { apiContext } from "../../api.server.ts";
@@ -36,9 +37,26 @@ const KINDS = [
   { kind: "total", label: "合起来", color: "var(--chart-3)" },
 ] as const;
 
+// What the forum sends, as the bandwidth chart shows it, in this order.
+const SENT = [
+  { kind: "page", label: "页面", color: "var(--chart-1)" },
+  { kind: "api", label: "接口", color: "var(--chart-2)" },
+  { kind: "image", label: "图片", color: "var(--chart-3)" },
+  { kind: "asset", label: "静态文件", color: "var(--chart-4)" },
+] as const;
+
 const number = (n: number) => n.toLocaleString("zh-CN", { maximumFractionDigits: 1 });
 const percent = (n: number) => `${number(n)}%`;
 const hours = (seconds: number) => seconds / 3600;
+const MB = 1024 ** 2;
+
+type Day = Stats["days"][number];
+
+// For figures recorded from some day on: from when, if that is within the range.
+function recordedSince(days: Day[], recorded: (day: Day) => boolean, what: string) {
+  const first = days.find(recorded);
+  return first && first !== days[0] ? `${what}自 ${monthDay(first.day)}起记录` : undefined;
+}
 
 export default function Stats({ loaderData: stats }: Route.ComponentProps) {
   const { range, days, totals } = stats;
@@ -93,6 +111,8 @@ export default function Stats({ loaderData: stats }: Route.ComponentProps) {
         <Retention cohorts={stats.retention} />
       </Section>
 
+      <Visits stats={stats} dates={dates} />
+
       <Section title="阅读">
         <div className="grid grid-cols-2 gap-3">
           <Figure
@@ -120,12 +140,23 @@ export default function Stats({ loaderData: stats }: Route.ComponentProps) {
           />
         </div>
       </Section>
+
+      <Bandwidth stats={stats} dates={dates} />
     </>
   );
 }
 
 // Up or down from the period before, in percent; nothing when there was nothing to compare with.
-function Delta({ now, before }: { now: number; before: number }) {
+// `neutral` for figures neither better nor worse when higher, such as bytes sent.
+function Delta({
+  now,
+  before,
+  neutral = false,
+}: {
+  now: number;
+  before: number;
+  neutral?: boolean;
+}) {
   if (before === 0) return null;
   const change = Math.round(((now - before) / before) * 100);
   if (change === 0) return <span className="text-meta text-muted-foreground">持平</span>;
@@ -134,7 +165,7 @@ function Delta({ now, before }: { now: number; before: number }) {
     <span
       className={cn(
         "inline-flex items-center gap-0.5 text-meta",
-        change > 0 ? "text-success" : "text-destructive",
+        neutral ? "text-muted-foreground" : change > 0 ? "text-success" : "text-destructive",
       )}
       title={`之前为 ${number(before)}`}
     >
@@ -147,20 +178,26 @@ function Delta({ now, before }: { now: number; before: number }) {
 function Figure({
   label,
   value,
-  before,
+  before = null,
   note,
+  neutral,
+  className,
 }: {
   label: string;
   value: number | null;
-  before?: number;
+  before?: number | null;
   note?: string;
+  neutral?: boolean;
+  className?: string;
 }) {
   return (
-    <div className="rounded-xl border p-3">
+    <div className={cn("rounded-xl border p-3", className)}>
       <div className="text-meta text-muted-foreground">{label}</div>
       <div className="mt-1 flex flex-wrap items-baseline gap-x-2">
         <span className="text-2xl font-semibold">{value === null ? "—" : number(value)}</span>
-        {value !== null && before !== undefined && <Delta now={value} before={before} />}
+        {value !== null && before !== null && (
+          <Delta now={value} before={before} neutral={neutral} />
+        )}
       </div>
       {note && <div className="text-xs text-muted-foreground">{note}</div>}
     </div>
@@ -215,14 +252,10 @@ function Active({ totals: { now, before } }: { totals: Stats["totals"] }) {
 function Members({ stats, dates }: { stats: Stats; dates: string[] }) {
   const { days, totals } = stats;
   const latest = days.findLast((d) => d.members !== null);
-  // Member counts are snapshots, which began on some day.
-  const first = days.find((d) => d.members !== null);
   return (
     <Section
       title="成员"
-      description={
-        first && first !== days[0] ? `群成员数和已激活数自 ${monthDay(first.day)}起记录` : undefined
-      }
+      description={recordedSince(days, (d) => d.members !== null, "群成员数和已激活数")}
     >
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         <Figure label="群成员" value={latest?.members ?? null} />
@@ -326,5 +359,151 @@ function Retention({ cohorts }: { cohorts: Stats["retention"] }) {
         尚未结束的那一周显示为 —，颜色越深占比越高
       </p>
     </div>
+  );
+}
+
+function Visits({ stats, dates }: { stats: Stats; dates: string[] }) {
+  const { range, days, totals, referrers, landings, devices } = stats;
+  const { now, before } = totals;
+  const since = recordedSince(days, (d) => d.guests !== null, "访问");
+  return (
+    <Section
+      title="访问"
+      description={`访客指未登录的 IP + User-Agent（不含爬虫），浏览量指打开页面的次数${since ? `。${since}` : ""}`}
+    >
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+        <Figure label="日均访客" value={now.guests} before={before.guests} />
+        <Figure label="访客日均浏览" value={now.guest_views} before={before.guest_views} />
+        <Figure label="成员日均浏览" value={now.member_views} before={before.member_views} />
+      </div>
+      <div className="mt-6 grid gap-6">
+        <LineChart
+          title="每天的访客"
+          days={dates}
+          series={[{ label: "访客", color: "var(--chart-1)", values: days.map((d) => d.guests) }]}
+        />
+        <LineChart
+          title="每天的浏览量"
+          days={dates}
+          series={[
+            { label: "访客", color: "var(--chart-1)", values: days.map((d) => d.guest_views) },
+            { label: "成员", color: "var(--chart-2)", values: days.map((d) => d.member_views) },
+          ]}
+        />
+      </div>
+      <div className="mt-6 grid gap-6 sm:grid-cols-2">
+        <TopList
+          title="访客的来源网站"
+          items={referrers.map((r) => ({ key: r.host, label: r.host, visits: r.visits }))}
+        />
+        <TopList
+          title="访客的入口页面"
+          items={landings.map((l) => ({
+            key: l.path,
+            label: (
+              <Link to={l.path} title={l.path} className="hover:underline">
+                {l.title ?? (l.path === "/" ? "首页" : l.path)}
+              </Link>
+            ),
+            visits: l.visits,
+          }))}
+        />
+        {(["guests", "members"] as const).map((who) => (
+          <TopList
+            key={who}
+            title={who === "guests" ? "访客的设备" : "成员的设备"}
+            items={devices[who].map((d) => ({ key: d.device, label: d.device, visits: d.visits }))}
+          />
+        ))}
+      </div>
+      <p className="mt-4 text-meta text-muted-foreground">
+        以上列表按人次统计，每人每天算一次。
+        {range > 90 && "访客的记录只保留 90 天，列表中的访客仅含最近 90 天。"}
+      </p>
+    </Section>
+  );
+}
+
+// The most frequent, each with a bar against the first.
+function TopList({
+  title,
+  items,
+}: {
+  title: string;
+  items: { key: string; label: ReactNode; visits: number }[];
+}) {
+  return (
+    <div className="min-w-0">
+      <h3 className="text-sm font-medium">{title}</h3>
+      {items.length === 0 ? (
+        <p className="mt-2 text-meta text-muted-foreground">暂无记录</p>
+      ) : (
+        <ol className="mt-2 space-y-2 text-sm">
+          {items.map((item) => (
+            <li key={item.key}>
+              <div className="flex justify-between gap-3">
+                <span className="min-w-0 truncate">{item.label}</span>
+                <span className="text-muted-foreground tabular-nums">{number(item.visits)}</span>
+              </div>
+              <div
+                className="mt-1 h-1 rounded-full"
+                style={{
+                  width: `${(item.visits / items[0].visits) * 100}%`,
+                  background: "var(--chart-1)",
+                }}
+              />
+            </li>
+          ))}
+        </ol>
+      )}
+    </div>
+  );
+}
+
+// Bytes sent, of one kind or in all, in MB.
+function megabytes(bytes: Day["bytes"], kind?: (typeof SENT)[number]["kind"]) {
+  if (bytes === null) return null;
+  return (kind ? bytes[kind] : bytes.page + bytes.api + bytes.image + bytes.asset) / MB;
+}
+
+function Bandwidth({ stats, dates }: { stats: Stats; dates: string[] }) {
+  const { days, totals } = stats;
+  const { now, before } = totals;
+  const since = recordedSince(days, (d) => d.bytes !== null, "流量");
+  return (
+    <Section
+      title="带宽"
+      description={`论坛平均每天发出的流量（MB），图片含正文图、头像和背景${since ? `。${since}` : ""}`}
+    >
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+        <Figure
+          label="合计"
+          value={megabytes(now.bytes)}
+          before={megabytes(before.bytes)}
+          neutral
+          className="col-span-2 sm:col-span-1"
+        />
+        {SENT.map((s) => (
+          <Figure
+            key={s.kind}
+            label={s.label}
+            value={megabytes(now.bytes, s.kind)}
+            before={megabytes(before.bytes, s.kind)}
+            neutral
+          />
+        ))}
+      </div>
+      <div className="mt-6">
+        <LineChart
+          title="每天发出的流量（MB）"
+          days={dates}
+          series={SENT.map((s) => ({
+            label: s.label,
+            color: s.color,
+            values: days.map((d) => megabytes(d.bytes, s.kind)),
+          }))}
+        />
+      </div>
+    </Section>
   );
 }

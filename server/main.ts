@@ -3,6 +3,7 @@ import type { Context } from "hono";
 import { createMiddleware } from "hono/factory";
 import type { SecureHeadersVariables } from "hono/secure-headers";
 import { createHonoServer } from "react-router-hono-server/node";
+import { routes } from "virtual:react-router/server-build";
 import { apiContext, createApi } from "../app/api.server.ts";
 import { nonceContext } from "../app/nonce.ts";
 import { app } from "./app.ts";
@@ -18,7 +19,8 @@ import {
 } from "./modules/notifications/service.ts";
 import { promoteActive, recheckL4 } from "./modules/levels/service.ts";
 import { indexMissingPosts } from "./modules/search/service.ts";
-import { clearOldActiveDays, summarizeDays } from "./modules/stats/service.ts";
+import { countVisits } from "./modules/stats/routes.ts";
+import { clearOldStats, flushVisits, summarizeDays } from "./modules/stats/service.ts";
 import { startBounties } from "./modules/threads/bounties.ts";
 import { drawDue } from "./modules/threads/lotteries.ts";
 import { flushViews, recordView, rerenderPosts } from "./modules/threads/service.ts";
@@ -47,6 +49,7 @@ listen({
 indexMissingPosts().catch((error: unknown) => log("error", "Indexing posts failed", { error }));
 rerenderPosts().catch((error: unknown) => log("error", "Rendering posts again failed", { error }));
 every(60_000, "Writing view counts", flushViews);
+every(60_000, "Writing visits and bytes sent", flushVisits);
 every(60_000, "Drawing lotteries", drawDue);
 every(60_000, "Sending queued mail", sendQueued);
 every(60_000, "Refreshing avatars", refreshAvatars);
@@ -66,7 +69,7 @@ every(DAY_MS, "Clearing old events", clearOldEvents);
 every(DAY_MS, "Clearing old drafts", clearOldDrafts);
 every(DAY_MS, "Rechecking L4", recheckL4);
 every(DAY_MS, "Clearing old active days", clearOldDays);
-every(DAY_MS, "Clearing active days kept for the stats", clearOldActiveDays);
+every(DAY_MS, "Clearing old stats", clearOldStats);
 
 // A thread served from the guest page cache skips the loader that counts its view.
 function countCachedView(c: Context) {
@@ -82,18 +85,27 @@ const cacheForAYear = createMiddleware(async (c, next) => {
   c.res.headers.set("cache-control", "public, max-age=31536000, immutable");
 });
 
-// Docker stops the container with SIGTERM; the view counts not yet written go out first.
+// Docker stops the container with SIGTERM; the counts not yet written go out first.
 process.once("SIGTERM", () => {
-  void flushViews().finally(() => process.exit(0));
+  void Promise.allSettled([flushViews(), flushVisits()]).finally(() => process.exit(0));
 });
+
+// Routes without a page are what the pages' fetchers load, whose data isn't a page opened. The
+// build's types give every route a page, hence `in`.
+const fetched = new Set(
+  Object.values(routes).flatMap((route) =>
+    route && !("default" in route.module) ? [route.id] : [],
+  ),
+);
 
 // The app's middleware runs for pages too, so they know their visitor.
 export default await createHonoServer<{ Variables: SecureHeadersVariables & AppEnv["Variables"] }>({
   defaultLogger: false,
   listeningListener: ({ port }) => log("info", "Listening", { port }),
-  // Before the static files, so they get the headers too; the guest page cache keeps pages
-  // with theirs.
+  // Before the static files, so they are counted and get the headers too. The guest page cache
+  // keeps pages with their headers, and its pages are counted all the same.
   beforeAll(server) {
+    server.use(countVisits(fetched));
     server.use(guestPages(server, countCachedView));
     server.use(securityHeaders);
     server.use("/emojibase/*", cacheForAYear);

@@ -28,6 +28,7 @@ import { suggestionRoutes } from "./modules/threads/suggestion-routes.ts";
 import { serveUpload, uploadsRoutes } from "./modules/uploads/routes.ts";
 import { serveAvatar, serveBackground, usersRoutes } from "./modules/users/routes.ts";
 import { weeklyRoutes } from "./modules/weekly/routes.ts";
+import { UNWELCOME_CRAWLERS } from "./platform/crawlers.ts";
 import { db } from "./platform/db.ts";
 import { env } from "./platform/env.ts";
 import { createRouter, handleError, type AppEnv } from "./platform/http.ts";
@@ -74,34 +75,7 @@ const checkOrigin = csrf({ origin: env.PUBLIC_URL });
 
 // Crawlers that train AI models or scrape heavily are turned away; the rest may read what guests
 // can, but not the pages that are someone's own or only fetched by the pages (design §11.2).
-const ROBOTS = `${[
-  "GPTBot",
-  "ChatGPT-User",
-  "OAI-SearchBot",
-  "ClaudeBot",
-  "Claude-Web",
-  "anthropic-ai",
-  "CCBot",
-  "Google-Extended",
-  "Applebot-Extended",
-  "Bytespider",
-  "PerplexityBot",
-  "Amazonbot",
-  "meta-externalagent",
-  "FacebookBot",
-  "cohere-ai",
-  "Diffbot",
-  "Omgilibot",
-  "ImagesiftBot",
-  "Timpibot",
-  "AhrefsBot",
-  "SemrushBot",
-  "MJ12bot",
-  "DotBot",
-  "PetalBot",
-]
-  .map((bot) => `User-agent: ${bot}`)
-  .join("\n")}
+const ROBOTS = `${UNWELCOME_CRAWLERS.map((bot) => `User-agent: ${bot}`).join("\n")}
 Disallow: /
 
 User-agent: *
