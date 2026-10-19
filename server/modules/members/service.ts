@@ -5,6 +5,7 @@ import { db } from "../../platform/db.ts";
 import { AppError } from "../../platform/errors.ts";
 import { recordAudit } from "../audit/service.ts";
 import { checkIn } from "../coins/service.ts";
+import { recordActive } from "../stats/service.ts";
 import {
   applyStanding,
   ensureMembers,
@@ -204,7 +205,8 @@ export async function syncMembers(
     const affected = new Set(renamed);
     const robots = new Map<number, boolean>();
     const listed = new Set<number>();
-    // Who spoke later than the forum knew, by the Beijing day they last did: they check in.
+    // Who spoke later than the forum knew, by the Beijing day they last did: they check in, and
+    // were active in the groups that day.
     const spoke = new Map<string, number[]>();
     for (const record of records) {
       const userId = ids.get(record.user_id);
@@ -266,7 +268,10 @@ export async function syncMembers(
       .where("id", "=", groupId)
       .execute();
     await refreshAccounts(trx, actor, [...affected], robots);
-    for (const [day, userIds] of spoke) await checkIn(trx, userIds, sql<Date>`${day}::date`);
+    for (const [day, userIds] of spoke) {
+      await checkIn(trx, userIds, sql<Date>`${day}::date`);
+      await recordActive(trx, userIds, sql<Date>`${day}::date`, "qq");
+    }
     return counts;
   });
 }

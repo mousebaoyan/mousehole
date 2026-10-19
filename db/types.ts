@@ -23,6 +23,13 @@ export type JsonValue = JsonArray | JsonObject | JsonPrimitive;
 
 export type Timestamp = ColumnType<Date, Date | string, Date | string>;
 
+export interface ActiveDays {
+  day: Timestamp;
+  qq: Generated<boolean>;
+  site: Generated<boolean>;
+  user_id: number;
+}
+
 export interface ApiTokens {
   bot_user_id: number;
   created_at: Generated<Timestamp>;
@@ -107,6 +114,14 @@ export interface CoinLedger {
   reason: string;
   thread_id: number | null;
   user_id: number;
+}
+
+export interface DailyStats {
+  activated: number | null;
+  day: Timestamp;
+  members: number | null;
+  posts_read: Generated<number>;
+  read_seconds: Generated<number>;
 }
 
 export interface Drafts {
@@ -545,6 +560,7 @@ export interface Users {
 }
 
 export interface DB {
+  active_days: ActiveDays;
   api_tokens: ApiTokens;
   audit_logs: AuditLogs;
   badges: Badges;
@@ -552,6 +568,7 @@ export interface DB {
   boosts: Boosts;
   coin_balances: CoinBalances;
   coin_ledger: CoinLedger;
+  daily_stats: DailyStats;
   drafts: Drafts;
   email_codes: EmailCodes;
   endorsements: Endorsements;

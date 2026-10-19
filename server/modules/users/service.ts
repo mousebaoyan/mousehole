@@ -19,6 +19,7 @@ import { recordAudit } from "../audit/service.ts";
 import { checkIn, spendCoins } from "../coins/service.ts";
 import { recordEvent } from "../events/service.ts";
 import { RECENT_DAYS } from "../levels/rules.ts";
+import { recordActive } from "../stats/service.ts";
 import { removeBackground } from "./backgrounds.ts";
 import {
   BACKGROUND_PRESETS,
@@ -198,14 +199,16 @@ export async function findMember(ref: UserRef) {
 // A day someone was active, in Beijing time: they visited, read, or had content synced from the
 // groups, on the day it was said there. Returns 1 for the first of a day, which counts as a day
 // visited and checks them in (design §8.17), else 0. What they read adds to the day's reading,
-// which L4 looks at (design §6.6).
+// which L4 looks at (design §6.6). The admin's stats also note where they were active.
 async function recordDay(
   trx: Transaction<DB>,
   userId: number,
+  where: "site" | "qq",
   read: { posts: number; seconds: number } = { posts: 0, seconds: 0 },
   at = sql<Date>`now()`,
 ) {
   const day = sql<Date>`(${at} AT TIME ZONE 'Asia/Shanghai')::date`;
+  await recordActive(trx, [userId], day, where);
   const first = await trx
     .insertInto("user_days")
     .values({ user_id: userId, day, posts_read: read.posts, read_seconds: read.seconds })
@@ -259,7 +262,7 @@ function seen(days: number) {
 
 // The first login activates the account, which the bot plugin hears of.
 export async function recordLogin(trx: Transaction<DB>, userId: number) {
-  const days = await recordDay(trx, userId);
+  const days = await recordDay(trx, userId, "site");
   const user = await trx
     .updateTable("users")
     .set((eb) => ({
@@ -278,7 +281,7 @@ export async function recordLogin(trx: Transaction<DB>, userId: number) {
 
 export async function recordSeen(userId: number) {
   await db.transaction().execute(async (trx) => {
-    const days = await recordDay(trx, userId);
+    const days = await recordDay(trx, userId, "site");
     await trx.updateTable("users").set(seen(days)).where("id", "=", userId).execute();
   });
 }
@@ -300,7 +303,7 @@ export async function countReading(
     .forUpdate()
     .executeTakeFirstOrThrow();
   const counted = { posts: read.posts, seconds: Math.min(read.seconds, since ?? read.seconds) };
-  const days = await recordDay(trx, userId, counted);
+  const days = await recordDay(trx, userId, "site", counted);
   await trx
     .updateTable("users")
     .set((eb) => ({
@@ -384,13 +387,14 @@ export async function recountPeopleReached() {
 }
 
 // Posting, reacting or leaving a boost is being active the day it is done, also when it comes from
-// the groups or a bot.
-export async function countActive(trx: Transaction<DB>, userId: number, at: RawBuilder<Date>) {
-  if ((await recordDay(trx, userId, undefined, at)) === 0) return;
+// the groups or a bot; for the stats, what comes through a bot was done in the groups.
+export async function countActive(trx: Transaction<DB>, actor: Actor, at: RawBuilder<Date>) {
+  const where = actor.tokenId === null ? "site" : "qq";
+  if ((await recordDay(trx, actor.userId, where, undefined, at)) === 0) return;
   await trx
     .updateTable("users")
     .set((eb) => ({ days_visited: eb("days_visited", "+", 1) }))
-    .where("id", "=", userId)
+    .where("id", "=", actor.userId)
     .execute();
 }
 

@@ -193,12 +193,12 @@
 
 表：`active_days`、`daily_stats`、`visits`、`mail_log`、`search_terms`。后台的数据页（[总体设计 §10.1](design.md#101-数据)）用。
 
-- `active_days` 每人每天（北京时间）一行，`site` 是这天来过论坛，`qq` 是这天在群里活跃，留 400 天。由 `stats` 模块写：`user_days` 记一天的几处（会话续期、阅读上报，发帖、回复、表情回应、短评）按 `via` 记 `site` 或 `qq`，网页上的是 `site`，群里收录和 bot 代发的是 `qq`；成员同步里 `last_sent_at` 往后移的人，给移到的那天记 `qq`。写入用 `ON CONFLICT DO UPDATE … WHERE`，这天已经记过同一种的不再写。不并进 `user_days`：那里的一行就是访问了一天，等级、签到和连续访问都看它，群里说话不算。
+- `active_days` 每人每天（北京时间）一行，`site` 是这天来过论坛，`qq` 是这天在群里活跃，留 400 天。由 `stats` 模块写：`user_days` 记一天的几处一起记，登录、会话续期、阅读上报和网页上的发帖、回复、表情回应、短评是 `site`，经 bot 来的（群里收录和代发）是 `qq`；成员同步里 `last_sent_at` 往后移的人，给移到的那天记 `qq`。写入用 `ON CONFLICT DO UPDATE … WHERE`，这天已经记过同一种的不再写。不并进 `user_days`：那里的一行就是访问了一天，等级、签到和连续访问都看它，群里说话不算。
 - `daily_stats` 每天一行，一直留着：`members`、`activated` 是成员数和已激活数（不算 bot 和站长）；`guests`、`guest_views`、`member_views` 由 `visits` 汇总；`read_seconds`、`posts_read` 由 `user_days` 汇总；`bytes` 是 jsonb，形如 `{ "page": 0, "api": 0, "image": 0, "asset": 0 }`。每小时重算今天和昨天的汇总，成员数只写今天的，所以过去每天的是那天最后一次的值；`bytes` 每分钟累加。
 - `visits` 每天每个"IP + User-Agent"一行，`user_id` 为空的是访客，登录了的另记一行（唯一约束 `NULLS NOT DISTINCT`）。`user_agent` 截到 500 字，`views` 是浏览数，`referrer` 是这天第一次从别的网站来时的域名，`landing` 是这天第一个打开的页面的路径。在进程内累计，每分钟写一次，和浏览数一样。成员的行留 400 天，访客的留 90 天。成员详情的访问记录走 `visits_user`（`user_id, day DESC`），同一个 IP 上的账号走 `visits_ip`（`ip, day DESC`）。
 - `mail_log` 每封邮件一行，留 400 天：`kind` 是通知类型、`weekly`、`login`（验证码）或 `test`；`sent_at` 发出去的时间，`dropped_at` 丢掉的时间，`opened_at`、`clicked_at` 第一次打开、点击的时间。和 `mail_queue` 的那一行在同一个事务里写，`mail_queue.mail_id` 指向它；由发邮件的 `platform/mail.ts` 写。
 - `search_terms` 每天每个词一行，留 400 天：`term` 是去掉首尾空白、合并中间空白、转成小写后的搜索词，最多 100 字；`searches` 搜了几次，`empty` 其中没有结果的几次。只记网页上搜的第一页，由 `search` 模块写。
-- 登录方式现查操作日志里 `action = 'auth.login'` 的 `data->>'method'`，鼠币现查 `coin_ledger`，内容和排行现查 `threads`、`posts`、`reactions`。这些只有数据页用，结果缓存 10 分钟，不另加索引。
+- 登录方式现查操作日志里 `action = 'auth.login'` 的 `data->>'method'`，鼠币现查 `coin_ledger`，内容和排行现查 `threads`、`posts`、`reactions`。这些只有数据页用，不另加索引。
 
 ## 二期（占位）
 

@@ -17,6 +17,7 @@ import { notificationsRoutes } from "./modules/notifications/routes.ts";
 import { qqRoutes } from "./modules/qq/routes.ts";
 import { reactionsRoutes } from "./modules/reactions/routes.ts";
 import { searchRoutes } from "./modules/search/routes.ts";
+import { statsRoutes } from "./modules/stats/routes.ts";
 import { summariesRoutes } from "./modules/summaries/routes.ts";
 import { bountyRoutes } from "./modules/threads/bounty-routes.ts";
 import { mergeRoutes } from "./modules/threads/merge-routes.ts";
@@ -60,6 +61,7 @@ const api = createRouter()
   .route("/", searchRoutes)
   .route("/", moderationRoutes)
   .route("/", adminRoutes)
+  .route("/", statsRoutes)
   .route("/", auditRoutes);
 
 api.doc31("/openapi.json", { openapi: "3.1.0", info: { title: SITE_NAME, version: "1" } });
