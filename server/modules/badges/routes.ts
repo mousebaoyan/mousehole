@@ -29,7 +29,7 @@ const BadgeSchema = z
   .object({
     id: z.number(),
     name: z.string(),
-    description: z.string(),
+    description: z.string().openapi({ description: "怎么得到；隐藏徽章对没得到的人是一句提示" }),
     tier: z.string().openapi({ description: "bronze 铜、silver 银、gold 金" }),
     grouping: z.string().openapi({
       description:
@@ -37,12 +37,17 @@ const BadgeSchema = z
     }),
     multiple: z.boolean().openapi({ description: "能不能得多次" }),
     manual: z.boolean().openapi({ description: "管理员手动授予的活动徽章" }),
+    hidden: z.boolean().openapi({ description: "隐藏徽章，没得到的人看不到怎么得到" }),
     frame: z
       .string()
       .nullable()
       .openapi({ description: "活动徽章配的活动框，得到的人能用（总体设计 §8.16）" }),
     granted_count: z.number().openapi({ description: "有几个人得到" }),
+    granted_rate: z.number().openapi({ description: "得到的人占成员的比例，0 到 1" }),
     granted: z.number().openapi({ description: "自己得到了几次，没登录为 0" }),
+    progress: z.object({ have: z.number(), need: z.number() }).nullable().openapi({
+      description: "同一串里还没得到的徽章：自己现在有多少、要多少；得到了的和不成串的为 null",
+    }),
   })
   .openapi("Badge");
 
@@ -155,7 +160,11 @@ export const badgesRoutes = createRouter()
     }),
     async (c) => {
       const id = await findUserId(c.req.valid("param").user);
-      const items = await listUserBadges(id, reachOf(c.var.viewer, c.var.bot));
+      const items = await listUserBadges(
+        id,
+        reachOf(c.var.viewer, c.var.bot),
+        c.var.viewer?.id ?? null,
+      );
       return c.json(
         {
           items: items.map((b) => ({
