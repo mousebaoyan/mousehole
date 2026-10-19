@@ -151,7 +151,8 @@ export async function mergeThread(
           .selectFrom("posts")
           .select(sql<number>`count(*)::smallint`.as("n"))
           .where("thread_id", "=", kept.id)
-          .where("accepted_at", "is not", null),
+          .where("accepted_at", "is not", null)
+          .where("status", "=", "visible"),
       }))
       .where("id", "=", kept.id)
       .execute();

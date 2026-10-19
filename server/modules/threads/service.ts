@@ -560,9 +560,8 @@ export async function getThread(id: number, reader: Reader) {
         SELECT coalesce(json_agg(json_build_array(lower(r), upper(r) - 1) ORDER BY lower(r)), '[]')
         FROM unnest(mine.read_floors) r)`.as("read_floors"),
       sql<number[]>`ARRAY(SELECT floor FROM posts
-        WHERE posts.thread_id = threads.id AND posts.accepted_at IS NOT NULL ORDER BY floor)`.as(
-        "accepted_floors",
-      ),
+        WHERE posts.thread_id = threads.id AND posts.accepted_at IS NOT NULL
+          AND posts.status = 'visible' ORDER BY floor)`.as("accepted_floors"),
       sql<string>`(SELECT html FROM posts WHERE posts.thread_id = threads.id AND posts.floor = 1)`.as(
         "opening_html",
       ),
@@ -1448,7 +1447,9 @@ export async function deletePost(
       ])
       .executeTakeFirst();
     if (!deleted) throw new AppError(404, "post_not_found", "回复不存在");
-    if (deleted.accepted) await countAnswers(trx, post.thread_id, -1);
+    if (deleted.accepted && deleted.status === "visible") {
+      await countAnswers(trx, post.thread_id, -1);
+    }
     await unindexPost(trx, postId);
     if (deleted.status === "visible") await withdrawPost(trx, postId, viewer.id, null);
     await recordAudit(trx, actor, {
@@ -1566,6 +1567,7 @@ async function publishPost(
       "posts.author_id",
       "posts.reply_to_id",
       "posts.anonymous",
+      sql<boolean>`posts.accepted_at IS NOT NULL`.as("accepted"),
       "posts.via",
       "posts.created_at",
       "threads.board_id",
@@ -1618,6 +1620,7 @@ async function withdrawPost(
       "posts.author_id",
       "posts.reply_to_id",
       "posts.anonymous",
+      sql<boolean>`posts.accepted_at IS NOT NULL`.as("accepted"),
       "threads.board_id",
       "threads.status as thread_status",
     ])
@@ -1628,9 +1631,9 @@ async function withdrawPost(
   await postDeleted(trx, postId, byId, reason);
 }
 
-// A reply in or out of the counts: its thread's, its author's, the floor it answers, and its
-// board's while the thread is public; countThread moves the rest. Anonymous replies stay out of
-// the author's, as anonymous threads do. Returns who wrote that floor.
+// A reply in or out of the counts: its thread's replies and, accepted, answers; its author's, the
+// floor it answers, and its board's while the thread is public; countThread moves the rest.
+// Anonymous replies stay out of the author's, as anonymous threads do. Returns who wrote that floor.
 async function countReply(
   trx: Transaction<DB>,
   post: {
@@ -1638,6 +1641,7 @@ async function countReply(
     author_id: number;
     reply_to_id: number | null;
     anonymous: boolean;
+    accepted: boolean;
     board_id: number;
     thread_status: string;
   },
@@ -1645,7 +1649,10 @@ async function countReply(
 ) {
   await trx
     .updateTable("threads")
-    .set((eb) => ({ reply_count: eb("reply_count", "+", delta) }))
+    .set((eb) => ({
+      reply_count: eb("reply_count", "+", delta),
+      accepted_count: eb("accepted_count", "+", post.accepted ? delta : 0),
+    }))
     .where("id", "=", post.thread_id)
     .execute();
   if (post.thread_status === "visible") {
@@ -1909,11 +1916,12 @@ export async function setAnswer(
       .where("deleted_at", "is", null)
       // Taking one back works on a floor hidden since.
       .$if(accepted, (qb) => qb.where("status", "=", "visible"))
-      .returning(["id", "author_id", sql<boolean>`old.accepted_at IS NOT NULL`.as("was")])
+      .returning(["id", "author_id", "status", sql<boolean>`old.accepted_at IS NOT NULL`.as("was")])
       .executeTakeFirst();
     if (!answer) throw new AppError(400, "invalid_request", "只能采纳此帖子中公开的回复");
     if (answer.was === accepted) return;
-    await countAnswers(trx, threadId, accepted ? 1 : -1);
+    // A hidden one is already out of the count (countReply).
+    if (answer.status === "visible") await countAnswers(trx, threadId, accepted ? 1 : -1);
     if (accepted) {
       await threadSolved(trx, answer.id);
       await notifyOnPost(

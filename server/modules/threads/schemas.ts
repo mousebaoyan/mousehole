@@ -26,7 +26,7 @@ export const ThreadSchema = z
     pinned: z.number().openapi({ description: "0：不置顶；1：版块内置顶；2：全站置顶" }),
     featured: z.boolean(),
     locked: z.boolean(),
-    solved: z.boolean().openapi({ description: "问答帖有被采纳的回答" }),
+    solved: z.boolean().openapi({ description: "问答帖有被采纳、公开的回答" }),
     bounty_until: z
       .number()
       .nullable()

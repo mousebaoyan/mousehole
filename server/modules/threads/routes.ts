@@ -112,7 +112,9 @@ const PersonCountSchema = z.object({ user: UserBriefSchema, count: z.number() })
 
 const ThreadDetailSchema = ThreadSchema.extend({
   url: z.string(),
-  accepted_floors: z.array(z.number()).openapi({ description: "被采纳的回答在第几楼，从小到大" }),
+  accepted_floors: z
+    .array(z.number())
+    .openapi({ description: "被采纳、公开的回答在第几楼，从小到大" }),
   excerpt: z.string().openapi({ description: "主楼正文的前 100 个字，分享卡片用" }),
   status: z.string().openapi({
     description: "visible 公开；pending 待审核、hidden 已隐藏，这两种只有作者和版主打得开",
