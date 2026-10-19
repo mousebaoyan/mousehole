@@ -390,6 +390,14 @@ function ThreadPage({
   // Replies, and answers to accept, wait until the thread itself is public.
   const published = thread.status === "visible";
   const accept = thread.kind === "question" && published && (staff || (authored && !thread.locked));
+  const acceptHint =
+    accept &&
+    authored &&
+    thread.accepted_floors.length === 0 &&
+    posts.some(
+      (p) =>
+        p.floor > 1 && p.status === "visible" && !p.deleted && !sameWriter(p.author, thread.author),
+    );
   const floors: Floors = {
     posts,
     total: thread.floor_count,
@@ -415,7 +423,7 @@ function ThreadPage({
             }
             staff={staff}
             power={power}
-            asker={accept && authored}
+            acceptHint={acceptHint}
             reveal={
               me?.role === "admin" && anonymity
                 ? { shown: revealed !== null, toggle: () => void toggleReveal() }
