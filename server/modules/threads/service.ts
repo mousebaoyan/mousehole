@@ -391,6 +391,38 @@ export async function countTabs(
     .executeTakeFirstOrThrow();
 }
 
+// 保研定位 threads of the past week still taking votes that the reader neither started nor voted
+// in, newest first, for the home page to ask them (design §8.14).
+export async function awaitingVotes(reach: number, userId: number) {
+  return visibleThreads(reach)
+    .innerJoin("polls", "polls.thread_id", "threads.id")
+    .select([
+      "threads.id",
+      "threads.title",
+      sql<number>`cardinality(polls.rows)`.as("schools"),
+      "polls.voter_count",
+    ])
+    .where("polls.preset", "=", "positioning")
+    .where("polls.closed_at", "is", null)
+    .where("threads.locked", "=", false)
+    .where("threads.author_id", "<>", userId)
+    .where("threads.created_at", ">", sql<Date>`now() - interval '7 days'`)
+    .where((eb) =>
+      eb.not(
+        eb.exists(
+          eb
+            .selectFrom("poll_votes")
+            .select("poll_votes.thread_id")
+            .whereRef("poll_votes.thread_id", "=", "threads.id")
+            .where("poll_votes.user_id", "=", userId),
+        ),
+      ),
+    )
+    .orderBy("threads.id", "desc")
+    .limit(3)
+    .execute();
+}
+
 // How many threads the reader's own lists have, for the sidebar (design §9).
 export async function countMine(reach: number, userId: number) {
   const [{ posted }, mine] = await Promise.all([

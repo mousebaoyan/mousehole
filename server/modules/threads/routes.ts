@@ -45,6 +45,7 @@ import { SummarySchema, summaryJson } from "../summaries/schemas.ts";
 import { threadSummary } from "../summaries/service.ts";
 import { assertRelationsShown, findUserId, relationsShown, userBriefs } from "../users/service.ts";
 import {
+  awaitingVotes,
   countTabs,
   createPost,
   createThread,
@@ -667,7 +668,41 @@ export const threadsRoutes = createRouter()
       return c.json({ top_posts, likers: people(likers), liked: people(liked) }, 200);
     },
   )
-  // Before /threads/{id}, which would take "counts" for an ID.
+  // Before /threads/{id}, which would take these for an ID.
+  .openapi(
+    createRoute({
+      method: "get",
+      path: "/threads/awaiting-votes",
+      summary:
+        "等自己投票的保研定位帖：近 7 天发的、还在投票、自己没投过也不是自己发的，最新的在前，最多 3 个；首页用",
+      responses: {
+        200: {
+          description: "帖子",
+          content: {
+            "application/json": {
+              schema: z.object({
+                items: z.array(
+                  z.object({
+                    id: z.number(),
+                    title: z.string(),
+                    schools: z.number().openapi({ description: "目标院校有几所" }),
+                    voter_count: z.number(),
+                  }),
+                ),
+              }),
+            },
+          },
+        },
+        401: errorResponse("没有登录"),
+        403: errorResponse("不是成员或被禁言，不能投票"),
+      },
+    }),
+    async (c) => {
+      const viewer = authorizePosting(c);
+      const reach = reachOf(viewer, c.var.bot);
+      return c.json({ items: await awaitingVotes(reach, viewer.id) }, 200);
+    },
+  )
   .openapi(
     createRoute({
       method: "get",
