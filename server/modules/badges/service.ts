@@ -36,6 +36,7 @@ export async function syncBadges() {
         tier: r.tier,
         grouping: r.grouping,
         multiple: r.multiple ?? false,
+        hidden: r.hidden ?? false,
         ladder: r.ladder ?? null,
         need: r.need ?? null,
         position,
@@ -48,6 +49,7 @@ export async function syncBadges() {
         tier: eb.ref("excluded.tier"),
         grouping: eb.ref("excluded.grouping"),
         multiple: eb.ref("excluded.multiple"),
+        hidden: eb.ref("excluded.hidden"),
         ladder: eb.ref("excluded.ladder"),
         need: eb.ref("excluded.need"),
         position: eb.ref("excluded.position"),
@@ -92,19 +94,12 @@ async function announce(trx: Transaction<DB>, badge: Badge, granted: Granted[]) 
   }
 }
 
-const CHECKED = "badges";
-
-// Every few minutes: whoever now qualifies for a badge gets it, and hears of it. The very first
-// run gives the badges already earned by what was there before badges existed, quietly.
+// Every few minutes: whoever now qualifies for a badge gets it, and hears of it. A rule's very
+// first run gives the badges already earned by what was there before it, quietly.
 export async function checkBadges() {
-  const quiet = !(await db
-    .selectFrom("job_runs")
-    .select("name")
-    .where("name", "=", CHECKED)
-    .executeTakeFirst());
   const synced = await db
     .selectFrom("badges")
-    .select([...BADGE, "slug"])
+    .select([...BADGE, "slug", "caught_up_at"])
     .where("slug", "is not", null)
     .$narrowType<{ slug: NotNull }>()
     .execute();
@@ -112,6 +107,7 @@ export async function checkBadges() {
   for (const rule of RULES) {
     const badge = bySlug.get(rule.slug);
     if (!badge) throw new Error(`Badge ${rule.slug} is not synced`);
+    const quiet = badge.caught_up_at === null;
     await db.transaction().execute(async (trx) => {
       const { rows } = await sql<Granted>`
         INSERT INTO user_badges (user_id, badge_id, post_id)
@@ -122,14 +118,17 @@ export async function checkBadges() {
             AND b.badge_id = ${badge.id} AND b.post_id IS NOT DISTINCT FROM q.post_id)
         ON CONFLICT DO NOTHING
         RETURNING user_id, post_id`.execute(trx);
-      if (!quiet && rows.length > 0) await announce(trx, badge, rows);
+      if (quiet) {
+        await trx
+          .updateTable("badges")
+          .set({ caught_up_at: sql<Date>`now()` })
+          .where("id", "=", badge.id)
+          .execute();
+      } else if (rows.length > 0) {
+        await announce(trx, badge, rows);
+      }
     });
   }
-  await db
-    .insertInto("job_runs")
-    .values({ name: CHECKED, ran_at: new Date() })
-    .onConflict((oc) => oc.column("name").doUpdateSet({ ran_at: new Date() }))
-    .execute();
 }
 
 // ---- Reading
