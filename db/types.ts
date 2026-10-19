@@ -49,10 +49,12 @@ export interface AuditLogs {
 }
 
 export interface Badges {
+  caught_up_at: Timestamp | null;
   created_at: Generated<Timestamp>;
   description: string;
   frame: string | null;
   grouping: string;
+  hidden: Generated<boolean>;
   id: Generated<number>;
   ladder: string | null;
   multiple: Generated<boolean>;

@@ -19,9 +19,14 @@ export async function loader({ context }: Route.LoaderArgs) {
 // The groups the badges page shows them in (design §8.8).
 const GROUPS = [
   { key: "start", label: "入门" },
-  { key: "likes", label: "获赞" },
+  { key: "likes", label: "人气" },
   { key: "answers", label: "回答" },
+  { key: "activity", label: "勤快" },
   { key: "persistence", label: "坚持" },
+  { key: "social", label: "交际" },
+  { key: "community", label: "共建" },
+  { key: "coins", label: "鼠币" },
+  { key: "fun", label: "趣味" },
   { key: "limited", label: "绝版" },
 ];
 

@@ -87,7 +87,7 @@ async function badgeEvents(userId: number) {
 
 describe("徽章", () => {
   test("第一次检查只是补齐，不通知；之后得到的徽章有通知，金徽章交给插件", async () => {
-    await db.deleteFrom("job_runs").where("name", "=", "badges").execute();
+    await db.updateTable("badges").set({ caught_up_at: null }).execute();
     const early = await person();
     await thread(early.who);
     await checkBadges();

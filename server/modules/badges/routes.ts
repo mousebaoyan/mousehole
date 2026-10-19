@@ -32,7 +32,8 @@ const BadgeSchema = z
     description: z.string(),
     tier: z.string().openapi({ description: "bronze 铜、silver 银、gold 金" }),
     grouping: z.string().openapi({
-      description: "start 入门、likes 获赞、answers 回答、persistence 坚持、limited 绝版",
+      description:
+        "start 入门、likes 人气、answers 回答、activity 勤快、persistence 坚持、social 交际、community 共建、coins 鼠币、fun 趣味、limited 绝版",
     }),
     multiple: z.boolean().openapi({ description: "能不能得多次" }),
     manual: z.boolean().openapi({ description: "管理员手动授予的活动徽章" }),
