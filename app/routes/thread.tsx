@@ -386,7 +386,7 @@ function ThreadPage({
     }
   }
 
-  const target = { id: thread.id, title: thread.title };
+  const target = { id: thread.id, title: thread.title, my_anonymity: thread.my_anonymity };
   // Replies, and answers to accept, wait until the thread itself is public.
   const published = thread.status === "visible";
   const accept = thread.kind === "question" && published && (staff || (authored && !thread.locked));

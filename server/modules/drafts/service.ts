@@ -4,6 +4,7 @@ import { db } from "../../platform/db.ts";
 import { AppError } from "../../platform/errors.ts";
 import type { LotterySpec } from "../threads/lotteries.ts";
 import type { PollSpec } from "../threads/polls.ts";
+import { replyAnonymity } from "../threads/anonymity.ts";
 
 // What people are still writing, saved by the composer as they type; see design §8.2. A null
 // thread is the one new thread each person may have in progress.
@@ -52,8 +53,16 @@ export async function listDrafts(userId: number) {
     .selectFrom("drafts")
     .leftJoin("threads", "threads.id", "drafts.thread_id")
     .select([
-      "drafts.thread_id",
-      "threads.title as thread_title",
+      sql<{
+        id: number;
+        title: string;
+        author_id: number;
+        author_anonymous: boolean;
+        anonymous_replies: boolean;
+      } | null>`CASE WHEN threads.id IS NOT NULL THEN json_build_object('id', threads.id,
+        'title', threads.title, 'author_id', threads.author_id,
+        'author_anonymous', threads.author_anonymous,
+        'anonymous_replies', threads.anonymous_replies) END`.as("thread"),
       "drafts.title",
       "drafts.body",
       "drafts.updated_at",
@@ -62,7 +71,11 @@ export async function listDrafts(userId: number) {
     .orderBy("drafts.updated_at", "desc")
     .execute();
   return rows.map((r) => ({
-    thread: r.thread_id === null ? null : { id: r.thread_id, title: r.thread_title ?? "" },
+    thread: r.thread && {
+      id: r.thread.id,
+      title: r.thread.title,
+      my_anonymity: replyAnonymity(r.thread, userId),
+    },
     title: r.title,
     excerpt: r.body.replaceAll(/\s+/g, " ").trim().slice(0, 100),
     updated_at: r.updated_at,

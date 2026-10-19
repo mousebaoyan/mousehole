@@ -16,7 +16,7 @@ const people = {
   second: as(""),
   follower: as(""),
 };
-const ids = { author: 0, first: 0 };
+const ids = { author: 0, first: 0, second: 0 };
 
 beforeAll(async () => {
   for (const role of ["admin", "moderator"] as const) {
@@ -24,7 +24,7 @@ beforeAll(async () => {
   }
   for (const name of ["author", "first", "second", "follower"] as const) {
     const { id } = await createUser();
-    if (name === "author" || name === "first") ids[name] = id;
+    if (name !== "follower") ids[name] = id;
     people[name] = as(await login(id));
   }
   await api.boards.$post({ json: { slug: "anon", name: "匿名" } }, people.admin);
@@ -159,6 +159,46 @@ describe("匿名", () => {
     expect(first.author).toEqual(anonymous(1));
     expect(first.boosts.map((b) => b.user)).toEqual([anonymous(2)]);
     expect(second.author).toMatchObject({ id: ids.author });
+  });
+
+  test("楼主匿名、回复公开：别人每条回复自己选是否匿名，不选是实名；楼主和别的帖子里不能选", async () => {
+    const thread = await newThread({ anonymous: true });
+    expect((await detail(thread, people.first)).my_anonymity).toBe("optional");
+    expect((await detail(thread, people.author)).my_anonymity).toBe("anonymous");
+    expect((await detail(thread, { headers: {} })).my_anonymity).toBeNull();
+
+    const post = (who: Who, choice: boolean | undefined, id = thread) =>
+      api.threads[":id"].posts.$post(
+        { param: { id: String(id) }, json: { content: { markdown: "回复" }, anonymous: choice } },
+        who,
+      );
+    expect((await post(people.first, true)).status).toBe(201);
+    expect((await post(people.first, false)).status).toBe(201);
+    expect((await post(people.second, undefined)).status).toBe(201);
+    const [, ...replies] = await floors(thread, people.follower);
+    expect(replies.map((p) => p.author)).toMatchObject([
+      anonymous(2),
+      { id: ids.first },
+      { id: ids.second },
+    ]);
+
+    const replied = await newThread({ anonymous: true, anonymous_replies: true });
+    const named = await newThread({});
+    expect((await post(people.author, false)).status).toBe(400);
+    expect((await post(people.first, false, replied)).status).toBe(400);
+    expect((await post(people.first, true, named)).status).toBe(400);
+
+    await api.me.drafts[":key"].$put(
+      { param: { key: String(thread) }, json: { body: "写到一半", author_anonymous: true } },
+      people.first,
+    );
+    const drafts = await api.me.drafts.$get({}, people.first);
+    if (!drafts.ok) throw new Error(`status ${drafts.status}`);
+    expect((await drafts.json()).items[0].thread).toEqual({
+      id: thread,
+      title: "匿名测试的帖子",
+      my_anonymity: "optional",
+    });
   });
 
   test("管理员可以查看匿名的人是谁，记操作日志；版主不行", async () => {

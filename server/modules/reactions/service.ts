@@ -5,13 +5,8 @@ import { AppError } from "../../platform/errors.ts";
 import { recordAudit } from "../audit/service.ts";
 import { notifyOnPost } from "../notifications/service.ts";
 import { postedAt, type Source } from "../qq/service.ts";
-import {
-  aliasIn,
-  countBoosts,
-  countReaction,
-  getPost,
-  writesAnonymously,
-} from "../threads/service.ts";
+import { writesAnonymously } from "../threads/anonymity.ts";
+import { aliasIn, countBoosts, countReaction, getPost } from "../threads/service.ts";
 import { countActive, shownToGuests, userBriefs, writer } from "../users/service.ts";
 
 // The heart is the like; every reaction counts as one. See design §8.1.

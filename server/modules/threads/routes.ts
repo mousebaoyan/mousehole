@@ -128,6 +128,10 @@ const ThreadDetailSchema = ThreadSchema.extend({
     .nullable()
     .optional()
     .openapi({ description: "自己在这个帖子里匿名时的编号；只在登录时有" }),
+  my_anonymity: z.enum(["named", "anonymous", "optional"]).nullable().openapi({
+    description:
+      "自己在这里回复时：named 实名，anonymous 匿名，optional 每条回复自己选（楼主匿名、回复不匿名的帖子里，楼主以外的人）；未登录时为 null",
+  }),
   read_floors: z
     .array(z.tuple([z.number(), z.number()]))
     .optional()
@@ -235,6 +239,7 @@ function threadDetailJson(t: Thread, signedIn: boolean) {
     status: t.status,
     author_anonymous: t.author_anonymous,
     anonymous_replies: t.anonymous_replies,
+    my_anonymity: t.my_anonymity,
     poll: t.poll && pollJson(t.poll),
     lottery: t.lottery && lotteryJson(t.lottery),
     ...(signedIn && {
@@ -909,6 +914,10 @@ export const threadsRoutes = createRouter()
             .object({
               content: Content,
               reply_to_id: Int.optional(),
+              anonymous: z.boolean().optional().openapi({
+                description:
+                  "这条回复是否匿名，只能在 my_anonymity 为 optional 的帖子里给，不给时实名；其他帖子按帖子的设置",
+              }),
               source: Source.optional(),
               created_at: CreatedAt.optional(),
             })
@@ -917,7 +926,7 @@ export const threadsRoutes = createRouter()
       },
       responses: {
         201: postResponse,
-        400: errorResponse("回复的那一层不在这个帖子里"),
+        400: errorResponse("回复的那一层不在这个帖子里，或这个帖子里不能自己选择是否匿名"),
         403: errorResponse("不是成员，或者帖子已锁定"),
         404: errorResponse("帖子不存在"),
         409: errorResponse("有消息已经收录到论坛了，附上它所在的 thread_id 和 post_id"),

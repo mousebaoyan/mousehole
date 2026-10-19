@@ -6,11 +6,13 @@ export async function action({ params, request, context }: Route.ActionArgs) {
   const form = await request.formData();
   const markdown = form.get("markdown");
   const replyTo = form.get("reply_to_id");
+  const anonymous = form.get("anonymous");
   const res = await context.get(apiContext).threads[":id"].posts.$post({
     param: { id: params.id },
     json: {
       content: { markdown: typeof markdown === "string" ? markdown : "" },
       reply_to_id: replyTo === null ? undefined : Number(replyTo),
+      anonymous: anonymous === null ? undefined : anonymous === "true",
     },
   });
   if (res.ok) return { ok: true as const, floor: (await res.json()).floor };

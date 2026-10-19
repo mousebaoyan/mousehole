@@ -54,7 +54,7 @@
 { "anonymous": true, "number": 3, "display_name": "匿名鼠 3" }
 
 // 帖子。kind：discussion 讨论、question 问答、poll 投票、lottery 抽奖；楼主匿名时 author 是匿名的样子；帖子详情里有 author_anonymous、anonymous_replies（楼主以外的人回复时匿名），
-// 登录时还有 my_alias（自己在这个帖子里匿名时的编号，没有为 null）；floor_count 是最大的楼层号；solved 表示问答帖有被采纳、公开的回答，帖子详情里的 accepted_floors 是这些回答在第几楼（从小到大，可以有几层），excerpt 是主楼正文的前 100 个字；pinned：0 不置顶，1 版块内置顶，2 全站置顶；
+// 登录时还有 my_alias（自己在这个帖子里匿名时的编号，没有为 null）和 my_anonymity（自己回复时：named 实名、anonymous 匿名、optional 每条自己选，未登录为 null）；floor_count 是最大的楼层号；solved 表示问答帖有被采纳、公开的回答，帖子详情里的 accepted_floors 是这些回答在第几楼（从小到大，可以有几层），excerpt 是主楼正文的前 100 个字；pinned：0 不置顶，1 版块内置顶，2 全站置顶；
 // posters 是楼主以外、最近 20 层公开的楼层里最近回复的最多 4 个人，不含匿名回复的；url 只在帖子详情里有；
 // last_read_floor 是自己读过的最高一楼，没打开过为 0，只在登录时返回；帖子详情里还有 read_floors，是读过的楼层区间，例如 [[1, 20], [480, 495]]，
 // 以及 bookmarked（是否收藏）和 notify_level（关注级别，见 /threads/{id}/subscription），也只在登录时返回；
@@ -217,9 +217,9 @@ token 由站长在后台创建，只显示一次。每个 token 绑定一个 bot
 | POST | `/me/looks` | 用鼠币兑换动态版（总体设计 §8.16）：`{ kind, key }`，`kind` 为 `background`、`frame` 或 `avatar`，上传背景的和动态头像的 `key` 为 `custom`，兑换后可以上传动图。只是兑换，换上照常用 `PATCH /me`。返回设置，同 `GET /me/settings`。这一款没有动态版返回 `400 invalid_request`；还没够得上这一款的等级返回 `403 cosmetic_locked`；鼠币不够返回 `403 coins_insufficient`；兑换过了返回 `409 look_owned` | 成员，只能在网页上 |
 | GET | `/me/coins` | 鼠币余额和明细（总体设计 §8.17），每页 50 条，最新的在前：`{ coins, items, next_cursor }`，每条 `{ amount, reason, day, created_at, thread, look }`：`reason` 为 `check_in`、`liked`、`accepted`、`bounty`、`question`、`look`，`day` 是 `YYYY-MM-DD`；`thread` 是发的问答帖或回答的悬赏 `{ id, title }`，`look` 是兑换的 `{ kind, key }`，其他为 `null` | 已登录 / `read` |
 | GET | `/me/export` | 导出自己的全部内容，作为附件 `mousehole-{id}.json` 下载：`user`（`id`、`qq`、`display_name`、`bio`）、`posts`（发过的主楼和回复，Markdown 原文，含待审核和已隐藏的，不含删掉的；`floor` 为 1 的就是自己发的帖子）、`boosts`、`bookmarks`；每小时最多 3 次 | 已登录，只能在网页上 |
-| GET | `/me/drafts` | 自己的草稿，最近改过的在前：`thread`（回复的帖子 `{ id, title }`，发帖的为 `null`）、`title`、`excerpt`（正文前 100 个字）、`updated_at` | 已登录，只能在网页上 |
+| GET | `/me/drafts` | 自己的草稿，最近改过的在前：`thread`（回复的帖子 `{ id, title, my_anonymity }`，`my_anonymity` 同帖子详情；发帖的为 `null`）、`title`、`excerpt`（正文前 100 个字）、`updated_at` | 已登录，只能在网页上 |
 | GET | `/me/drafts/{key}` | 一份草稿，`key` 为 `new` 是发帖的，为帖子 ID 是回复这个帖子的：`title`、`board`、`kind`、`poll`（写了一半的投票，选项可以是空的；截止时间是 `days`（选了几天后截止，发帖时从那时算起）或 `closes_at`（自定义的时间），其余字段同发帖；没有为 `null`）、`lottery`（写了一半的抽奖，奖品可以是空的；开奖时间是 `days` 或 `draws_at`，同投票；没有为 `null`）、`positioning`（写了一半的保研定位：`fields` 各项背景、`schools` 目标院校，都可以是空的；没有为 `null`）、`tags`、`author_anonymous`、`anonymous_replies`、`body`、`reply_to`（`{ id, floor, name }` 或 `null`）、`updated_at`；没有返回 `404 draft_not_found` | 已登录，只能在网页上 |
-| PUT | `/me/drafts/{key}` | 保存草稿，整份替换：`{ body, title?, board?, kind?, poll?, lottery?, positioning?, tags?, author_anonymous?, anonymous_replies?, reply_to_id? }`；回复的帖子不存在返回 `404`，不在这个帖子里的 `reply_to_id`、不存在的版块不保存。发帖、回复成功后论坛删掉对应的草稿，180 天没动过的每天清理 | 已登录，只能在网页上 |
+| PUT | `/me/drafts/{key}` | 保存草稿，整份替换：`{ body, title?, board?, kind?, poll?, lottery?, positioning?, tags?, author_anonymous?, anonymous_replies?, reply_to_id? }`，回复的草稿用 `author_anonymous` 记这条回复是否匿名；回复的帖子不存在返回 `404`，不在这个帖子里的 `reply_to_id`、不存在的版块不保存。发帖、回复成功后论坛删掉对应的草稿，180 天没动过的每天清理 | 已登录，只能在网页上 |
 | DELETE | `/me/drafts/{key}` | 放弃草稿 | 已登录，只能在网页上 |
 | GET | `/me/sessions` | 已登录的设备：`user_agent`、`device`（例如"Chrome · macOS"）、`ip`、时间、是否当前设备 | 已登录 |
 | DELETE | `/me/sessions/{id}` | 让某个设备下线 | 已登录 |
@@ -311,7 +311,7 @@ token 由站长在后台创建，只显示一次。每个 token 绑定一个 bot
 | --- | --- | --- | --- |
 | GET | `/threads/{id}/posts` | 楼层列表，按楼层号升序，每次最多 20 层：`after=N` 取第 N 楼之后的（默认 0，从主楼开始），`before=N` 取第 N 楼之前的，二选一；不足 20 层说明这个方向到头了。每层带 `reply_to`（回复的是哪一层，没有为 `null`）和 `reply_count`（有几条回复它）；删除的楼层也在，带 `deleted: true`；待审核和已隐藏的楼层只给作者和版主，别人看到的楼层号会跳过它们。合并到了别的帖子的返回 `404 thread_merged`，带 `thread_id`、`floor`：要的那一楼（`after` 的下一楼或 `before` 的上一楼）现在在哪 | 访客 |
 | POST | `/preview` | `{ markdown }`：渲染成发布后的 HTML，返回 `{ html }`，编辑器预览用；每人每分钟最多 120 次 | 成员 / `act` |
-| POST | `/threads/{id}/posts` | 回复：`content`、`reply_to_id`（回复同一帖子里的哪一层，可选）、`source` 和 `created_at`（2.5 节）；锁定的帖子只有版主能回复，否则返回 `403 thread_locked`；帖子待审核或已隐藏时不能回复（`403 forbidden`）。先审后发的版块里，版主以外的人发的回复 `status` 为 `pending` | 成员 / `act` |
+| POST | `/threads/{id}/posts` | 回复：`content`、`reply_to_id`（回复同一帖子里的哪一层，可选）、`anonymous`（只开了楼主匿名的帖子里，楼主以外的人这条回复是否匿名，不带是实名；别的情况带了返回 `400 invalid_request`）、`source` 和 `created_at`（2.5 节）；锁定的帖子只有版主能回复，否则返回 `403 thread_locked`；帖子待审核或已隐藏时不能回复（`403 forbidden`）。先审后发的版块里，版主以外的人发的回复 `status` 为 `pending` | 成员 / `act` |
 | GET | `/posts/{id}` | 单个楼层 | 访客 |
 | GET | `/posts/{id}/replies` | 回复这一层的楼层，按楼层号升序，每次最多 20 层：`after=N` 取第 N 楼之后的，不足 20 层说明取完了 | 访客 |
 | PATCH | `/posts/{id}` | 修改 `content`（Markdown 或 OneBot 消息段），旧的正文进编辑记录；收录的楼层更新时带上 `source`，是这一层整理自的全部消息，替换原来的，其中有消息属于别的楼层时返回 `409 source_exists`；版主也能改别人的，L5 能改等级比自己低的人的（不含版主的和匿名的），版主还可以改 `status` 和 `reason`，同帖子。主楼的状态跟着帖子（`400`）；帖子待审核或已隐藏时不能改回复的状态（`403`）；锁定的帖子只有版主能改 | 作者、版主 / `act`、`moderate` |
