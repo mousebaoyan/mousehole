@@ -6,6 +6,7 @@ import { AppError } from "../../platform/errors.ts";
 import { queueMail } from "../../platform/mail.ts";
 import { excerpt } from "../../platform/markdown.ts";
 import { getSettings, type EmailPolicy, type Settings } from "../../platform/settings.ts";
+import { STAFF } from "../../platform/site.ts";
 import { userBriefs, writer } from "../users/service.ts";
 import {
   badgeReminders,
@@ -84,11 +85,17 @@ export async function notifyPrefs(saved: Record<string, { site?: boolean; email?
 }
 
 // Written in the transaction that caused it. Nobody hears of their own doing, nor anyone who left
-// the groups or muted the thread, nor the owner, who has no QQ and is in no group. Each type shows on the site and goes by email, as each person
-// set it.
+// the groups, muted the thread or can't read its board, nor the owner, who has no QQ and is in no
+// group. Each type shows on the site and goes by email, as each person set it.
 async function notify(trx: Transaction<DB>, userIds: number[], notice: Notice | SiteNotice) {
   const ids = [...new Set(userIds)].filter((id) => id !== notice.actorId);
   if (ids.length === 0) return;
+  const { read_level } = await trx
+    .selectFrom("threads")
+    .innerJoin("boards", "boards.id", "threads.board_id")
+    .select("boards.read_level")
+    .where("threads.id", "=", notice.threadId)
+    .executeTakeFirstOrThrow();
   const recipients = await trx
     .selectFrom("users")
     .leftJoin("thread_users", (join) =>
@@ -100,6 +107,7 @@ async function notify(trx: Transaction<DB>, userIds: number[], notice: Notice | 
     .where("users.id", "in", ids)
     .where("users.member_status", "=", "member")
     .where(sql<boolean>`thread_users.notify_level IS DISTINCT FROM 'muted'`)
+    .where((eb) => eb.or([eb("users.level", ">=", read_level), eb("users.role", "in", STAFF)]))
     .where("users.qq", "is not", null)
     .$narrowType<{ qq: NotNull }>()
     .execute();

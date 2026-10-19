@@ -145,6 +145,32 @@ describe("通知", () => {
     await clear(author, replier, other);
   });
 
+  test("版块的阅读门槛高过自己的等级时，那里的 @ 和关注的人发帖都不通知", async () => {
+    const admin = as(await login((await createUser("admin")).id));
+    await api.boards.$post({ json: { slug: "n3", name: "L3 通知", read_level: 3 } }, admin);
+    const [poster, below, reader] = await Promise.all([person(), person(), person()]);
+    await db
+      .updateTable("users")
+      .set({ level: 3 })
+      .where("id", "in", [poster.id, reader.id])
+      .execute();
+    await api.users[":user"].follow.$put({ param: { user: String(poster.id) } }, below.who);
+    const res = await api.threads.$post(
+      {
+        json: {
+          board: "n3",
+          title: "高阶版块的帖子",
+          content: { markdown: `[@L0](/u/${below.id}) [@L3](/u/${reader.id})` },
+        },
+      },
+      poster.who,
+    );
+    expect(res.status).toBe(201);
+    expect(await inbox(below.who)).toEqual([]);
+    expect(await inbox(reader.who)).toEqual([`mention:${poster.id}x1`]);
+    await clear(poster, below, reader);
+  });
+
   test("未读数、只看未读、标为已读", async () => {
     const t = await thread(author.who);
     const first = await reply(replier.who, t.id, "第一条", t.opening);
