@@ -253,6 +253,7 @@ token 由站长在后台创建，只显示一次。每个 token 绑定一个 bot
 | PUT | `/users/{user}/restriction` | 禁言或封禁：`{ type, until, reason }`，`type` 为 `mute` 或 `ban`，`until` 是到期的 Unix 秒、`null` 为永久，已有的就换掉；只能对普通成员（版主和管理员返回 `403`）。封禁同时让他所有设备下线。理由记进操作日志 | 禁言：版主 / `moderate`；封禁：管理员 / `admin` |
 | DELETE | `/users/{user}/restriction` | 解除禁言或封禁，可附 `{ reason }`；没有被限制返回 `404 not_restricted` | 版主 / `moderate`，解除封禁要管理员 |
 | DELETE | `/users/{user}/customization/{item}` | 清除不合适的个性化（总体设计 §8.16）：`item` 为 `background`、`status` 或 `showcase`，带 `{ reason }`，理由必填，记操作日志 | 版主 / `moderate` |
+| GET | `/users/{user}/visits` | 访问记录（总体设计 §10.1），最近的在前，每页 50 条，`cursor` 是已经列出的条数：每条 `{ day, ip, device, views }`，`device` 从 User-Agent 看出；`others` 是这些 IP 上来过的其他账号，每项 `{ user, ips }`，最多 20 个 | 站长，只能在网页上操作 |
 | GET | `/coins/leaderboard` | 鼠币排行榜（总体设计 §8.17）：`period` 为 `week`（默认，本周一起）、`month`（本月 1 日起）或 `all`，按北京时间；前 50 名 `{ items: [{ user, earned }] }`，`earned` 是这段时间挣到的鼠币，`user` 同楼层里的用户；不含 bot 和冻结的账号 | 成员 / `read` |
 
 ### 3.3 版块与标签
@@ -350,6 +351,7 @@ token 由站长在后台创建，只显示一次。每个 token 绑定一个 bot
 | GET | `/notifications/unread-count` | 未读数：`{ count }` | 成员 / `act` |
 | POST | `/notifications/read` | 标为已读：`{ ids }`（最多 100 条）或 `{ all: true }` | 成员 / `act` |
 | POST | `/mail/unsubscribe` | 按邮件里的退订链接关掉一类邮件：`{ user_id, kind, sig }`，取自链接的 `u`、`k`、`s`，`kind` 是通知类型或 `weekly`（每周来信），见[总体设计 §8.6](design.md#86-通知与实时)。和在设置里关一样，记进操作日志。成功返回 204，签名不对返回 `400 unsubscribe_invalid` | 不用登录 |
+| POST | `/mail/clicks` | 从邮件点进论坛：`{ mail }`，取自链接的 `m`（`邮件 ID.签名`，总体设计 §8.6）。记下这封邮件第一次点击，还没记过打开的一起记上；签名不对也返回 204，什么都不做 | 不用登录 |
 | GET | `/stream` | SSE：当前用户的未读通知数，连上时和每次变化时推一条 `unread` 事件，`data` 是未读数；每 20 秒一条心跳注释 | 登录用户，只能在网页上 |
 
 ### 3.9 管理后台
@@ -357,6 +359,7 @@ token 由站长在后台创建，只显示一次。每个 token 绑定一个 bot
 | 方法 | 路径 | 说明 | 权限 |
 | --- | --- | --- | --- |
 | GET | `/admin/overview` | 概览：`members`（`total`、`activated`、`frozen`，不算 bot 和站长）、`content`（`threads_today`、`posts_today`：今天公开的帖子和回复，按北京时间；`pending`：待审核；`reports`：待处理的举报；`suggestions`：待处理的修改建议）、`events`（`streams`：现在连着的事件流；`polled_at`：最近一次按游标拉取的时间，进程重启后为 `null`）、`storage`（`database`、`uploads`：数据库和上传图片占用的字节数）；群的同步状态见 `/admin/groups` | 管理员 / `admin` |
+| GET | `/admin/stats` | 数据页（总体设计 §10.1）：`range` 为 `7`、`30`（默认）、`90` 或 `365` 天。`days` 是逐天的数组，每天 `{ day, active: { site, qq, any }, members, activated, new_activated, joined, left, guests, guest_views, member_views, threads, posts, reactions, read_seconds, posts_read, logins, mails, coins, bytes }`，`threads`、`posts`、`reactions` 按 `web`、`bot`、`qq` 分，`logins` 按 `code`、`link`、`email` 分，`mails` 按类给 `{ sent, dropped, opened, clicked }`，`coins` 按 `reason` 给 `{ earned, spent }`，`bytes` 按 `page`、`api`、`image`、`asset` 分；`totals` 是整段和前一段的 `{ dau, wau, mau }`（三种各一组）、`new_activated`、`threads`、`posts`、`solved_rate`、`first_reply_seconds`（中位数）；`retention` 是最近 12 周的 `{ week, size, back: [第 1、2、4、8 周的比例] }`；`referrers`、`landings`、`devices`（`guest`、`member` 各一份）、`search`（`top`、`empty`）、`top`（`threads`、`boards`、`tags`）是前 N 名的 `{ key, count }` 或对象加 `count`。结果缓存 10 分钟 | 管理员 / `admin` |
 | GET | `/admin/settings` | 站点设置，按分组返回：`site`（`banner` 公告横幅，`qq_public` 访客能否看到 QQ 号，`summaries` 是否显示和生成 AI 总结）、`login`（三种登录方式的开关和口令提示）、`smtp`（`accounts`：发信邮箱，按使用的顺序，每个是 `host`、`port`、`secure`、`user`，密码只返回 `password_set`）、`bot`（`require_operator`）、`notify`（`email`：每类通知的邮件规则，`on` 默认发送、`off` 默认不发、`never` 不发送，成员也不能打开；`unactivated`：未激活的成员也发通知邮件和每周来信，默认 `false`）、`weekly`（每周来信：`enabled`，`min_reads`、`min_likes` 被读和获赞的门槛，`top_likes` 写进信里的楼层至少几个赞） | 站长，只能在网页上操作 |
 | PATCH | `/admin/settings` | 修改站点设置，立即生效：只改带了的分组和字段。`smtp.accounts` 整组替换，最多 10 个；某个邮箱不带 `password` 就沿用这个账号原来的密码；`notify.email` 只改带了的类型。改了的字段连同改前改后的值记进操作日志，密码只记哪个邮箱的改了 | 站长，只能在网页上操作 |
 | POST | `/admin/badges` | 新建活动徽章：`{ name, description, tier, frame }`，名字最多 12 个字，说明最多 60 个字；`frame` 是配的活动框的 key，可以为 `null`（总体设计 §8.16）；重名返回 `409 badge_exists` | 管理员 / `admin` |
