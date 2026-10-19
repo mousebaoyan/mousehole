@@ -187,6 +187,69 @@ test("按天数三种方式各登录了几次，同一个人登录几次算几�
   expect(after.totals.now.logins.link - before.totals.now.logins.link).toBe(2);
 });
 
+test("按记账的那天数发放和消耗的鼠币，分来源和用途；站长的不算", async () => {
+  const before = await stats();
+  const { id } = await createUser();
+  // Logging in checks in; asking a question spends.
+  const who = as(await login(id));
+  const asked = await api.threads.$post(
+    {
+      json: {
+        board: "stats",
+        kind: "question",
+        title: "问答帖要花鼠币",
+        content: { markdown: "正文" },
+      },
+    },
+    who,
+  );
+  if (!asked.ok) throw new Error(`status ${asked.status}: ${await asked.text()}`);
+  const thread = (await asked.json()).id;
+  await ownerSession();
+  const owner = await db
+    .selectFrom("users")
+    .select("id")
+    .where("role", "=", "owner")
+    .executeTakeFirstOrThrow();
+  await db
+    .insertInto("coin_ledger")
+    .values([
+      { user_id: id, amount: 3, reason: "liked", day: dayAgo(1) },
+      { user_id: id, amount: 10, reason: "accepted", day: dayAgo(1) },
+      { user_id: id, amount: 1, reason: "bounty", day: dayAgo(1), thread_id: thread },
+      {
+        user_id: id,
+        amount: -30,
+        reason: "look",
+        day: dayAgo(0),
+        look_kind: "frame",
+        look_key: "a",
+      },
+      { user_id: owner.id, amount: 4, reason: "liked", day: dayAgo(0) },
+    ])
+    .execute();
+
+  const after = await stats();
+  const change = (back: number) => {
+    const was = before.days[before.days.length - 1 - back].coins;
+    const is = after.days[after.days.length - 1 - back].coins;
+    return {
+      check_in: is.earned.check_in - was.earned.check_in,
+      liked: is.earned.liked - was.earned.liked,
+      accepted: is.earned.accepted - was.earned.accepted,
+      bounty: is.earned.bounty - was.earned.bounty,
+      question: is.spent.question - was.spent.question,
+      look: is.spent.look - was.spent.look,
+    };
+  };
+  expect([change(0), change(1)]).toEqual([
+    { check_in: 2, liked: 0, accepted: 0, bounty: 0, question: 1, look: 30 },
+    { check_in: 0, liked: 3, accepted: 10, bounty: 1, question: 0, look: 0 },
+  ]);
+  expect(after.totals.now.coins.earned.accepted - before.totals.now.coins.earned.accepted).toBe(10);
+  expect(after.totals.now.coins.spent.look - before.totals.now.coins.spent.look).toBe(30);
+});
+
 test("只有管理员能看", async () => {
   const member = as(await login((await createUser()).id));
   expect((await api.admin.stats.$get({ query: {} }, member)).status).toBe(403);

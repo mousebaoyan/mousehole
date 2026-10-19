@@ -150,6 +150,8 @@ export default function Stats({ loaderData: stats }: Route.ComponentProps) {
 
       <Searches searches={stats.searches} />
 
+      <Coins stats={stats} dates={dates} />
+
       <Bandwidth stats={stats} dates={dates} />
 
       <Top top={stats.top} />
@@ -804,6 +806,120 @@ function Searches({ searches }: { searches: Stats["searches"] }) {
       <div className="grid gap-6 sm:grid-cols-2">
         <TopList title="搜得最多的词" items={termsListed(searches.most)} />
         <TopList title="没有结果的词" items={termsListed(searches.unfound)} />
+      </div>
+    </Section>
+  );
+}
+
+// Where coins come from and what they go on, as the coins page names them, in this order.
+const EARNINGS = [
+  { reason: "check_in", label: "签到", color: "var(--chart-1)" },
+  { reason: "liked", label: "获赞", color: "var(--chart-2)" },
+  { reason: "accepted", label: "回复被采纳", color: "var(--chart-3)" },
+  { reason: "bounty", label: "回答悬赏", color: "var(--chart-4)" },
+] as const;
+
+const SPENDINGS = [
+  { reason: "question", label: "发问答帖", color: "var(--chart-1)" },
+  { reason: "look", label: "兑换动态版", color: "var(--chart-2)" },
+] as const;
+
+type Coined = { key: string; label: string; color: string; now: number; before: number };
+
+function coinsIn(rows: Coined[], when: "now" | "before") {
+  return rows.reduce((total, r) => total + r[when], 0);
+}
+
+function LedgerRow({
+  label,
+  color,
+  now,
+  before,
+}: {
+  label: string;
+  color?: string;
+  now: number;
+  before: number;
+}) {
+  return (
+    <tr>
+      <th className="py-2 text-left font-normal">
+        <span className="inline-flex items-center gap-1.5">
+          {color && <span className="h-0.5 w-3 rounded-full" style={{ background: color }} />}
+          {label}
+        </span>
+      </th>
+      <td className="py-2 text-right font-semibold tabular-nums">{number(now)}</td>
+      <td className="w-16 py-2 pl-2">
+        <Delta now={now} before={before} neutral />
+      </td>
+    </tr>
+  );
+}
+
+// Coins by where they came from or went, with the total.
+function Ledger({ title, rows }: { title: string; rows: Coined[] }) {
+  return (
+    <div className="min-w-0">
+      <h3 className="text-sm font-medium">{title}</h3>
+      <table className="mt-1 w-full text-sm">
+        <tbody className="divide-y">
+          {rows.map((r) => (
+            <LedgerRow key={r.key} label={r.label} color={r.color} now={r.now} before={r.before} />
+          ))}
+          <LedgerRow label="合计" now={coinsIn(rows, "now")} before={coinsIn(rows, "before")} />
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function Coins({ stats, dates }: { stats: Stats; dates: string[] }) {
+  const { days, totals } = stats;
+  const { now, before } = totals;
+  return (
+    <Section title="鼠币" description="获赞、采纳和悬赏的鼠币次日到账，所以今天的发放只含签到">
+      <div className="grid gap-6 sm:grid-cols-2">
+        <Ledger
+          title="发放"
+          rows={EARNINGS.map((e) => ({
+            key: e.reason,
+            label: e.label,
+            color: e.color,
+            now: now.coins.earned[e.reason],
+            before: before.coins.earned[e.reason],
+          }))}
+        />
+        <Ledger
+          title="消耗"
+          rows={SPENDINGS.map((e) => ({
+            key: e.reason,
+            label: e.label,
+            color: e.color,
+            now: now.coins.spent[e.reason],
+            before: before.coins.spent[e.reason],
+          }))}
+        />
+      </div>
+      <div className="mt-6 grid gap-6">
+        <LineChart
+          title="每天发放的鼠币"
+          days={dates}
+          series={EARNINGS.map((e) => ({
+            label: e.label,
+            color: e.color,
+            values: days.map((d) => d.coins.earned[e.reason]),
+          }))}
+        />
+        <LineChart
+          title="每天消耗的鼠币"
+          days={dates}
+          series={SPENDINGS.map((e) => ({
+            label: e.label,
+            color: e.color,
+            values: days.map((d) => d.coins.spent[e.reason]),
+          }))}
+        />
       </div>
     </Section>
   );
