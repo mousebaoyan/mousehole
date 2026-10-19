@@ -39,11 +39,15 @@
 { "id": 7, "display_name": "鼠鼠", "role": "user", "level": 3, "title": "指导顾问", "title_tier": "silver",
   "frame": { "key": "laurel", "moving": true }, "user_status": { "emoji": "🎉", "text": "已上岸" } }
 
-// 徽章（总体设计 §8.8）。tier：bronze 铜、silver 银、gold 金；grouping：start 入门、likes 获赞、answers 回答、
-// persistence 坚持、limited 绝版；multiple 能不能得多次；manual 是不是管理员手动授予的活动徽章；
-// granted_count 有几个人得到；frame 是活动徽章配的活动框（总体设计 §8.16），没有为 null；列表和详情里登录用户还带 granted（自己得到了几次，没有为 0）
+// 徽章（总体设计 §8.8）。tier：bronze 铜、silver 银、gold 金；grouping：start 入门、likes 人气、answers 回答、
+// activity 勤快、persistence 坚持、social 交际、community 共建、coins 鼠币、fun 趣味、limited 绝版；
+// multiple 能不能得多次；manual 是不是管理员手动授予的活动徽章；hidden 是不是隐藏徽章：没得到它的人 description 为 null；
+// granted_count 有几个人得到，granted_rate 是占成员的比例（0–1）；frame 是活动徽章配的活动框（总体设计 §8.16），没有为 null；
+// 列表和详情里登录用户还带 granted（自己得到了几次，没有为 0），以及 progress：同一串里还没得到的徽章，
+// 自己现在的值和门槛 { have, need }，已经得到的和不成串的为 null
 { "id": 12, "name": "指导顾问", "description": "回复被采纳 10 次", "tier": "silver", "grouping": "answers",
-  "multiple": false, "manual": false, "frame": null, "granted_count": 8, "granted": 1 }
+  "multiple": false, "manual": false, "hidden": false, "frame": null, "granted_count": 8, "granted_rate": 0.004,
+  "granted": 0, "progress": { "have": 6, "need": 10 } }
 
 // 匿名写的人（总体设计 §8.12）：帖子、楼层、短评、通知和事件里的 author、user、actor 都可能是这个样子，
 // number 是这个人在这个帖子里的编号，楼主匿名时是 1 号；没有 id、头像和 QQ 号
