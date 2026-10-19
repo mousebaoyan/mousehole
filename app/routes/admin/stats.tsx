@@ -5,6 +5,7 @@ import { apiContext } from "../../api.server.ts";
 import { ArrowDown, ArrowUp } from "~/components/icons";
 import { Section } from "~/components/form-parts";
 import { pageTitle } from "~/share-meta";
+import { NOTIFICATION_LABELS } from "../../../server/modules/notifications/types.ts";
 import { BOT_NAME } from "../../../server/platform/site.ts";
 import type { Route } from "./+types/stats.ts";
 import { LineChart, monthDay } from "./stats-chart.tsx";
@@ -141,6 +142,8 @@ export default function Stats({ loaderData: stats }: Route.ComponentProps) {
         </div>
       </Section>
 
+      <Mail mail={stats.mail} />
+
       <Bandwidth stats={stats} dates={dates} />
     </>
   );
@@ -179,6 +182,7 @@ function Figure({
   label,
   value,
   before = null,
+  format = number,
   note,
   neutral,
   className,
@@ -186,6 +190,7 @@ function Figure({
   label: string;
   value: number | null;
   before?: number | null;
+  format?: (n: number) => string;
   note?: string;
   neutral?: boolean;
   className?: string;
@@ -194,7 +199,7 @@ function Figure({
     <div className={cn("rounded-xl border p-3", className)}>
       <div className="text-meta text-muted-foreground">{label}</div>
       <div className="mt-1 flex flex-wrap items-baseline gap-x-2">
-        <span className="text-2xl font-semibold">{value === null ? "—" : number(value)}</span>
+        <span className="text-2xl font-semibold">{value === null ? "—" : format(value)}</span>
         {value !== null && before !== null && (
           <Delta now={value} before={before} neutral={neutral} />
         )}
@@ -457,6 +462,85 @@ function TopList({
         </ol>
       )}
     </div>
+  );
+}
+
+// Each kind of mail as the settings call it.
+const MAIL_KINDS: Partial<Record<string, string>> = {
+  ...NOTIFICATION_LABELS,
+  weekly: "每周来信",
+  login: "登录验证码",
+  test: "测试邮件",
+};
+
+function sum(kinds: Stats["mail"], key: "sent" | "dropped" | "opened" | "clicked") {
+  return kinds.reduce((total, m) => total + (m[key] ?? 0), 0);
+}
+
+// In percent; null for mails that don't tell, or when none were sent.
+function rate(n: number | null, of: number) {
+  return n === null || of === 0 ? null : (n / of) * 100;
+}
+
+function Mail({ mail }: { mail: Stats["mail"] }) {
+  // The mails that tell when they are opened: reminders and letters.
+  const tracked = mail.filter((m) => m.opened !== null);
+  return (
+    <Section
+      title="邮件"
+      description="打开率和点击率只统计通知邮件和每周来信。部分邮箱默认不显示图片，实际打开的会更多"
+    >
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <Figure label="发出" value={sum(mail, "sent")} />
+        <Figure label="发送失败" value={sum(mail, "dropped")} />
+        <Figure
+          label="打开率"
+          value={rate(sum(tracked, "opened"), sum(tracked, "sent"))}
+          format={percent}
+        />
+        <Figure
+          label="点击率"
+          value={rate(sum(tracked, "clicked"), sum(tracked, "sent"))}
+          format={percent}
+        />
+      </div>
+      {mail.length === 0 ? (
+        <p className="mt-4 text-sm text-muted-foreground">这段时间暂无邮件</p>
+      ) : (
+        <div className="mt-4 -mx-5 overflow-x-auto overscroll-x-contain">
+          <table className="w-full text-sm whitespace-nowrap tabular-nums">
+            <thead className="text-left text-meta text-muted-foreground">
+              <tr>
+                <th className="py-2 pr-2 pl-5 font-medium">类别</th>
+                <th className="px-2 py-2 text-right font-medium sm:px-3">发出</th>
+                <th className="px-2 py-2 text-right font-medium sm:px-3">失败</th>
+                <th className="px-2 py-2 text-right font-medium sm:px-3">打开率</th>
+                <th className="py-2 pr-5 pl-2 text-right font-medium sm:pl-3">点击率</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y border-t">
+              {mail.map((m) => {
+                const opened = rate(m.opened, m.sent);
+                const clicked = rate(m.clicked, m.sent);
+                return (
+                  <tr key={m.kind}>
+                    <td className="py-2 pr-2 pl-5">{MAIL_KINDS[m.kind] ?? m.kind}</td>
+                    <td className="px-2 py-2 text-right sm:px-3">{number(m.sent)}</td>
+                    <td className="px-2 py-2 text-right sm:px-3">{number(m.dropped)}</td>
+                    <td className="px-2 py-2 text-right sm:px-3">
+                      {opened === null ? "—" : percent(opened)}
+                    </td>
+                    <td className="py-2 pr-5 pl-2 text-right sm:pl-3">
+                      {clicked === null ? "—" : percent(clicked)}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </Section>
   );
 }
 

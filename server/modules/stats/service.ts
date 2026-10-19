@@ -356,6 +356,25 @@ async function sources(range: Range) {
   };
 }
 
+// Mails of each kind over the range, the most sent first. Login codes and test mails don't tell
+// when they are opened and clicked.
+async function mailing(range: Range) {
+  const { rows } = await sql<{
+    kind: string;
+    sent: number;
+    dropped: number;
+    opened: number | null;
+    clicked: number | null;
+  }>`
+    SELECT kind, count(sent_at)::integer AS sent, count(dropped_at)::integer AS dropped,
+      CASE WHEN kind NOT IN ('login', 'test') THEN count(opened_at)::integer END AS opened,
+      CASE WHEN kind NOT IN ('login', 'test') THEN count(clicked_at)::integer END AS clicked
+    FROM mail_log
+    WHERE created_at >= (${TODAY} - ${range - 1}::integer)::timestamp AT TIME ZONE 'Asia/Shanghai'
+    GROUP BY kind ORDER BY sent DESC, kind`.execute(db);
+  return rows;
+}
+
 type Day = Awaited<ReturnType<typeof series>>[number];
 
 // A figure recorded from some day on, averaged over the days that have it; null when none do.
@@ -396,12 +415,13 @@ function summarize(period: Day[], whole: Day[], people: Awaited<ReturnType<typeo
 
 // Each figure over the range against the same length of time just before it.
 export async function getStats(range: Range) {
-  const [days, now, before, cohorts, from] = await Promise.all([
+  const [days, now, before, cohorts, from, mail] = await Promise.all([
     series(range),
     reach(TODAY),
     reach(sql<Date>`(${TODAY} - ${range}::integer)`),
     retention(),
     sources(range),
+    mailing(range),
   ]);
   const earlier = days.slice(0, range);
   const recent = days.slice(range);
@@ -414,5 +434,6 @@ export async function getStats(range: Range) {
     },
     retention: cohorts,
     ...from,
+    mail,
   };
 }

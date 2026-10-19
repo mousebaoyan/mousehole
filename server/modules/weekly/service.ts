@@ -167,6 +167,7 @@ export async function sendWeeklyLetters(now = new Date()) {
         unsubscribe: unsubscribeUrl(p.id, "weekly"),
       };
       return {
+        kind: "weekly",
         address: `${p.qq}@qq.com`,
         subject: subjectOf(week),
         body: letterText(week),

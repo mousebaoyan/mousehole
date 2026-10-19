@@ -1,6 +1,6 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { setTimeout } from "node:timers/promises";
-import { sql, type Transaction } from "kysely";
+import { sql, type RawBuilder, type Transaction } from "kysely";
 import { createTransport } from "nodemailer";
 import type { DB } from "../../db/types.ts";
 import { db } from "./db.ts";
@@ -90,15 +90,24 @@ async function deliver(mail: Mail) {
   return refusals === tried ? "refused" : "failed";
 }
 
-// Sends now, for whoever is waiting on it. Called after transactions commit: a slow mail server
-// must not hold database locks.
+// Mails sent without the queue, into the log as sent or dropped.
+async function logSent(kind: "login" | "test", sent: boolean[]) {
+  const now = new Date();
+  await db
+    .insertInto("mail_log")
+    .values(sent.map((s) => (s ? { kind, sent_at: now } : { kind, dropped_at: now })))
+    .execute();
+}
+
+// Login codes, sent now for whoever is waiting on them. Called after transactions commit: a slow
+// mail server must not hold database locks.
 export async function sendMail(to: string, subject: string, text: string, html: string) {
   if ((await getSettings()).smtp.accounts.length === 0) {
     throw new AppError(503, "email_not_configured", "尚未配置发信邮箱");
   }
-  if ((await deliver({ to, subject, text, html })) !== "sent") {
-    throw new AppError(502, "email_failed", "邮件发送失败，请稍后重试");
-  }
+  const sent = (await deliver({ to, subject, text, html })) === "sent";
+  await logSent("login", [sent]);
+  if (!sent) throw new AppError(502, "email_failed", "邮件发送失败，请稍后重试");
 }
 
 // One test email from each mailbox, resting or not; one that sends is no longer resting.
@@ -126,6 +135,10 @@ export async function testMailboxes(to: string) {
       });
     }
   }
+  await logSent(
+    "test",
+    results.map((r) => r.error === null),
+  );
   return results;
 }
 
@@ -133,13 +146,39 @@ export async function testMailboxes(to: string) {
 
 export const MAIL_CHANNEL = "mousehole_mail";
 
-// The NOTIFY reaches sendQueued only once the transaction commits.
+// `kind` is the notification type, or "weekly" for the weekly letters. The NOTIFY reaches
+// sendQueued only once the transaction commits.
 export async function queueMail(
   trx: Transaction<DB>,
-  mails: { address: string; subject: string; body: string; html: string; unsubscribe?: string }[],
+  mails: {
+    kind: string;
+    address: string;
+    subject: string;
+    body: string;
+    html: string;
+    unsubscribe?: string;
+  }[],
 ) {
   if (mails.length === 0) return;
-  await trx.insertInto("mail_queue").values(mails).execute();
+  // Postgres returns the rows of an insert in the order given.
+  const logged = await trx
+    .insertInto("mail_log")
+    .values(mails.map((m) => ({ kind: m.kind })))
+    .returning("id")
+    .execute();
+  await trx
+    .insertInto("mail_queue")
+    .values(
+      mails.map(({ address, subject, body, html, unsubscribe }, i) => ({
+        address,
+        subject,
+        body,
+        html: tracked(html, logged[i].id),
+        unsubscribe,
+        mail_id: logged[i].id,
+      })),
+    )
+    .execute();
   await sql`SELECT pg_notify(${MAIL_CHANNEL}, '')`.execute(trx);
 }
 
@@ -161,13 +200,8 @@ export function sendQueued() {
 // Oldest due first, until no mailbox can send, a second or two apart so that a batch doesn't leave
 // all at once. A reminder a day late is no use any more.
 async function drain() {
-  const stale = await db
-    .deleteFrom("mail_queue")
-    .where("created_at", "<", sql<Date>`now() - interval '1 day'`)
-    .executeTakeFirst();
-  if (stale.numDeletedRows > 0n) {
-    log("warn", "Dropped mail unsent for a day", { count: Number(stale.numDeletedRows) });
-  }
+  const stale = await settle(sql`created_at < now() - interval '1 day'`, "dropped_at");
+  if (stale > 0) log("warn", "Dropped mail unsent for a day", { count: stale });
   if ((await getSettings()).smtp.accounts.length === 0) return;
   for (let first = true; ; first = false) {
     if (!first) await setTimeout(1000 + Math.random() * 1000);
@@ -200,23 +234,85 @@ async function drain() {
     if (outcome === "failed")
       log("warn", "Dropped mail that kept failing", { address: mail.address });
     if (outcome === "refused") log("warn", "Mail refused", { address: mail.address });
-    await db.deleteFrom("mail_queue").where("id", "=", mail.id).execute();
+    await settle(sql`id = ${mail.id}`, outcome === "sent" ? "sent_at" : "dropped_at");
   }
 }
 
-// ---- Unsubscribe links (design §8.6): signed, so they turn off one kind of mail without logging in.
-
-// What a link turns off: a notification type, or "weekly" for the weekly letters.
-function signature(userId: number, kind: string) {
-  return createHmac("sha256", env.APP_SECRET).update(`${userId}:${kind}`).digest("base64url");
+// Takes mails off the queue, noting in the log that they were sent or dropped; how many.
+async function settle(which: RawBuilder<unknown>, done: "sent_at" | "dropped_at") {
+  const result = await sql`
+    WITH settled AS (DELETE FROM mail_queue WHERE ${which} RETURNING mail_id)
+    UPDATE mail_log SET ${sql.ref(done)} = now() FROM settled
+    WHERE mail_log.id = settled.mail_id`.execute(db);
+  return Number(result.numAffectedRows);
 }
 
+export async function clearOldMail() {
+  await db
+    .deleteFrom("mail_log")
+    .where("created_at", "<", sql<Date>`now() - interval '400 days'`)
+    .execute();
+}
+
+// ---- Signed links (design §8.6): APP_SECRET's HMAC of what they are about.
+
+function sign(message: string) {
+  return createHmac("sha256", env.APP_SECRET).update(message).digest("base64url");
+}
+
+function signed(message: string, sig: string) {
+  const expected = Buffer.from(sign(message));
+  const given = Buffer.from(sig);
+  return given.length === expected.length && timingSafeEqual(given, expected);
+}
+
+// Unsubscribe links turn off one kind of mail without logging in: a notification type, or
+// "weekly" for the weekly letters.
 export function unsubscribeUrl(userId: number, kind: string) {
-  return `${env.PUBLIC_URL}/unsubscribe?u=${userId}&k=${kind}&s=${signature(userId, kind)}`;
+  return `${env.PUBLIC_URL}/unsubscribe?u=${userId}&k=${kind}&s=${sign(`${userId}:${kind}`)}`;
 }
 
 export function signedUnsubscribe(userId: number, kind: string, sig: string) {
-  const expected = Buffer.from(signature(userId, kind));
-  const given = Buffer.from(sig);
-  return given.length === expected.length && timingSafeEqual(given, expected);
+  return signed(`${userId}:${kind}`, sig);
+}
+
+// Opens and clicks of reminders and letters, signed so that nobody counts them for other mails.
+// The image at the end of the HTML loads when the mail is opened, and the links to the site carry
+// the mail, all but the one that unsubscribes.
+function tracked(html: string, id: number) {
+  const sig = sign(`mail:${id}`);
+  const site = `${env.PUBLIC_URL}/`;
+  return html
+    .replace(/href="([^"]+)"/g, (link, href: string) => {
+      if (!href.startsWith(site) || href.startsWith(`${site}unsubscribe`)) return link;
+      const url = new URL(href.replaceAll("&amp;", "&"));
+      url.searchParams.set("m", `${id}.${sig}`);
+      return `href="${url.href.replaceAll("&", "&amp;")}"`;
+    })
+    .replace(
+      "</body>",
+      `<img src="${site}mail/${id}.gif?s=${sig}" width="1" height="1" alt="" style="display:block;border:0;"></body>`,
+    );
+}
+
+export async function recordOpen(id: string, sig: string) {
+  if (!signed(`mail:${id}`, sig)) return;
+  await db
+    .updateTable("mail_log")
+    .set({ opened_at: sql<Date>`now()` })
+    .where("id", "=", Number(id))
+    .where("opened_at", "is", null)
+    .execute();
+}
+
+// From a link in the mail, which opened it too; `mark` is what the link carries.
+export async function recordClick(mark: string) {
+  const [id, sig = ""] = mark.split(".");
+  if (!signed(`mail:${id}`, sig)) return;
+  await db
+    .updateTable("mail_log")
+    .set({ clicked_at: sql<Date>`now()`, opened_at: sql<Date>`coalesce(opened_at, now())` })
+    .where("id", "=", Number(id))
+    .where("clicked_at", "is", null)
+    .execute();
 }
