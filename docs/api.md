@@ -41,7 +41,7 @@
 
 // 徽章（总体设计 §8.8）。tier：bronze 铜、silver 银、gold 金；grouping：start 入门、likes 人气、answers 回答、
 // activity 勤快、persistence 坚持、social 交际、community 共建、coins 鼠币、fun 趣味、limited 绝版；
-// multiple 能不能得多次；manual 是不是管理员手动授予的活动徽章；hidden 是不是隐藏徽章：没得到它的人拿到的 description 是一句提示"得到后才知道怎么拿"，别人资料里的也一样；
+// multiple 能不能得多次；manual 是不是管理员手动授予的活动徽章；hidden 是不是隐藏徽章：没得到它的人拿到的 description 是一句提示"获得后揭晓条件"，别人资料里的也一样；
 // granted_count 有几个人得到，granted_rate 是占成员（不含 bot 和站长）的比例，0 到 1；frame 是活动徽章配的活动框（总体设计 §8.16），没有为 null；
 // granted 是自己得到了几次（没登录为 0）；progress 是同一串里还没得到的徽章，
 // 自己现在的值和门槛 { have, need }，没登录的、已经得到的和不成串的为 null

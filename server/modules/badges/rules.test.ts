@@ -553,7 +553,7 @@ describe("徽章的读取", () => {
       .execute();
     await checkBadges();
 
-    const hint = "得到后才知道怎么拿";
+    const hint = "获得后揭晓条件";
     const secret = await named("夜行鼠");
     expect(secret).toMatchObject({ hidden: true, description: hint, granted: 0 });
     expect(await named("夜行鼠", other.who)).toMatchObject({ description: hint });

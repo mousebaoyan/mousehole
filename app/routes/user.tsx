@@ -20,6 +20,7 @@ import { Backdrop } from "~/components/backdrop";
 import { BoardBadge } from "~/components/board-badge";
 import { PostBody } from "~/components/post-body";
 import { PROSE } from "~/components/prose";
+import { ProgressBar } from "~/components/progress-bar";
 import { ThreadPages } from "~/components/thread-feed";
 import { UserAvatar } from "~/components/user-avatar";
 import { UserBadges } from "~/components/user-badges";
@@ -754,12 +755,7 @@ function LevelProgress({ progress }: { progress: NonNullable<LoaderData["progres
                   {shown(Math.min(item.have, item.need))} / {shown(item.need)}
                 </span>
               </div>
-              <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-secondary">
-                <div
-                  className={cn("h-full rounded-full", done ? "bg-primary" : "bg-primary/50")}
-                  style={{ width: `${Math.min(100, (item.have / item.need) * 100)}%` }}
-                />
-              </div>
+              <ProgressBar have={item.have} need={item.need} className="mt-1" />
             </li>
           );
         })}

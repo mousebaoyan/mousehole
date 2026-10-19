@@ -1,10 +1,11 @@
 import { type Loaded, Pages } from "~/components/pages";
-import { Award } from "~/components/icons";
+import { Award, Lock } from "~/components/icons";
 import { pageTitle } from "~/share-meta";
 import { data, Link } from "react-router";
 import { cn } from "cn";
 import { apiContext } from "../api.server.ts";
-import { TIER_STYLES } from "~/components/badge-chip";
+import { holdersText, TIER_STYLES } from "~/components/badge-chip";
+import { ProgressBar } from "~/components/progress-bar";
 import { TIER_NAMES } from "../../server/platform/site.ts";
 import { UserAvatar } from "~/components/user-avatar";
 import { ago, unixNow } from "~/time";
@@ -30,25 +31,48 @@ const kept = new Map<string, Loaded<typeof loader>[]>();
 
 export default function Badge({ loaderData }: Route.ComponentProps) {
   const { badge, items } = loaderData;
+  const secret = badge.hidden && badge.granted === 0;
   return (
     <section className="flex flex-col gap-5">
       <Link to="/badges" className="px-1 text-meta text-muted-foreground hover:text-foreground">
         全部徽章
       </Link>
-      <header className="flex items-center gap-4 rounded-2xl border bg-card px-4 py-4">
+      <header
+        className={cn(
+          "flex items-center gap-4 rounded-2xl border bg-card px-4 py-4",
+          secret && "border-dashed",
+        )}
+      >
         <span
           className={cn(
             "flex size-14 shrink-0 items-center justify-center rounded-full",
-            TIER_STYLES[badge.tier],
+            secret ? "bg-secondary text-muted-foreground" : TIER_STYLES[badge.tier],
           )}
         >
-          <Award className="size-8" aria-hidden />
+          {secret ? (
+            <Lock className="size-7" aria-hidden />
+          ) : (
+            <Award className="size-8" aria-hidden />
+          )}
         </span>
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <h1 className="text-xl font-semibold">{badge.name}</h1>
           <p className="mt-0.5 text-body text-muted-foreground">{badge.description}</p>
-          <p className="mt-1 text-xs text-muted-foreground">
-            {TIER_NAMES[badge.tier]}徽章 · {badge.granted_count} 人获得
+          {badge.progress && (
+            <div className="mt-2 flex items-center gap-2">
+              <ProgressBar
+                have={badge.progress.have}
+                need={badge.progress.need}
+                className="flex-1"
+              />
+              <span className="shrink-0 text-meta text-muted-foreground tabular-nums">
+                {Math.min(badge.progress.have, badge.progress.need)} / {badge.progress.need}
+              </span>
+            </div>
+          )}
+          <p className="mt-1.5 text-xs text-muted-foreground">
+            {TIER_NAMES[badge.tier]}徽章 · {holdersText(badge.granted_count, badge.granted_rate)}
+            {badge.hidden && " · 隐藏徽章"}
             {badge.multiple && " · 可多次获得"}
             {badge.granted > 0 && <span className="text-primary"> · 你已获得</span>}
           </p>

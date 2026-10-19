@@ -9,6 +9,15 @@ export const TIER_STYLES: Record<string, string> = {
   bronze: "bg-bronze/15 text-bronze",
 };
 
+// How many have a badge and how much of the membership that is.
+export function holdersText(count: number, rate: number) {
+  if (count === 0) return "暂无人获得";
+  const percent = rate * 100;
+  const share =
+    percent < 0.1 ? "<0.1%" : percent < 10 ? `${percent.toFixed(1)}%` : `${Math.round(percent)}%`;
+  return `${count} 人获得 · ${share}`;
+}
+
 export function BadgeChip({
   badge,
   className,
