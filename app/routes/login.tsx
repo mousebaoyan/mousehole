@@ -58,7 +58,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 
 export default function Login({ loaderData, actionData }: Route.ComponentProps) {
   const { methods } = loaderData;
-  const first = methods.code ? "code" : methods.email ? "email" : "link";
+  const first = methods.code ? "code" : methods.link ? "link" : "email";
   return (
     <>
       <LogoMark className="size-12" />
@@ -72,14 +72,14 @@ export default function Login({ loaderData, actionData }: Route.ComponentProps) 
                 <MessageSquareCode /> 口令
               </TabsTrigger>
             )}
-            {methods.email && (
-              <TabsTrigger value="email">
-                <Mail /> QQ 邮箱
-              </TabsTrigger>
-            )}
             {methods.link && (
               <TabsTrigger value="link">
                 <Link2 /> 链接
+              </TabsTrigger>
+            )}
+            {methods.email && (
+              <TabsTrigger value="email">
+                <Mail /> QQ 邮箱
               </TabsTrigger>
             )}
           </TabsList>
