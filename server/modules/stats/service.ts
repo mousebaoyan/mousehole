@@ -1,14 +1,17 @@
 import { sql, type RawBuilder, type Transaction } from "kysely";
 import type { DB } from "../../../db/types.ts";
 import { db } from "../../platform/db.ts";
+import { deviceSummary } from "../auth/device.ts";
 
 // The admin's stats (design §10.1). Days are Beijing days; bots and the owner aren't people here.
 
 const TODAY = sql<Date>`(now() AT TIME ZONE 'Asia/Shanghai')::date`;
 const PEOPLE = sql<boolean>`users.role NOT IN ('bot', 'owner')`;
 
-// Active days are kept this long, enough for a year's monthly actives.
+// Active days and members' visits are kept this long, enough for a year's monthly actives;
+// guests' visits for a season.
 const KEEP_DAYS = 400;
+const GUEST_DAYS = 90;
 
 export const RANGES = [7, 30, 90, 365] as const;
 export type Range = (typeof RANGES)[number];
@@ -28,8 +31,78 @@ export async function recordActive(
     WHERE NOT ${sql.ref(`a.${where}`)}`.execute(trx);
 }
 
-// Hourly: the reading of today and yesterday, as user_days keeps only some weeks, and today's
-// member counts.
+// ---- Visits and bytes sent: counted in memory and written once a minute, to the day it is then.
+
+export type Sent = "page" | "api" | "image" | "asset";
+
+let sent = { page: 0, api: 0, image: 0, asset: 0 };
+
+type Visit = {
+  ip: string;
+  user_agent: string;
+  user_id: number | null;
+  views: number;
+  referrer: string | null;
+  landing: string;
+};
+
+let visits = new Map<string, Visit>();
+
+export function recordSent(kind: Sent, bytes: number) {
+  sent[kind] += bytes;
+}
+
+// A page opened. `referrer` is the host of another site it was opened from, `landing` its path;
+// the day keeps the first of each.
+export function recordVisit(visit: Omit<Visit, "views">) {
+  const userAgent = visit.user_agent.slice(0, 500);
+  const key = `${visit.ip} ${visit.user_id ?? ""} ${userAgent}`;
+  const known = visits.get(key);
+  if (known) {
+    known.views++;
+    known.referrer ??= visit.referrer;
+  } else {
+    visits.set(key, { ...visit, user_agent: userAgent, views: 1 });
+  }
+}
+
+export async function flushVisits() {
+  const opened = [...visits.values()];
+  const bytes = sent;
+  visits = new Map();
+  sent = { page: 0, api: 0, image: 0, asset: 0 };
+  if (opened.length > 0) {
+    await sql`
+      INSERT INTO visits AS v (day, ip, user_agent, user_id, views, referrer, landing)
+      SELECT ${TODAY}, * FROM unnest(
+        ${opened.map((o) => o.ip)}::inet[],
+        ${opened.map((o) => o.user_agent)}::text[],
+        ${opened.map((o) => o.user_id)}::integer[],
+        ${opened.map((o) => o.views)}::integer[],
+        ${opened.map((o) => o.referrer)}::text[],
+        ${opened.map((o) => o.landing)}::text[])
+      ON CONFLICT (day, ip, user_agent, user_id) DO UPDATE
+      SET views = v.views + excluded.views, referrer = coalesce(v.referrer, excluded.referrer)
+    `.execute(db);
+  }
+  await sql`
+    INSERT INTO daily_stats AS s (day, page_bytes, api_bytes, image_bytes, asset_bytes)
+    VALUES (${TODAY}, ${bytes.page}, ${bytes.api}, ${bytes.image}, ${bytes.asset})
+    ON CONFLICT (day) DO UPDATE
+    SET page_bytes = coalesce(s.page_bytes, 0) + excluded.page_bytes,
+      api_bytes = coalesce(s.api_bytes, 0) + excluded.api_bytes,
+      image_bytes = coalesce(s.image_bytes, 0) + excluded.image_bytes,
+      asset_bytes = coalesce(s.asset_bytes, 0) + excluded.asset_bytes`.execute(db);
+}
+
+// A guest is an address and browser nobody signed in from that day, which leaves out the pages
+// people opened before logging in.
+const GUEST = sql<boolean>`v.user_id IS NULL AND NOT EXISTS (
+  SELECT 1 FROM visits m
+  WHERE m.day = v.day AND m.ip = v.ip AND m.user_agent = v.user_agent AND m.user_id IS NOT NULL)`;
+
+// Hourly: the reading and visits of today and yesterday, as user_days and guests' visits are kept
+// only some weeks, and today's member counts.
 export async function summarizeDays() {
   await sql`INSERT INTO daily_stats (day, read_seconds, posts_read)
     SELECT d.day, sum(d.read_seconds), sum(d.posts_read)
@@ -38,6 +111,16 @@ export async function summarizeDays() {
     GROUP BY d.day
     ON CONFLICT (day) DO UPDATE
     SET read_seconds = excluded.read_seconds, posts_read = excluded.posts_read`.execute(db);
+  await sql`INSERT INTO daily_stats (day, guests, guest_views, member_views)
+    SELECT v.day, count(*) FILTER (WHERE ${GUEST}),
+      coalesce(sum(v.views) FILTER (WHERE ${GUEST}), 0),
+      coalesce(sum(v.views) FILTER (WHERE v.user_id IS NOT NULL AND ${PEOPLE}), 0)
+    FROM visits v LEFT JOIN users ON users.id = v.user_id
+    WHERE v.day >= ${TODAY} - 1
+    GROUP BY v.day
+    ON CONFLICT (day) DO UPDATE
+    SET guests = excluded.guests, guest_views = excluded.guest_views,
+      member_views = excluded.member_views`.execute(db);
   await sql`INSERT INTO daily_stats (day, members, activated)
     SELECT ${TODAY}, count(*), count(*) FILTER (WHERE activated_at IS NOT NULL)
     FROM users WHERE member_status = 'member' AND ${PEOPLE}
@@ -45,10 +128,21 @@ export async function summarizeDays() {
     SET members = excluded.members, activated = excluded.activated`.execute(db);
 }
 
-export async function clearOldActiveDays() {
+// The day this many days before today.
+function daysAgo(days: number) {
+  return sql<Date>`${TODAY} - ${days}::integer`;
+}
+
+export async function clearOldStats() {
+  await db.deleteFrom("active_days").where("day", "<=", daysAgo(KEEP_DAYS)).execute();
   await db
-    .deleteFrom("active_days")
-    .where("day", "<=", sql<Date>`${TODAY} - ${KEEP_DAYS}::integer`)
+    .deleteFrom("visits")
+    .where((eb) =>
+      eb.or([
+        eb("day", "<=", daysAgo(KEEP_DAYS)),
+        eb.and([eb("user_id", "is", null), eb("day", "<=", daysAgo(GUEST_DAYS))]),
+      ]),
+    )
     .execute();
 }
 
@@ -76,6 +170,10 @@ async function series(range: Range) {
     left: number;
     read_seconds: number;
     posts_read: number;
+    guests: number | null;
+    guest_views: number | null;
+    member_views: number | null;
+    bytes: Record<Sent, number> | null;
   }>`
     WITH days AS (
       SELECT generate_series(${first}, ${TODAY}, interval '1 day')::date AS day
@@ -99,7 +197,11 @@ async function series(range: Range) {
       coalesce(joins.n, 0)::integer AS joined,
       coalesce(leaves.n, 0)::integer AS left,
       coalesce(daily_stats.read_seconds, 0) AS read_seconds,
-      coalesce(daily_stats.posts_read, 0) AS posts_read
+      coalesce(daily_stats.posts_read, 0) AS posts_read,
+      daily_stats.guests, daily_stats.guest_views, daily_stats.member_views,
+      CASE WHEN daily_stats.page_bytes IS NOT NULL THEN json_build_object(
+        'page', daily_stats.page_bytes, 'api', daily_stats.api_bytes,
+        'image', daily_stats.image_bytes, 'asset', daily_stats.asset_bytes) END AS bytes
     FROM days
     LEFT JOIN active USING (day)
     LEFT JOIN daily_stats USING (day)
@@ -169,31 +271,103 @@ async function retention() {
   return rows.map(({ week, size, w1, w2, w4, w8 }) => ({ week, size, back: [w1, w2, w4, w8] }));
 }
 
+// The longest of the lists: sites guests came from, pages they opened first, devices.
+const TOP = 10;
+
+// Over the range: where guests came from and which page they opened first, and the devices of
+// guests and members, each counted once a day.
+async function sources(range: Range) {
+  const since = sql<Date>`(${TODAY} - ${range - 1}::integer)`;
+  const [referrers, landings, agents] = await Promise.all([
+    sql<{ host: string; visits: number }>`
+      SELECT v.referrer AS host, count(*)::integer AS visits
+      FROM visits v WHERE v.day >= ${since} AND v.referrer IS NOT NULL AND ${GUEST}
+      GROUP BY v.referrer ORDER BY visits DESC, host LIMIT ${TOP}`.execute(db),
+    // A thread's page shows with its title.
+    sql<{ path: string; title: string | null; visits: number }>`
+      SELECT l.path, threads.title, l.visits
+      FROM (
+        SELECT v.landing AS path, count(*)::integer AS visits
+        FROM visits v WHERE v.day >= ${since} AND ${GUEST}
+        GROUP BY v.landing ORDER BY visits DESC, path LIMIT ${TOP}
+      ) l
+      LEFT JOIN threads ON threads.id =
+        CASE WHEN l.path ~ '^/t/[0-9]{1,9}$' THEN substr(l.path, 4)::integer END
+      ORDER BY l.visits DESC, l.path`.execute(db),
+    sql<{ user_agent: string; guests: number; members: number }>`
+      SELECT v.user_agent, count(*) FILTER (WHERE ${GUEST})::integer AS guests,
+        count(DISTINCT (v.day, v.user_id))
+          FILTER (WHERE v.user_id IS NOT NULL AND ${PEOPLE})::integer AS members
+      FROM visits v LEFT JOIN users ON users.id = v.user_id
+      WHERE v.day >= ${since}
+      GROUP BY v.user_agent`.execute(db),
+  ]);
+  // Browser and system, so a browser's versions count together.
+  const devices = (who: "guests" | "members") => {
+    const counts = new Map<string, number>();
+    for (const agent of agents.rows) {
+      const device = deviceSummary(agent.user_agent);
+      counts.set(device, (counts.get(device) ?? 0) + agent[who]);
+    }
+    return [...counts]
+      .filter(([, count]) => count > 0)
+      .map(([device, count]) => ({ device, visits: count }))
+      .toSorted((a, b) => b.visits - a.visits)
+      .slice(0, TOP);
+  };
+  return {
+    referrers: referrers.rows,
+    landings: landings.rows,
+    devices: { guests: devices("guests"), members: devices("members") },
+  };
+}
+
 type Day = Awaited<ReturnType<typeof series>>[number];
 
-// A period's figures. Daily actives are averaged over whole days, so today counts only in the
-// charts.
+// A figure recorded from some day on, averaged over the days that have it; null when none do.
+function mean(values: (number | null)[]) {
+  const known = values.filter((v) => v !== null);
+  return known.length === 0 ? null : known.reduce((sum, v) => sum + v, 0) / known.length;
+}
+
+// A period's figures. Daily actives, visits and bytes are averaged over whole days, so today
+// counts only in the charts.
 function summarize(period: Day[], whole: Day[], people: Awaited<ReturnType<typeof reach>>) {
   const average = (kind: "site" | "qq" | "total") =>
     whole.reduce((sum, d) => sum + d[kind], 0) / whole.length;
   const sum = (key: "new_activated" | "read_seconds" | "posts_read") =>
     period.reduce((total, d) => total + d[key], 0);
+  const bytes = whole.flatMap((d) => d.bytes ?? []);
+  const perDay = (kind: Sent) => bytes.reduce((total, b) => total + b[kind], 0) / bytes.length;
   return {
     dau: { site: average("site"), qq: average("qq"), total: average("total") },
     ...people,
     new_activated: sum("new_activated"),
     read_seconds: sum("read_seconds"),
     posts_read: sum("posts_read"),
+    guests: mean(whole.map((d) => d.guests)),
+    guest_views: mean(whole.map((d) => d.guest_views)),
+    member_views: mean(whole.map((d) => d.member_views)),
+    bytes:
+      bytes.length === 0
+        ? null
+        : {
+            page: perDay("page"),
+            api: perDay("api"),
+            image: perDay("image"),
+            asset: perDay("asset"),
+          },
   };
 }
 
 // Each figure over the range against the same length of time just before it.
 export async function getStats(range: Range) {
-  const [days, now, before, cohorts] = await Promise.all([
+  const [days, now, before, cohorts, from] = await Promise.all([
     series(range),
     reach(TODAY),
     reach(sql<Date>`(${TODAY} - ${range}::integer)`),
     retention(),
+    sources(range),
   ]);
   const earlier = days.slice(0, range);
   const recent = days.slice(range);
@@ -205,5 +379,6 @@ export async function getStats(range: Range) {
       before: summarize(earlier, earlier, before),
     },
     retention: cohorts,
+    ...from,
   };
 }

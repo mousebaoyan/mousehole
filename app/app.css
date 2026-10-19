@@ -86,10 +86,12 @@
   --silver: #64707d;
   --bronze: #a35a33;
   /* Series in the admin's charts, in this order: told apart with colour blindness, checked
-     against the card in each theme. */
+     against the card in each theme. Any two of the first three may meet; the fourth, too close
+     to the second, goes beside the third. */
   --chart-1: #2a78d6;
   --chart-2: #eb6834;
   --chart-3: #1baf7a;
+  --chart-4: #eda100;
 }
 
 :root[data-theme="dark"] {
@@ -124,6 +126,7 @@
   --chart-1: #3987e5;
   --chart-2: #d95926;
   --chart-3: #199e70;
+  --chart-4: #c98500;
 }
 
 /* Accent colours people pick for their card and page (design §8.16): buttons, links, progress

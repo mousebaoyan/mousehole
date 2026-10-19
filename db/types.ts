@@ -118,8 +118,15 @@ export interface CoinLedger {
 
 export interface DailyStats {
   activated: number | null;
+  api_bytes: number | null;
+  asset_bytes: number | null;
   day: Timestamp;
+  guest_views: number | null;
+  guests: number | null;
+  image_bytes: number | null;
+  member_views: number | null;
   members: number | null;
+  page_bytes: number | null;
   posts_read: Generated<number>;
   read_seconds: Generated<number>;
 }
@@ -559,6 +566,16 @@ export interface Users {
   weekly_email: Generated<boolean>;
 }
 
+export interface Visits {
+  day: Timestamp;
+  ip: string;
+  landing: string;
+  referrer: string | null;
+  user_agent: string;
+  user_id: number | null;
+  views: number;
+}
+
 export interface DB {
   active_days: ActiveDays;
   api_tokens: ApiTokens;
@@ -609,4 +626,5 @@ export interface DB {
   user_looks: UserLooks;
   user_reads: UserReads;
   users: Users;
+  visits: Visits;
 }
