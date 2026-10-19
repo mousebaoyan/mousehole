@@ -50,6 +50,7 @@ export function ThreadHeader({
   editable,
   staff,
   power,
+  asker,
   reveal,
 }: {
   thread: ThreadDetail;
@@ -58,6 +59,8 @@ export function ThreadHeader({
   editable: boolean;
   staff: boolean;
   power: number;
+  // Whether the reader asked this question and can accept its answers.
+  asker: boolean;
   // For admins in a thread with anonymous people: whether they are shown as who they are, and
   // the switch.
   reveal: { shown: boolean; toggle: () => void } | null;
@@ -313,6 +316,12 @@ export function ThreadHeader({
               <EyeOff className="size-4 shrink-0" /> 已隐藏，仅作者和版主可见
             </>
           )}
+        </p>
+      )}
+      {asker && thread.accepted_floors.length === 0 && thread.reply_count > 0 && (
+        <p className="mt-3 flex gap-2 rounded-xl bg-success/10 px-3 py-2 text-meta">
+          <CircleCheck className="mt-px size-4 shrink-0 text-success" />
+          <span>有回答解决了问题？点击回答下方的“采纳”，回答的人会收到通知。</span>
         </p>
       )}
       {thread.bounty_until !== null && (

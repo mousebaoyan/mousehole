@@ -299,6 +299,11 @@ export function PostCard({
             </Button>
           )}
           {boosts.shown.length === 0 && <div className="text-muted-foreground">{boostButton}</div>}
+          {manage.accept && !accepted && (
+            <Button variant="ghost" size="sm" className="text-success" onClick={onAccept}>
+              <CircleCheck /> 采纳
+            </Button>
+          )}
           <div className="ml-auto flex items-center text-muted-foreground">
             {!own && (
               <LikeButton
@@ -336,7 +341,7 @@ export function PostCard({
                       <Pencil /> 编辑
                     </button>
                   )}
-                  {manage.accept && (
+                  {manage.accept && accepted && (
                     <button
                       type="button"
                       className={menuItem}
@@ -345,7 +350,7 @@ export function PostCard({
                         onAccept();
                       }}
                     >
-                      <CircleCheck /> {accepted ? "取消采纳" : "采纳为答案"}
+                      <CircleCheck /> 取消采纳
                     </button>
                   )}
                   {manage.review && (
