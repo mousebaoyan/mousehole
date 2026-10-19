@@ -108,6 +108,10 @@ const Bytes = z.object({
   asset: z.number().openapi({ description: "静态文件" }),
 });
 
+const Logins = z
+  .object({ code: z.number(), link: z.number(), email: z.number() })
+  .openapi({ description: "口令、链接、QQ 邮箱验证码三种方式各登录了几次" });
+
 const Totals = z.object({
   dau: Kinds.openapi({ description: "平均日活，只算过完了的天" }),
   wau: Kinds.openapi({ description: "截至最后一天的 7 天里来过的人" }),
@@ -119,6 +123,7 @@ const Totals = z.object({
   guest_views: z.number().nullable().openapi({ description: "平均每天访客的浏览量" }),
   member_views: z.number().nullable().openapi({ description: "平均每天成员的浏览量" }),
   bytes: Bytes.nullable().openapi({ description: "平均每天发出的字节数" }),
+  logins: Logins,
 });
 
 const Count = z.number().openapi({ description: "人次，每人每天算一次" });
@@ -128,7 +133,8 @@ export const statsRoutes = createRouter()
     createRoute({
       method: "get",
       path: "/admin/stats",
-      summary: "数据页：活跃、成员、留存、阅读、访问、邮件和带宽，按北京时间逐天，不算 bot 和站长",
+      summary:
+        "数据页：活跃、成员、留存、访问、阅读、登录、邮件和带宽，按北京时间逐天，不算 bot 和站长",
       request: {
         query: z.object({
           range: z.coerce
@@ -162,6 +168,7 @@ export const statsRoutes = createRouter()
                     guest_views: z.number().nullable(),
                     member_views: z.number().nullable(),
                     bytes: Bytes.nullable().openapi({ description: "发出的字节数" }),
+                    logins: Logins,
                   }),
                 ),
                 totals: z.object({
