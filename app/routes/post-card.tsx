@@ -108,6 +108,8 @@ export function PostCard({
   const reaction = useReaction(post, threadId);
   const boosts = useBoosts(post, threadId, self);
   const own = isMine(post.author, me, self.alias);
+  // A hidden floor can't be accepted, only taken back.
+  const acceptable = manage.accept && (accepted || post.status === "visible");
   const shown = useShown();
   const author = shown(post.author);
   const boostButton = <BoostButton mine={boosts.mine} onSave={boosts.save} />;
@@ -299,6 +301,11 @@ export function PostCard({
             </Button>
           )}
           {boosts.shown.length === 0 && <div className="text-muted-foreground">{boostButton}</div>}
+          {acceptable && !own && !accepted && (
+            <Button variant="ghost" size="sm" className="text-success" onClick={onAccept}>
+              <CircleCheck /> 采纳
+            </Button>
+          )}
           <div className="ml-auto flex items-center text-muted-foreground">
             {!own && (
               <LikeButton
@@ -336,7 +343,7 @@ export function PostCard({
                       <Pencil /> 编辑
                     </button>
                   )}
-                  {manage.accept && (
+                  {acceptable && (accepted || own) && (
                     <button
                       type="button"
                       className={menuItem}

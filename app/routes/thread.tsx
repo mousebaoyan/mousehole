@@ -389,6 +389,15 @@ function ThreadPage({
   const target = { id: thread.id, title: thread.title };
   // Replies, and answers to accept, wait until the thread itself is public.
   const published = thread.status === "visible";
+  const accept = thread.kind === "question" && published && (staff || (authored && !thread.locked));
+  const acceptHint =
+    accept &&
+    authored &&
+    thread.accepted_floors.length === 0 &&
+    posts.some(
+      (p) =>
+        p.floor > 1 && p.status === "visible" && !p.deleted && !sameWriter(p.author, thread.author),
+    );
   const floors: Floors = {
     posts,
     total: thread.floor_count,
@@ -414,6 +423,7 @@ function ThreadPage({
             }
             staff={staff}
             power={power}
+            acceptHint={acceptHint}
             reveal={
               me?.role === "admin" && anonymity
                 ? { shown: revealed !== null, toggle: () => void toggleReveal() }
@@ -459,11 +469,7 @@ function ThreadPage({
                       !thread.locked &&
                       thread.reply_count === 0),
                   moderate: staff,
-                  accept:
-                    thread.kind === "question" &&
-                    post.floor > 1 &&
-                    published &&
-                    (staff || (authored && !thread.locked)),
+                  accept: accept && post.floor > 1,
                   // The opening post is reviewed with its thread, above.
                   review: staff && published && post.floor > 1,
                 }}
