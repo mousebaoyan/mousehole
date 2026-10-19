@@ -52,8 +52,9 @@ export async function sendWeeklyLetters(now = new Date()) {
     .executeTakeFirst();
   if (sent) return;
 
-  // Public floors that aren't anonymous, as p.
-  const shown = sql`p.status = 'visible' AND p.deleted_at IS NULL AND NOT p.anonymous`;
+  // Public floors in public threads, not anonymous, as p in t.
+  const shown = sql`p.status = 'visible' AND p.deleted_at IS NULL AND NOT p.anonymous
+    AND t.status = 'visible' AND t.deleted_at IS NULL`;
   const { rows: people } = await sql<{
     id: number;
     qq: number;
@@ -81,7 +82,7 @@ export async function sendWeeklyLetters(now = new Date()) {
     LEFT JOIN (SELECT p.author_id,
         (count(*) FILTER (WHERE reactions.created_at >= ${start}))::integer AS likes,
         (count(*) FILTER (WHERE reactions.created_at < ${start}))::integer AS likes_before
-      FROM reactions JOIN posts p ON p.id = reactions.post_id
+      FROM reactions JOIN posts p ON p.id = reactions.post_id JOIN threads t ON t.id = p.thread_id
       WHERE ${shown} AND reactions.user_id <> p.author_id
         AND reactions.created_at >= ${before} AND reactions.created_at < ${end}
       GROUP BY p.author_id) l ON l.author_id = users.id
@@ -116,8 +117,7 @@ export async function sendWeeklyLetters(now = new Date()) {
   }>`
     SELECT p.author_id AS user_id, t.id AS thread_id, t.title, p.floor, count(*)::integer AS likes
     FROM reactions JOIN posts p ON p.id = reactions.post_id JOIN threads t ON t.id = p.thread_id
-    WHERE ${shown} AND t.status = 'visible' AND t.deleted_at IS NULL
-      AND reactions.user_id <> p.author_id AND p.author_id = any(${ids}::integer[])
+    WHERE ${shown} AND reactions.user_id <> p.author_id AND p.author_id = any(${ids}::integer[])
       AND reactions.created_at >= ${start} AND reactions.created_at < ${end}
     GROUP BY p.author_id, t.id, p.id
     HAVING count(*) >= ${weekly.top_likes}

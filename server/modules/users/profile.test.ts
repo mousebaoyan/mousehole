@@ -253,4 +253,52 @@ describe("赞过、概要和关系", () => {
     if (!solved.ok) throw new Error(`status ${solved.status}`);
     expect((await solved.json()).items.map((p) => p.id)).toEqual([accepted]);
   });
+
+  test("帖子隐藏期间和删除后，里面的回复不算进回复数和被采纳数", async () => {
+    const [asker, helper] = await Promise.all([person(), person()]);
+    const moderator = as(await login((await createUser("moderator")).id));
+    const asked = await api.threads.$post(
+      {
+        json: {
+          board: "open",
+          title: "会被隐藏的问题",
+          kind: "question",
+          content: { markdown: "怎么办" },
+        },
+      },
+      asker.who,
+    );
+    if (!asked.ok) throw new Error(`status ${asked.status}`);
+    const param = { id: String((await asked.json()).id) };
+    const answered = await api.threads[":id"].posts.$post(
+      { param, json: { content: { markdown: "这样办" } } },
+      helper.who,
+    );
+    if (!answered.ok) throw new Error(`status ${answered.status}`);
+    await api.threads[":id"].posts.$post(
+      { param, json: { content: { markdown: "补充" } } },
+      helper.who,
+    );
+    await api.threads[":id"].answers[":post"].$put(
+      { param: { ...param, post: String((await answered.json()).id) } },
+      asker.who,
+    );
+    const stats = async () => {
+      const res = await api.users[":user"].$get({ param: { user: String(helper.id) } }, reader);
+      if (!res.ok) throw new Error(`status ${res.status}`);
+      const user = await res.json();
+      if (user.members_only) throw new Error("members only");
+      return { posts: user.stats.posts, solved: user.stats.solved };
+    };
+    const review = (status: "visible" | "hidden") =>
+      api.threads[":id"].$patch({ param, json: { status } }, moderator);
+
+    expect(await stats()).toEqual({ posts: 2, solved: 1 });
+    await review("hidden");
+    expect(await stats()).toEqual({ posts: 0, solved: 0 });
+    await review("visible");
+    expect(await stats()).toEqual({ posts: 2, solved: 1 });
+    await api.threads[":id"].$delete({ param }, moderator);
+    expect(await stats()).toEqual({ posts: 0, solved: 0 });
+  });
 });
