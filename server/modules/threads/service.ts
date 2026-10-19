@@ -855,7 +855,8 @@ function via(actor: Actor, source: Source | undefined) {
 // What levels allow (design §6.6). Moderators and admins aren't held by any of it.
 // Polls and lotteries.
 const KIND_LEVEL = 2;
-// L0's limits, which content synced from the groups doesn't count towards.
+// L0's limits, which content synced from the groups doesn't count towards: links in a floor, as
+// posted or edited, and floors posted a day.
 const L0_LINKS = 2;
 const L0_PER_DAY = { thread: 3, reply: 20 };
 
@@ -863,16 +864,18 @@ function levelRequired(message: string) {
   return new AppError(403, "level_required", message);
 }
 
+// `kind` is null for an edit.
 async function assertWithinL0(
   viewer: Viewer,
   source: Source | undefined,
   links: string[],
-  kind: "thread" | "reply",
+  kind: "thread" | "reply" | null,
 ) {
   if (viewer.level > 0 || STAFF.includes(viewer.role) || source) return;
   if (links.length > L0_LINKS) {
     throw levelRequired(`L0 每层最多 ${L0_LINKS} 个站外链接，升到 L1 后不限`);
   }
+  if (kind === null) return;
   const today = await db
     .selectFrom("posts")
     .select(sql<number>`count(*)::integer`.as("count"))
@@ -1148,7 +1151,8 @@ export async function editPost(
   const { markdown } = await resolveContent(viewer, change.content, source, post.thread_id);
   if (markdown === post.body && !source) return post;
   const shown = post.status === "visible" && thread.status === "visible";
-  const { html, images } = await renderMarkdown(markdown, showImages);
+  const { html, images, links } = await renderMarkdown(markdown, showImages);
+  await assertWithinL0(viewer, source, links, null);
 
   await db.transaction().execute(async (trx) => {
     if (source) await linkSource(trx, source, post.thread_id, postId);
