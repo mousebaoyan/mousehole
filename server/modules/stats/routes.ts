@@ -120,6 +120,17 @@ const Logins = z
   .object({ code: z.number(), link: z.number(), email: z.number() })
   .openapi({ description: "口令、链接、QQ 邮箱验证码三种方式各登录了几次" });
 
+const Coins = z
+  .object({
+    earned: z
+      .object({ check_in: z.number(), liked: z.number(), accepted: z.number(), bounty: z.number() })
+      .openapi({ description: "发出的：签到、获赞、回复被采纳、回答悬赏" }),
+    spent: z
+      .object({ question: z.number(), look: z.number() })
+      .openapi({ description: "花掉的：发问答帖、兑换动态版" }),
+  })
+  .openapi({ description: "鼠币，按记账的那天；获赞、采纳和悬赏次日结算" });
+
 const Totals = z.object({
   dau: Kinds.openapi({ description: "平均日活，只算过完了的天" }),
   wau: Kinds.openapi({ description: "截至最后一天的 7 天里来过的人" }),
@@ -144,6 +155,7 @@ const Totals = z.object({
     })
     .openapi({ description: "这一段在论坛上发的问答帖，不算群里收录的" }),
   logins: Logins,
+  coins: Coins,
 });
 
 const Made = z.object({
@@ -159,7 +171,7 @@ export const statsRoutes = createRouter()
       method: "get",
       path: "/admin/stats",
       summary:
-        "数据页：活跃、成员、留存、访问、内容、阅读、登录、邮件、搜索、带宽和排行，按北京时间逐天，不算 bot 和站长",
+        "数据页：活跃、成员、留存、访问、内容、阅读、登录、邮件、搜索、鼠币、带宽和排行，按北京时间逐天，不算 bot 和站长",
       request: {
         query: z.object({
           range: z.coerce
@@ -195,6 +207,7 @@ export const statsRoutes = createRouter()
                     bytes: Bytes.nullable().openapi({ description: "发出的字节数" }),
                     content: Content,
                     logins: Logins,
+                    coins: Coins,
                   }),
                 ),
                 totals: z.object({

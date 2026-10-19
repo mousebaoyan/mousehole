@@ -19,6 +19,10 @@ export type Range = (typeof RANGES)[number];
 // How people logged in (design §7), as the audit log keeps it.
 type Login = "code" | "link" | "email";
 
+// Where coins come from and what they go on (design §8.17), as the ledger's reasons.
+type Earning = "check_in" | "liked" | "accepted" | "bounty";
+type Spending = "question" | "look";
+
 // Where someone was active that day: on the site, or in the groups (speaking there, content
 // archived from there, or acting through the bot). A day already marked for the place isn't
 // written again.
@@ -217,6 +221,7 @@ async function series(range: Range) {
     member_views: number | null;
     bytes: Record<Sent, number> | null;
     logins: Record<Login, number>;
+    coins: { earned: Record<Earning, number>; spent: Record<Spending, number> };
   }>`
     WITH days AS (
       SELECT generate_series(${first}, ${TODAY}, interval '1 day')::date AS day
@@ -239,6 +244,17 @@ async function series(range: Range) {
       FROM audit_logs a JOIN users ON users.id = a.actor_id
       WHERE a.action = 'auth.login' AND a.created_at >= ${since} AND ${PEOPLE}
       GROUP BY 1
+    ), coins AS (
+      SELECT l.day,
+        sum(l.amount) FILTER (WHERE l.reason = 'check_in') AS check_in,
+        sum(l.amount) FILTER (WHERE l.reason = 'liked') AS liked,
+        sum(l.amount) FILTER (WHERE l.reason = 'accepted') AS accepted,
+        sum(l.amount) FILTER (WHERE l.reason = 'bounty') AS bounty,
+        -sum(l.amount) FILTER (WHERE l.reason = 'question') AS question,
+        -sum(l.amount) FILTER (WHERE l.reason = 'look') AS look
+      FROM coin_ledger l JOIN users ON users.id = l.user_id
+      WHERE l.day >= ${first} AND ${PEOPLE}
+      GROUP BY l.day
     )
     SELECT days.day::text AS day,
       coalesce(active.site, 0)::integer AS site,
@@ -255,7 +271,13 @@ async function series(range: Range) {
         'page', daily_stats.page_bytes, 'api', daily_stats.api_bytes,
         'image', daily_stats.image_bytes, 'asset', daily_stats.asset_bytes) END AS bytes,
       json_build_object('code', coalesce(logins.code, 0), 'link', coalesce(logins.link, 0),
-        'email', coalesce(logins.email, 0)) AS logins
+        'email', coalesce(logins.email, 0)) AS logins,
+      json_build_object(
+        'earned', json_build_object('check_in', coalesce(coins.check_in, 0),
+          'liked', coalesce(coins.liked, 0), 'accepted', coalesce(coins.accepted, 0),
+          'bounty', coalesce(coins.bounty, 0)),
+        'spent', json_build_object('question', coalesce(coins.question, 0),
+          'look', coalesce(coins.look, 0))) AS coins
     FROM days
     LEFT JOIN active USING (day)
     LEFT JOIN daily_stats USING (day)
@@ -263,6 +285,7 @@ async function series(range: Range) {
     LEFT JOIN joins USING (day)
     LEFT JOIN leaves USING (day)
     LEFT JOIN logins USING (day)
+    LEFT JOIN coins USING (day)
     ORDER BY days.day`.execute(db);
   return rows;
 }
@@ -566,6 +589,9 @@ function summarize(
   const bytes = whole.flatMap((d) => d.bytes ?? []);
   const perDay = (kind: Sent) => bytes.reduce((total, b) => total + b[kind], 0) / bytes.length;
   const logins = (method: Login) => period.reduce((total, d) => total + d.logins[method], 0);
+  const earned = (reason: Earning) =>
+    period.reduce((total, d) => total + d.coins.earned[reason], 0);
+  const spent = (reason: Spending) => period.reduce((total, d) => total + d.coins.spent[reason], 0);
   const made = noContent();
   for (const d of period) {
     for (const kind of MADE) {
@@ -581,6 +607,15 @@ function summarize(
     content: made,
     questions: asked,
     logins: { code: logins("code"), link: logins("link"), email: logins("email") },
+    coins: {
+      earned: {
+        check_in: earned("check_in"),
+        liked: earned("liked"),
+        accepted: earned("accepted"),
+        bounty: earned("bounty"),
+      },
+      spent: { question: spent("question"), look: spent("look") },
+    },
     guests: mean(whole.map((d) => d.guests)),
     guest_views: mean(whole.map((d) => d.guest_views)),
     member_views: mean(whole.map((d) => d.member_views)),
