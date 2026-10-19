@@ -131,7 +131,12 @@ async function counts() {
     .select(["thread_count", "post_count"])
     .where("id", "=", other.id)
     .executeTakeFirstOrThrow();
-  return { board, author };
+  const replier = await db
+    .selectFrom("users")
+    .select("post_count")
+    .where("id", "=", answerer.id)
+    .executeTakeFirstOrThrow();
+  return { board, author, replier };
 }
 
 // The two boards' counts and those of the tags the threads share or not.
@@ -180,6 +185,7 @@ describe("合并帖子", () => {
     const detail = await api.threads[":id"].$get({ param: { id: String(kept.id) } });
     expect(await detail.json()).toMatchObject({ floor_count: 6, reply_count: 5 });
     // The board has one thread less and the opening post as one more reply; so has its author.
+    // The replies that came along still count for theirs.
     expect(await counts()).toEqual({
       board: {
         thread_count: before.board.thread_count - 1,
@@ -189,6 +195,7 @@ describe("合并帖子", () => {
         thread_count: before.author.thread_count - 1,
         post_count: before.author.post_count + 1,
       },
+      replier: before.replier,
     });
   });
 

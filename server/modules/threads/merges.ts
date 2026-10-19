@@ -85,7 +85,6 @@ export async function mergeThread(
     const second = await lock(Math.max(threadId, choice.into));
     const [gone, kept] = first.id === threadId ? [first, second] : [second, first];
 
-    await countThread(trx, gone.id, gone, -1);
     const floors = await trx
       .selectFrom("posts")
       .select(["id", "thread_id", "floor"])
@@ -101,6 +100,8 @@ export async function mergeThread(
       .values({ thread_id: gone.id, post_ids: goneFloors.map((f) => f.id) })
       .execute();
     await number(trx, kept.id, floors);
+    // Once its floors have moved, so their authors keep counting them.
+    await countThread(trx, gone.id, gone, -1);
     await mergeReaders(trx, gone.id, kept.id);
 
     // What answered its author now answers their floor, which is no longer the opening post.

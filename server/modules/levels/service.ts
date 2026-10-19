@@ -21,12 +21,13 @@ const SINCE = sql<Date>`now() - make_interval(days => ${RECENT_DAYS})`;
 // The last RECENT_DAYS days in Beijing time, today included.
 const FIRST_DAY = sql<Date>`(now() AT TIME ZONE 'Asia/Shanghai')::date - ${RECENT_DAYS - 1}::integer`;
 
-// Other people's threads someone replied in publicly, each counted once.
+// Other people's public threads someone replied in publicly, each counted once.
 function threadsReplied(recent: boolean) {
   return sql<number>`(SELECT count(DISTINCT posts.thread_id)::integer FROM posts
     JOIN threads ON threads.id = posts.thread_id
     WHERE posts.author_id = users.id AND posts.floor > 1 AND posts.status = 'visible'
       AND posts.deleted_at IS NULL AND threads.author_id <> users.id
+      AND threads.status = 'visible' AND threads.deleted_at IS NULL
       ${recent ? sql`AND posts.created_at > ${SINCE}` : sql``})`;
 }
 

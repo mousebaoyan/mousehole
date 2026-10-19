@@ -77,10 +77,13 @@ async function progress(of: number, who: Who) {
 }
 
 describe("等级", () => {
-  test("活跃的人够了条件就升级并收到通知；回复自己的帖子不算", async () => {
+  test("活跃的人够了条件就升级并收到通知；回复自己的、删掉了的帖子不算", async () => {
     const me = await person();
     const threads = await readEnough(me.id);
     await reply(me.who, await thread(me.who));
+    const deleted = await thread(admin.who);
+    await reply(me.who, deleted);
+    await api.threads[":id"].$delete({ param: { id: String(deleted) } }, admin.who);
     for (const t of threads.slice(0, 9)) await reply(me.who, t);
     const liked = await reply(me.who, threads[0]);
     await api.posts[":id"].reaction.$put(

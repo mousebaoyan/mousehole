@@ -515,7 +515,8 @@ export async function getUser(ref: UserRef, viewerId: number | null) {
         JOIN threads ON threads.id = posts.thread_id
         WHERE posts.author_id = users.id AND posts.accepted_at IS NOT NULL
           AND posts.author_id <> threads.author_id
-          AND posts.deleted_at IS NULL AND NOT posts.anonymous)`.as("solved"),
+          AND posts.status = 'visible' AND posts.deleted_at IS NULL AND NOT posts.anonymous
+          AND threads.status = 'visible' AND threads.deleted_at IS NULL)`.as("solved"),
       sql<number>`(SELECT count(DISTINCT badge_id)::integer FROM user_badges
         WHERE user_badges.user_id = users.id)`.as("badge_count"),
       sql<boolean>`EXISTS (SELECT 1 FROM user_follows
@@ -1253,6 +1254,28 @@ export async function membersByQq(qqs: number[]) {
           .$narrowType<{ qq: NotNull }>()
           .execute();
   return new Map(rows.map((r) => [r.qq, r]));
+}
+
+// The public replies in a thread, in or out of their authors' counts as the thread goes public or
+// stops being. Anonymous ones stay out, as countUserPosts leaves them.
+export async function countThreadReplies(trx: Transaction<DB>, threadId: number, delta: 1 | -1) {
+  await trx
+    .updateTable("users")
+    .from(
+      trx
+        .selectFrom("posts")
+        .select(["author_id", sql<number>`count(*)::integer`.as("replies")])
+        .where("thread_id", "=", threadId)
+        .where("floor", ">", 1)
+        .where("status", "=", "visible")
+        .where("deleted_at", "is", null)
+        .where("anonymous", "=", false)
+        .groupBy("author_id")
+        .as("r"),
+    )
+    .set((eb) => ({ post_count: eb("post_count", "+", eb("r.replies", "*", delta)) }))
+    .whereRef("users.id", "=", "r.author_id")
+    .execute();
 }
 
 export async function countLikes(trx: Transaction<DB>, userId: number, likes: number) {

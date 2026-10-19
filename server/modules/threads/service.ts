@@ -34,6 +34,7 @@ import {
   countActive,
   countReading,
   countReadsReceived,
+  countThreadReplies,
   countUserPosts,
   membersByQq,
   shownToGuests,
@@ -1522,8 +1523,9 @@ async function withdrawThread(
   await threadDeleted(trx, threadId, byId, reason);
 }
 
-// A thread in or out of its board's, tags' and author's counts, with the replies in it. Anonymous
-// threads stay out of the author's, which would otherwise rise as one is posted and give them away.
+// A thread in or out of its board's, tags' and author's counts, with the replies in it, also in
+// their authors'. Anonymous threads stay out of the author's, which would otherwise rise as one is
+// posted and give them away.
 export async function countThread(
   trx: Transaction<DB>,
   threadId: number,
@@ -1544,6 +1546,7 @@ export async function countThread(
   if (!thread.author_anonymous) {
     await countUserPosts(trx, thread.author_id, { threads: delta, posts: 0 });
   }
+  await countThreadReplies(trx, threadId, delta);
 }
 
 // A reply going public: its thread's replies and, the first time, last activity; the board's
@@ -1631,8 +1634,8 @@ async function withdrawPost(
   await postDeleted(trx, postId, byId, reason);
 }
 
-// A reply in or out of the counts: its thread's replies and, accepted, answers; its author's, the
-// floor it answers, and its board's while the thread is public; countThread moves the rest.
+// A reply in or out of the counts: its thread's replies and, accepted, answers; the floor it
+// answers; its board's and author's while the thread is public, as countThread moves them.
 // Anonymous replies stay out of the author's, as anonymous threads do. Returns who wrote that floor.
 async function countReply(
   trx: Transaction<DB>,
@@ -1657,8 +1660,8 @@ async function countReply(
     .execute();
   if (post.thread_status === "visible") {
     await countBoard(trx, post.board_id, { threads: 0, posts: delta });
+    if (!post.anonymous) await countUserPosts(trx, post.author_id, { threads: 0, posts: delta });
   }
-  if (!post.anonymous) await countUserPosts(trx, post.author_id, { threads: 0, posts: delta });
   if (post.reply_to_id === null) return null;
   const target = await trx
     .updateTable("posts")

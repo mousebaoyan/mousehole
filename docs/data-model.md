@@ -66,7 +66,7 @@
 - 正文：`body` 是 Markdown 原文，`html` 是渲染好的，`render_version` 记 `html` 出自哪一版渲染器（`markdown.ts` 的 `RENDER_VERSION`）。渲染规则一变就把常量加一，启动时把版本更旧的楼层分批重新渲染、重建索引；更新时带上"版本仍然更旧"的条件，期间被编辑过的楼层不会被盖掉。
 - "最新发布"排序直接按 `id DESC` 走主键，不用单独建索引。热门和"新"从最近 7 天的帖子开始找，走部分索引 `threads_recent`。
 - 采纳（[总体设计 §8.1](design.md#81-版块帖子与楼层)）：`posts.accepted_at` 是被采纳的时间，不为空的就是被采纳的回答（周榜按它数本周被采纳的），一个问答帖可以有几层；`threads.accepted_count` 是其中公开、没删的层数，采纳、取消、隐藏、恢复和删除时在同一个事务里加减，为 0 的问答帖是待解答，走部分索引 `threads_unsolved`；收录来的（主楼的 `via` 是 `qq`）不算。
-- 计数：`threads.reply_count` 和 `boards.post_count`、`users.post_count` 只算公开的回复（不含主楼），`users.thread_count` 算发过的帖子；`users` 的两个数不算匿名的内容；都和发帖在同一个事务里更新。
+- 计数：`threads.reply_count` 只算公开的回复（不含主楼）；`boards.post_count`、`users.post_count` 只算公开的帖子里公开的回复，帖子隐藏、恢复、删除时连同里面的回复一起加减；`users.thread_count` 算公开的帖子；`users` 的两个数不算匿名的内容；都和发帖在同一个事务里更新。
 - 列表翻页的游标是最后一个帖子的 `last_post_at`（微秒，JavaScript 的 Date 只到毫秒）和 ID，"最新发布"是 ID，收藏列表是 `thread_users.bookmarked_at`（微秒）和 ID。
 - 热门：最近 7 天发布的帖子按 `(回复数 × 2 + 赞数 + 浏览数 / 20 + 1) / (发布至今的小时数 + 2)^1.5` 排序，取前 500 个，在内存里存 10 分钟；读列表时再按可见范围和筛选条件过滤。
 - 浏览数在内存里累计，每分钟批量写一次；同一个人（登录用户按 ID，访客按 IP）一分钟内只算一次，bot 的请求不算。
