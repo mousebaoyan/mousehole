@@ -91,13 +91,14 @@ const YESTERDAY_NOON = sql<Date>`(date_trunc('day', now() AT TIME ZONE 'Asia/Sha
   - interval '12 hours') AT TIME ZONE 'Asia/Shanghai'`;
 
 describe("悬赏", () => {
-  test("论坛上发的问答帖和保研定位帖一天没有别人回复就悬赏，只一次；收录的、讨论帖、有人回复的、回复匿名的、门槛高的版块和太久以前的不悬赏", async () => {
+  test("论坛上发的问答帖和保研定位帖一天没有别人回复就悬赏，只一次；收录的、讨论帖、有人回复的、楼主采纳了自己回复的、回复匿名的、门槛高的版块和太久以前的不悬赏", async () => {
     const [asker, other, l3, masker] = await Promise.all([person(), person(), person(), person()]);
     await db.updateTable("users").set({ level: 3 }).where("id", "=", l3.id).execute();
     const question = await ask(asker.who);
     const positioning = await ask(other.who, { positioning: true });
     const discussion = await ask(asker.who, { kind: "discussion" });
     const answered = await ask(other.who);
+    const solved = await ask(asker.who);
     const masked = await ask(masker.who);
     await db
       .updateTable("threads")
@@ -121,13 +122,22 @@ describe("悬赏", () => {
     const collected = (await archived.json()).id;
     await reply(asker.who, question);
     await reply(asker.who, answered);
-    await asked([question, positioning, discussion, answered, masked, gated, collected], DAY_AGO);
+    const own = await reply(asker.who, solved);
+    const accepted = await api.threads[":id"].answers[":post"].$put(
+      { param: { id: String(solved), post: String(own) } },
+      asker.who,
+    );
+    expect(accepted.status).toBe(200);
+    await asked(
+      [question, positioning, discussion, answered, solved, masked, gated, collected],
+      DAY_AGO,
+    );
     await asked([old], sql<Date>`now() - interval '4 days'`);
     await reply(other.who, await ask(other.who));
 
     await startBounties();
     for (const thread of [question, positioning]) expect(await bountyUntil(thread)).not.toBeNull();
-    for (const thread of [discussion, answered, masked, gated, old, collected]) {
+    for (const thread of [discussion, answered, solved, masked, gated, old, collected]) {
       expect(await bountyUntil(thread)).toBeNull();
     }
     const { items, reward } = await listed();
