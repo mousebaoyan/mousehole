@@ -142,8 +142,9 @@ async function fileReport(
   reason: string,
 ) {
   if (post.deleted_at !== null) throw new AppError(404, "post_not_found", "回复不存在");
-  const held = boost === null && (await reportHolds(viewer, post));
+  const holds = boost === null && (await reportHolds(viewer, post));
   await db.transaction().execute(async (trx) => {
+    const held = holds && (await holdReported(trx, post.id, viewer.id));
     const created = await trx
       .insertInto("reports")
       .values({
@@ -157,7 +158,6 @@ async function fileReport(
       .returning("id")
       .executeTakeFirst();
     if (!created) throw alreadyReported();
-    if (held) await holdReported(trx, post.id, viewer.id);
     await recordAudit(trx, actor, {
       action: "report.create",
       target_type: boost ? "boost" : "post",
