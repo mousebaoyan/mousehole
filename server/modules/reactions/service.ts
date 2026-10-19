@@ -65,11 +65,12 @@ export async function react(
         .where("user_id", "=", viewer.id)
         .execute();
     } else {
+      const via = archived ? "qq" : actor.tokenId === null ? "web" : "bot";
       await trx
         .insertInto("reactions")
-        .values({ post_id: postId, user_id: viewer.id, emoji, created_at: at })
+        .values({ post_id: postId, user_id: viewer.id, emoji, created_at: at, via })
         .onConflict((oc) =>
-          oc.columns(["post_id", "user_id"]).doUpdateSet({ emoji, created_at: at }),
+          oc.columns(["post_id", "user_id"]).doUpdateSet({ emoji, created_at: at, via }),
         )
         .execute();
     }

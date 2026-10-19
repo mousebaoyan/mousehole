@@ -114,6 +114,8 @@ export default function Stats({ loaderData: stats }: Route.ComponentProps) {
 
       <Visits stats={stats} dates={dates} />
 
+      <Content stats={stats} dates={dates} />
+
       <Section title="阅读">
         <div className="grid grid-cols-2 gap-3">
           <Figure
@@ -147,6 +149,8 @@ export default function Stats({ loaderData: stats }: Route.ComponentProps) {
       <Mail mail={stats.mail} />
 
       <Bandwidth stats={stats} dates={dates} />
+
+      <Top top={stats.top} />
     </>
   );
 }
@@ -401,7 +405,7 @@ function Visits({ stats, dates }: { stats: Stats; dates: string[] }) {
       <div className="mt-6 grid gap-6 sm:grid-cols-2">
         <TopList
           title="访客的来源网站"
-          items={referrers.map((r) => ({ key: r.host, label: r.host, visits: r.visits }))}
+          items={referrers.map((r) => ({ key: r.host, label: r.host, count: r.visits }))}
         />
         <TopList
           title="访客的入口页面"
@@ -412,14 +416,14 @@ function Visits({ stats, dates }: { stats: Stats; dates: string[] }) {
                 {l.title ?? (l.path === "/" ? "首页" : l.path)}
               </Link>
             ),
-            visits: l.visits,
+            count: l.visits,
           }))}
         />
         {(["guests", "members"] as const).map((who) => (
           <TopList
             key={who}
             title={who === "guests" ? "访客的设备" : "成员的设备"}
-            items={devices[who].map((d) => ({ key: d.device, label: d.device, visits: d.visits }))}
+            items={devices[who].map((d) => ({ key: d.device, label: d.device, count: d.visits }))}
           />
         ))}
       </div>
@@ -431,13 +435,133 @@ function Visits({ stats, dates }: { stats: Stats; dates: string[] }) {
   );
 }
 
-// The most frequent, each with a bar against the first.
+// Where content came from, in this order.
+const VIAS = [
+  { via: "web", label: "网页", color: "var(--chart-1)" },
+  { via: "bot", label: BOT_NAME, color: "var(--chart-2)" },
+  { via: "qq", label: "群里收录", color: "var(--chart-3)" },
+] as const;
+
+const MADE = [
+  { kind: "threads", label: "新帖" },
+  { kind: "replies", label: "回复" },
+  { kind: "reactions", label: "表情回应" },
+] as const;
+
+type Made = Stats["totals"]["now"]["content"];
+
+function allSources(made: Made, kind: (typeof MADE)[number]["kind"]) {
+  return made[kind].web + made[kind].bot + made[kind].qq;
+}
+
+// Minutes under an hour, hours under two days, then days.
+function duration(seconds: number) {
+  if (seconds < 3600) return `${Math.max(1, Math.round(seconds / 60))} 分钟`;
+  if (seconds < 48 * 3600) return `${number(seconds / 3600)} 小时`;
+  return `${number(seconds / 86400)} 天`;
+}
+
+function Content({ stats, dates }: { stats: Stats; dates: string[] }) {
+  const { days, totals } = stats;
+  const { now, before } = totals;
+  const { asked, solved, answered, wait } = now.questions;
+  return (
+    <Section
+      title="内容"
+      description={`公开的帖子、回复和表情回应，按来源分为网页、${BOT_NAME} 代发和群里收录。收录的按在群里发出的时间统计`}
+    >
+      <div className="-mx-5 overflow-x-auto overscroll-x-contain">
+        <table className="w-full text-sm whitespace-nowrap">
+          <thead className="text-left text-meta text-muted-foreground">
+            <tr>
+              <th className="px-5 py-2 font-medium">
+                <span className="sr-only">来源</span>
+              </th>
+              {MADE.map((m) => (
+                <th key={m.kind} className="px-2 py-2 font-medium last:pr-5 sm:px-3">
+                  {m.label}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody className="divide-y border-t align-top">
+            {VIAS.map(({ via, label, color }) => (
+              <tr key={via}>
+                <th className="py-2.5 pr-2 pl-5 text-left font-medium sm:pr-3">
+                  <span className="inline-flex items-center gap-1.5">
+                    <span className="h-0.5 w-3 rounded-full" style={{ background: color }} />
+                    {label}
+                  </span>
+                </th>
+                {MADE.map(({ kind }) => (
+                  <td key={kind} className="px-2 py-2.5 last:pr-5 sm:px-3">
+                    <div className="font-semibold tabular-nums">
+                      {number(now.content[kind][via])}
+                    </div>
+                    <Delta now={now.content[kind][via]} before={before.content[kind][via]} />
+                  </td>
+                ))}
+              </tr>
+            ))}
+            <tr>
+              <th className="py-2.5 pr-2 pl-5 text-left font-medium sm:pr-3">合计</th>
+              {MADE.map(({ kind }) => (
+                <td key={kind} className="px-2 py-2.5 last:pr-5 sm:px-3">
+                  <div className="font-semibold tabular-nums">
+                    {number(allSources(now.content, kind))}
+                  </div>
+                  <Delta
+                    now={allSources(now.content, kind)}
+                    before={allSources(before.content, kind)}
+                  />
+                </td>
+              ))}
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div className="mt-4 grid grid-cols-2 gap-3">
+        <Figure
+          label="问答帖解决率"
+          value={asked === 0 ? null : (solved / asked) * 100}
+          format={percent}
+          note={asked === 0 ? undefined : `共 ${number(asked)} 个问答帖`}
+        />
+        <Figure
+          label="首条回复等待"
+          value={wait}
+          format={duration}
+          note={asked > answered ? `${number(asked - answered)} 个暂无他人回复` : undefined}
+        />
+      </div>
+      <p className="mt-2 text-meta text-muted-foreground">
+        问答帖只统计在论坛上发的。等待时间指提问后第一条他人回复的时间，取中位数。
+      </p>
+      <div className="mt-6 grid gap-6">
+        {MADE.map(({ kind, label }) => (
+          <LineChart
+            key={kind}
+            title={`每天的${label}`}
+            days={dates}
+            series={VIAS.map((v) => ({
+              label: v.label,
+              color: v.color,
+              values: days.map((d) => d.content[kind][v.via]),
+            }))}
+          />
+        ))}
+      </div>
+    </Section>
+  );
+}
+
+// The most frequent, each with a bar against the first; `detail` says what the count is made of.
 function TopList({
   title,
   items,
 }: {
   title: string;
-  items: { key: string; label: ReactNode; visits: number }[];
+  items: { key: string; label: ReactNode; count: number; detail?: string }[];
 }) {
   return (
     <div className="min-w-0">
@@ -448,14 +572,16 @@ function TopList({
         <ol className="mt-2 space-y-2 text-sm">
           {items.map((item) => (
             <li key={item.key}>
-              <div className="flex justify-between gap-3">
+              <div className="flex items-baseline justify-between gap-3">
                 <span className="min-w-0 truncate">{item.label}</span>
-                <span className="text-muted-foreground tabular-nums">{number(item.visits)}</span>
+                <span className="shrink-0 text-muted-foreground tabular-nums">
+                  {item.detail ?? number(item.count)}
+                </span>
               </div>
               <div
                 className="mt-1 h-1 rounded-full"
                 style={{
-                  width: `${(item.visits / items[0].visits) * 100}%`,
+                  width: `${(item.count / items[0].count) * 100}%`,
                   background: "var(--chart-1)",
                 }}
               />
@@ -464,6 +590,62 @@ function TopList({
         </ol>
       )}
     </div>
+  );
+}
+
+// A ranked thread, board or tag: the new replies and reactions it has.
+function madeOf(m: { replies: number; reactions: number }) {
+  return {
+    count: m.replies + m.reactions,
+    detail: `回复 ${number(m.replies)} · 表情 ${number(m.reactions)}`,
+  };
+}
+
+// The most replied to and reacted to over the range.
+function Top({ top }: { top: Stats["top"] }) {
+  return (
+    <Section title="排行" description="这段时间公开的新回复和表情回应合计最多的帖子、版块和标签">
+      <div className="grid gap-6 sm:grid-cols-2">
+        <div className="min-w-0 sm:col-span-2">
+          <TopList
+            title="帖子"
+            items={top.threads.map((t) => ({
+              key: String(t.id),
+              label: (
+                <Link to={`/t/${t.id}`} className="hover:underline">
+                  {t.title}
+                </Link>
+              ),
+              ...madeOf(t),
+            }))}
+          />
+        </div>
+        <TopList
+          title="版块"
+          items={top.boards.map((b) => ({
+            key: b.slug,
+            label: (
+              <Link to={`/b/${b.slug}`} className="hover:underline">
+                {b.name}
+              </Link>
+            ),
+            ...madeOf(b),
+          }))}
+        />
+        <TopList
+          title="标签"
+          items={top.tags.map((t) => ({
+            key: t.name,
+            label: (
+              <Link to={`/?tag=${encodeURIComponent(t.name)}`} className="hover:underline">
+                {t.name}
+              </Link>
+            ),
+            ...madeOf(t),
+          }))}
+        />
+      </div>
+    </Section>
   );
 }
 
