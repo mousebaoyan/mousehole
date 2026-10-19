@@ -50,6 +50,7 @@ import {
   threadDeleted,
   threadSolved,
 } from "./events.ts";
+import { replyAnonymity } from "./anonymity.ts";
 import { createLottery, getLottery, type LotterySpec } from "./lotteries.ts";
 import { createPoll, getPoll, type PollSpec } from "./polls.ts";
 
@@ -588,6 +589,7 @@ export async function getThread(id: number, reader: Reader) {
   const [thread] = await withUsers([row]);
   return {
     ...thread,
+    my_anonymity: reader.id === null ? null : replyAnonymity(thread, reader.id),
     poll: thread.kind === "poll" ? await getPoll(id, reader.id) : null,
     lottery: thread.kind === "lottery" ? await getLottery(id, reader.id) : null,
   };
@@ -730,15 +732,6 @@ async function assertVisible(threadId: number, reader: Reader, floor = 1) {
     .executeTakeFirst();
   if (!thread) throw (await mergedAway(threadId, floor)) ?? threadNotFound();
   return thread;
-}
-
-// Whether someone writes anonymously in a thread: the author as the thread says for them, anyone
-// else as it says for replies (design §8.12).
-export function writesAnonymously(
-  thread: { author_id: number; author_anonymous: boolean; anonymous_replies: boolean },
-  userId: number,
-) {
-  return userId === thread.author_id ? thread.author_anonymous : thread.anonymous_replies;
 }
 
 // Someone's number in a thread: the one they have, or the next. The thread's row is locked so
@@ -1042,12 +1035,24 @@ export async function createPost(
   viewer: Viewer,
   reach: number,
   threadId: number,
-  input: { content: Content; reply_to_id?: number; source?: Source; created_at?: number },
+  input: {
+    content: Content;
+    reply_to_id?: number;
+    anonymous?: boolean;
+    source?: Source;
+    created_at?: number;
+  },
 ) {
   const reader: Reader = { reach, id: viewer.id, staff: false };
   const at = postedAt(actor, input.created_at);
   const thread = await assertVisible(threadId, reader);
   assertPublic(thread);
+  const anonymity = replyAnonymity(thread, viewer.id);
+  if (input.anonymous !== undefined && anonymity !== "optional") {
+    throw new AppError(400, "invalid_request", "这个帖子里不能自己选择是否匿名");
+  }
+  const anonymous =
+    anonymity === "optional" ? (input.anonymous ?? false) : anonymity === "anonymous";
   if (thread.locked && !STAFF.includes(viewer.role)) {
     throw new AppError(403, "thread_locked", "帖子已锁定");
   }
@@ -1061,7 +1066,6 @@ export async function createPost(
   const replyTo = input.reply_to_id ?? replyToId ?? undefined;
   const { html, images, mentions, links } = await renderMarkdown(markdown, showImages);
   await assertWithinL0(viewer, input.source, links, "reply");
-  const anonymous = writesAnonymously(thread, viewer.id);
 
   const status = statusFor(thread.review_mode, viewer);
   const id = await db.transaction().execute(async (trx) => {

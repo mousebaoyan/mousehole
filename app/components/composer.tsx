@@ -37,7 +37,12 @@ import { fromWallClock, unixNow, wallClock } from "~/time";
 import { levelName, STAFF } from "../../server/platform/site.ts";
 import { QUESTION_COST } from "../../server/modules/coins/rules.ts";
 
-type ThreadRef = { id: number; title: string };
+// `my_anonymity` as in the thread's details: how one's replies there go out (design §8.12).
+type ThreadRef = {
+  id: number;
+  title: string;
+  my_anonymity: "named" | "anonymous" | "optional" | null;
+};
 type ReplyRef = { id: number; floor: number; name: string };
 type Kind = "discussion" | "question" | "poll" | "positioning" | "lottery";
 
@@ -225,6 +230,8 @@ function draftBody({ target, content }: Writing) {
   return {
     body: content.text,
     reply_to_id: target.mode === "reply" ? (target.replyTo?.id ?? null) : null,
+    // For a reply, whether it goes out anonymously.
+    author_anonymous: content.anonymous,
   };
 }
 
@@ -361,7 +368,12 @@ export function ComposerProvider({
     const content =
       target.mode === "edit"
         ? { ...EMPTY, text: target.post.markdown }
-        : { ...EMPTY, board: target.mode === "thread" ? (target.board ?? "") : "" };
+        : {
+            ...EMPTY,
+            board: target.mode === "thread" ? (target.board ?? "") : "",
+            // Where each reply chooses, it is anonymous unless unticked, as is safer.
+            anonymous: target.mode === "reply" && target.thread.my_anonymity === "optional",
+          };
     show({ target, content, collapsed });
     if (!collapsed) focus();
   }
@@ -398,7 +410,11 @@ export function ComposerProvider({
       const stored: ComposerTarget =
         key === "new"
           ? { mode: "thread", board: null }
-          : { mode: "reply", thread: { id: Number(key), title: "" }, replyTo: draft.reply_to };
+          : {
+              mode: "reply",
+              thread: { id: Number(key), title: "", my_anonymity: null },
+              replyTo: draft.reply_to,
+            };
       saved.current.set(
         key,
         JSON.stringify(draftBody({ target: stored, content, collapsed: false })),
@@ -565,6 +581,13 @@ function Composer({
   const { target, content, collapsed } = writing;
   const busy = sending.state !== "idle";
   const { label, Icon, field } = SEND[target.mode];
+  // Whether a reply's author may choose to be anonymous, and whether it goes out so: said on the
+  // send button, where it can't be missed (design §8.12).
+  const choosing = target.mode === "reply" && target.thread.my_anonymity === "optional";
+  const anonymousReply =
+    target.mode === "reply" &&
+    (target.thread.my_anonymity === "anonymous" || (choosing && content.anonymous));
+  const anonymousId = useId();
   const withPoll = target.mode === "thread" && content.kind === "poll";
   const withLottery = target.mode === "thread" && content.kind === "lottery";
   const withPositioning = target.mode === "thread" && content.kind === "positioning";
@@ -637,7 +660,11 @@ function Composer({
       );
     } else {
       void sending.submit(
-        { markdown: content.text, ...(target.replyTo && { reply_to_id: target.replyTo.id }) },
+        {
+          markdown: content.text,
+          ...(target.replyTo && { reply_to_id: target.replyTo.id }),
+          ...(choosing && { anonymous: content.anonymous }),
+        },
         { ...options, action: `/t/${target.thread.id}/reply` },
       );
     }
@@ -749,8 +776,18 @@ function Composer({
             </div>
             <footer className="flex touch-none items-center gap-3 border-t px-4 py-2.5">
               <Button onClick={send} disabled={busy || !ready}>
-                <Icon /> {busy ? "发送中…" : label}
+                <Icon /> {busy ? "发送中…" : anonymousReply ? "匿名回复" : label}
               </Button>
+              {choosing && (
+                <span className="flex shrink-0 items-center gap-2 text-sm">
+                  <Checkbox
+                    id={anonymousId}
+                    checked={content.anonymous}
+                    onChange={(e) => onChange({ ...content, anonymous: e.target.checked })}
+                  />
+                  <label htmlFor={anonymousId}>匿名</label>
+                </span>
+              )}
               {sending.data && !sending.data.ok ? (
                 <p role="alert" className="min-w-0 truncate text-meta text-destructive">
                   {sending.data.message}

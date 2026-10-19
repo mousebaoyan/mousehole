@@ -90,7 +90,16 @@ export const draftsRoutes = createRouter()
               schema: z.object({
                 items: z.array(
                   z.object({
-                    thread: z.object({ id: z.number(), title: z.string() }).nullable(),
+                    thread: z
+                      .object({
+                        id: z.number(),
+                        title: z.string(),
+                        my_anonymity: z.enum(["named", "anonymous", "optional"]).openapi({
+                          description: "自己在这个帖子里回复时是否匿名，同帖子详情的 my_anonymity",
+                        }),
+                      })
+                      .nullable()
+                      .openapi({ description: "回复的是哪个帖子；发帖的草稿为 null" }),
                     title: z.string(),
                     excerpt: z.string().openapi({ description: "正文的前 100 个字" }),
                     updated_at: z.number(),
