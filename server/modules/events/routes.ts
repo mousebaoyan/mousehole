@@ -3,11 +3,10 @@ import { streamSSE } from "hono/streaming";
 import { authorize, createRouter, errorResponse, unix } from "../../platform/http.ts";
 import { HEARTBEAT_MS } from "../../platform/sse.ts";
 import {
+  arrivalsSoFar,
   batchPolled,
   checkCursor,
   EVENT_TYPES,
-  pending,
-  HELD_MS,
   latestEventId,
   nextEvents,
   readEvents,
@@ -58,6 +57,7 @@ export const eventsRoutes = createRouter()
         streamOpened();
         try {
           while (!closed.signal.aborted) {
+            const since = arrivalsSoFar();
             const events = await readEvents(cursor, types, BATCH);
             for (const e of events) {
               await stream.writeSSE({
@@ -69,8 +69,7 @@ export const eventsRoutes = createRouter()
             }
             // A full batch may have more behind it; otherwise wait for news, or say it is alive.
             if (events.length === BATCH) continue;
-            if (await pending(cursor, types)) await nextEvents(HELD_MS, closed.signal);
-            else if (!(await nextEvents(HEARTBEAT_MS, closed.signal))) {
+            if (!(await nextEvents(since, HEARTBEAT_MS, closed.signal))) {
               await stream.write(": ping\n\n");
             }
           }
