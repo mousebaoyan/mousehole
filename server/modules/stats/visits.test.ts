@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { testClient } from "hono/testing";
 import { sql } from "kysely";
 import { beforeAll, describe, expect, test } from "vitest";
-import { as, createUser, login } from "../../../test/fixtures.ts";
+import { as, createUser, login, ownerSession } from "../../../test/fixtures.ts";
 import { app } from "../../app.ts";
 import { db } from "../../platform/db.ts";
 import { env } from "../../platform/env.ts";
@@ -197,5 +197,48 @@ describe("访问", () => {
       .orderBy("views")
       .execute();
     expect(kept.map((v) => v.views)).toEqual([89, 90, 399]);
+  });
+
+  test("站长能看某人每天的 IP 和设备，以及这些 IP 上的其他账号；管理员不能看", async () => {
+    const [someone, twin, neighbour] = await Promise.all([
+      createUser(),
+      createUser(),
+      createUser(),
+    ]);
+    const visit = (userId: number | null, days: number, ip: string, views: number) => ({
+      day: dayAgo(days),
+      ip,
+      user_agent: userId === someone.id && days === 0 ? PHONE : DESKTOP,
+      user_id: userId,
+      views,
+      landing: "/",
+    });
+    await db
+      .insertInto("visits")
+      .values([
+        visit(someone.id, 0, "198.51.100.1", 3),
+        visit(someone.id, 1, "198.51.100.2", 5),
+        visit(twin.id, 2, "198.51.100.1", 1),
+        visit(twin.id, 2, "198.51.100.2", 1),
+        visit(neighbour.id, 0, "198.51.100.2", 1),
+        visit(null, 0, "198.51.100.1", 9),
+      ])
+      .execute();
+    const param = { user: String(someone.id) };
+
+    const res = await api.users[":user"].visits.$get({ param, query: {} }, await ownerSession());
+    if (!res.ok) throw new Error(`status ${res.status}`);
+    const { items, next_cursor, others } = await res.json();
+    expect(items.map(({ ip, device, views }) => ({ ip, device, views }))).toEqual([
+      { ip: "198.51.100.1", device: "Safari · iOS", views: 3 },
+      { ip: "198.51.100.2", device: "Chrome · Windows", views: 5 },
+    ]);
+    expect(next_cursor).toBeNull();
+    expect(others.map((o) => ({ id: o.user.id, ips: o.ips }))).toEqual([
+      { id: twin.id, ips: ["198.51.100.1", "198.51.100.2"] },
+      { id: neighbour.id, ips: ["198.51.100.2"] },
+    ]);
+
+    expect((await api.users[":user"].visits.$get({ param, query: {} }, admin)).status).toBe(403);
   });
 });

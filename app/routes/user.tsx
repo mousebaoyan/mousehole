@@ -33,6 +33,7 @@ import type { InferResponseType } from "hono/client";
 import type { Api } from "~/api-types";
 import type { Route } from "./+types/user.ts";
 import { ClearButtons, ModerationButtons } from "./user-moderation.tsx";
+import { VisitRecords } from "./user-visits.tsx";
 import { REACTIONS } from "./reactions.tsx";
 import { levelName, readTime, STAFF, TIER_NAMES } from "../../server/platform/site.ts";
 import { CLEARABLE } from "../../server/modules/users/customization.ts";
@@ -50,15 +51,16 @@ export function meta({ loaderData }: Route.MetaArgs) {
 }
 
 // What the page lists below the profile, ?tab=; likes and people only for members, and only
-// when the person shows them (design §9).
+// when the person shows them (design §9); visits only for the owner (design §10.1).
 const TABS = [
-  { tab: "threads", label: "帖子", relations: false },
-  { tab: "posts", label: "回复", relations: false },
-  { tab: "solved", label: "被采纳", relations: false },
-  { tab: "badges", label: "徽章", relations: false },
-  { tab: "likes", label: "赞过", relations: true },
-  { tab: "summary", label: "概要", relations: false },
-  { tab: "people", label: "关系", relations: true },
+  { tab: "threads", label: "帖子", only: null },
+  { tab: "posts", label: "回复", only: null },
+  { tab: "solved", label: "被采纳", only: null },
+  { tab: "badges", label: "徽章", only: null },
+  { tab: "likes", label: "赞过", only: "relations" },
+  { tab: "summary", label: "概要", only: null },
+  { tab: "people", label: "关系", only: "relations" },
+  { tab: "visits", label: "访问", only: "owner" },
 ] as const;
 type Tab = (typeof TABS)[number]["tab"];
 
@@ -87,6 +89,7 @@ export async function loader({ params, request, context }: Route.LoaderArgs) {
     summaryRes,
     peopleRes,
     badgesRes,
+    visitsRes,
   ] = await Promise.all([
     api.$get({ param }),
     api.showcase.$get({ param }),
@@ -103,12 +106,15 @@ export async function loader({ params, request, context }: Route.LoaderArgs) {
     tab === "summary" ? api.summary.$get({ param }) : null,
     tab === "people" ? api.relations.$get({ param, query: { list, cursor } }) : null,
     tab === "badges" ? api.badges.$get({ param }) : null,
+    // Only for the owner.
+    tab === "visits" ? api.visits.$get({ param, query: { cursor } }) : null,
   ]);
   if (!userRes.ok || !showcaseRes.ok) throw data("用户不存在", { status: 404 });
   const threads = threadsRes?.ok ? await threadsRes.json() : null;
   const posts = postsRes?.ok ? await postsRes.json() : null;
   const likes = likesRes?.ok ? await likesRes.json() : null;
   const people = peopleRes?.ok ? await peopleRes.json() : null;
+  const visits = visitsRes?.ok ? await visitsRes.json() : null;
   // Shaped like the thread lists' pages, which `ThreadPages` loads the next of.
   return {
     user: await userRes.json(),
@@ -121,7 +127,8 @@ export async function loader({ params, request, context }: Route.LoaderArgs) {
     summary: summaryRes?.ok ? await summaryRes.json() : null,
     people: people?.items ?? null,
     badges: badgesRes?.ok ? (await badgesRes.json()).items : null,
-    next_cursor: (threads ?? posts ?? likes ?? people)?.next_cursor ?? null,
+    visits,
+    next_cursor: (threads ?? posts ?? likes ?? people ?? visits)?.next_cursor ?? null,
     now: unixNow(),
   };
 }
@@ -229,6 +236,7 @@ function Profile({
   summary,
   people,
   badges,
+  visits,
   next_cursor,
   now,
   actionData,
@@ -414,7 +422,10 @@ function Profile({
           aria-label="TA 的内容和关系"
           className="-mx-1 mb-3 flex gap-1 overflow-x-auto px-2 [scrollbar-width:none]"
         >
-          {TABS.filter((t) => !t.relations || relationsShown).map((t) => (
+          {TABS.filter(
+            (t) =>
+              t.only === null || (t.only === "relations" ? relationsShown : me?.role === "owner"),
+          ).map((t) => (
             <Link
               key={t.tab}
               to={t.tab === "threads" ? "." : `?tab=${t.tab}`}
@@ -460,6 +471,7 @@ function Profile({
           ))}
         {summary && <Summary summary={summary} now={now} />}
         {badges && (badges.length === 0 ? <Empty /> : <BadgeList badges={badges} now={now} />)}
+        {visits && <VisitRecords first={{ visits, next_cursor, now }} />}
         {people && (
           <>
             <nav aria-label="名单" className="mb-2 flex flex-wrap gap-1 px-1">

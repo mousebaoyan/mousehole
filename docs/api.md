@@ -253,7 +253,7 @@ token 由站长在后台创建，只显示一次。每个 token 绑定一个 bot
 | PUT | `/users/{user}/restriction` | 禁言或封禁：`{ type, until, reason }`，`type` 为 `mute` 或 `ban`，`until` 是到期的 Unix 秒、`null` 为永久，已有的就换掉；只能对普通成员（版主和管理员返回 `403`）。封禁同时让他所有设备下线。理由记进操作日志 | 禁言：版主 / `moderate`；封禁：管理员 / `admin` |
 | DELETE | `/users/{user}/restriction` | 解除禁言或封禁，可附 `{ reason }`；没有被限制返回 `404 not_restricted` | 版主 / `moderate`，解除封禁要管理员 |
 | DELETE | `/users/{user}/customization/{item}` | 清除不合适的个性化（总体设计 §8.16）：`item` 为 `background`、`status` 或 `showcase`，带 `{ reason }`，理由必填，记操作日志 | 版主 / `moderate` |
-| GET | `/users/{user}/visits` | 访问记录（总体设计 §10.1），最近的在前，每页 50 条，`cursor` 是已经列出的条数：每条 `{ day, ip, device, views }`，`device` 从 User-Agent 看出；`others` 是这些 IP 上来过的其他账号，每项 `{ user, ips }`，最多 20 个 | 站长，只能在网页上操作 |
+| GET | `/users/{user}/visits` | 访问记录（总体设计 §10.1），最近的在前，每页 50 条，`cursor` 是已经列出的条数：`items` 每条 `{ day, ip, device, user_agent, views }`，`device` 是从 User-Agent 看出的浏览器和系统；`others` 是这个人用过的 IP 上来过的其他账号，共用的 IP 多的在前，最多 20 个，每项 `{ user, ips }`，`ips` 是共用的那些 | 站长，只能在网页上操作 |
 | GET | `/coins/leaderboard` | 鼠币排行榜（总体设计 §8.17）：`period` 为 `week`（默认，本周一起）、`month`（本月 1 日起）或 `all`，按北京时间；前 50 名 `{ items: [{ user, earned }] }`，`earned` 是这段时间挣到的鼠币，`user` 同楼层里的用户；不含 bot 和冻结的账号 | 成员 / `read` |
 
 ### 3.3 版块与标签
