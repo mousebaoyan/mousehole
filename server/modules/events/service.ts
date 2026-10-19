@@ -32,16 +32,25 @@ export async function recordEvent(trx: Transaction<DB>, type: EventType, data: J
 
 const arrived = new EventEmitter();
 arrived.setMaxListeners(0);
+// NOTIFYs so far, for a stream to tell whether one came while it was reading.
+let arrivals = 0;
 
 // For the LISTEN connection: wakes the bot streams waiting in nextEvents, and hands the new
 // events to those listening in this process.
 export function eventsArrived() {
+  arrivals += 1;
   arrived.emit("events");
   pumpSoon();
 }
 
-// Resolves when events may have arrived, or after `ms` either way; false then.
-export async function nextEvents(ms: number, signal: AbortSignal) {
+export function arrivalsSoFar() {
+  return arrivals;
+}
+
+// Resolves when events may have arrived since `arrivalsSoFar()` was `since`, or after `ms` either
+// way; false then.
+export async function nextEvents(since: number, ms: number, signal: AbortSignal) {
+  if (arrivals !== since) return true;
   try {
     await once(arrived, "events", { signal: AbortSignal.any([signal, AbortSignal.timeout(ms)]) });
     return true;
@@ -50,31 +59,17 @@ export async function nextEvents(ms: number, signal: AbortSignal) {
   }
 }
 
-// After the cursor, in ID order, only from transactions that have finished: one that started
-// earlier may still commit an event with a smaller ID, which `id > cursor` would then skip.
-// See docs/data-model.md.
+// After the cursor, in ID order. Events are numbered as they commit, so none still to come can
+// take an ID below one read; see docs/data-model.md.
 export async function readEvents(after: number, types: string[] | null, limit: number) {
   let query = db
     .selectFrom("events")
     .select(["id", "type", sql<Record<string, unknown>>`data`.as("data"), "created_at"])
     .where("id", ">", after)
-    .where(sql<boolean>`txid < pg_snapshot_xmin(pg_current_snapshot())`)
     .orderBy("id")
     .limit(limit);
   if (types !== null) query = query.where("type", "in", types);
   return query.execute();
-}
-
-// How soon events held back by a transaction still running are looked for again: that
-// transaction may write no event, so no NOTIFY would say when it ends.
-export const HELD_MS = 200;
-
-// Whether there are events after the cursor not handed out yet: held back by a transaction still
-// running, or readable since the last read. Usually for a moment.
-export async function pending(after: number, types: string[] | null) {
-  let query = db.selectFrom("events").select("id").where("id", ">", after).limit(1);
-  if (types !== null) query = query.where("type", "in", types);
-  return (await query.executeTakeFirst()) !== undefined;
 }
 
 // Kept 7 days; a cursor from before that can't be followed, and is told where to start over.
@@ -101,10 +96,12 @@ export async function latestEventId() {
   return latest ?? 0;
 }
 
+// The latest stays, so a cursor at it still goes on after a quiet week: the next ID isn't one more.
 export async function clearOldEvents() {
   await db
     .deleteFrom("events")
     .where("created_at", "<", sql<Date>`now() - interval '7 days'`)
+    .where("id", "<", (eb) => eb.selectFrom("events").select((e) => e.fn.max("id").as("latest")))
     .execute();
 }
 
@@ -171,8 +168,6 @@ async function pump() {
       pumped = event.id;
       for (const listener of listeners) listener(event);
     }
-    if (events.length === 100) continue;
-    if (!(await pending(pumped, null))) return;
-    await new Promise((resolve) => setTimeout(resolve, HELD_MS));
+    if (events.length < 100) return;
   }
 }

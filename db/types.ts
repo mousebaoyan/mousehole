@@ -144,7 +144,6 @@ export interface Events {
   created_at: Generated<Timestamp>;
   data: Json;
   id: Generated<number>;
-  txid: Generated<string>;
   type: string;
 }
 

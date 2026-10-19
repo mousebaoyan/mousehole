@@ -1,10 +1,11 @@
 import { testClient } from "hono/testing";
+import { sql } from "kysely";
 import { beforeAll, describe, expect, test } from "vitest";
 import { as, createUser, login, nextQq } from "../../../test/fixtures.ts";
 import { app } from "../../app.ts";
 import { db } from "../../platform/db.ts";
 import { createBotToken } from "../auth/service.ts";
-import { latestEventId, readEvents, recordEvent } from "./service.ts";
+import { clearOldEvents, latestEventId, recordEvent } from "./service.ts";
 
 const api = testClient(app).api.v1;
 
@@ -29,16 +30,10 @@ beforeAll(async () => {
   await api.boards.$post({ json: { slug: "e", name: "事件" } }, bot);
 });
 
-// Test files share the PostgreSQL cluster, and a transaction running in another one holds events
-// back for a moment; so wait until this many are there.
-async function batch(after: number, count: number, types?: string) {
-  for (let tries = 0; ; tries++) {
-    const res = await api.bot.events.batch.$get({ query: { after: String(after), types } }, bot);
-    if (!res.ok) throw new Error(`status ${res.status}: ${await res.text()}`);
-    const page = await res.json();
-    if (page.items.length >= count || tries === 50) return page;
-    await new Promise((resolve) => setTimeout(resolve, 50));
-  }
+async function batch(after: number, types?: string) {
+  const res = await api.bot.events.batch.$get({ query: { after: String(after), types } }, bot);
+  if (!res.ok) throw new Error(`status ${res.status}: ${await res.text()}`);
+  return res.json();
 }
 
 describe("事件流", () => {
@@ -72,7 +67,7 @@ describe("事件流", () => {
       answerer,
     );
 
-    const { items, next_after } = await batch(start, 2);
+    const { items, next_after } = await batch(start);
     expect(items.map((e) => e.type)).toEqual(["thread.created", "post.created"]);
     expect(items[0].data).toMatchObject({ author: { qq: askerQq } });
     expect(items[1].data).toMatchObject({
@@ -81,7 +76,7 @@ describe("事件流", () => {
     });
     expect(next_after).toBe(items[1].id);
 
-    const onlyThreads = await batch(start, 1, "thread.created");
+    const onlyThreads = await batch(start, "thread.created");
     expect(onlyThreads.items.map((e) => e.type)).toEqual(["thread.created"]);
   });
 
@@ -90,32 +85,38 @@ describe("事件流", () => {
     const user = await createUser();
     await login(user.id);
     await login(user.id);
-    const { items } = await batch(start, 1);
+    const { items } = await batch(start);
     expect(items.map((e) => [e.type, e.data])).toEqual([
       ["member.activated", { user: { id: user.id, display_name: "鼠鼠", qq: user.qq } }],
     ]);
   });
 
-  test("还没提交的事务里的事件，连同它之后的都先不读，免得游标越过它", async () => {
+  test("事件按提交的先后编号：先写了事件、后提交的排在后面，游标不会越过它", async () => {
     const start = await latestEventId();
+    const { promise: begun, resolve: begin } = Promise.withResolvers<void>();
+    const { promise: written, resolve: write } = Promise.withResolvers<void>();
     const { promise: held, resolve: commit } = Promise.withResolvers<void>();
+    // Its transaction ID comes before the slow one's, its event after; it commits first.
+    const early = db.transaction().execute(async (trx) => {
+      await sql`SELECT pg_current_xact_id()`.execute(trx);
+      begin();
+      await written;
+      await recordEvent(trx, "member.activated", { user: { id: 2 } });
+    });
+    await begun;
     const slow = db.transaction().execute(async (trx) => {
       await recordEvent(trx, "member.activated", { user: { id: 1 } });
+      write();
       await held;
     });
-    // Let the slow transaction take its event ID first.
-    await new Promise((resolve) => setTimeout(resolve, 100));
-    await db
-      .transaction()
-      .execute((trx) => recordEvent(trx, "member.activated", { user: { id: 2 } }));
-    expect(await readEvents(start, null, 10)).toEqual([]);
+    await early;
+    const first = await batch(start);
+    expect(first.items.map((e) => e.data)).toEqual([{ user: { id: 2 } }]);
 
     commit();
     await slow;
-    expect((await batch(start, 2)).items.map((e) => e.data)).toEqual([
-      { user: { id: 1 } },
-      { user: { id: 2 } },
-    ]);
+    const then = await batch(first.next_after);
+    expect(then.items.map((e) => e.data)).toEqual([{ user: { id: 1 } }]);
   });
 
   test("SSE 先补发游标之后的事件；游标太旧返回 410 和最新的 ID", async () => {
@@ -123,6 +124,7 @@ describe("事件流", () => {
     await db
       .transaction()
       .execute((trx) => recordEvent(trx, "member.activated", { user: { id: 3 } }));
+    const id = await latestEventId();
     const res = await app.request("/api/v1/bot/events", {
       headers: { ...bot.headers, "last-event-id": String(start) },
     });
@@ -131,7 +133,7 @@ describe("事件流", () => {
     const { value } = await reader.read();
     await reader.cancel();
     expect(new TextDecoder().decode(value)).toBe(
-      `event: member.activated\ndata: {"user":{"id":3}}\nid: ${start + 1}\n\n`,
+      `event: member.activated\ndata: {"user":{"id":3}}\nid: ${id}\n\n`,
     );
 
     await db.deleteFrom("events").where("id", "<=", start).execute();
@@ -139,7 +141,25 @@ describe("事件流", () => {
     expect(expired.status).toBe(410);
     expect(await expired.json()).toMatchObject({
       error: { code: "cursor_expired" },
-      latest_id: start + 1,
+      latest_id: id,
     });
+  });
+
+  test("一周没有新事件时，最新的一个不清理，跟上了的游标照样能续上", async () => {
+    await db
+      .transaction()
+      .execute((trx) => recordEvent(trx, "member.activated", { user: { id: 4 } }));
+    const latest = await latestEventId();
+    await db
+      .updateTable("events")
+      .set({ created_at: sql<Date>`now() - interval '8 days'` })
+      .execute();
+    await clearOldEvents();
+    expect(await latestEventId()).toBe(latest);
+
+    await db
+      .transaction()
+      .execute((trx) => recordEvent(trx, "member.activated", { user: { id: 5 } }));
+    expect((await batch(latest)).items.map((e) => e.data)).toEqual([{ user: { id: 5 } }]);
   });
 });
