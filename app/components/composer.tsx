@@ -24,7 +24,7 @@ import {
   X,
 } from "~/components/icons";
 import { browserApi } from "~/browser-api";
-import { MarkdownEditor } from "~/components/markdown-editor";
+import { MarkdownEditor, PHONE } from "~/components/markdown-editor";
 import { TagPicker } from "~/components/tag-picker";
 import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
@@ -465,6 +465,8 @@ export function ComposerProvider({
       {children}
       {writing && (
         <Composer
+          // Whether it starts full-screen depends on what is being written.
+          key={writing.target.mode}
           writing={writing}
           saveState={draftKey(writing.target) === null ? null : saveState}
           textarea={textarea}
@@ -530,8 +532,10 @@ function useFreeViewport() {
 type Sent = { ok: true; id?: number; floor?: number } | { ok: false; message: string };
 
 // Docked at the bottom like Discourse's: the page stays readable above it, a spacer of the
-// same height keeps the end of the page reachable, and the dragged height is remembered.
-// Only mounted after a click, so reading localStorage while rendering is safe.
+// same height keeps the end of the page reachable, and the dragged height is remembered. On a
+// phone a new thread, with its many fields, takes the whole screen. Swipes on the composer
+// never move the page behind it. Only mounted after a click, so reading localStorage and the
+// screen's width while rendering is safe.
 function Composer({
   writing,
   saveState,
@@ -552,7 +556,9 @@ function Composer({
   const [height, setHeight] = useState(() =>
     clampHeight(Number(localStorage.getItem(HEIGHT_KEY)) || 360),
   );
-  const [full, setFull] = useState(false);
+  const [full, setFull] = useState(
+    () => writing.target.mode === "thread" && matchMedia(PHONE).matches,
+  );
   const free = useFreeViewport();
   const drag = useRef<{ y: number; height: number } | null>(null);
   const sending = useFetcher<Sent>();
@@ -684,7 +690,7 @@ function Composer({
 
         <header
           className={cn(
-            "flex min-w-0 items-center gap-2 px-4 text-sm",
+            "flex min-w-0 touch-none items-center gap-2 px-4 text-sm",
             collapsed ? "h-12" : "pb-2",
           )}
         >
@@ -718,26 +724,30 @@ function Composer({
 
         {!collapsed && (
           <>
-            {target.mode === "thread" && <ThreadFields content={content} onChange={onChange} />}
-            {withPoll && <PollSettings poll={content.poll} onChange={setPoll} />}
-            {withLottery && <LotterySettings lottery={content.lottery} onChange={setLottery} />}
-            {/* Scrolls when a poll's options or lottery's prizes leave the editor too little room. */}
-            <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain">
-              {withPoll && <PollOptions poll={content.poll} onChange={setPoll} />}
-              {withLottery && <LotteryPrizes lottery={content.lottery} onChange={setLottery} />}
-              {withPositioning && (
-                <PositioningFields positioning={content.positioning} onChange={setPositioning} />
-              )}
-              <MarkdownEditor
-                value={content.text}
-                onChange={(text) => onChange({ ...content, text })}
-                onSubmit={send}
-                label={withPositioning ? "补充说明" : field}
-                textarea={textarea}
-                className="min-h-40 flex-1 border-t"
-              />
+            {/* On a phone all below the header scrolls as one. Elsewhere the fields stay put and
+                the rest scrolls when a poll's options or lottery's prizes leave the editor too
+                little room. */}
+            <div className="flex min-h-0 flex-1 flex-col max-sm:overflow-y-auto max-sm:overscroll-contain">
+              {target.mode === "thread" && <ThreadFields content={content} onChange={onChange} />}
+              {withPoll && <PollSettings poll={content.poll} onChange={setPoll} />}
+              {withLottery && <LotterySettings lottery={content.lottery} onChange={setLottery} />}
+              <div className="flex min-h-0 flex-1 flex-col max-sm:min-h-auto sm:overflow-y-auto sm:overscroll-contain">
+                {withPoll && <PollOptions poll={content.poll} onChange={setPoll} />}
+                {withLottery && <LotteryPrizes lottery={content.lottery} onChange={setLottery} />}
+                {withPositioning && (
+                  <PositioningFields positioning={content.positioning} onChange={setPositioning} />
+                )}
+                <MarkdownEditor
+                  value={content.text}
+                  onChange={(text) => onChange({ ...content, text })}
+                  onSubmit={send}
+                  label={withPositioning ? "补充说明" : field}
+                  textarea={textarea}
+                  className="min-h-40 flex-1 border-t max-sm:min-h-auto"
+                />
+              </div>
             </div>
-            <footer className="flex items-center gap-3 border-t px-4 py-2.5">
+            <footer className="flex touch-none items-center gap-3 border-t px-4 py-2.5">
               <Button onClick={send} disabled={busy || !ready}>
                 <Icon /> {busy ? "发送中…" : label}
               </Button>
@@ -775,15 +785,18 @@ function Heading({ target, title }: { target: ComposerTarget; title: string }) {
       ) : (
         <Reply className="size-4 shrink-0 text-muted-foreground" />
       )}
-      <span className="shrink-0">
+      {/* A long name is cut short rather than pushing the buttons off a phone's screen. */}
+      <span className="flex min-w-0 items-baseline whitespace-pre">
         {target.mode === "edit" ? (
           <>
             编辑 <span className="text-muted-foreground tabular-nums">#{target.post.floor}</span>
           </>
         ) : target.replyTo ? (
           <>
-            回复 <span className="font-medium">{target.replyTo.name}</span>
-            <span className="ml-1 text-muted-foreground tabular-nums">#{target.replyTo.floor}</span>
+            回复 <span className="truncate font-medium">{target.replyTo.name}</span>
+            <span className="ml-1 shrink-0 text-muted-foreground tabular-nums">
+              #{target.replyTo.floor}
+            </span>
           </>
         ) : (
           "回复帖子"
@@ -791,7 +804,7 @@ function Heading({ target, title }: { target: ComposerTarget; title: string }) {
       </span>
       <Link
         to={`/t/${target.thread.id}`}
-        className="min-w-0 truncate text-muted-foreground hover:text-foreground"
+        className="min-w-0 flex-1 truncate text-muted-foreground hover:text-foreground"
       >
         {target.thread.title}
       </Link>
@@ -1006,7 +1019,7 @@ function DeadlinePicker({
 }
 
 // How the poll works, fixed once posted. Kept out of the scrolling part, which would clip the
-// dropdowns.
+// dropdowns, except on a phone, where the composer takes the whole screen and leaves them room.
 function PollSettings({
   poll,
   onChange,

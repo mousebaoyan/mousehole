@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type RefObject } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
 import { useFetcher } from "react-router";
 import {
   AtSign,
@@ -30,6 +30,9 @@ import { EmojiButton, insertEmoji } from "~/components/emoji-button";
 import { PROSE } from "~/components/prose";
 import { Button } from "~/components/ui/button";
 import { UserAvatar } from "~/components/user-avatar";
+
+// Phones, as Tailwind's `max-sm` has them.
+export const PHONE = "(width < 40rem)";
 
 // A change to the text and what to select afterwards.
 type Edit = (
@@ -162,10 +165,9 @@ const MIRRORED = [
   "tab-size",
 ];
 
-function findMention(el: HTMLTextAreaElement, text: string, caret: number): Mention | null {
-  const match = MENTION.exec(text.slice(0, caret));
-  if (!match) return null;
-  // The caret's position, from a hidden copy of the text box laid out the same way.
+// Where the caret's line is from the top of the text box as shown, from a hidden copy of the box
+// laid out the same way.
+function caretLine(el: HTMLTextAreaElement, text: string, caret: number) {
   const mirror = document.createElement("div");
   const style = getComputedStyle(el);
   for (const name of MIRRORED) mirror.style.setProperty(name, style.getPropertyValue(name));
@@ -176,14 +178,21 @@ function findMention(el: HTMLTextAreaElement, text: string, caret: number): Ment
   marker.textContent = "\u200b";
   mirror.append(marker);
   document.body.append(mirror);
-  const lineTop = marker.offsetTop - el.scrollTop;
-  const lineBottom = lineTop + marker.offsetHeight;
+  const top = marker.offsetTop - el.scrollTop;
+  const bottom = top + marker.offsetHeight;
   mirror.remove();
-  const above = lineTop > el.clientHeight / 2;
+  return { top, bottom };
+}
+
+function findMention(el: HTMLTextAreaElement, text: string, caret: number): Mention | null {
+  const match = MENTION.exec(text.slice(0, caret));
+  if (!match) return null;
+  const line = caretLine(el, text, caret);
+  const above = line.top > el.clientHeight / 2;
   return {
     start: caret - match[1].length - 1,
     query: match[1],
-    y: el.offsetTop + (above ? lineTop : lineBottom),
+    y: el.offsetTop + (above ? line.top : line.bottom),
     above,
   };
 }
@@ -225,6 +234,23 @@ export function MarkdownEditor({
     }, 400);
     return () => clearTimeout(timer);
   }, [value, submit]);
+
+  // On a phone the text box grows with its text, so the composer scrolls as one rather than as a
+  // box within a box, which a finger can't scroll out of. The browser brings the caret into view
+  // as it types, before the box has grown, so that is done again after.
+  useLayoutEffect(() => {
+    const el = textarea.current;
+    if (!el || previewing || !matchMedia(PHONE).matches) return;
+    el.style.setProperty("height", "auto");
+    el.style.setProperty("height", `${el.scrollHeight}px`);
+    if (document.activeElement !== el) return;
+    const mark = document.createElement("div");
+    const below = el.offsetTop + caretLine(el, value, el.selectionEnd).bottom;
+    mark.style.cssText = `position:absolute;left:0;top:${below}px;width:1px;height:12px;scroll-margin-top:48px`;
+    el.after(mark);
+    mark.scrollIntoView({ block: "nearest" });
+    mark.remove();
+  }, [value, previewing, textarea]);
 
   // Suggestions for the name after "@", once typing pauses.
   const query = mention?.query;
@@ -302,7 +328,7 @@ export function MarkdownEditor({
       <div
         className={cn("relative flex min-h-0 flex-col md:border-r", previewing && "max-md:hidden")}
       >
-        <div className="flex items-center gap-0.5 border-b px-2 py-1 text-muted-foreground">
+        <div className="flex items-center gap-0.5 border-b px-2 py-1 text-muted-foreground max-sm:sticky max-sm:top-0 max-sm:z-10 max-sm:bg-card">
           {TOOLS.map((t) => (
             <Button
               key={t.label}
@@ -426,7 +452,7 @@ export function MarkdownEditor({
           }}
           aria-label={label}
           placeholder="支持 Markdown，输入 @ 提及成员，可以粘贴或拖入图片"
-          className="min-h-0 flex-1 resize-none overscroll-contain bg-transparent px-4 py-3 text-body leading-7 outline-none placeholder:text-muted-foreground"
+          className="min-h-0 flex-1 resize-none bg-transparent px-4 py-3 text-body leading-7 outline-none placeholder:text-muted-foreground max-sm:min-h-40 max-sm:flex-auto sm:overscroll-contain"
         />
         {uploadError !== null && (
           <p role="alert" className="border-t px-4 py-1.5 text-meta text-destructive">
@@ -466,12 +492,12 @@ export function MarkdownEditor({
         )}
       </div>
       <div className={cn("flex min-h-0 flex-col", !previewing && "max-md:hidden")}>
-        <div className="flex h-9 items-center border-b px-2 text-muted-foreground md:hidden">
+        <div className="flex h-9 items-center border-b px-2 text-muted-foreground md:hidden max-sm:sticky max-sm:top-0 max-sm:z-10 max-sm:bg-card">
           <Button type="button" variant="ghost" size="sm" onClick={() => setPreviewing(false)}>
             <PenLine /> 继续编辑
           </Button>
         </div>
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-secondary/40 px-4 py-1">
+        <div className="min-h-0 flex-1 bg-secondary/40 px-4 py-1 sm:overflow-y-auto sm:overscroll-contain">
           {value.trim() && data?.html ? (
             <div className={PROSE} dangerouslySetInnerHTML={{ __html: data.html }} />
           ) : (
