@@ -11,7 +11,7 @@ import { recordEvent } from "../events/service.ts";
 import { notifyBadges } from "../notifications/service.ts";
 import { dropRevokedBadge, shownToGuests, userBriefs } from "../users/service.ts";
 import type { EVENT_FRAMES } from "../users/customization.ts";
-import { GROUPINGS, RULES, type Tier } from "./rules.ts";
+import { GROUPINGS, haveOf, RULES, type Tier } from "./rules.ts";
 
 type EventFrame = (typeof EVENT_FRAMES)[number];
 
@@ -133,24 +133,66 @@ export async function checkBadges() {
 
 // ---- Reading
 
+const HIDDEN_DESCRIPTION = "得到后才知道怎么拿";
+
+// What a badge takes, which a hidden one keeps from those who haven't earned it.
+function describedTo(viewerId: number | null) {
+  return sql<string>`CASE WHEN badges.hidden AND NOT EXISTS (SELECT 1 FROM user_badges
+      WHERE badge_id = badges.id AND user_id = ${viewerId}) THEN ${HIDDEN_DESCRIPTION}
+    ELSE badges.description END`.as("description");
+}
+
 function selectBadges(viewerId: number | null) {
   return db.selectFrom("badges").select([
-    ...BADGE,
+    "id",
+    "name",
+    describedTo(viewerId),
+    "tier",
+    "grouping",
+    "multiple",
+    "hidden",
+    "frame",
+    "ladder",
+    "need",
     sql<boolean>`slug IS NULL`.as("manual"),
     sql<number>`(SELECT count(DISTINCT user_id)::integer FROM user_badges
         WHERE badge_id = badges.id)`.as("granted_count"),
+    sql<number>`round((SELECT count(DISTINCT user_id) FROM user_badges
+        WHERE badge_id = badges.id)::numeric
+      / (SELECT greatest(count(*), 1) FROM users WHERE role NOT IN ('bot', 'owner')),
+      4)::float8`.as("granted_rate"),
     sql<number>`(SELECT count(*)::integer FROM user_badges
         WHERE badge_id = badges.id AND user_id = ${viewerId})`.as("granted"),
   ]);
 }
 
+// How far the reader is from the badges on a ladder they don't have yet; nothing for guests.
+async function withProgress<
+  T extends { ladder: string | null; need: number | null; granted: number },
+>(badges: T[], viewerId: number | null) {
+  const open = badges.flatMap((b) => (b.ladder !== null && b.granted === 0 ? [b.ladder] : []));
+  const have: Record<string, number> = {};
+  if (viewerId !== null && open.length > 0) {
+    const { rows } = await haveOf(viewerId, open).execute(db);
+    for (const row of rows) have[row.ladder] = row.have;
+  }
+  return badges.map(({ ladder, need, ...badge }) => ({
+    ...badge,
+    progress:
+      viewerId !== null && ladder !== null && need !== null && badge.granted === 0
+        ? { have: have[ladder] ?? 0, need }
+        : null,
+  }));
+}
+
 // Every badge by group, how many people have it, and how often the reader has.
 export async function listBadges(viewerId: number | null) {
-  return selectBadges(viewerId)
+  const badges = await selectBadges(viewerId)
     .orderBy(sql`array_position(${[...GROUPINGS]}::text[], grouping)`)
     .orderBy("position")
     .orderBy("id")
     .execute();
+  return withProgress(badges, viewerId);
 }
 
 const HOLDERS_PAGE = 50;
@@ -158,8 +200,9 @@ const HOLDERS_PAGE = 50;
 // One badge and who has it, latest first; `cursor` is how many were shown. Guests don't see
 // those who keep their content from them.
 export async function getBadge(id: number, viewerId: number | null, reach: number, cursor: number) {
-  const badge = await selectBadges(viewerId).where("id", "=", id).executeTakeFirst();
-  if (!badge) throw badgeNotFound();
+  const found = await selectBadges(viewerId).where("id", "=", id).executeTakeFirst();
+  if (!found) throw badgeNotFound();
+  const [badge] = await withProgress([found], viewerId);
   const rows = await db
     .selectFrom("user_badges")
     .select(["user_id", sql<Date>`max(granted_at)`.as("granted_at")])
@@ -195,7 +238,7 @@ const FLOORS_SHOWN = 10;
 // Someone's badges, gold first, each once with how often and when last; for those earned per
 // floor, the latest floors the reader can open. Nothing for guests when they keep their content
 // from them.
-export async function listUserBadges(userId: number, reach: number) {
+export async function listUserBadges(userId: number, reach: number, viewerId: number | null) {
   if (reach === GUEST) {
     const hidden = await db
       .selectFrom("users")
@@ -211,7 +254,7 @@ export async function listUserBadges(userId: number, reach: number) {
     .select([
       "badges.id",
       "badges.name",
-      "badges.description",
+      describedTo(viewerId),
       "badges.tier",
       "badges.grouping",
       "badges.multiple",

@@ -532,3 +532,85 @@ describe("更多徽章的规则", () => {
     expect(await slugsOf(collector.id)).not.toContain("badges_30");
   });
 });
+
+async function named(name: string, who?: Who) {
+  const res = await api.badges.$get({}, who);
+  const badge = (await res.json()).items.find((b) => b.name === name);
+  if (!badge) throw new Error(`no badge ${name}`);
+  return badge;
+}
+
+describe("徽章的读取", () => {
+  test("隐藏徽章没得到的人只看到一句提示，得到的人看得到怎么得到", async () => {
+    const owner = await person();
+    const other = await person();
+    const home = await thread(admin);
+    const post = await reply(owner.who, home);
+    await db
+      .updateTable("posts")
+      .set({ created_at: new Date("2026-11-03T03:30:00+08:00") })
+      .where("id", "=", post)
+      .execute();
+    await checkBadges();
+
+    const hint = "得到后才知道怎么拿";
+    const secret = await named("夜行鼠");
+    expect(secret).toMatchObject({ hidden: true, description: hint, granted: 0 });
+    expect(await named("夜行鼠", other.who)).toMatchObject({ description: hint });
+    expect(await named("夜行鼠", owner.who)).toMatchObject({
+      description: "北京时间凌晨 3 点到 5 点发过内容",
+      granted: 1,
+    });
+    expect(await named("钻书堆")).toMatchObject({ hidden: false, description: "累计阅读 10 小时" });
+
+    const ofOwner = async (who?: Who) => {
+      const res = await api.users[":user"].badges.$get({ param: { user: String(owner.id) } }, who);
+      if (!res.ok) throw new Error(`status ${res.status}`);
+      return (await res.json()).items.find((b) => b.name === "夜行鼠")?.description;
+    };
+    expect(await ofOwner()).toBe(hint);
+    expect(await ofOwner(other.who)).toBe(hint);
+    expect(await ofOwner(owner.who)).toBe("北京时间凌晨 3 点到 5 点发过内容");
+
+    const detail = await api.badges[":id"].$get({ param: { id: String(secret.id) }, query: {} });
+    if (!detail.ok) throw new Error(`status ${detail.status}`);
+    expect((await detail.json()).badge.description).toBe(hint);
+  });
+
+  test("还没得到的一串徽章显示进度，得到了的和不成串的没有；访客没有", async () => {
+    const climber = await person();
+    await db.updateTable("users").set({ days_visited: 61 }).where("id", "=", climber.id).execute();
+    const home = await thread(admin);
+    const answer = await reply(climber.who, home);
+    await db.updateTable("posts").set({ like_count: 7 }).where("id", "=", answer).execute();
+    await checkBadges();
+
+    const progress = async (name: string, who?: Who) => (await named(name, who)).progress;
+    expect(await progress("鼠洞户口", climber.who)).toBeNull();
+    expect(await progress("钉子户", climber.who)).toEqual({ have: 61, need: 200 });
+    expect(await progress("不错的回复", climber.who)).toBeNull();
+    expect(await progress("很棒的回复", climber.who)).toEqual({ have: 7, need: 15 });
+    expect(await progress("初次发帖", climber.who)).toBeNull();
+    expect(await progress("钉子户")).toBeNull();
+
+    const gold = await named("钉子户");
+    const detail = await api.badges[":id"].$get(
+      { param: { id: String(gold.id) }, query: {} },
+      climber.who,
+    );
+    if (!detail.ok) throw new Error(`status ${detail.status}`);
+    expect((await detail.json()).badge.progress).toEqual({ have: 61, need: 200 });
+  });
+
+  test("得到的人占成员的比例", async () => {
+    const { members } = await db
+      .selectFrom("users")
+      .select(sql<number>`count(*)::integer`.as("members"))
+      .where("role", "not in", ["bot", "owner"])
+      .executeTakeFirstOrThrow();
+    const first = await named("初来乍到");
+    expect(first.granted_count).toBeGreaterThan(0);
+    expect(first.granted_rate).toBeCloseTo(first.granted_count / members, 3);
+    expect((await named("博物馆馆长")).granted_rate).toBe(0);
+  });
+});

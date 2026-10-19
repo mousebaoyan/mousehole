@@ -37,26 +37,28 @@ export type Rule = {
 };
 
 // Counts some badges come one after another along, each needing more of it.
-export type Ladder =
-  | "reply_likes"
-  | "thread_likes"
-  | "bookmarks"
-  | "floors"
-  | "accepted"
-  | "positioning"
-  | "read_hours"
-  | "threads"
-  | "replies"
-  | "likes_given"
-  | "streak"
-  | "visit_days"
-  | "group_days"
-  | "followers"
-  | "endorsed"
-  | "reports"
-  | "coins_earned"
-  | "looks"
-  | "badges_held";
+const LADDERS = [
+  "reply_likes",
+  "thread_likes",
+  "bookmarks",
+  "floors",
+  "accepted",
+  "positioning",
+  "read_hours",
+  "threads",
+  "replies",
+  "likes_given",
+  "streak",
+  "visit_days",
+  "group_days",
+  "followers",
+  "endorsed",
+  "reports",
+  "coins_earned",
+  "looks",
+  "badges_held",
+] as const;
+export type Ladder = (typeof LADDERS)[number];
 
 // Floors that count, as p, with their thread as t.
 const SHOWN = sql`posts p JOIN threads t ON t.id = p.thread_id
@@ -68,35 +70,10 @@ function people(query: RawBuilder<unknown>) {
     FROM (${query}) q`;
 }
 
-// Floors (replies, or opening posts) with at least this many likes, each a badge of its own.
-function likedFloors(opening: boolean, likes: number) {
-  return sql<{ user_id: number; post_id: number }>`SELECT p.author_id AS user_id, p.id AS post_id
-    FROM ${SHOWN} AND ${opening ? sql`p.floor = 1` : sql`p.floor > 1`} AND p.like_count >= ${likes}`;
-}
-
 // At least `floors` floors with at least `likes` likes each.
 function likedOften(floors: number, likes: number) {
   return people(sql`SELECT p.author_id AS user_id FROM ${SHOWN} AND p.like_count >= ${likes}
     GROUP BY p.author_id HAVING count(*) >= ${floors}`);
-}
-
-// Answers to other people's questions: an asker's own reply accepted doesn't count (design §8.1).
-function accepted(answers: number) {
-  return people(sql`SELECT p.author_id AS user_id FROM ${SHOWN} AND p.accepted_at IS NOT NULL
-      AND p.author_id <> t.author_id
-    GROUP BY p.author_id HAVING count(*) >= ${answers}`);
-}
-
-// Replies in other people's positioning threads (design §8.14), each thread once.
-function positioningReplies(threads: number) {
-  return people(sql`SELECT p.author_id AS user_id FROM ${SHOWN} AND p.floor > 1
-      AND p.author_id <> t.author_id
-      AND EXISTS (SELECT 1 FROM polls WHERE polls.thread_id = t.id AND polls.preset = 'positioning')
-    GROUP BY p.author_id HAVING count(DISTINCT t.id) >= ${threads}`);
-}
-
-function streak(days: number) {
-  return people(sql`SELECT id AS user_id FROM users WHERE visit_streak >= ${days}`);
 }
 
 // Opening posts of the threads that, as t, meet a condition, each a badge of its own.
@@ -105,105 +82,128 @@ function openingsWhere(condition: RawBuilder<unknown>) {
     FROM ${SHOWN} AND p.floor = 1 AND ${condition}`;
 }
 
-// Bookmarked by this many people besides their author.
-function bookmarked(by: number) {
-  return openingsWhere(sql`t.id IN (
-    SELECT tu.thread_id FROM thread_users tu JOIN threads th ON th.id = tu.thread_id
-    WHERE tu.bookmarked_at IS NOT NULL AND tu.user_id <> th.author_id
-    GROUP BY tu.thread_id HAVING count(*) >= ${by})`);
+type Measured = { user_id: number; post_id: number | null; n: number };
+
+// What the count behind a ladder is for everyone, or for one person: a row for each, or for each
+// floor of theirs when its badges are earned per floor. A badge on the ladder asks for `need` of it.
+type Measure = (user?: number) => RawBuilder<Measured>;
+
+// The same query narrowed to one person, when there is one.
+function onlyFor(column: string, user: number | undefined) {
+  return user === undefined ? sql`` : sql`AND ${sql.ref(column)} = ${user}`;
 }
 
-// This many floors by others, so a thread can't be built up by its author alone.
-function answered(floors: number) {
-  return openingsWhere(sql`t.reply_count >= ${floors} AND (
-    SELECT count(*) FROM posts r WHERE r.thread_id = t.id AND r.floor > 1
-      AND r.status = 'visible' AND r.deleted_at IS NULL AND r.author_id <> t.author_id) >= ${floors}`);
+// Something about each floor (a reply, or an opening post), with the thread as t.
+function eachFloor(opening: boolean, count: RawBuilder<number>): Measure {
+  return (user) => sql<Measured>`SELECT p.author_id AS user_id, p.id AS post_id, ${count} AS n
+    FROM ${SHOWN} AND ${opening ? sql`p.floor = 1` : sql`p.floor > 1`} ${onlyFor("p.author_id", user)}`;
 }
 
-function readHours(hours: number) {
-  return people(sql`SELECT id AS user_id FROM users WHERE read_seconds >= ${hours * 3600}`);
-}
+// Replies in other people's positioning threads (design §8.14), each thread once.
+const POSITIONING = sql`EXISTS (SELECT 1 FROM polls
+  WHERE polls.thread_id = t.id AND polls.preset = 'positioning')`;
 
-// Opening posts, or replies, written.
-function written(opening: boolean, count: number) {
-  return people(sql`SELECT p.author_id AS user_id FROM ${SHOWN}
-      AND ${opening ? sql`p.floor = 1` : sql`p.floor > 1`}
-    GROUP BY p.author_id HAVING count(*) >= ${count}`);
-}
-
-// Floors of others they have reacted to.
-function likesGiven(floors: number) {
-  return people(sql`SELECT r.user_id FROM reactions r JOIN posts p ON p.id = r.post_id
+const MEASURES: Record<Ladder, Measure> = {
+  reply_likes: eachFloor(false, sql`p.like_count`),
+  thread_likes: eachFloor(true, sql`p.like_count`),
+  // Besides their author's own, so a thread can't be built up by its author alone.
+  bookmarks: eachFloor(
+    true,
+    sql`(SELECT count(*)::integer FROM thread_users tu WHERE tu.thread_id = t.id
+      AND tu.bookmarked_at IS NOT NULL AND tu.user_id <> t.author_id)`,
+  ),
+  floors: eachFloor(
+    true,
+    sql`(SELECT count(*)::integer FROM posts r WHERE r.thread_id = t.id AND r.floor > 1
+      AND r.status = 'visible' AND r.deleted_at IS NULL AND r.author_id <> t.author_id)`,
+  ),
+  // Answers to other people's questions: an asker's own reply accepted doesn't count (design §8.1).
+  accepted: (user) => sql<Measured>`SELECT p.author_id AS user_id, NULL::integer AS post_id,
+      count(*)::integer AS n
+    FROM ${SHOWN} AND p.accepted_at IS NOT NULL AND p.author_id <> t.author_id
+      ${onlyFor("p.author_id", user)}
+    GROUP BY p.author_id`,
+  positioning: (user) => sql<Measured>`SELECT p.author_id AS user_id, NULL::integer AS post_id,
+      count(DISTINCT t.id)::integer AS n
+    FROM ${SHOWN} AND p.floor > 1 AND p.author_id <> t.author_id AND ${POSITIONING}
+      ${onlyFor("p.author_id", user)}
+    GROUP BY p.author_id`,
+  read_hours: (user) => sql<Measured>`SELECT id AS user_id, NULL::integer AS post_id,
+      read_seconds / 3600 AS n
+    FROM users WHERE true ${onlyFor("id", user)}`,
+  threads: (user) => sql<Measured>`SELECT p.author_id AS user_id, NULL::integer AS post_id,
+      count(*)::integer AS n
+    FROM ${SHOWN} AND p.floor = 1 ${onlyFor("p.author_id", user)}
+    GROUP BY p.author_id`,
+  replies: (user) => sql<Measured>`SELECT p.author_id AS user_id, NULL::integer AS post_id,
+      count(*)::integer AS n
+    FROM ${SHOWN} AND p.floor > 1 ${onlyFor("p.author_id", user)}
+    GROUP BY p.author_id`,
+  // Floors of others they have reacted to.
+  likes_given: (user) => sql<Measured>`SELECT r.user_id, NULL::integer AS post_id,
+      count(*)::integer AS n
+    FROM reactions r JOIN posts p ON p.id = r.post_id
     WHERE p.author_id <> r.user_id AND p.status = 'visible' AND p.deleted_at IS NULL
-    GROUP BY r.user_id HAVING count(*) >= ${floors}`);
-}
-
-function visitDays(days: number) {
-  return people(sql`SELECT id AS user_id FROM users WHERE days_visited >= ${days}`);
-}
-
-// Still in a group of the forum, for as long in the one they joined first.
-function inGroupFor(days: number) {
-  return people(sql`SELECT m.user_id FROM group_members m JOIN qq_groups g ON g.id = m.group_id
-    WHERE g.enabled AND m.left_at IS NULL AND m.joined_at <= now() - make_interval(days => ${days})`);
-}
-
-function followers(count: number) {
-  return people(sql`SELECT followee_id AS user_id FROM user_follows
-    GROUP BY followee_id HAVING count(*) >= ${count}`);
-}
-
-function endorsed(count: number) {
-  return people(sql`SELECT user_id FROM endorsements GROUP BY user_id HAVING count(*) >= ${count}`);
-}
-
-// Reports a moderator found right.
-function reportsUpheld(count: number) {
-  return people(sql`SELECT reporter_id AS user_id FROM reports WHERE status = 'resolved'
-    GROUP BY reporter_id HAVING count(*) >= ${count}`);
-}
-
-// What came in, not what is left.
-function coinsEarned(coins: number) {
-  return people(sql`SELECT user_id FROM coin_ledger WHERE amount > 0
-    GROUP BY user_id HAVING sum(amount) >= ${coins}`);
-}
-
-function looksBought(looks: number) {
-  return people(sql`SELECT user_id FROM coin_ledger WHERE reason = 'look'
-    GROUP BY user_id HAVING count(*) >= ${looks}`);
-}
-
-function badgesHeld(kinds: number) {
-  return people(sql`SELECT user_id FROM user_badges
-    GROUP BY user_id HAVING count(DISTINCT badge_id) >= ${kinds}`);
-}
-
-const BY_COUNT: Record<Ladder, (need: number) => Rule["earned"]> = {
-  reply_likes: (need) => likedFloors(false, need),
-  thread_likes: (need) => likedFloors(true, need),
-  bookmarks: bookmarked,
-  floors: answered,
-  accepted,
-  positioning: positioningReplies,
-  read_hours: readHours,
-  threads: (need) => written(true, need),
-  replies: (need) => written(false, need),
-  likes_given: likesGiven,
-  streak,
-  visit_days: visitDays,
-  group_days: inGroupFor,
-  followers,
-  endorsed,
-  reports: reportsUpheld,
-  coins_earned: coinsEarned,
-  looks: looksBought,
-  badges_held: badgesHeld,
+      ${onlyFor("r.user_id", user)}
+    GROUP BY r.user_id`,
+  streak: (user) => sql<Measured>`SELECT id AS user_id, NULL::integer AS post_id,
+      visit_streak AS n
+    FROM users WHERE true ${onlyFor("id", user)}`,
+  visit_days: (user) => sql<Measured>`SELECT id AS user_id, NULL::integer AS post_id,
+      days_visited AS n
+    FROM users WHERE true ${onlyFor("id", user)}`,
+  // Days in the group of the forum they have been in longest, while still in one.
+  group_days: (user) => sql<Measured>`SELECT m.user_id, NULL::integer AS post_id,
+      floor(extract(epoch FROM now() - min(m.joined_at)) / 86400)::integer AS n
+    FROM group_members m JOIN qq_groups g ON g.id = m.group_id
+    WHERE g.enabled AND m.left_at IS NULL ${onlyFor("m.user_id", user)}
+    GROUP BY m.user_id`,
+  followers: (user) => sql<Measured>`SELECT followee_id AS user_id, NULL::integer AS post_id,
+      count(*)::integer AS n
+    FROM user_follows WHERE true ${onlyFor("followee_id", user)}
+    GROUP BY followee_id`,
+  endorsed: (user) => sql<Measured>`SELECT user_id, NULL::integer AS post_id, count(*)::integer AS n
+    FROM endorsements WHERE true ${onlyFor("user_id", user)}
+    GROUP BY user_id`,
+  // Reports a moderator found right.
+  reports: (user) => sql<Measured>`SELECT reporter_id AS user_id, NULL::integer AS post_id,
+      count(*)::integer AS n
+    FROM reports WHERE status = 'resolved' ${onlyFor("reporter_id", user)}
+    GROUP BY reporter_id`,
+  // What came in, not what is left.
+  coins_earned: (user) => sql<Measured>`SELECT user_id, NULL::integer AS post_id,
+      sum(amount)::integer AS n
+    FROM coin_ledger WHERE amount > 0 ${onlyFor("user_id", user)}
+    GROUP BY user_id`,
+  looks: (user) => sql<Measured>`SELECT user_id, NULL::integer AS post_id, count(*)::integer AS n
+    FROM coin_ledger WHERE reason = 'look' ${onlyFor("user_id", user)}
+    GROUP BY user_id`,
+  badges_held: (user) => sql<Measured>`SELECT user_id, NULL::integer AS post_id,
+      count(DISTINCT badge_id)::integer AS n
+    FROM user_badges WHERE true ${onlyFor("user_id", user)}
+    GROUP BY user_id`,
 };
 
 // A badge on a ladder, earned with `need` of its count.
 function counted(ladder: Ladder, need: number) {
-  return { ladder, need, earned: BY_COUNT[ladder](need) };
+  return {
+    ladder,
+    need,
+    earned: sql<{ user_id: number; post_id: number | null }>`SELECT user_id, post_id
+      FROM (${MEASURES[ladder]()}) m WHERE n >= ${need}`,
+  };
+}
+
+// How much of each of these ladders one person has: the most any one floor has, for those earned
+// per floor.
+export function haveOf(user: number, wanted: readonly string[]) {
+  return sql<{ ladder: string; have: number }>`${sql.join(
+    LADDERS.filter((ladder) => wanted.includes(ladder)).map(
+      (ladder) => sql`SELECT ${ladder}::text AS ladder, coalesce(max(n), 0)::integer AS have
+        FROM (${MEASURES[ladder](user)}) m`,
+    ),
+    sql` UNION ALL `,
+  )}`;
 }
 
 // The seed badge goes to whoever first logs in before this, Beijing time.
