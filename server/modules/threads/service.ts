@@ -1444,7 +1444,7 @@ export async function deletePost(
     // A deleted answer is no longer accepted. As the row was, locked, as in deleteThread.
     const deleted = await trx
       .updateTable("posts")
-      .set({ deleted_at: sql<Date>`now()`, accepted_at: null })
+      .set({ deleted_at: sql<Date>`now()`, accepted_at: null, accepted_by: null })
       .where("id", "=", postId)
       .where("deleted_at", "is", null)
       .returning([
@@ -1916,8 +1916,11 @@ export async function setAnswer(
   await db.transaction().execute(async (trx) => {
     const answer = await trx
       .updateTable("posts")
-      // Accepting again keeps when it was first accepted.
-      .set({ accepted_at: accepted ? sql<Date>`coalesce(accepted_at, now())` : null })
+      // Accepting again keeps when and by whom it was first accepted.
+      .set({
+        accepted_at: accepted ? sql<Date>`coalesce(accepted_at, now())` : null,
+        accepted_by: accepted ? sql<number>`coalesce(accepted_by, ${viewer.id})` : null,
+      })
       .where("id", "=", postId)
       .where("thread_id", "=", threadId)
       .where("floor", ">", 1)

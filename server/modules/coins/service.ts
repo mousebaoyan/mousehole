@@ -83,12 +83,15 @@ export async function settleCoins() {
 // of theirs was accepted, and for a bounty (design §8.19) one if they replied to it on the forum
 // that day, five if such a reply was accepted, one of the two. Only what is still there counts:
 // reactions taken back, answers no longer accepted, floors deleted, hidden or anonymous don't. An
-// asker accepting their own reply marks the question solved and earns nothing (design §8.1).
+// answer accepted by its own author, the asker or a moderator, marks the question solved and earns
+// nothing (design §8.1).
 async function settleDay(day: string) {
   const start = sql<Date>`(${day}::date::timestamp AT TIME ZONE 'Asia/Shanghai')`;
   const end = sql<Date>`${start} + interval '1 day'`;
   const shown = sql`p.status = 'visible' AND p.deleted_at IS NULL AND NOT p.anonymous
     AND t.status = 'visible' AND t.deleted_at IS NULL`;
+  const accepted = sql`p.accepted_at >= ${start} AND p.accepted_at < ${end}
+    AND p.accepted_by <> p.author_id`;
   await db.transaction().execute(async (trx) => {
     await sql`
       WITH earned AS (
@@ -103,22 +106,18 @@ async function settleDay(day: string) {
         UNION ALL
         SELECT DISTINCT p.author_id, 'accepted', ${ACCEPTED}::integer, NULL::integer
         FROM posts p JOIN threads t ON t.id = p.thread_id
-        WHERE p.accepted_at >= ${start} AND p.accepted_at < ${end} AND ${shown}
-          AND p.author_id <> t.author_id
+        WHERE ${accepted} AND ${shown} AND p.author_id <> t.author_id
         UNION ALL
         SELECT * FROM (
           SELECT DISTINCT ON (p.author_id) p.author_id, 'bounty',
-            CASE WHEN p.accepted_at >= ${start} AND p.accepted_at < ${end}
-              THEN ${BOUNTY_ANSWER} ELSE ${BOUNTY_REPLY} END::integer,
+            CASE WHEN ${accepted} THEN ${BOUNTY_ANSWER} ELSE ${BOUNTY_REPLY} END::integer,
             p.thread_id
           FROM posts p JOIN threads t ON t.id = p.thread_id
           WHERE t.bounty_at IS NOT NULL AND p.created_at >= t.bounty_at
             AND p.created_at < t.bounty_at + make_interval(days => ${BOUNTY_DAYS})
             AND p.floor > 1 AND p.author_id <> t.author_id AND p.via <> 'qq' AND ${shown}
-            AND (p.created_at >= ${start} AND p.created_at < ${end}
-              OR p.accepted_at >= ${start} AND p.accepted_at < ${end})
-          ORDER BY p.author_id, (p.accepted_at >= ${start} AND p.accepted_at < ${end}) IS TRUE DESC,
-            p.id
+            AND (p.created_at >= ${start} AND p.created_at < ${end} OR ${accepted})
+          ORDER BY p.author_id, (${accepted}) IS TRUE DESC, p.id
         ) bounties
       ), fresh AS (
         INSERT INTO coin_ledger (user_id, amount, reason, day, thread_id)

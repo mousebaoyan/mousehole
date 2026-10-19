@@ -91,7 +91,7 @@ export async function sendWeeklyLetters(now = new Date()) {
         (count(*) FILTER (WHERE p.accepted_at < ${start}))::integer AS accepted_before
       FROM posts p JOIN threads t ON t.id = p.thread_id
       WHERE ${shown} AND p.accepted_at >= ${before} AND p.accepted_at < ${end}
-        AND p.author_id <> t.author_id
+        AND p.author_id <> t.author_id AND p.accepted_by <> p.author_id
       GROUP BY p.author_id) a ON a.author_id = users.id
     WHERE (coalesce(r.reads, 0) >= ${weekly.min_reads} AND coalesce(l.likes, 0) >= ${weekly.min_likes}
         OR coalesce(a.accepted, 0) > 0)

@@ -59,7 +59,10 @@ async function member(week: { reads: number; likes: number; accepted?: boolean }
   if (week.accepted) {
     await db
       .updateTable("posts")
-      .set({ accepted_at: new Date() })
+      .set({
+        accepted_at: new Date(),
+        accepted_by: sql<number>`(SELECT author_id FROM threads WHERE id = ${threadId})`,
+      })
       .where("id", "=", postId)
       .execute();
   }

@@ -108,8 +108,11 @@ export function PostCard({
   const reaction = useReaction(post, threadId);
   const boosts = useBoosts(post, threadId, self);
   const own = isMine(post.author, me, self.alias);
-  // A hidden floor can't be accepted, only taken back.
+  // A hidden floor can't be accepted, only taken back. The asker accepting their own reply only
+  // marks the question solved, so that is tucked in the menu; a moderator's own reply in someone
+  // else's question gets the button like anyone's (design §8.1).
   const acceptable = manage.accept && (accepted || post.status === "visible");
+  const askers = own && op;
   const shown = useShown();
   const author = shown(post.author);
   const boostButton = <BoostButton mine={boosts.mine} onSave={boosts.save} />;
@@ -301,7 +304,7 @@ export function PostCard({
             </Button>
           )}
           {boosts.shown.length === 0 && <div className="text-muted-foreground">{boostButton}</div>}
-          {acceptable && !own && !accepted && (
+          {acceptable && !askers && !accepted && (
             <Button variant="ghost" size="sm" className="text-success" onClick={onAccept}>
               <CircleCheck /> 采纳
             </Button>
@@ -343,7 +346,7 @@ export function PostCard({
                       <Pencil /> 编辑
                     </button>
                   )}
-                  {acceptable && (accepted || own) && (
+                  {acceptable && (accepted || askers) && (
                     <button
                       type="button"
                       className={menuItem}
