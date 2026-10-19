@@ -283,18 +283,29 @@ export async function recordSeen(userId: number) {
   });
 }
 
-// Reading reports count as being seen too.
+// Reading reports count as being seen too. Their seconds count only as far as the time since
+// the last report or visit, so pages open side by side, or reports sent faster than the page sends
+// them, add up to no more than the time that passed.
 export async function countReading(
   trx: Transaction<DB>,
   userId: number,
   read: { posts: number; seconds: number },
 ) {
-  const days = await recordDay(trx, userId, read);
+  const { since } = await trx
+    .selectFrom("users")
+    .select(
+      sql<number | null>`floor(extract(epoch FROM now() - last_seen_at))::integer`.as("since"),
+    )
+    .where("id", "=", userId)
+    .forUpdate()
+    .executeTakeFirstOrThrow();
+  const counted = { posts: read.posts, seconds: Math.min(read.seconds, since ?? read.seconds) };
+  const days = await recordDay(trx, userId, counted);
   await trx
     .updateTable("users")
     .set((eb) => ({
-      posts_read: eb("posts_read", "+", read.posts),
-      read_seconds: eb("read_seconds", "+", read.seconds),
+      posts_read: eb("posts_read", "+", counted.posts),
+      read_seconds: eb("read_seconds", "+", counted.seconds),
       ...seen(days)(eb),
     }))
     .where("id", "=", userId)
