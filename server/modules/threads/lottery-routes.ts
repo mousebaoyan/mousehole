@@ -6,14 +6,13 @@ import {
   can,
   createRouter,
   errorResponse,
+  IdParam,
   readerOf,
 } from "../../platform/http.ts";
 import { UserBriefSchema } from "../users/schemas.ts";
 import { cancelLottery, enter, getLottery, leave, listEntries } from "./lotteries.ts";
 import { lotteryJson, LotterySchema } from "./schemas.ts";
 import { getThread } from "./service.ts";
-
-const IdParam = z.object({ id: z.coerce.number().int() });
 
 const lotteryResponse = {
   description: "抽奖",

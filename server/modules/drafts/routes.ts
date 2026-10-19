@@ -1,5 +1,5 @@
 import { createRoute, z } from "@hono/zod-openapi";
-import { createRouter, errorResponse, requireWeb, unix } from "../../platform/http.ts";
+import { createRouter, errorResponse, Int, requireWeb, unix } from "../../platform/http.ts";
 import { MAX_BODY } from "../threads/service.ts";
 import { deleteDraft, getDraft, listDrafts, saveDraft } from "./service.ts";
 
@@ -151,7 +151,7 @@ export const draftsRoutes = createRouter()
                 tags: z.array(z.string().max(20)).max(5).optional(),
                 author_anonymous: z.boolean().optional(),
                 anonymous_replies: z.boolean().optional(),
-                reply_to_id: z.number().int().nullable().optional(),
+                reply_to_id: Int.nullable().optional(),
               }),
             },
           },

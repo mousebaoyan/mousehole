@@ -6,12 +6,13 @@ import {
   authorizePosting,
   createRouter,
   errorResponse,
+  IdParam,
+  IntParam,
   readerOf,
 } from "../../platform/http.ts";
 import { BoardBriefSchema, SuggestionSchema, suggestionJson } from "./schemas.ts";
 import { decideSuggestion, listSuggestions, suggestChange } from "./suggestions.ts";
 
-const IdParam = z.object({ id: z.coerce.number().int() });
 export const suggestionRoutes = createRouter()
   .openapi(
     createRoute({
@@ -98,7 +99,7 @@ export const suggestionRoutes = createRouter()
       method: "get",
       path: "/admin/suggestions",
       summary: "待处理的修改建议，最新的在前；帖子删了的不列",
-      request: { query: z.object({ cursor: z.coerce.number().int().optional() }) },
+      request: { query: z.object({ cursor: IntParam.optional() }) },
       responses: {
         200: {
           description: "修改建议",

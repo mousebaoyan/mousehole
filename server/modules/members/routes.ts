@@ -6,6 +6,7 @@ import {
   createRouter,
   errorResponse,
   unix,
+  UnixSeconds,
 } from "../../platform/http.ts";
 import { UserRefSchema } from "../users/schemas.ts";
 import {
@@ -37,8 +38,8 @@ const MemberRecordSchema = z.object({
   card: z.string().optional(),
   role: z.enum(["owner", "admin", "member"]).optional(),
   title: z.string().optional(),
-  join_time: z.number().int().nonnegative().optional(),
-  last_sent_time: z.number().int().nonnegative().optional(),
+  join_time: UnixSeconds.optional(),
+  last_sent_time: UnixSeconds.optional(),
   is_robot: z.boolean().optional(),
   in_group: z.boolean().optional(),
   left_reason: z.enum(["leave", "kick"]).optional(),

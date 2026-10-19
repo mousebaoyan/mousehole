@@ -246,9 +246,6 @@ function inScope({ board, tagId }: Awaited<ReturnType<typeof scopeOf>>) {
     ]);
 }
 
-// Cursors: the last thread's ID for `created`, an offset for `hot`, otherwise the time the list
-// is ordered by (last activity, or when the reader bookmarked or last read it) and the ID. The
-// reader's own lists are empty for guests.
 // The threads someone pinned to their page, in their order (design §8.16); those the reader can't
 // open, and any since hidden, drop out.
 export async function listPins(reach: number, ids: number[]) {
@@ -268,6 +265,10 @@ export async function listPins(reach: number, ids: number[]) {
     .execute();
 }
 
+// Cursors: the last thread's ID for `created`, an offset for `hot`, otherwise the time the list
+// is ordered by (last activity, or when the reader bookmarked or last read it) in microseconds and
+// the ID. An ID or offset has at most 9 digits, as the integer it is compared with holds. The
+// reader's own lists are empty for guests.
 export async function listThreads(
   reach: number,
   userId: number | null,
@@ -316,13 +317,13 @@ export async function listThreads(
   if (view === "created") {
     query = query.orderBy("threads.id", "desc");
     if (cursor !== undefined) {
-      if (!/^\d+$/.test(cursor)) badCursor();
+      if (!/^\d{1,9}$/.test(cursor)) badCursor();
       query = query.where("threads.id", "<", Number(cursor));
     }
     next = (last) => String(last.id);
   } else if (view === "hot") {
     const ids = await hotIds();
-    if (cursor !== undefined && !/^\d+$/.test(cursor)) badCursor();
+    if (cursor !== undefined && !/^\d{1,9}$/.test(cursor)) badCursor();
     const offset = Number(cursor ?? 0);
     query = query
       .where("threads.id", "=", sql<number>`any(${ids}::integer[])`)
@@ -339,7 +340,7 @@ export async function listThreads(
     if (pinFrom !== null) query = query.where("threads.pinned", "<", pinFrom);
     query = query.orderBy(time, "desc").orderBy("threads.id", "desc");
     if (cursor !== undefined) {
-      const [, micros, id] = /^(\d+)_(\d+)$/.exec(cursor) ?? badCursor();
+      const [, micros, id] = /^(\d{1,18})_(\d{1,9})$/.exec(cursor) ?? badCursor();
       query = query.where((eb) =>
         eb(
           eb.refTuple(time, "threads.id"),

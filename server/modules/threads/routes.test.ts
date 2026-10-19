@@ -206,6 +206,21 @@ describe("读帖子", () => {
     expect(listed.items.map((t) => t.id)).not.toContain(thread);
   });
 
+  test("ID、楼层、游标和时间超出数据库能存的范围时是请求有误，不是服务器出错", async () => {
+    const thread = String(await newThread(await newBoard()));
+    const statuses = await Promise.all(
+      [
+        api.threads[":id"].$get({ param: { id: "9999999999" } }),
+        api.threads[":id"].posts.$get({ param: { id: thread }, query: { after: "9999999999" } }),
+        api.threads.$get({ query: { cursor: "99999999999999999999_1" } }),
+        api.threads.$get({ query: { view: "created", cursor: "9999999999" } }),
+        api.users[":user"].$get({ param: { user: "9999999999" } }),
+        api.bot.bounties.$get({ query: { since: "99999999999999" } }, admin),
+      ].map(async (res) => (await res).status),
+    );
+    expect(statuses).toEqual([400, 400, 400, 400, 400, 400]);
+  });
+
   test("楼层按批取：往后、往前各 20 层，不足 20 层就是到头了；删除的楼层保留位置", async () => {
     const board = await newBoard();
     const thread = await newThread(board);

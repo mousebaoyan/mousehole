@@ -1,6 +1,6 @@
 import { createRoute, z } from "@hono/zod-openapi";
 import { AppError } from "../../platform/errors.ts";
-import { authorize, createRouter, errorResponse } from "../../platform/http.ts";
+import { authorize, createRouter, errorResponse, UnixSecondsParam } from "../../platform/http.ts";
 import { findLink, newAnswers } from "./service.ts";
 
 const MessageParams = z.object({
@@ -63,12 +63,10 @@ export const qqRoutes = createRouter()
       summary: "从群里收录的提问在论坛上有了哪些新回答，给插件在群里提醒提问的人",
       request: {
         query: z.object({
-          since: z.coerce.number().int().openapi({ description: "Unix 秒" }),
-          until: z.coerce
-            .number()
-            .int()
-            .optional()
-            .openapi({ description: "算 [since, until) 里发的回复，Unix 秒，默认现在" }),
+          since: UnixSecondsParam.openapi({ description: "Unix 秒" }),
+          until: UnixSecondsParam.optional().openapi({
+            description: "算 [since, until) 里发的回复，Unix 秒，默认现在",
+          }),
         }),
       },
       responses: {

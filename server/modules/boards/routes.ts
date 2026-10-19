@@ -1,6 +1,13 @@
 import { createRoute, z } from "@hono/zod-openapi";
 import { reachOf } from "../../platform/access.ts";
-import { actorOf, authorize, createRouter, errorResponse } from "../../platform/http.ts";
+import {
+  actorOf,
+  authorize,
+  createRouter,
+  errorResponse,
+  IdParam,
+  Int,
+} from "../../platform/http.ts";
 import {
   createBoard,
   createTag,
@@ -70,7 +77,6 @@ const TagFields = z.object({
 });
 
 const SlugParam = z.object({ slug: z.string() });
-const IdParam = z.object({ id: z.coerce.number().int() });
 
 function json<T extends z.ZodType>(schema: T) {
   return { required: true, content: { "application/json": { schema } } };
@@ -240,7 +246,7 @@ export const boardsRoutes = createRouter()
       method: "post",
       path: "/tags/{id}/merge",
       summary: "合并到另一个标签：帖子都改用那个标签，这个标签删除",
-      request: { params: IdParam, body: json(z.object({ into: z.number().int() })) },
+      request: { params: IdParam, body: json(z.object({ into: Int })) },
       responses: {
         200: { ...tagResponse, description: "合并后的标签" },
         403: errorResponse("不是版主"),

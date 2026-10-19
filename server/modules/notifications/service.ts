@@ -467,7 +467,7 @@ export async function listNotifications(userId: number, unreadOnly: boolean, cur
     .limit(PAGE);
   if (unreadOnly) query = query.where("notifications.read_at", "is", null);
   if (cursor !== undefined) {
-    const [, micros, id] = /^(\d+)_(\d+)$/.exec(cursor) ?? badCursor();
+    const [, micros, id] = /^(\d{1,18})_(\d{1,18})$/.exec(cursor) ?? badCursor();
     query = query.where((eb) =>
       eb(
         eb.refTuple("notifications.created_at", "notifications.id"),

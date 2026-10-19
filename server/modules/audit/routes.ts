@@ -1,5 +1,11 @@
 import { createRoute, z } from "@hono/zod-openapi";
-import { authorizeOwner, createRouter, errorResponse, unix } from "../../platform/http.ts";
+import {
+  authorizeOwner,
+  createRouter,
+  errorResponse,
+  IntParam,
+  unix,
+} from "../../platform/http.ts";
 import { deviceSummary } from "../auth/device.ts";
 import { UserBriefSchema, UserRefSchema } from "../users/schemas.ts";
 import { findUserId, userBriefs } from "../users/service.ts";
@@ -16,7 +22,7 @@ export const auditRoutes = createRouter().openapi(
         ip: z.union([z.ipv4(), z.ipv6()]).optional(),
         action: z.string().max(40).optional().openapi({ example: "user.restrict" }),
         target_type: z.string().max(20).optional().openapi({ example: "user" }),
-        target_id: z.coerce.number().int().optional(),
+        target_id: IntParam.optional(),
         cursor: z.coerce.number().int().optional(),
       }),
     },

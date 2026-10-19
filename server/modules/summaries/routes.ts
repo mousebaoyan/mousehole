@@ -1,10 +1,16 @@
 import { createRoute, z } from "@hono/zod-openapi";
 import { reachOf } from "../../platform/access.ts";
-import { actorOf, authorize, createRouter, errorResponse } from "../../platform/http.ts";
+import {
+  actorOf,
+  authorize,
+  createRouter,
+  errorResponse,
+  IdParam,
+  IntParam,
+} from "../../platform/http.ts";
 import { dueSummaries, saveSummary, setSummaryDisabled, summarySource } from "./service.ts";
 
-const ThreadParam = z.object({ thread: z.coerce.number().int() });
-const IdParam = z.object({ id: z.coerce.number().int() });
+const ThreadParam = z.object({ thread: IntParam });
 
 const PointSchema = z.object({
   text: z.string().trim().min(1).max(80),

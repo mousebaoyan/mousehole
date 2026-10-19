@@ -12,8 +12,10 @@ import {
   clientIp,
   createRouter,
   errorResponse,
+  Int,
   requireWeb,
   unix,
+  UnixSeconds,
 } from "../../platform/http.ts";
 import { signedUnsubscribe } from "../../platform/mail.ts";
 import { rateLimit } from "../../platform/rate-limit.ts";
@@ -679,14 +681,11 @@ export const usersRoutes = createRouter()
                 allow_proxy: z.boolean().optional(),
                 hide_from_guests: z.boolean().optional(),
                 relations_public: z.boolean().optional(),
-                title_badge_id: z
-                  .number()
-                  .int()
-                  .nullable()
+                title_badge_id: Int.nullable()
                   .optional()
                   .openapi({ description: "自己得到的金徽章或银徽章；null 改回 QQ 的专属头衔" }),
                 shown_badge_ids: z
-                  .array(z.number().int())
+                  .array(Int)
                   .max(SHOWN_BADGES)
                   .refine((ids) => new Set(ids).size === ids.length, "展示徽章不能重复")
                   .nullable()
@@ -722,7 +721,7 @@ export const usersRoutes = createRouter()
                         "请选择一个表情",
                       ),
                     text: z.string().trim().min(1).max(STATUS_MAX),
-                    until: z.number().int().nullable(),
+                    until: UnixSeconds.nullable(),
                   })
                   .nullable()
                   .optional()
@@ -731,7 +730,7 @@ export const usersRoutes = createRouter()
                       "表情加一句话，until 是自动清除的 Unix 秒，null 是不清除；整个为 null 是清除状态",
                   }),
                 pins: z
-                  .array(z.number().int())
+                  .array(Int)
                   .max(PINS_MAX)
                   .refine((ids) => new Set(ids).size === ids.length, "代表作不能重复")
                   .optional()
@@ -789,7 +788,7 @@ export const usersRoutes = createRouter()
           content: {
             "application/json": {
               schema: z.object({
-                user_id: z.number().int(),
+                user_id: Int,
                 kind: z.enum([...NOTIFICATION_TYPES, "weekly"]),
                 sig: z.string().max(64),
               }),
