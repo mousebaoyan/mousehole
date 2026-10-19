@@ -25,6 +25,7 @@ function unanswered(eb: ExpressionBuilder<DB, "threads">) {
   );
 }
 
+// Unanswered and unsolved: its author may have accepted their own reply.
 function open() {
   return db
     .selectFrom("threads")
@@ -32,6 +33,7 @@ function open() {
     .where("threads.deleted_at", "is", null)
     .where("threads.status", "=", "visible")
     .where("boards.read_level", "=", 0)
+    .where("threads.accepted_count", "=", 0)
     .where(unanswered);
 }
 
