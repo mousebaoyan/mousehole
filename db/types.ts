@@ -306,6 +306,7 @@ export interface PostRevisions {
 
 export interface Posts {
   accepted_at: Timestamp | null;
+  accepted_by: number | null;
   anonymous: Generated<boolean>;
   author_id: number;
   body: string;

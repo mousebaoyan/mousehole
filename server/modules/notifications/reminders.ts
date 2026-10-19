@@ -191,6 +191,7 @@ function aboutFloor(trx: Transaction<DB>, notice: Notice) {
       "author.people_reached as author_reached",
       sql<number>`(SELECT count(*)::integer FROM posts p JOIN threads t ON t.id = p.thread_id
         WHERE p.author_id = author.id AND p.accepted_at IS NOT NULL AND p.author_id <> t.author_id
+          AND p.accepted_by <> p.author_id
           AND p.status = 'visible'
           AND p.deleted_at IS NULL AND NOT p.anonymous
           AND t.status = 'visible' AND t.deleted_at IS NULL)`.as("author_accepted"),

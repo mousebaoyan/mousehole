@@ -129,7 +129,7 @@ export async function mergeThread(
     if (kind === "discussion") {
       await trx
         .updateTable("posts")
-        .set({ accepted_at: null })
+        .set({ accepted_at: null, accepted_by: null })
         .where("thread_id", "=", kept.id)
         .where("accepted_at", "is not", null)
         .execute();

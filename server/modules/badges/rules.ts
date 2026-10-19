@@ -117,10 +117,12 @@ const MEASURES: Record<Ladder, Measure> = {
     sql`(SELECT count(*)::integer FROM posts r WHERE r.thread_id = t.id AND r.floor > 1
       AND r.status = 'visible' AND r.deleted_at IS NULL AND r.author_id <> t.author_id)`,
   ),
-  // Answers to other people's questions: an asker's own reply accepted doesn't count (design §8.1).
+  // Answers to other people's questions, accepted by someone else: an asker's own reply accepted,
+  // or a moderator's accepted by themselves, doesn't count (design §8.1).
   accepted: (user) => sql<Measured>`SELECT p.author_id AS user_id, NULL::integer AS post_id,
       count(*)::integer AS n
     FROM ${SHOWN} AND p.accepted_at IS NOT NULL AND p.author_id <> t.author_id
+      AND p.accepted_by <> p.author_id
       ${onlyFor("p.author_id", user)}
     GROUP BY p.author_id`,
   positioning: (user) => sql<Measured>`SELECT p.author_id AS user_id, NULL::integer AS post_id,
