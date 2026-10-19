@@ -52,6 +52,15 @@ async function readState(thread: number, who = reader.who) {
   return { read_floors, last_read_floor };
 }
 
+// As if the last report or visit were long ago, so the seconds reported all count.
+function lastSeen(ago: string, id = reader.id) {
+  return db
+    .updateTable("users")
+    .set({ last_seen_at: sql<Date>`now() - ${ago}::interval` })
+    .where("id", "=", id)
+    .execute();
+}
+
 async function stats() {
   return db
     .selectFrom("users")
@@ -65,6 +74,7 @@ describe("阅读记录", () => {
     const thread = await newThread(5);
     const before = await stats();
 
+    await lastSeen("10 minutes");
     expect(
       (
         await report(
@@ -85,6 +95,7 @@ describe("阅读记录", () => {
       last_read_floor: 6,
     });
 
+    await lastSeen("10 minutes");
     await report(thread, [[2, 4]], 500);
     expect(await readState(thread)).toEqual({ read_floors: [[1, 6]], last_read_floor: 6 });
     const after = await stats();
@@ -92,6 +103,15 @@ describe("阅读记录", () => {
       after.posts_read - before.posts_read,
       after.read_seconds - before.read_seconds,
     ]).toEqual([6, 150]);
+  });
+
+  test("阅读时间不超过距上次上报或访问过去的时间：两个页面同时上报也只算一份", async () => {
+    const thread = await newThread(0);
+    await lastSeen("20 seconds");
+    const before = await stats();
+    await report(thread, [], 60);
+    await report(thread, [], 60);
+    expect((await stats()).read_seconds - before.read_seconds).toBe(20);
   });
 
   test("自己发的楼层直接算读过", async () => {
@@ -134,6 +154,7 @@ describe("阅读记录", () => {
       .set({ day: sql<Date>`day - 1` })
       .where("user_id", "=", reader.id)
       .execute();
+    await lastSeen("1 minute");
     await report(thread, [], 7);
     expect((await stats()).days_visited).toBe(days_visited + 1);
     const today = await db

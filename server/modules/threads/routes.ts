@@ -1130,7 +1130,8 @@ export const threadsRoutes = createRouter()
     createRoute({
       method: "post",
       path: "/threads/{id}/read",
-      summary: "记录阅读：读过的楼层区间并入已读，seconds 计入阅读时间，单次最多算 120 秒",
+      summary:
+        "记录阅读：读过的楼层区间并入已读，seconds 计入阅读时间，单次最多算 120 秒，也不超过距上次上报或访问过去的秒数",
       description: "网页批量上报，见 docs/design.md §8.9。超出帖子楼层数的部分不算",
       request: {
         params: IdParam,
