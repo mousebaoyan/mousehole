@@ -133,8 +133,13 @@ function filledPrizes(lottery: LotteryDraft) {
 // What a 保研定位 thread asks of its author, in the order of the table its body opens with. Every
 // one is filled in, "无" where there is nothing to say; the schools go between the last two.
 const BACKGROUND = [
-  { key: "level", label: "本科层次与专业", hint: "只写层次，例如：双非 计算机科学与技术" },
-  { key: "rank", label: "专业排名", hint: "例如：3/120（2.5%），写明是综合还是绩点排名" },
+  {
+    key: "level",
+    label: "本科层次与专业",
+    note: "只写层次，地域选填",
+    hint: "例如：山东 双非 计算机科学与技术",
+  },
+  { key: "rank", label: "专业排名", note: "注明综合或绩点排名", hint: "例如：3/120（2.5%）" },
   { key: "english", label: "英语", hint: "例如：六级 520" },
   { key: "awards", label: "竞赛奖项", hint: "如无请填「无」" },
   { key: "research", label: "科研与论文", hint: "如无请填「无」" },
@@ -873,6 +878,8 @@ function ThreadFields({
                       kind: k.kind,
                       // Lotteries can't be anonymous (design §8.13).
                       ...(k.kind === "lottery" && { anonymous: false, anonymousReplies: false }),
+                      // Only 保研定位 starts with its author anonymous.
+                      ...(positioning && { anonymous: false }),
                       // Few would show their rank under their name.
                       ...(k.kind === "positioning" && {
                         anonymous: true,
@@ -1111,10 +1118,14 @@ function PositioningFields({
   onChange: (positioning: PositioningDraft) => void;
 }) {
   const id = useId();
+  // A field's note stands beside its name rather than in the box, where a phone would cut it off.
   const field = (f: (typeof BACKGROUND)[number]) => (
     <div key={f.key} className="flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-3">
-      <label htmlFor={`${id}-${f.key}`} className="shrink-0 text-meta font-medium sm:w-28">
+      <label htmlFor={`${id}-${f.key}`} className="shrink-0 text-meta font-medium sm:w-36">
         {f.label}
+        {"note" in f && (
+          <span className="font-normal text-muted-foreground max-sm:ml-2 sm:block">{f.note}</span>
+        )}
       </label>
       <Input
         id={`${id}-${f.key}`}
@@ -1135,7 +1146,7 @@ function PositioningFields({
       </p>
       {BACKGROUND.slice(0, -1).map(field)}
       <div className="flex flex-col gap-1 sm:flex-row sm:gap-3">
-        <span className="shrink-0 text-meta font-medium sm:w-28 sm:pt-1.5">目标院校</span>
+        <span className="shrink-0 text-meta font-medium sm:w-36 sm:pt-1.5">目标院校</span>
         <div className="flex min-w-0 flex-1 flex-col items-start gap-1.5">
           <ol className="flex w-full flex-col gap-1.5">
             {positioning.schools.map((school, i) => (
