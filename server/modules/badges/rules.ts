@@ -47,8 +47,10 @@ function likedOften(floors: number, likes: number) {
     GROUP BY p.author_id HAVING count(*) >= ${floors}`);
 }
 
+// Answers to other people's questions: an asker's own reply accepted doesn't count (design §8.1).
 function accepted(answers: number) {
   return people(sql`SELECT p.author_id AS user_id FROM ${SHOWN} AND p.accepted_at IS NOT NULL
+      AND p.author_id <> t.author_id
     GROUP BY p.author_id HAVING count(*) >= ${answers}`);
 }
 

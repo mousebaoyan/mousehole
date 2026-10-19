@@ -548,7 +548,7 @@ export const threadsRoutes = createRouter()
           solved: z
             .enum(["true", "false"])
             .optional()
-            .openapi({ description: "true 只要被采纳的回答" }),
+            .openapi({ description: "true 只要在别人的问答帖里被采纳的回答" }),
           cursor: IntParam.optional(),
         }),
       },

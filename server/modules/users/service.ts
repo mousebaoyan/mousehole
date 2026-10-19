@@ -501,7 +501,9 @@ export async function getUser(ref: UserRef, viewerId: number | null) {
       sql<number>`(SELECT count(*)::integer FROM endorsements
         WHERE endorsements.user_id = users.id)`.as("endorsements"),
       sql<number>`(SELECT count(*)::integer FROM posts
+        JOIN threads ON threads.id = posts.thread_id
         WHERE posts.author_id = users.id AND posts.accepted_at IS NOT NULL
+          AND posts.author_id <> threads.author_id
           AND posts.deleted_at IS NULL AND NOT posts.anonymous)`.as("solved"),
       sql<number>`(SELECT count(DISTINCT badge_id)::integer FROM user_badges
         WHERE user_badges.user_id = users.id)`.as("badge_count"),
