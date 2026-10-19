@@ -284,7 +284,9 @@ export async function listEntries(lottery: Lottery | null, threadId: number) {
   }));
 }
 
-// Every minute: the lotteries whose time has come, except in deleted threads.
+// Every minute: the lotteries whose time has come, in threads still there and public. One waiting
+// for review or hidden is drawn once it is public again, rather than announced with a link
+// nobody can open.
 export async function drawDue() {
   const due = await db
     .selectFrom("lotteries")
@@ -294,6 +296,7 @@ export async function drawDue() {
     .where("lotteries.cancelled_at", "is", null)
     .where("lotteries.draws_at", "<=", sql<Date>`now()`)
     .where("threads.deleted_at", "is", null)
+    .where("threads.status", "=", "visible")
     .execute();
   for (const { thread_id } of due) await draw(thread_id);
 }
