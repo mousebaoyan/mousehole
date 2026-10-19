@@ -122,8 +122,8 @@ describe("头像", () => {
 
     await db
       .insertInto("coin_balances")
-      .values({ user_id: user.id, coins: 200 })
-      .onConflict((oc) => oc.column("user_id").doUpdateSet({ coins: 200 }))
+      .values({ user_id: user.id, coins: 60 })
+      .onConflict((oc) => oc.column("user_id").doUpdateSet({ coins: 60 }))
       .execute();
     const bought = await api.me.looks.$post({ json: { kind: "avatar", key: "custom" } }, me);
     expect(bought.status).toBe(200);

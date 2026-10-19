@@ -167,7 +167,7 @@ describe("个性化", () => {
   test("按等级解锁的是静态的，用鼠币兑换动态版：要够得上等级、鼠币够，兑换了戴上就一直动", async () => {
     const { id } = await createUser("user", 3);
     const who = as(await login(id));
-    await db.updateTable("coin_balances").set({ coins: 200 }).where("user_id", "=", id).execute();
+    await db.updateTable("coin_balances").set({ coins: 70 }).where("user_id", "=", id).execute();
     const buy = (
       look:
         | { kind: "frame"; key: "flow" | "teal" | "laurel" }
@@ -192,7 +192,7 @@ describe("个性化", () => {
     if (!bought.ok) throw new Error(`status ${bought.status}`);
     expect(await bought.json()).toMatchObject({
       background: null,
-      coins: 40,
+      coins: 10,
       owned: { backgrounds: ["waves"], frames: ["flow"] },
     });
     await api.me.$patch({ json: { background: "waves" } }, who);
@@ -217,8 +217,8 @@ describe("个性化", () => {
       .orderBy("id")
       .execute();
     expect(spent).toEqual([
-      { amount: -100, look_kind: "frame", look_key: "flow" },
-      { amount: -60, look_kind: "background", look_key: "waves" },
+      { amount: -40, look_kind: "frame", look_key: "flow" },
+      { amount: -20, look_kind: "background", look_key: "waves" },
     ]);
   });
 

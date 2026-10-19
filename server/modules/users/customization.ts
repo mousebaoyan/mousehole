@@ -57,23 +57,23 @@ export const BACKGROUND_PRESETS: Record<
   BackgroundPreset,
   { name: string; level: number; price: number | null }
 > = {
-  mist: { name: "晨雾", level: 0, price: 40 },
+  mist: { name: "晨雾", level: 0, price: 14 },
   paper: { name: "纸笺", level: 0, price: null },
-  waves: { name: "海浪", level: 1, price: 60 },
-  sunrise: { name: "日出", level: 2, price: 80 },
-  stars: { name: "星空", level: 3, price: 120 },
-  aurora: { name: "极光", level: 3, price: 120 },
-  shimmer: { name: "流光", level: 4, price: 200 },
-  gilded: { name: "鎏金", level: 5, price: 300 },
+  waves: { name: "海浪", level: 1, price: 20 },
+  sunrise: { name: "日出", level: 2, price: 30 },
+  stars: { name: "星空", level: 3, price: 40 },
+  aurora: { name: "极光", level: 3, price: 40 },
+  shimmer: { name: "流光", level: 4, price: 60 },
+  gilded: { name: "鎏金", level: 5, price: 90 },
 };
 
 // One's own picture, from this level; animated ones once its moving version is bought.
 export const UPLOAD_LEVEL = 3;
-export const UPLOAD_PRICE = 200;
+export const UPLOAD_PRICE = 60;
 
 // Animated avatars once bought, open to all as uploading an avatar is; they show everywhere, so
 // only so large.
-export const MOVING_AVATAR_PRICE = 200;
+export const MOVING_AVATAR_PRICE = 60;
 export const MOVING_AVATAR_MAX = 200 * 1024;
 
 // What an uploaded picture is cut into, each covering all it lies under: a square one for the card
@@ -127,10 +127,10 @@ type Unlock =
   | { event: true };
 export const FRAME_LOOKS: Record<Frame, { name: string; unlock: Unlock }> = {
   teal: { name: "青环", unlock: { level: 1, price: null } },
-  apricot: { name: "杏环", unlock: { level: 2, price: 60 } },
-  flow: { name: "流转", unlock: { level: 3, price: 100 } },
-  breath: { name: "呼吸", unlock: { level: 4, price: 160 } },
-  laurel: { name: "桂冠", unlock: { level: 5, price: 240 } },
+  apricot: { name: "杏环", unlock: { level: 2, price: 20 } },
+  flow: { name: "流转", unlock: { level: 3, price: 40 } },
+  breath: { name: "呼吸", unlock: { level: 4, price: 60 } },
+  laurel: { name: "桂冠", unlock: { level: 5, price: 90 } },
   sprout: { name: "新芽", unlock: { badge: "seed", by: "种子用户" } },
   gilt: { name: "金边", unlock: { gold: true } },
   trophy: { name: "奖杯", unlock: { event: true } },
