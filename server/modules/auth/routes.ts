@@ -11,6 +11,7 @@ import {
   clientIp,
   createRouter,
   errorResponse,
+  IdParam,
   requireWeb,
   unix,
   type AppEnv,
@@ -407,7 +408,7 @@ export const authRoutes = createRouter()
       method: "delete",
       path: "/me/sessions/{id}",
       summary: "让某个设备下线",
-      request: { params: z.object({ id: z.coerce.number().int() }) },
+      request: { params: IdParam },
       responses: {
         204: { description: "已下线" },
         401: errorResponse("没有登录"),

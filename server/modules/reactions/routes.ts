@@ -6,6 +6,7 @@ import {
   authorizePosting,
   createRouter,
   errorResponse,
+  IdParam,
   unix,
 } from "../../platform/http.ts";
 import { CREATED_WITH_SOURCE, CreatedAt, createdWithSource, Source } from "../qq/schemas.ts";
@@ -22,8 +23,6 @@ import {
   removeBoost,
   setBoost,
 } from "./service.ts";
-
-const IdParam = z.object({ id: z.coerce.number().int() });
 
 const BoostBody = z
   .string()

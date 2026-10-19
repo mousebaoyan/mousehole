@@ -12,6 +12,9 @@ import {
   createRouter,
   errorResponse,
   ErrorSchema,
+  IdParam,
+  Int,
+  IntParam,
   readerOf,
   type AppEnv,
   requireWeb,
@@ -270,8 +273,7 @@ function postJson(p: Post, form: "html" | "markdown", extras: Extras) {
   };
 }
 
-const IdParam = z.object({ id: z.coerce.number().int() });
-const AnswerParams = z.object({ id: z.coerce.number().int(), post: z.coerce.number().int() });
+const AnswerParams = z.object({ id: IntParam, post: IntParam });
 
 // Not found; a thread merged into another (design §8.20) also tells where a floor of it is now.
 function notFoundOrMerged(description: string) {
@@ -547,7 +549,7 @@ export const threadsRoutes = createRouter()
             .enum(["true", "false"])
             .optional()
             .openapi({ description: "true 只要被采纳的回答" }),
-          cursor: z.coerce.number().int().optional(),
+          cursor: IntParam.optional(),
         }),
       },
       responses: {
@@ -768,8 +770,8 @@ export const threadsRoutes = createRouter()
       request: {
         params: IdParam,
         query: BodyQuery.extend({
-          after: z.coerce.number().int().min(0).optional(),
-          before: z.coerce.number().int().min(1).optional(),
+          after: IntParam.min(0).optional(),
+          before: IntParam.min(1).optional(),
         }),
       },
       responses: {
@@ -814,7 +816,7 @@ export const threadsRoutes = createRouter()
       summary: "回复这一条的楼层，按楼层号升序，每次最多 20 层；after 是上一批最后一层的楼层号",
       request: {
         params: IdParam,
-        query: BodyQuery.extend({ after: z.coerce.number().int().min(0).default(0) }),
+        query: BodyQuery.extend({ after: IntParam.min(0).default(0) }),
       },
       responses: {
         200: {
@@ -904,7 +906,7 @@ export const threadsRoutes = createRouter()
           z
             .object({
               content: Content,
-              reply_to_id: z.number().int().optional(),
+              reply_to_id: Int.optional(),
               source: Source.optional(),
               created_at: CreatedAt.optional(),
             })
@@ -1168,7 +1170,7 @@ export const threadsRoutes = createRouter()
       request: {
         query: z.object({
           status: z.enum(["pending", "hidden"]).default("pending"),
-          cursor: z.coerce.number().int().optional(),
+          cursor: IntParam.optional(),
         }),
       },
       responses: {

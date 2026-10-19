@@ -6,14 +6,15 @@ import {
   can,
   createRouter,
   errorResponse,
+  IdParam,
+  Int,
+  IntParam,
   readerOf,
 } from "../../platform/http.ts";
 import { UserBriefSchema } from "../users/schemas.ts";
 import { closePoll, getPoll, listVoters, vote } from "./polls.ts";
 import { pollJson, PollSchema } from "./schemas.ts";
 import { getThread } from "./service.ts";
-
-const IdParam = z.object({ id: z.coerce.number().int() });
 
 const pollResponse = {
   description: "投票",
@@ -32,7 +33,7 @@ export const pollRoutes = createRouter()
           required: true,
           content: {
             "application/json": {
-              schema: z.object({ options: z.array(z.number().int()).max(20) }),
+              schema: z.object({ options: z.array(Int).max(20) }),
             },
           },
         },
@@ -76,7 +77,7 @@ export const pollRoutes = createRouter()
       path: "/threads/{id}/poll/options/{option}/voters",
       summary: "投了某个选项的人，先投的在前；实名投票、自己看得到结果时才能看",
       request: {
-        params: IdParam.extend({ option: z.coerce.number().int() }),
+        params: IdParam.extend({ option: IntParam }),
       },
       responses: {
         200: {

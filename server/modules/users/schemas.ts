@@ -5,7 +5,8 @@ import { FRAMES } from "./customization.ts";
 // A user in a path or header: a forum user ID, or qq: and a QQ number.
 export const UserRefSchema = z
   .string()
-  .regex(/^(qq:)?\d{1,12}$/, "格式应为 qq:QQ号 或论坛用户 ID")
+  // A forum ID within the integer it is kept in.
+  .regex(/^(qq:\d{1,12}|\d{1,9})$/, "格式应为 qq:QQ号 或论坛用户 ID")
   .transform((v): UserRef =>
     v.startsWith("qq:") ? { qq: Number(v.slice(3)) } : { id: Number(v) },
   );

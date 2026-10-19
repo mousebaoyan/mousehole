@@ -1,8 +1,15 @@
 import { createRoute, z } from "@hono/zod-openapi";
-import { actorOf, authorize, createRouter, errorResponse, readerOf } from "../../platform/http.ts";
+import {
+  actorOf,
+  authorize,
+  createRouter,
+  errorResponse,
+  IdParam,
+  Int,
+  readerOf,
+} from "../../platform/http.ts";
 import { mergeThread, renumberThread } from "./merges.ts";
 
-const IdParam = z.object({ id: z.coerce.number().int() });
 export const mergeRoutes = createRouter()
   .openapi(
     createRoute({
@@ -16,7 +23,7 @@ export const mergeRoutes = createRouter()
           content: {
             "application/json": {
               schema: z.object({
-                into: z.number().int(),
+                into: Int,
                 title: z.string().trim().min(4).max(80).optional(),
                 board: z.string().optional(),
                 tags: z

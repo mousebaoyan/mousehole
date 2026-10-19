@@ -1,6 +1,13 @@
 import { createRoute, z } from "@hono/zod-openapi";
 import { reachOf } from "../../platform/access.ts";
-import { actorOf, authorize, createRouter, errorResponse, unix } from "../../platform/http.ts";
+import {
+  actorOf,
+  authorize,
+  createRouter,
+  errorResponse,
+  IdParam,
+  unix,
+} from "../../platform/http.ts";
 import { EVENT_FRAMES } from "../users/customization.ts";
 import { UserBriefSchema, UserRefSchema } from "../users/schemas.ts";
 import { findUserId } from "../users/service.ts";
@@ -61,8 +68,6 @@ const UserBadgeSchema = z
       .openapi({ description: "能得多次的徽章最近 10 次是哪几层，只含看得到的" }),
   })
   .openapi("UserBadge");
-
-const IdParam = z.object({ id: z.coerce.number().int() });
 
 const NAME = z.string().trim().min(1).max(12);
 const DESCRIPTION = z.string().trim().min(1).max(60);

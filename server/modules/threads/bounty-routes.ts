@@ -1,9 +1,7 @@
 import { createRoute, z } from "@hono/zod-openapi";
-import { authorize, createRouter, unix } from "../../platform/http.ts";
+import { authorize, createRouter, unix, UnixSecondsParam } from "../../platform/http.ts";
 import { BOUNTY_ANSWER, BOUNTY_REPLY } from "../coins/rules.ts";
 import { listBounties } from "./bounties.ts";
-
-const Seconds = z.coerce.number().int().min(0);
 
 export const bountyRoutes = createRouter().openapi(
   createRoute({
@@ -12,8 +10,8 @@ export const bountyRoutes = createRouter().openapi(
     summary: "[since, until) 里开始悬赏、到现在还没有别人回复的问题，给插件每天在群里发",
     request: {
       query: z.object({
-        since: Seconds.openapi({ description: "Unix 秒" }),
-        until: Seconds.optional().openapi({ description: "Unix 秒，默认现在" }),
+        since: UnixSecondsParam.openapi({ description: "Unix 秒" }),
+        until: UnixSecondsParam.optional().openapi({ description: "Unix 秒，默认现在" }),
       }),
     },
     responses: {

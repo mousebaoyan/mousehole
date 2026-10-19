@@ -1,4 +1,5 @@
 import { z } from "@hono/zod-openapi";
+import { UnixSeconds } from "../../platform/http.ts";
 
 export const Source = z
   .object({
@@ -12,11 +13,9 @@ export const Source = z
   })
   .openapi("Source", { description: "内容整理自同一个聊天里的哪几条 QQ 消息" });
 
-export const CreatedAt = z
-  .number()
-  .int()
-  .positive()
-  .openapi({ description: "bot 收录时带：消息在群里发出的时间（Unix 秒），晚于现在的按现在算" });
+export const CreatedAt = UnixSeconds.positive().openapi({
+  description: "bot 收录时带：消息在群里发出的时间（Unix 秒），晚于现在的按现在算",
+});
 
 // Archived content may say when it was said, along with where.
 export function createdWithSource(b: { source?: unknown; created_at?: number }) {

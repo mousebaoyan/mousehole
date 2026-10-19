@@ -1,6 +1,13 @@
 import { createRoute, z } from "@hono/zod-openapi";
 import { SCOPES } from "../../platform/access.ts";
-import { actorOf, authorizeOwner, createRouter, errorResponse, unix } from "../../platform/http.ts";
+import {
+  actorOf,
+  authorizeOwner,
+  createRouter,
+  errorResponse,
+  IdParam,
+  unix,
+} from "../../platform/http.ts";
 import { createBotToken, listBotTokens, revokeBotToken } from "./service.ts";
 
 const BotTokenSchema = z
@@ -94,7 +101,7 @@ export const tokenRoutes = createRouter()
       method: "delete",
       path: "/admin/tokens/{id}",
       summary: "吊销 bot token",
-      request: { params: z.object({ id: z.coerce.number().int() }) },
+      request: { params: IdParam },
       responses: {
         204: { description: "已吊销" },
         401: errorResponse("没有登录"),

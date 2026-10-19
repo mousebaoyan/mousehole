@@ -1,5 +1,11 @@
 import { createRoute, z } from "@hono/zod-openapi";
-import { authorize, createRouter, errorResponse, unix } from "../../platform/http.ts";
+import {
+  authorize,
+  createRouter,
+  errorResponse,
+  unix,
+  UnixSecondsParam,
+} from "../../platform/http.ts";
 import { AnonymousSchema } from "../users/schemas.ts";
 import { weeklyStats } from "./stats.ts";
 
@@ -54,11 +60,9 @@ export const weeklyRoutes = createRouter().openapi(
     summary: "一周的统计，给插件排周榜图片：概况、帖子榜、人的榜单和金徽章",
     request: {
       query: z.object({
-        until: z.coerce
-          .number()
-          .int()
-          .optional()
-          .openapi({ description: "统计 [until - 7 天, until)，Unix 秒，默认现在" }),
+        until: UnixSecondsParam.optional().openapi({
+          description: "统计 [until - 7 天, until)，Unix 秒，默认现在",
+        }),
       }),
     },
     responses: {

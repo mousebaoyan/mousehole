@@ -1,7 +1,7 @@
 import { createRoute, z } from "@hono/zod-openapi";
 import { isMember } from "../../platform/access.ts";
 import { AppError } from "../../platform/errors.ts";
-import { authorize, createRouter, errorResponse, unix } from "../../platform/http.ts";
+import { authorize, createRouter, errorResponse, IntParam, unix } from "../../platform/http.ts";
 import { UserBriefSchema } from "../users/schemas.ts";
 import { userBriefs } from "../users/service.ts";
 import { PERIODS } from "./rules.ts";
@@ -35,7 +35,7 @@ export const coinsRoutes = createRouter()
       method: "get",
       path: "/me/coins",
       summary: "鼠币余额和明细，最新的在前，每页 50 条",
-      request: { query: z.object({ cursor: z.coerce.number().int().optional() }) },
+      request: { query: z.object({ cursor: IntParam.optional() }) },
       responses: {
         200: {
           description: "余额和明细",

@@ -63,6 +63,7 @@ test/                   Vitest 的全局准备：测试用的数据库
 ## 2. 接口
 
 - 每个接口用 `createRoute` 定义请求和响应的 schema，OpenAPI 文档从这里生成，不另外手写。路由用 `platform/http.ts` 的 `createRouter()` 创建，参数校验失败统一返回 `400 invalid_request`，`message` 是一句给群友看的话，例如「标题至少 4 个字」，由 `platform/validation.ts` 按字段的中文名生成。新加的、群友会填的字段，在那里补上中文名。
+- 进查询的数字用 `platform/http.ts` 里的 schema：ID、楼层这类整数用 `Int`（路径和查询参数用 `IntParam`，单个 `id` 的路径用 `IdParam`），Unix 秒用 `UnixSeconds`（`UnixSecondsParam`）。它们把数字限制在 PostgreSQL 的 `integer` 和日期能存的范围里，超出时返回 `400`，不会让查询报错变成 `500`。
 - 认证、代操作（`X-Act-As`）、操作人（`X-Operator`）、幂等、限流和审计日志都是公共的中间件或步骤，不在每个接口里各写一遍。规则见[接口 §2](api.md#2-bot-认证与代操作)。
   - 处理函数开头调用 `authorize(c, 范围)` 拿到当前用户，范围就是 bot token 的范围（`read`、`act`、`moderate` 等）。它统一检查 token 范围、冻结、代发开关、角色和操作人，规则是 `platform/access.ts` 里的纯函数。没调用它的接口 bot 只能当访客用；只给网页用的接口调用 `requireWeb(c)`。
   - 限流调用 `platform/rate-limit.ts` 的 `rateLimit(键, 次数, 窗口)`，键用原值拼成，例如 `email:qq:123456:minute`；超出时抛 `429`，带 `Retry-After`。

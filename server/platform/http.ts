@@ -57,6 +57,17 @@ export function unix(date: Date) {
   return Math.floor(date.getTime() / 1000);
 }
 
+// Numbers from requests that go into queries, kept within what holds them: PostgreSQL's integer
+// for IDs and floors, a date for Unix seconds. Past that the query would fail instead of finding
+// nothing. The Param forms read a path or query string.
+const INT = { min: -(2 ** 31), max: 2 ** 31 - 1 };
+const LAST_SECOND = 8.64e12;
+export const Int = z.number().int().min(INT.min).max(INT.max);
+export const IntParam = z.coerce.number().int().min(INT.min).max(INT.max);
+export const IdParam = z.object({ id: IntParam });
+export const UnixSeconds = z.number().int().min(0).max(LAST_SECOND);
+export const UnixSecondsParam = z.coerce.number().int().min(0).max(LAST_SECOND);
+
 // The viewer, once they may do what the route needs; see access.ts for the rules.
 export function authorize(c: Context<AppEnv>, need: Scope) {
   return checkPermission(c.var.viewer, c.var.bot, need);

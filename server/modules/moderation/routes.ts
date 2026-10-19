@@ -7,13 +7,15 @@ import {
   can,
   createRouter,
   errorResponse,
+  IdParam,
+  IntParam,
   unix,
+  UnixSeconds,
 } from "../../platform/http.ts";
 import { UserBriefSchema, UserRefSchema, WriterSchema } from "../users/schemas.ts";
 import { handleReport, lift, listReports, reportBoost, reportPost, restrict } from "./service.ts";
 
 const UserParam = z.object({ user: UserRefSchema });
-const IdParam = z.object({ id: z.coerce.number().int() });
 const Reason = z.string().trim().min(1).max(200);
 
 const ReportBody = {
@@ -69,7 +71,7 @@ export const moderationRoutes = createRouter()
             "application/json": {
               schema: z.object({
                 type: z.enum(["mute", "ban"]),
-                until: z.number().int().positive().nullable(),
+                until: UnixSeconds.positive().nullable(),
                 reason: Reason,
               }),
             },
@@ -172,7 +174,7 @@ export const moderationRoutes = createRouter()
       request: {
         query: z.object({
           status: z.enum(["open", "resolved", "dismissed"]).default("open"),
-          cursor: z.coerce.number().int().optional(),
+          cursor: IntParam.optional(),
         }),
       },
       responses: {
