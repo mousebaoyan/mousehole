@@ -44,14 +44,16 @@ describe("草稿", () => {
     await save("new", {
       title: "写了一半",
       board: "d",
-      kind: "question",
+      kind: "positioning",
+      positioning: { fields: { rank: "" }, schools: [] },
       tags: ["夏令营"],
       body: "第一版",
     });
     await save("new", {
       title: "写了一半",
       board: "d",
-      kind: "question",
+      kind: "positioning",
+      positioning: { fields: { rank: "前 10%" }, schools: ["南京大学"] },
       tags: [],
       body: "第二版",
     });
@@ -59,7 +61,8 @@ describe("草稿", () => {
       thread_id: null,
       title: "写了一半",
       board: "d",
-      kind: "question",
+      kind: "positioning",
+      positioning: { fields: { rank: "前 10%" }, schools: ["南京大学"] },
       tags: [],
       body: "第二版",
       reply_to: null,

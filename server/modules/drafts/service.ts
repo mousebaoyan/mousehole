@@ -118,9 +118,8 @@ export async function saveDraft(userId: number, threadId: number | null, content
       .executeTakeFirst();
     if (!thread) throw new AppError(404, "thread_not_found", "帖子不存在");
   }
-  const values = {
-    user_id: userId,
-    thread_id: threadId,
+  // Everything but the key, the same for a first save and a later one.
+  const draft = {
     title: content.title ?? "",
     board_id: content.board
       ? sql<number | null>`(SELECT id FROM boards WHERE slug = ${content.board})`
@@ -142,22 +141,8 @@ export async function saveDraft(userId: number, threadId: number | null, content
   };
   await db
     .insertInto("drafts")
-    .values(values)
-    .onConflict((oc) =>
-      oc.columns(["user_id", "thread_id"]).doUpdateSet((eb) => ({
-        title: eb.ref("excluded.title"),
-        board_id: eb.ref("excluded.board_id"),
-        kind: eb.ref("excluded.kind"),
-        poll: eb.ref("excluded.poll"),
-        lottery: eb.ref("excluded.lottery"),
-        tags: eb.ref("excluded.tags"),
-        author_anonymous: eb.ref("excluded.author_anonymous"),
-        anonymous_replies: eb.ref("excluded.anonymous_replies"),
-        body: eb.ref("excluded.body"),
-        reply_to_id: eb.ref("excluded.reply_to_id"),
-        updated_at: eb.ref("excluded.updated_at"),
-      })),
-    )
+    .values({ user_id: userId, thread_id: threadId, ...draft })
+    .onConflict((oc) => oc.columns(["user_id", "thread_id"]).doUpdateSet(draft))
     .execute();
 }
 
