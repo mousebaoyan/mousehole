@@ -45,7 +45,7 @@
 
 表：`boards`、`tags`、`thread_tags`。
 
-帖子有新回复时，同时更新 `thread_tags.last_post_at`（每个帖子最多 5 个标签）。
+标签页和版块页一样按帖子自己的 `last_post_at` 排，`thread_tags` 只记帖子有哪些标签（每个帖子最多 5 个），按 `tag_id` 有索引。
 
 - 等级门槛：`boards.read_level` 只用于仅成员的版块（CHECK 约束），`post_level` 是发帖要几级。代码里把"能看到哪些版块"算成一个数 `reach`：访客 -1，只看公开版块；成员是自己的等级，看 `read_level` 不超过它的版块；版主、管理员和 bot 自己的账号是 5，都能看。列表、搜索和单个帖子都按它过滤。
 - `boards.position` 是侧栏里的顺序；移动一个版块时，在同一个事务里给全部版块重新编号。

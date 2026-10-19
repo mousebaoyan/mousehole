@@ -431,7 +431,6 @@ export interface ThreadSummaries {
 }
 
 export interface ThreadTags {
-  last_post_at: Timestamp;
   tag_id: number;
   thread_id: number;
 }

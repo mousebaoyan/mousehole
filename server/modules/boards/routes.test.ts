@@ -148,14 +148,13 @@ describe("标签", () => {
     await db.updateTable("threads").set({ status: "hidden" }).where("id", "=", hidden).execute();
     const from = await newTag("合并来源");
     const into = await newTag("合并目标");
-    const now = new Date();
     await db
       .insertInto("thread_tags")
       .values([
-        { thread_id: both, tag_id: from, last_post_at: now },
-        { thread_id: both, tag_id: into, last_post_at: now },
-        { thread_id: onlyFrom, tag_id: from, last_post_at: now },
-        { thread_id: hidden, tag_id: from, last_post_at: now },
+        { thread_id: both, tag_id: from },
+        { thread_id: both, tag_id: into },
+        { thread_id: onlyFrom, tag_id: from },
+        { thread_id: hidden, tag_id: from },
       ])
       .execute();
 

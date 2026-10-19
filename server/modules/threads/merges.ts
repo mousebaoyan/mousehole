@@ -141,7 +141,11 @@ export async function mergeThread(
         floor_count: floors.length,
         reply_count: eb("reply_count", "+", gone.reply_count + 1),
         view_count: eb("view_count", "+", gone.view_count),
-        last_post_at: later.last_post_at,
+        // From the row, not the Date read from it, which would drop the microseconds.
+        last_post_at: eb
+          .selectFrom("threads as later")
+          .select("later.last_post_at")
+          .where("later.id", "=", later.id),
         last_poster_id: later.last_poster_id,
         accepted_count: eb
           .selectFrom("posts")
@@ -179,11 +183,6 @@ export async function mergeThread(
       pinned: Math.max(gone.pinned, kept.pinned),
       featured: gone.featured || kept.featured,
     });
-    await trx
-      .updateTable("thread_tags")
-      .set({ last_post_at: later.last_post_at })
-      .where("thread_id", "=", kept.id)
-      .execute();
     // Its title no longer goes with it.
     await indexPost(trx, opening);
 
