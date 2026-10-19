@@ -147,6 +147,7 @@ async function reminder(
     ${blocks.map(blockHtml)} ${mailButton(mail.button, mail.url)}`;
   const preview = blocks.find((b): b is Line => b.kind === "quote" || b.kind === "text");
   return {
+    kind: type,
     address: mailbox(person.qq),
     subject: mail.subject,
     body: [mail.said, ...blocks.map(blockText), mail.url, footer.text].join("\n\n"),

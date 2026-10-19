@@ -3,6 +3,7 @@ import type { Context } from "hono";
 import { createMiddleware } from "hono/factory";
 import { isCrawler } from "../../platform/crawlers.ts";
 import { env } from "../../platform/env.ts";
+import { recordClick, recordOpen } from "../../platform/mail.ts";
 import {
   authorize,
   authorizeOwner,
@@ -83,6 +84,19 @@ export function countVisits(fetched: Set<string>) {
   });
 }
 
+// A transparent 1×1 GIF.
+const PIXEL = Buffer.from("R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7", "base64");
+
+// The image at the end of reminders and letters, loaded when one is opened (design §8.6). Only the
+// first time counts, so mail apps may keep it.
+export async function serveMailOpen(c: Context<AppEnv, "/mail/:file{[0-9]+\\.gif}">) {
+  await recordOpen(c.req.param("file").slice(0, -".gif".length), c.req.query("s") ?? "");
+  return c.body(PIXEL, 200, {
+    "content-type": "image/gif",
+    "cache-control": "public, max-age=31536000, immutable",
+  });
+}
+
 const Kinds = z
   .object({ site: z.number(), qq: z.number(), total: z.number() })
   .openapi({ description: "论坛、群里、合起来" });
@@ -114,7 +128,7 @@ export const statsRoutes = createRouter()
     createRoute({
       method: "get",
       path: "/admin/stats",
-      summary: "数据页：活跃、成员、留存、阅读、访问和带宽，按北京时间逐天，不算 bot 和站长",
+      summary: "数据页：活跃、成员、留存、阅读、访问、邮件和带宽，按北京时间逐天，不算 bot 和站长",
       request: {
         query: z.object({
           range: z.coerce
@@ -181,6 +195,21 @@ export const statsRoutes = createRouter()
                     members: z.array(z.object({ device: z.string(), visits: Count })),
                   })
                   .openapi({ description: "浏览器和系统" }),
+                mail: z
+                  .array(
+                    z.object({
+                      kind: z
+                        .string()
+                        .openapi({ description: "通知类型、weekly、login（验证码）或 test" }),
+                      sent: z.number(),
+                      dropped: z.number().openapi({ description: "发不出去丢掉的" }),
+                      opened: z.number().nullable().openapi({
+                        description: "其中打开过的；验证码和测试邮件不记，为 null",
+                      }),
+                      clicked: z.number().nullable().openapi({ description: "其中点击过的" }),
+                    }),
+                  )
+                  .openapi({ description: "这一段的邮件，按类，发得多的在前" }),
               }),
             },
           },
@@ -254,5 +283,29 @@ export const statsRoutes = createRouter()
         },
         200,
       );
+    },
+  )
+  .openapi(
+    createRoute({
+      method: "post",
+      path: "/mail/clicks",
+      summary: "从邮件点进论坛，不用登录：记下这封邮件第一次点击，还没记过打开的一起记上",
+      request: {
+        body: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: z.object({
+                mail: z.string().max(100).openapi({ description: "链接里的 m：邮件 ID.签名" }),
+              }),
+            },
+          },
+        },
+      },
+      responses: { 204: { description: "已记下；签名不对时什么都不做" } },
+    }),
+    async (c) => {
+      await recordClick(c.req.valid("json").mail);
+      return c.body(null, 204);
     },
   );

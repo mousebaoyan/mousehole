@@ -17,7 +17,7 @@ import { notificationsRoutes } from "./modules/notifications/routes.ts";
 import { qqRoutes } from "./modules/qq/routes.ts";
 import { reactionsRoutes } from "./modules/reactions/routes.ts";
 import { searchRoutes } from "./modules/search/routes.ts";
-import { statsRoutes } from "./modules/stats/routes.ts";
+import { serveMailOpen, statsRoutes } from "./modules/stats/routes.ts";
 import { summariesRoutes } from "./modules/summaries/routes.ts";
 import { bountyRoutes } from "./modules/threads/bounty-routes.ts";
 import { mergeRoutes } from "./modules/threads/merge-routes.ts";
@@ -103,6 +103,7 @@ export const app = new Hono<AppEnv>()
   .get("/uploads/:dir{[0-9a-f]{2}}/:file{[0-9a-f]{64}(?:-960)?\\.webp}", serveUpload)
   .get("/avatars/:file{[0-9]+\\.webp}", serveAvatar)
   .get("/backgrounds/:file{[0-9]+-(?:card|profile)\\.webp}", serveBackground)
+  .get("/mail/:file{[0-9]+\\.gif}", serveMailOpen)
   .get("/robots.txt", (c) => c.text(ROBOTS, 200, { "cache-control": "public, max-age=86400" }))
   .get("/sitemap.xml", serveSitemap)
   // A cross-site page can make the browser send our cookie, but not a bearer token. Mail apps

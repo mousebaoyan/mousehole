@@ -56,7 +56,13 @@ async function queue(...addresses: string[]) {
   await db.transaction().execute((trx) =>
     queueMail(
       trx,
-      addresses.map((address) => ({ address, subject: "提醒", body: "正文", html: "<p>正文</p>" })),
+      addresses.map((address) => ({
+        kind: "reply",
+        address,
+        subject: "提醒",
+        body: "正文",
+        html: "<p>正文</p>",
+      })),
     ),
   );
 }
@@ -85,20 +91,55 @@ describe("发信", () => {
 
   test("待发的邮件按顺序发，发出去的删掉；放了一天还没发出去的不再发", async () => {
     await mailboxes("d@qq.com");
-    await queue("1@qq.com", "2@qq.com");
+    await queue("old@qq.com", "1@qq.com", "2@qq.com");
     await db
-      .insertInto("mail_queue")
-      .values({
-        address: "old@qq.com",
-        subject: "提醒",
-        body: "正文",
-        html: "<p>正文</p>",
-        created_at: sql<Date>`now() - interval '25 hours'`,
-      })
+      .updateTable("mail_queue")
+      .set({ created_at: sql<Date>`now() - interval '25 hours'` })
+      .where("address", "=", "old@qq.com")
       .execute();
     await sendQueued();
     expect(smtp.sent).toEqual(["d@qq.com → 1@qq.com", "d@qq.com → 2@qq.com"]);
     expect(await db.selectFrom("mail_queue").select("id").execute()).toEqual([]);
+  });
+
+  test("每封邮件记一行，发出去的和丢掉的各记下时间", async () => {
+    const { last } = await db
+      .selectFrom("mail_log")
+      .select(sql<number>`coalesce(max(id), 0)`.as("last"))
+      .executeTakeFirstOrThrow();
+    await mailboxes("i@qq.com");
+    await queue("old@qq.com", "1@qq.com");
+    await db
+      .updateTable("mail_queue")
+      .set({ created_at: sql<Date>`now() - interval '25 hours'` })
+      .where("address", "=", "old@qq.com")
+      .execute();
+    await sendQueued();
+    await sendMail("2@qq.com", "验证码", "123456", "<p>123456</p>");
+    await testMailboxes("admin@qq.com");
+    smtp.failures.set("i@qq.com", refused());
+    await queue("gone@qq.com");
+    await sendQueued();
+    // The mailbox rests after failing, so the code can't go either.
+    await sendMail("3@qq.com", "验证码", "654321", "<p>654321</p>").catch(() => {});
+    const logged = await db
+      .selectFrom("mail_log")
+      .select([
+        "kind",
+        sql<boolean>`sent_at IS NOT NULL`.as("sent"),
+        sql<boolean>`dropped_at IS NOT NULL`.as("dropped"),
+      ])
+      .where("id", ">", last)
+      .orderBy("id")
+      .execute();
+    expect(logged).toEqual([
+      { kind: "reply", sent: false, dropped: true },
+      { kind: "reply", sent: true, dropped: false },
+      { kind: "login", sent: true, dropped: false },
+      { kind: "test", sent: true, dropped: false },
+      { kind: "reply", sent: false, dropped: true },
+      { kind: "login", sent: false, dropped: true },
+    ]);
   });
 
   test("每个邮箱都拒收的地址丢掉；邮箱都歇着时邮件留着，等它们能发了再发", async () => {

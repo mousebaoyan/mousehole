@@ -35,7 +35,7 @@ import { securityHeaders } from "./platform/security-headers.ts";
 import { listen } from "./platform/db.ts";
 import { log } from "./platform/log.ts";
 import { clearIdempotencyKeys } from "./platform/idempotency.ts";
-import { MAIL_CHANNEL, sendQueued } from "./platform/mail.ts";
+import { clearOldMail, MAIL_CHANNEL, sendQueued } from "./platform/mail.ts";
 import { migrate } from "./platform/migrate.ts";
 import { every } from "./platform/schedule.ts";
 
@@ -70,6 +70,7 @@ every(DAY_MS, "Clearing old drafts", clearOldDrafts);
 every(DAY_MS, "Rechecking L4", recheckL4);
 every(DAY_MS, "Clearing old active days", clearOldDays);
 every(DAY_MS, "Clearing old stats", clearOldStats);
+every(DAY_MS, "Clearing old mail log", clearOldMail);
 
 // A thread served from the guest page cache skips the loader that counts its view.
 function countCachedView(c: Context) {

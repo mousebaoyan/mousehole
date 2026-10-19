@@ -5,8 +5,8 @@ import { SITE_NAME } from "./site.ts";
 
 // How every email looks (design §8.6): a paper card on a cream page, in the site's colours
 // (app.css). Tables and inline styles only, the one thing mail apps agree on; no images, which QQ
-// Mail hides from senders it doesn't know. hono/html escapes what goes in: names, titles and
-// floors are written by members.
+// Mail hides from senders it doesn't know, but the one mail.ts adds to tell that the mail was
+// opened. hono/html escapes what goes in: names, titles and floors are written by members.
 
 export const INK = "#1f2a28";
 export const MUTED = "#686d66";

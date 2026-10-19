@@ -9,8 +9,9 @@ import {
   useNavigation,
   useRouteLoaderData,
 } from "react-router";
-import { use } from "react";
+import { use, useEffect } from "react";
 import type { Route } from "./+types/root.ts";
+import { browserApi } from "./browser-api.ts";
 import { Nonce } from "./nonce.ts";
 import { SITE_URL } from "./site.server.ts";
 import { buttonVariants } from "~/components/ui/button";
@@ -85,6 +86,16 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
 export default function App() {
   const loading = useNavigation().state === "loading";
+  // Opened from a link in an email: the click is told once, and the mark comes off the address
+  // (design §8.6). Replaced directly: a router navigation would load the page again.
+  useEffect(() => {
+    const url = new URL(location.href);
+    const mail = url.searchParams.get("m");
+    if (mail === null) return;
+    void browserApi.mail.clicks.$post({ json: { mail } });
+    url.searchParams.delete("m");
+    history.replaceState(history.state, "", url);
+  }, []);
   return (
     <>
       {loading && <div aria-hidden="true" className="nav-progress" />}

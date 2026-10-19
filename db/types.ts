@@ -228,6 +228,16 @@ export interface LotteryEntries {
   user_id: number;
 }
 
+export interface MailLog {
+  clicked_at: Timestamp | null;
+  created_at: Generated<Timestamp>;
+  dropped_at: Timestamp | null;
+  id: Generated<number>;
+  kind: string;
+  opened_at: Timestamp | null;
+  sent_at: Timestamp | null;
+}
+
 export interface MailQueue {
   address: string;
   attempts: Generated<number>;
@@ -235,6 +245,7 @@ export interface MailQueue {
   created_at: Generated<Timestamp>;
   html: string;
   id: Generated<number>;
+  mail_id: number;
   next_at: Generated<Timestamp>;
   subject: string;
   unsubscribe: string | null;
@@ -596,6 +607,7 @@ export interface DB {
   login_tickets: LoginTickets;
   lotteries: Lotteries;
   lottery_entries: LotteryEntries;
+  mail_log: MailLog;
   mail_queue: MailQueue;
   notifications: Notifications;
   poll_options: PollOptions;
