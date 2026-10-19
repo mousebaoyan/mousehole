@@ -287,6 +287,29 @@ describe("读帖子", () => {
     expect(seen.toSorted((a, b) => a - b)).toEqual(ids);
   });
 
+  test("列表上最近回复的人只算公开的回复，隐藏了的不算", async () => {
+    const board = await newBoard();
+    const thread = String(await newThread(board));
+    const [shown, hidden] = await Promise.all([createUser(), createUser()]);
+    const say = async (userId: number) => {
+      const res = await api.threads[":id"].posts.$post(
+        { param: { id: thread }, json: { content: { markdown: "回复" } } },
+        as(await login(userId)),
+      );
+      if (!res.ok) throw new Error(`status ${res.status}`);
+      return String((await res.json()).id);
+    };
+    await say(shown.id);
+    const ad = await say(hidden.id);
+    const res = await api.posts[":id"].$patch(
+      { param: { id: ad }, json: { status: "hidden", reason: "广告" } },
+      admin,
+    );
+    expect(res.status).toBe(200);
+    const [item] = (await list({ board })).items;
+    expect(item.posters.map((p) => p.id)).toEqual([shown.id]);
+  });
+
   test("按标签和待解答筛选", async () => {
     const board = await newBoard();
     await api.tags.$post({ json: { name: "筛选用", kind: "topic" } }, admin);

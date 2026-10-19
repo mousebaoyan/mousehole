@@ -21,7 +21,7 @@ export const ThreadSchema = z
     author: WriterSchema,
     posters: z
       .array(UserBriefSchema)
-      .openapi({ description: "作者以外最近回复的最多 4 个人，不含匿名回复的" }),
+      .openapi({ description: "作者以外最近公开回复的最多 4 个人，不含匿名回复的" }),
     tags: z.array(z.string()),
     pinned: z.number().openapi({ description: "0：不置顶；1：版块内置顶；2：全站置顶" }),
     featured: z.boolean(),

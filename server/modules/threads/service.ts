@@ -137,13 +137,14 @@ function selectThreads(from: ReturnType<typeof openableThreads>, userId: number 
         array_position(array['topic', 'school', 'major'], tags.kind), tags.name), '{}')
       FROM thread_tags JOIN tags ON tags.id = thread_tags.tag_id
       WHERE thread_tags.thread_id = threads.id)`.as("tags"),
-      // For lists: the latest people to reply besides the author, among the last 20 floors; those
-      // who replied anonymously aren't shown.
+      // For lists: the latest people to reply besides the author, among the last 20 public floors;
+      // those who replied anonymously aren't shown.
       sql<number[]>`(
       SELECT coalesce(array_agg(author_id ORDER BY last_floor DESC), '{}') FROM (
         SELECT author_id, max(floor) AS last_floor FROM (
           SELECT author_id, floor FROM posts
-          WHERE posts.thread_id = threads.id AND posts.deleted_at IS NULL AND NOT posts.anonymous
+          WHERE posts.thread_id = threads.id AND posts.status = 'visible'
+            AND posts.deleted_at IS NULL AND NOT posts.anonymous
           ORDER BY floor DESC LIMIT 20
         ) recent
         WHERE author_id <> threads.author_id
