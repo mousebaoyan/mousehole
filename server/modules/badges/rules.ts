@@ -240,7 +240,7 @@ export const RULES: Rule[] = [
   {
     slug: "first_like",
     name: "第一个赞",
-    description: "第一次给别人留表情回应",
+    description: "第一次给他人留表情回应",
     tier: "bronze",
     grouping: "start",
     earned: people(sql`SELECT r.user_id FROM reactions r JOIN posts p ON p.id = r.post_id
@@ -283,7 +283,7 @@ export const RULES: Rule[] = [
   {
     slug: "first_endorse",
     name: "慧眼识鼠",
-    description: "第一次认可别人",
+    description: "第一次认可他人",
     tier: "bronze",
     grouping: "start",
     earned: people(sql`SELECT endorser_id AS user_id FROM endorsements`),
@@ -395,7 +395,7 @@ export const RULES: Rule[] = [
   {
     slug: "floors_30",
     name: "盖起高楼",
-    description: "帖子收到别人 30 层回复",
+    description: "帖子收到他人 30 层回复",
     tier: "bronze",
     grouping: "likes",
     multiple: true,
@@ -404,7 +404,7 @@ export const RULES: Rule[] = [
   {
     slug: "floors_80",
     name: "摩天大楼",
-    description: "帖子收到别人 80 层回复",
+    description: "帖子收到他人 80 层回复",
     tier: "silver",
     grouping: "likes",
     multiple: true,
@@ -456,7 +456,7 @@ export const RULES: Rule[] = [
   {
     slug: "positioning_helper",
     name: "定位热心人",
-    description: "在 5 个别人的保研定位帖里回复过",
+    description: "在 5 个他人的保研定位帖里回复过",
     tier: "bronze",
     grouping: "answers",
     ...counted("positioning", 5),
@@ -464,7 +464,7 @@ export const RULES: Rule[] = [
   {
     slug: "positioning_guide",
     name: "定位领航员",
-    description: "在 20 个别人的保研定位帖里回复过",
+    description: "在 20 个他人的保研定位帖里回复过",
     tier: "silver",
     grouping: "answers",
     ...counted("positioning", 20),
@@ -540,7 +540,7 @@ export const RULES: Rule[] = [
   {
     slug: "given_100",
     name: "手有余香",
-    description: "给别人的 100 个楼层留过表情回应",
+    description: "给他人的 100 个楼层留过表情回应",
     tier: "bronze",
     grouping: "activity",
     ...counted("likes_given", 100),
@@ -548,7 +548,7 @@ export const RULES: Rule[] = [
   {
     slug: "given_500",
     name: "赞不绝口",
-    description: "给别人的 500 个楼层留过表情回应",
+    description: "给他人的 500 个楼层留过表情回应",
     tier: "silver",
     grouping: "activity",
     ...counted("likes_given", 500),
@@ -700,7 +700,7 @@ export const RULES: Rule[] = [
   {
     slug: "coins_100",
     name: "颊囊鼓鼓",
-    description: "累计挣到 100 鼠币",
+    description: "累计获得 100 鼠币",
     tier: "bronze",
     grouping: "coins",
     ...counted("coins_earned", 100),
@@ -708,7 +708,7 @@ export const RULES: Rule[] = [
   {
     slug: "coins_400",
     name: "粮仓殷实",
-    description: "累计挣到 400 鼠币",
+    description: "累计获得 400 鼠币",
     tier: "silver",
     grouping: "coins",
     ...counted("coins_earned", 400),
@@ -716,7 +716,7 @@ export const RULES: Rule[] = [
   {
     slug: "coins_1200",
     name: "鼠中陶朱",
-    description: "累计挣到 1200 鼠币",
+    description: "累计获得 1200 鼠币",
     tier: "gold",
     grouping: "coins",
     ...counted("coins_earned", 1200),
@@ -778,7 +778,7 @@ export const RULES: Rule[] = [
   {
     slug: "badges_15",
     name: "集邮鼠",
-    description: "得到 15 种徽章",
+    description: "获得 15 种徽章",
     tier: "silver",
     grouping: "fun",
     ...counted("badges_held", 15),
@@ -786,7 +786,7 @@ export const RULES: Rule[] = [
   {
     slug: "badges_30",
     name: "博物馆馆长",
-    description: "得到 30 种徽章",
+    description: "获得 30 种徽章",
     tier: "gold",
     grouping: "fun",
     ...counted("badges_held", 30),

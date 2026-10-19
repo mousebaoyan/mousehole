@@ -133,7 +133,7 @@ export async function checkBadges() {
 
 // ---- Reading
 
-const HIDDEN_DESCRIPTION = "得到后才知道怎么拿";
+const HIDDEN_DESCRIPTION = "获得后揭晓条件";
 
 // What a badge takes, which a hidden one keeps from those who haven't earned it.
 function describedTo(viewerId: number | null) {
