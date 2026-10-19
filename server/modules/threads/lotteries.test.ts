@@ -245,6 +245,20 @@ describe("抽奖", () => {
     expect(drawn.prizes[0].won_by?.map((u) => u.id)).toEqual([keen.id]);
   });
 
+  test("帖子待审核或已隐藏时到点也不开奖，恢复公开后补开", async () => {
+    const { id, param } = await newLottery({ prizes: [{ name: "书", winners: 1 }] });
+    await enter(id, (await person()).who);
+    const review = (status: "visible" | "hidden") =>
+      api.threads[":id"].$patch({ param, json: { status, reason: "核实奖品" } }, moderator);
+    expect((await review("hidden")).status).toBe(200);
+    await drawNow(id);
+    expect(await lotteryOf(id, moderator)).toMatchObject({ drawn_at: null });
+
+    expect((await review("visible")).status).toBe(200);
+    await drawDue();
+    expect((await lotteryOf(id, moderator)).drawn_at).not.toBeNull();
+  });
+
   test("开奖前楼主和版主能取消，取消后不开奖，参与的人收到通知", async () => {
     const { id, param } = await newLottery({ prizes: [{ name: "书", winners: 1 }] });
     const fan = await person();
