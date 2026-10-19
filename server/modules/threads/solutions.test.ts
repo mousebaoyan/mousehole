@@ -60,6 +60,10 @@ function unaccept(threadId: number, postId: number, who: Who) {
   return api.threads[":id"].answers[":post"].$delete(param(threadId, postId), who);
 }
 
+function review(postId: number, status: "visible" | "hidden") {
+  return api.posts[":id"].$patch({ param: { id: String(postId) }, json: { status } }, moderator);
+}
+
 // The thread's count, and the floors accepted, from the database.
 async function answers(threadId: number) {
   const { accepted_count } = await db
@@ -129,6 +133,24 @@ describe("采纳答案", () => {
     await api.posts[":id"].$delete({ param: { id: String(q.answer) } }, answerer.who);
     expect(await answers(q.id)).toEqual({ count: 1, ids: [q.another] });
     await api.posts[":id"].$delete({ param: { id: String(q.another) } }, answerer.who);
+    expect(await answers(q.id)).toEqual({ count: 0, ids: [] });
+  });
+
+  test("采纳的回答被隐藏时不算已解决，恢复后照旧；隐藏期间取消或删掉不会多扣", async () => {
+    const q = await question();
+    await accept(q.id, q.answer, asker);
+    await review(q.answer, "hidden");
+    expect(await answers(q.id)).toEqual({ count: 0, ids: [q.answer] });
+    const thread = await api.threads[":id"].$get({ param: { id: String(q.id) } }, asker);
+    expect(await thread.json()).toMatchObject({ solved: false, accepted_floors: [] });
+    await review(q.answer, "visible");
+    expect(await answers(q.id)).toEqual({ count: 1, ids: [q.answer] });
+
+    await accept(q.id, q.another, asker);
+    await review(q.answer, "hidden");
+    await review(q.another, "hidden");
+    expect((await unaccept(q.id, q.answer, asker)).status).toBe(200);
+    await api.posts[":id"].$delete({ param: { id: String(q.another) } }, moderator);
     expect(await answers(q.id)).toEqual({ count: 0, ids: [] });
   });
 });

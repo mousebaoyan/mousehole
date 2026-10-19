@@ -54,7 +54,7 @@
 { "anonymous": true, "number": 3, "display_name": "匿名鼠 3" }
 
 // 帖子。kind：discussion 讨论、question 问答、poll 投票、lottery 抽奖；楼主匿名时 author 是匿名的样子；帖子详情里有 author_anonymous、anonymous_replies（楼主以外的人回复时匿名），
-// 登录时还有 my_alias（自己在这个帖子里匿名时的编号，没有为 null）；floor_count 是最大的楼层号；solved 表示问答帖有被采纳的回答，帖子详情里的 accepted_floors 是被采纳的回答在第几楼（从小到大，可以有几层），excerpt 是主楼正文的前 100 个字；pinned：0 不置顶，1 版块内置顶，2 全站置顶；
+// 登录时还有 my_alias（自己在这个帖子里匿名时的编号，没有为 null）；floor_count 是最大的楼层号；solved 表示问答帖有被采纳、公开的回答，帖子详情里的 accepted_floors 是这些回答在第几楼（从小到大，可以有几层），excerpt 是主楼正文的前 100 个字；pinned：0 不置顶，1 版块内置顶，2 全站置顶；
 // posters 是楼主以外、最近 20 层公开的楼层里最近回复的最多 4 个人，不含匿名回复的；url 只在帖子详情里有；
 // last_read_floor 是自己读过的最高一楼，没打开过为 0，只在登录时返回；帖子详情里还有 read_floors，是读过的楼层区间，例如 [[1, 20], [480, 495]]，
 // 以及 bookmarked（是否收藏）和 notify_level（关注级别，见 /threads/{id}/subscription），也只在登录时返回；
