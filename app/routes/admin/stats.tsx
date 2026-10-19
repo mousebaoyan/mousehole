@@ -142,6 +142,8 @@ export default function Stats({ loaderData: stats }: Route.ComponentProps) {
         </div>
       </Section>
 
+      <Logins stats={stats} dates={dates} />
+
       <Mail mail={stats.mail} />
 
       <Bandwidth stats={stats} dates={dates} />
@@ -462,6 +464,54 @@ function TopList({
         </ol>
       )}
     </div>
+  );
+}
+
+// The ways to log in, as the login page names them, in this order.
+const LOGINS = [
+  { method: "code", label: "口令", color: "var(--chart-1)" },
+  { method: "link", label: "链接", color: "var(--chart-2)" },
+  { method: "email", label: "QQ 邮箱", color: "var(--chart-3)" },
+] as const;
+
+function loginsInAll({ code, link, email }: Day["logins"]) {
+  return code + link + email;
+}
+
+function Logins({ stats, dates }: { stats: Stats; dates: string[] }) {
+  const { days, totals } = stats;
+  const { now, before } = totals;
+  return (
+    <Section title="登录" description="按次统计，同一成员多次登录分别计算">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <Figure
+          label="合计"
+          value={loginsInAll(now.logins)}
+          before={loginsInAll(before.logins)}
+          neutral
+        />
+        {LOGINS.map((l) => (
+          <Figure
+            key={l.method}
+            label={l.label}
+            value={now.logins[l.method]}
+            before={before.logins[l.method]}
+            neutral
+          />
+        ))}
+      </div>
+      <div className="mt-6">
+        <LineChart
+          title="每天的登录次数"
+          days={dates}
+          series={LOGINS.map((l) => ({
+            label: l.label,
+            color: l.color,
+            values: days.map((d) => d.logins[l.method]),
+          }))}
+        />
+      </div>
+    </Section>
   );
 }
 

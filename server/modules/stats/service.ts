@@ -16,6 +16,9 @@ const GUEST_DAYS = 90;
 export const RANGES = [7, 30, 90, 365] as const;
 export type Range = (typeof RANGES)[number];
 
+// How people logged in (design §7), as the audit log keeps it.
+type Login = "code" | "link" | "email";
+
 // Where someone was active that day: on the site, or in the groups (speaking there, content
 // archived from there, or acting through the bot). A day already marked for the place isn't
 // written again.
@@ -208,6 +211,7 @@ async function series(range: Range) {
     guest_views: number | null;
     member_views: number | null;
     bytes: Record<Sent, number> | null;
+    logins: Record<Login, number>;
   }>`
     WITH days AS (
       SELECT generate_series(${first}, ${TODAY}, interval '1 day')::date AS day
@@ -221,7 +225,16 @@ async function series(range: Range) {
       SELECT (activated_at AT TIME ZONE 'Asia/Shanghai')::date AS day, count(*) AS n
       FROM users WHERE activated_at >= ${since} AND ${PEOPLE}
       GROUP BY 1
-    ), joins AS (${groupChanges("joined_at")}), leaves AS (${groupChanges("left_at")})
+    ), joins AS (${groupChanges("joined_at")}), leaves AS (${groupChanges("left_at")}),
+    logins AS (
+      SELECT (a.created_at AT TIME ZONE 'Asia/Shanghai')::date AS day,
+        count(*) FILTER (WHERE a.data->>'method' = 'code') AS code,
+        count(*) FILTER (WHERE a.data->>'method' = 'link') AS link,
+        count(*) FILTER (WHERE a.data->>'method' = 'email') AS email
+      FROM audit_logs a JOIN users ON users.id = a.actor_id
+      WHERE a.action = 'auth.login' AND a.created_at >= ${since} AND ${PEOPLE}
+      GROUP BY 1
+    )
     SELECT days.day::text AS day,
       coalesce(active.site, 0)::integer AS site,
       coalesce(active.qq, 0)::integer AS qq,
@@ -235,13 +248,16 @@ async function series(range: Range) {
       daily_stats.guests, daily_stats.guest_views, daily_stats.member_views,
       CASE WHEN daily_stats.page_bytes IS NOT NULL THEN json_build_object(
         'page', daily_stats.page_bytes, 'api', daily_stats.api_bytes,
-        'image', daily_stats.image_bytes, 'asset', daily_stats.asset_bytes) END AS bytes
+        'image', daily_stats.image_bytes, 'asset', daily_stats.asset_bytes) END AS bytes,
+      json_build_object('code', coalesce(logins.code, 0), 'link', coalesce(logins.link, 0),
+        'email', coalesce(logins.email, 0)) AS logins
     FROM days
     LEFT JOIN active USING (day)
     LEFT JOIN daily_stats USING (day)
     LEFT JOIN activations USING (day)
     LEFT JOIN joins USING (day)
     LEFT JOIN leaves USING (day)
+    LEFT JOIN logins USING (day)
     ORDER BY days.day`.execute(db);
   return rows;
 }
@@ -392,12 +408,14 @@ function summarize(period: Day[], whole: Day[], people: Awaited<ReturnType<typeo
     period.reduce((total, d) => total + d[key], 0);
   const bytes = whole.flatMap((d) => d.bytes ?? []);
   const perDay = (kind: Sent) => bytes.reduce((total, b) => total + b[kind], 0) / bytes.length;
+  const logins = (method: Login) => period.reduce((total, d) => total + d.logins[method], 0);
   return {
     dau: { site: average("site"), qq: average("qq"), total: average("total") },
     ...people,
     new_activated: sum("new_activated"),
     read_seconds: sum("read_seconds"),
     posts_read: sum("posts_read"),
+    logins: { code: logins("code"), link: logins("link"), email: logins("email") },
     guests: mean(whole.map((d) => d.guests)),
     guest_views: mean(whole.map((d) => d.guest_views)),
     member_views: mean(whole.map((d) => d.member_views)),

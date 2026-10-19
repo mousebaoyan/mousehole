@@ -156,6 +156,37 @@ test("每小时汇总今天的阅读和成员数", async () => {
   }).toEqual({ read_seconds: 120, posts_read: 3, members: 1, activated: 0 });
 });
 
+test("按天数三种方式各登录了几次，同一个人登录几次算几次；站长不算", async () => {
+  const before = await stats();
+  const { id } = await createUser();
+  await login(id);
+  await login(id);
+  await ownerSession();
+  await db
+    .insertInto("audit_logs")
+    .values(
+      (["code", "email"] as const).map((method) => ({
+        actor_id: id,
+        action: "auth.login",
+        data: JSON.stringify({ method }),
+        created_at: sql<Date>`now() - interval '1 day'`,
+      })),
+    )
+    .execute();
+
+  const after = await stats();
+  const change = (back: number) => {
+    const was = before.days[before.days.length - 1 - back].logins;
+    const is = after.days[after.days.length - 1 - back].logins;
+    return { code: is.code - was.code, link: is.link - was.link, email: is.email - was.email };
+  };
+  expect([change(0), change(1)]).toEqual([
+    { code: 0, link: 2, email: 0 },
+    { code: 1, link: 0, email: 1 },
+  ]);
+  expect(after.totals.now.logins.link - before.totals.now.logins.link).toBe(2);
+});
+
 test("只有管理员能看", async () => {
   const member = as(await login((await createUser()).id));
   expect((await api.admin.stats.$get({ query: {} }, member)).status).toBe(403);
