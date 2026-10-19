@@ -38,14 +38,15 @@ export function meta({ loaderData }: Route.MetaArgs) {
   ];
 }
 
+// The largest floor number the API takes, so a ?floor= past it still opens on the last floors.
+const LAST_FLOOR = 2 ** 31 - 1;
+
 // The page opens at ?floor=N, or the opening post, and shows the 20 floors from there. Near the
 // end it takes the floors before too, so it doesn't open on a lone floor.
 export async function loader({ params, request, context }: Route.LoaderArgs) {
   const api = context.get(apiContext);
-  const start = Math.max(
-    1,
-    Math.trunc(Number(new URL(request.url).searchParams.get("floor")) || 1),
-  );
+  const asked = Math.trunc(Number(new URL(request.url).searchParams.get("floor")) || 1);
+  const start = Math.min(LAST_FLOOR, Math.max(1, asked));
   const param = { id: params.id };
   const [threadRes, afterRes, latestRes] = await Promise.all([
     api.threads[":id"].$get({ param }),
