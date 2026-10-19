@@ -396,6 +396,27 @@ async function mailing(range: Range) {
   return rows;
 }
 
+const SEARCH_TOP = 20;
+
+// The terms searched for most over the range, and those that most often found nothing; each
+// searcher counts once a day.
+async function searching(range: Range) {
+  const since = daysAgo(range - 1);
+  const [most, unfound] = await Promise.all([
+    sql<{ term: string; searches: number }>`
+      SELECT term, sum(searches)::integer AS searches FROM search_terms
+      WHERE day >= ${since}
+      GROUP BY term ORDER BY searches DESC, term LIMIT ${SEARCH_TOP}`.execute(db),
+    sql<{ term: string; searches: number }>`
+      SELECT term, sum(empty)::integer AS searches FROM search_terms
+      WHERE day >= ${since}
+      GROUP BY term HAVING sum(empty) > 0 ORDER BY searches DESC, term LIMIT ${SEARCH_TOP}`.execute(
+      db,
+    ),
+  ]);
+  return { most: most.rows, unfound: unfound.rows };
+}
+
 // ---- Content: what was made public, by where it came from. Floors and reactions archived from
 // the groups count on the day they were said there.
 
@@ -577,13 +598,14 @@ function summarize(
 
 // Each figure over the range against the same length of time just before it.
 export async function getStats(range: Range) {
-  const [daily, now, before, cohorts, from, mail, made, asked, top] = await Promise.all([
+  const [daily, now, before, cohorts, from, mail, searches, made, asked, top] = await Promise.all([
     series(range),
     reach(TODAY),
     reach(sql<Date>`(${TODAY} - ${range}::integer)`),
     retention(),
     sources(range),
     mailing(range),
+    searching(range),
     content(range),
     questions(range),
     ranking(range),
@@ -601,6 +623,7 @@ export async function getStats(range: Range) {
     retention: cohorts,
     ...from,
     mail,
+    searches,
     top,
   };
 }

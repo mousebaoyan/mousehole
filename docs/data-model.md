@@ -197,7 +197,7 @@
 - `daily_stats` 每天一行，一直留着：`members`、`activated` 是成员数和已激活数（不算 bot 和站长）；`guests`、`guest_views`、`member_views` 由 `visits` 汇总，当天同一个 IP 和 User-Agent 上有人登录过的那行不算访客；`read_seconds`、`posts_read` 由 `user_days` 汇总；`page_bytes`、`api_bytes`、`image_bytes`、`asset_bytes` 是发出的页面、接口、图片和静态文件的字节数。每小时重算今天和昨天的汇总，成员数只写今天的，所以过去每天的是那天最后一次的值；字节数每分钟累加。开始记录以前的天，这些列为 `NULL`。
 - `visits` 每天每个"IP + User-Agent"一行，`user_id` 为空的是访客，登录了的另记一行（唯一约束 `NULLS NOT DISTINCT`）。`user_agent` 截到 500 字，`views` 是浏览数，`referrer` 是这天第一次从别的网站来时的域名，`landing` 是这天第一个打开的页面的路径。在进程内累计，每分钟写一次，记到写入时的那天，和浏览数一样。成员的行留 400 天，访客的留 90 天。成员主页上的访问记录走 `visits_user`（`user_id, day DESC`），同一个 IP 上的账号走 `visits_ip`（`ip, day DESC`）。
 - `mail_log` 每封邮件一行，留 400 天：`kind` 是通知类型、`weekly`、`login`（验证码）或 `test`；`sent_at` 发出去的时间，`dropped_at` 丢掉的时间，`opened_at`、`clicked_at` 第一次打开、点击的时间，数据页按 `created_at` 分天。提醒和每周来信和 `mail_queue` 的那一行在同一个事务里写，`mail_queue.mail_id` 指向它；验证码和测试邮件不排队，发完记一行。由发邮件的 `platform/mail.ts` 写。
-- `search_terms` 每天每个词一行，留 400 天：`term` 是去掉首尾空白、合并中间空白、转成小写后的搜索词，最多 100 字；`searches` 搜了几次，`empty` 其中没有结果的几次。只记网页上搜的第一页，由 `search` 模块写。
+- `search_terms` 每天每个词一行，留 400 天：`term` 是去掉首尾空白、合并中间空白、转成小写后的搜索词，最多 100 字；`searches` 搜了几人次，`empty` 其中没有结果的几次。同一个人（用户 ID，访客按 IP）一天内搜同一个词只算第一次：这天谁搜过哪个词只记在进程内，不存库。只记网页上搜的第一页，不算 bot、站长和爬虫，由 `search` 模块写。
 - 登录方式现查操作日志里 `action = 'auth.login'` 的 `data->>'method'`，鼠币现查 `coin_ledger`，内容和排行现查 `threads`、`posts`、`reactions`。这些只有数据页用，不另加索引。
 
 ## 二期（占位）

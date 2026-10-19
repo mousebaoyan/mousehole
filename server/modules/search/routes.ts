@@ -1,12 +1,13 @@
 import { createRoute, z } from "@hono/zod-openapi";
 import { reachOf } from "../../platform/access.ts";
-import { createRouter, errorResponse } from "../../platform/http.ts";
+import { isCrawler } from "../../platform/crawlers.ts";
+import { clientIp, createRouter, errorResponse } from "../../platform/http.ts";
 import { getBoard, getTagId } from "../boards/service.ts";
 import { threadJson, ThreadSchema } from "../threads/schemas.ts";
 import { threadsByIds } from "../threads/service.ts";
 import { UserRefSchema } from "../users/schemas.ts";
 import { findUserId } from "../users/service.ts";
-import { search, similar, SORTS } from "./service.ts";
+import { recordSearch, search, similar, SORTS } from "./service.ts";
 
 export const searchRoutes = createRouter()
   .openapi(
@@ -91,6 +92,13 @@ export const searchRoutes = createRouter()
             ]
           : [];
       });
+      // Searches people start on the site; not bots, crawlers or the owner.
+      const searcher = viewer ? `user ${viewer.id}` : clientIp(c);
+      const userAgent = c.req.header("user-agent") ?? "";
+      const person = userAgent !== "" && !isCrawler(userAgent) && viewer?.role !== "owner";
+      if (!bot && cursor === 0 && searcher !== null && person) {
+        await recordSearch(searcher, q, items.length === 0);
+      }
       return c.json({ items, next_cursor }, 200);
     },
   )

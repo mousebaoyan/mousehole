@@ -213,3 +213,36 @@ export async function similar(reach: number, text: string) {
     .limit(SIMILAR)
     .execute();
 }
+
+// ---- Search terms for the admin's stats (design §10.1): what is searched for on the site and
+// how often nothing is found, without who. Each searcher counts once a Beijing day for a term, so
+// that changing the filters or the order doesn't count again; who that was is kept in memory only.
+
+const KEEP_DAYS = 400;
+
+let searched = { day: "", by: new Set<string>() };
+
+// `searcher` tells one person from another: a user ID, or a guest's address.
+export async function recordSearch(searcher: string, q: string, empty: boolean) {
+  const term = q.trim().replace(/\s+/g, " ").toLowerCase();
+  const day = new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Shanghai" });
+  if (searched.day !== day) searched = { day, by: new Set() };
+  const key = `${searcher} ${term}`;
+  if (searched.by.has(key)) return;
+  searched.by.add(key);
+  await sql`INSERT INTO search_terms AS s (day, term, searches, empty)
+    VALUES (${day}, ${term}, 1, ${empty ? 1 : 0})
+    ON CONFLICT (day, term) DO UPDATE
+    SET searches = s.searches + 1, empty = s.empty + excluded.empty`.execute(db);
+}
+
+export async function clearOldSearchTerms() {
+  await db
+    .deleteFrom("search_terms")
+    .where(
+      "day",
+      "<=",
+      sql<Date>`(now() AT TIME ZONE 'Asia/Shanghai')::date - ${KEEP_DAYS}::integer`,
+    )
+    .execute();
+}

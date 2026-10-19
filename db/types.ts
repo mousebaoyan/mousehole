@@ -382,6 +382,13 @@ export interface Reports {
   status: Generated<string>;
 }
 
+export interface SearchTerms {
+  day: Timestamp;
+  empty: number;
+  searches: number;
+  term: string;
+}
+
 export interface Sessions {
   created_at: Generated<Timestamp>;
   expires_at: Timestamp;
@@ -622,6 +629,7 @@ export interface DB {
   qq_message_links: QqMessageLinks;
   reactions: Reactions;
   reports: Reports;
+  search_terms: SearchTerms;
   sessions: Sessions;
   settings: Settings;
   tags: Tags;
