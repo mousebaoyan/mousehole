@@ -85,6 +85,11 @@
   --gold: #b07a12;
   --silver: #64707d;
   --bronze: #a35a33;
+  /* Series in the admin's charts, in this order: told apart with colour blindness, checked
+     against the card in each theme. */
+  --chart-1: #2a78d6;
+  --chart-2: #eb6834;
+  --chart-3: #1baf7a;
 }
 
 :root[data-theme="dark"] {
@@ -116,6 +121,9 @@
   --gold: #e9b860;
   --silver: #aab4bf;
   --bronze: #dd9a6e;
+  --chart-1: #3987e5;
+  --chart-2: #d95926;
+  --chart-3: #199e70;
 }
 
 /* Accent colours people pick for their card and page (design §8.16): buttons, links, progress

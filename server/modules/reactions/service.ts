@@ -74,7 +74,7 @@ export async function react(
         .execute();
     }
     await countReaction(trx, postId, { from: previous, to: emoji });
-    if (emoji !== null) await countActive(trx, viewer.id, at);
+    if (emoji !== null) await countActive(trx, actor, at);
     if (previous === null && emoji !== null && !archived) {
       await notifyOnPost(trx, "like", post, viewer.id, null, { emoji });
     }
@@ -149,7 +149,7 @@ export async function setBoost(
       .returning(sql<number | null>`old.id`.as("replaced"))
       .executeTakeFirstOrThrow();
     const alias = anonymous ? await aliasIn(trx, post.thread_id, viewer.id) : null;
-    await countActive(trx, viewer.id, at);
+    await countActive(trx, actor, at);
     if (replaced === null) {
       await countBoosts(trx, postId, 1);
       if (!archived) await notifyOnPost(trx, "boost", post, viewer.id, alias, { body });

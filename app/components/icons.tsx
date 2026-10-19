@@ -52,6 +52,7 @@ export const Bookmark = icon(lucide.Bookmark);
 export const Bot = icon(lucide.Bot);
 export const CalendarCheck = icon(lucide.CalendarCheck);
 export const ChartBar = icon(lucide.ChartBar);
+export const ChartLine = icon(lucide.ChartLine);
 export const Check = icon(lucide.Check);
 export const CheckCheck = icon(lucide.CheckCheck);
 export const ChevronDown = icon(lucide.ChevronDown);

@@ -18,6 +18,7 @@ import {
 } from "./modules/notifications/service.ts";
 import { promoteActive, recheckL4 } from "./modules/levels/service.ts";
 import { indexMissingPosts } from "./modules/search/service.ts";
+import { clearOldActiveDays, summarizeDays } from "./modules/stats/service.ts";
 import { startBounties } from "./modules/threads/bounties.ts";
 import { drawDue } from "./modules/threads/lotteries.ts";
 import { flushViews, recordView, rerenderPosts } from "./modules/threads/service.ts";
@@ -55,6 +56,7 @@ every(3600_000, "Counting people reached", recountPeopleReached);
 every(3600_000, "Sending weekly letters", () => sendWeeklyLetters());
 every(3600_000, "Starting bounties", startBounties);
 every(3600_000, "Settling coins", settleCoins);
+every(3600_000, "Summarizing the day's stats", summarizeDays);
 const DAY_MS = 24 * 3600_000;
 every(DAY_MS, "Clearing unused uploads", clearUnusedUploads);
 every(DAY_MS, "Clearing expired logins", clearExpiredLogins);
@@ -64,6 +66,7 @@ every(DAY_MS, "Clearing old events", clearOldEvents);
 every(DAY_MS, "Clearing old drafts", clearOldDrafts);
 every(DAY_MS, "Rechecking L4", recheckL4);
 every(DAY_MS, "Clearing old active days", clearOldDays);
+every(DAY_MS, "Clearing active days kept for the stats", clearOldActiveDays);
 
 // A thread served from the guest page cache skips the loader that counts its view.
 function countCachedView(c: Context) {

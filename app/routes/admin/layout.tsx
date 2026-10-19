@@ -2,6 +2,7 @@ import {
   ArrowLeft,
   Award,
   Bot,
+  ChartLine,
   ClipboardCheck,
   FilePen,
   Flag,
@@ -36,6 +37,7 @@ type Rank = (typeof RANKS)[number];
 
 const pages: { to: string; label: string; icon: LucideIcon; end?: boolean; from: Rank }[] = [
   { to: "/admin", label: "概览", icon: LayoutDashboard, end: true, from: "admin" },
+  { to: "/admin/stats", label: "数据", icon: ChartLine, from: "admin" },
   { to: "/admin/content", label: "内容", icon: ClipboardCheck, from: "moderator" },
   { to: "/admin/reports", label: "举报", icon: Flag, from: "moderator" },
   { to: "/admin/suggestions", label: "修改建议", icon: FilePen, from: "moderator" },
