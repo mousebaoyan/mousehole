@@ -170,6 +170,11 @@ function daysAgo(days: number) {
   return sql<Date>`${TODAY} - ${days}::integer`;
 }
 
+// Beijing midnight at the start of the last `days` days, today included.
+function startOf(days: number) {
+  return sql<Date>`(${daysAgo(days - 1)})::timestamp AT TIME ZONE 'Asia/Shanghai'`;
+}
+
 export async function clearOldStats() {
   await db.deleteFrom("active_days").where("day", "<=", daysAgo(KEEP_DAYS)).execute();
   await db
@@ -185,8 +190,8 @@ export async function clearOldStats() {
 
 // Day by day over the range and the one before it, oldest first.
 async function series(range: Range) {
-  const first = sql<Date>`(${TODAY} - ${2 * range - 1}::integer)`;
-  const since = sql<Date>`${first}::timestamp AT TIME ZONE 'Asia/Shanghai'`;
+  const first = daysAgo(2 * range - 1);
+  const since = startOf(2 * range);
   // Joins to and departures from the enabled groups, each group counted on its own.
   const groupChanges = (column: "joined_at" | "left_at") => sql`
     SELECT (${sql.ref(column)} AT TIME ZONE 'Asia/Shanghai')::date AS day, count(*) AS n
@@ -386,12 +391,138 @@ async function mailing(range: Range) {
       CASE WHEN kind NOT IN ('login', 'test') THEN count(opened_at)::integer END AS opened,
       CASE WHEN kind NOT IN ('login', 'test') THEN count(clicked_at)::integer END AS clicked
     FROM mail_log
-    WHERE created_at >= (${TODAY} - ${range - 1}::integer)::timestamp AT TIME ZONE 'Asia/Shanghai'
+    WHERE created_at >= ${startOf(range)}
     GROUP BY kind ORDER BY sent DESC, kind`.execute(db);
   return rows;
 }
 
-type Day = Awaited<ReturnType<typeof series>>[number];
+// ---- Content: what was made public, by where it came from. Floors and reactions archived from
+// the groups count on the day they were said there.
+
+const VIAS = ["web", "bot", "qq"] as const;
+type Via = (typeof VIAS)[number];
+const MADE = ["threads", "replies", "reactions"] as const;
+type Content = Record<(typeof MADE)[number], Record<Via, number>>;
+
+function noContent(): Content {
+  return {
+    threads: { web: 0, bot: 0, qq: 0 },
+    replies: { web: 0, bot: 0, qq: 0 },
+    reactions: { web: 0, bot: 0, qq: 0 },
+  };
+}
+
+// Shown and not deleted, in a thread that is too.
+const PUBLIC = sql<boolean>`p.status = 'visible' AND p.deleted_at IS NULL
+  AND t.status = 'visible' AND t.deleted_at IS NULL`;
+
+// Each day of the range and the one before it that had any.
+async function content(range: Range) {
+  const { rows } = await sql<{
+    day: string;
+    via: Via;
+    threads: number;
+    replies: number;
+    reactions: number;
+  }>`
+    SELECT day::text AS day, via, sum(threads)::integer AS threads,
+      sum(replies)::integer AS replies, sum(reactions)::integer AS reactions
+    FROM (
+      SELECT (p.created_at AT TIME ZONE 'Asia/Shanghai')::date AS day, p.via,
+        count(*) FILTER (WHERE p.floor = 1) AS threads,
+        count(*) FILTER (WHERE p.floor > 1) AS replies, 0 AS reactions
+      FROM posts p JOIN threads t ON t.id = p.thread_id
+      WHERE p.created_at >= ${startOf(2 * range)} AND ${PUBLIC}
+      GROUP BY 1, 2
+      UNION ALL
+      SELECT (r.created_at AT TIME ZONE 'Asia/Shanghai')::date, r.via, 0, 0, count(*)
+      FROM reactions r JOIN posts p ON p.id = r.post_id JOIN threads t ON t.id = p.thread_id
+      WHERE r.created_at >= ${startOf(2 * range)} AND ${PUBLIC}
+      GROUP BY 1, 2
+    ) made
+    GROUP BY day, via`.execute(db);
+  const days = new Map<string, Content>();
+  for (const row of rows) {
+    const made = days.get(row.day) ?? noContent();
+    for (const kind of MADE) made[kind][row.via] = row[kind];
+    days.set(row.day, made);
+  }
+  return days;
+}
+
+type Questions = { asked: number; solved: number; answered: number; wait: number | null };
+
+// Questions asked on the forum rather than archived from the groups, in the range and the one
+// before it: how many are solved, how many someone else answered, and the median wait for that
+// first answer, in seconds. Floors merged in from an older thread can be older than the question,
+// so only those after it count.
+async function questions(range: Range) {
+  const { rows } = await sql<Questions & { recent: boolean }>`
+    SELECT q.created_at >= ${startOf(range)} AS recent, count(*)::integer AS asked,
+      count(*) FILTER (WHERE q.accepted_count > 0)::integer AS solved,
+      count(q.answered_at)::integer AS answered,
+      percentile_cont(0.5) WITHIN GROUP (
+        ORDER BY extract(epoch FROM q.answered_at - q.created_at)) AS wait
+    FROM (
+      SELECT t.created_at, t.accepted_count, (
+        SELECT min(p.created_at) FROM posts p
+        WHERE p.thread_id = t.id AND p.floor > 1 AND p.author_id <> t.author_id
+          AND p.created_at >= t.created_at AND p.status = 'visible' AND p.deleted_at IS NULL
+      ) AS answered_at
+      FROM threads t JOIN posts o ON o.thread_id = t.id AND o.floor = 1
+      WHERE t.kind = 'question' AND o.via <> 'qq' AND t.status = 'visible'
+        AND t.deleted_at IS NULL AND t.created_at >= ${startOf(2 * range)}
+    ) q
+    GROUP BY 1`.execute(db);
+  const of = (recent: boolean): Questions => {
+    const row = rows.find((r) => r.recent === recent);
+    return row
+      ? { asked: row.asked, solved: row.solved, answered: row.answered, wait: row.wait }
+      : { asked: 0, solved: 0, answered: 0, wait: null };
+  };
+  return { now: of(true), before: of(false) };
+}
+
+// The threads with the most new public replies and reactions over the range, and the boards and
+// tags they are in.
+async function ranking(range: Range) {
+  const activity = sql`
+    SELECT thread_id, sum(replies)::integer AS replies, sum(reactions)::integer AS reactions
+    FROM (
+      SELECT p.thread_id, count(*) AS replies, 0 AS reactions
+      FROM posts p JOIN threads t ON t.id = p.thread_id
+      WHERE p.floor > 1 AND p.created_at >= ${startOf(range)} AND ${PUBLIC}
+      GROUP BY p.thread_id
+      UNION ALL
+      SELECT p.thread_id, 0, count(*)
+      FROM reactions r JOIN posts p ON p.id = r.post_id JOIN threads t ON t.id = p.thread_id
+      WHERE r.created_at >= ${startOf(range)} AND ${PUBLIC}
+      GROUP BY p.thread_id
+    ) made
+    GROUP BY thread_id`;
+  const [threads, boards, tags] = await Promise.all([
+    sql<{ id: number; title: string; replies: number; reactions: number }>`
+      SELECT t.id, t.title, a.replies, a.reactions
+      FROM (${activity}) a JOIN threads t ON t.id = a.thread_id
+      ORDER BY a.replies + a.reactions DESC, t.id DESC LIMIT ${TOP}`.execute(db),
+    sql<{ slug: string; name: string; replies: number; reactions: number }>`
+      SELECT b.slug, b.name, sum(a.replies)::integer AS replies,
+        sum(a.reactions)::integer AS reactions
+      FROM (${activity}) a JOIN threads t ON t.id = a.thread_id JOIN boards b ON b.id = t.board_id
+      GROUP BY b.id
+      ORDER BY sum(a.replies + a.reactions) DESC, b.position LIMIT ${TOP}`.execute(db),
+    sql<{ name: string; replies: number; reactions: number }>`
+      SELECT tags.name, sum(a.replies)::integer AS replies,
+        sum(a.reactions)::integer AS reactions
+      FROM (${activity}) a JOIN thread_tags tt ON tt.thread_id = a.thread_id
+      JOIN tags ON tags.id = tt.tag_id
+      GROUP BY tags.id
+      ORDER BY sum(a.replies + a.reactions) DESC, tags.name LIMIT ${TOP}`.execute(db),
+  ]);
+  return { threads: threads.rows, boards: boards.rows, tags: tags.rows };
+}
+
+type Day = Awaited<ReturnType<typeof series>>[number] & { content: Content };
 
 // A figure recorded from some day on, averaged over the days that have it; null when none do.
 function mean(values: (number | null)[]) {
@@ -401,7 +532,12 @@ function mean(values: (number | null)[]) {
 
 // A period's figures. Daily actives, visits and bytes are averaged over whole days, so today
 // counts only in the charts.
-function summarize(period: Day[], whole: Day[], people: Awaited<ReturnType<typeof reach>>) {
+function summarize(
+  period: Day[],
+  whole: Day[],
+  people: Awaited<ReturnType<typeof reach>>,
+  asked: Questions,
+) {
   const average = (kind: "site" | "qq" | "total") =>
     whole.reduce((sum, d) => sum + d[kind], 0) / whole.length;
   const sum = (key: "new_activated" | "read_seconds" | "posts_read") =>
@@ -409,12 +545,20 @@ function summarize(period: Day[], whole: Day[], people: Awaited<ReturnType<typeo
   const bytes = whole.flatMap((d) => d.bytes ?? []);
   const perDay = (kind: Sent) => bytes.reduce((total, b) => total + b[kind], 0) / bytes.length;
   const logins = (method: Login) => period.reduce((total, d) => total + d.logins[method], 0);
+  const made = noContent();
+  for (const d of period) {
+    for (const kind of MADE) {
+      for (const via of VIAS) made[kind][via] += d.content[kind][via];
+    }
+  }
   return {
     dau: { site: average("site"), qq: average("qq"), total: average("total") },
     ...people,
     new_activated: sum("new_activated"),
     read_seconds: sum("read_seconds"),
     posts_read: sum("posts_read"),
+    content: made,
+    questions: asked,
     logins: { code: logins("code"), link: logins("link"), email: logins("email") },
     guests: mean(whole.map((d) => d.guests)),
     guest_views: mean(whole.map((d) => d.guest_views)),
@@ -433,25 +577,30 @@ function summarize(period: Day[], whole: Day[], people: Awaited<ReturnType<typeo
 
 // Each figure over the range against the same length of time just before it.
 export async function getStats(range: Range) {
-  const [days, now, before, cohorts, from, mail] = await Promise.all([
+  const [daily, now, before, cohorts, from, mail, made, asked, top] = await Promise.all([
     series(range),
     reach(TODAY),
     reach(sql<Date>`(${TODAY} - ${range}::integer)`),
     retention(),
     sources(range),
     mailing(range),
+    content(range),
+    questions(range),
+    ranking(range),
   ]);
+  const days = daily.map((d) => ({ ...d, content: made.get(d.day) ?? noContent() }));
   const earlier = days.slice(0, range);
   const recent = days.slice(range);
   return {
     range,
     days: recent.map(({ site, qq, total, ...d }) => ({ ...d, active: { site, qq, total } })),
     totals: {
-      now: summarize(recent, recent.slice(0, -1), now),
-      before: summarize(earlier, earlier, before),
+      now: summarize(recent, recent.slice(0, -1), now, asked.now),
+      before: summarize(earlier, earlier, before, asked.before),
     },
     retention: cohorts,
     ...from,
     mail,
+    top,
   };
 }

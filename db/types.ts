@@ -366,6 +366,7 @@ export interface Reactions {
   emoji: string;
   post_id: number;
   user_id: number;
+  via: Generated<string>;
 }
 
 export interface Reports {

@@ -108,6 +108,14 @@ const Bytes = z.object({
   asset: z.number().openapi({ description: "静态文件" }),
 });
 
+const Sources = z
+  .object({ web: z.number(), bot: z.number(), qq: z.number() })
+  .openapi({ description: "网页上、bot 代发、群里收录" });
+
+const Content = z
+  .object({ threads: Sources, replies: Sources, reactions: Sources })
+  .openapi({ description: "公开的新帖、回复和表情回应，收录的按在群里说的时间算" });
+
 const Logins = z
   .object({ code: z.number(), link: z.number(), email: z.number() })
   .openapi({ description: "口令、链接、QQ 邮箱验证码三种方式各登录了几次" });
@@ -123,7 +131,24 @@ const Totals = z.object({
   guest_views: z.number().nullable().openapi({ description: "平均每天访客的浏览量" }),
   member_views: z.number().nullable().openapi({ description: "平均每天成员的浏览量" }),
   bytes: Bytes.nullable().openapi({ description: "平均每天发出的字节数" }),
+  content: Content,
+  questions: z
+    .object({
+      asked: z.number(),
+      solved: z.number().openapi({ description: "其中已解决的" }),
+      answered: z.number().openapi({ description: "其中有别人回复的" }),
+      wait: z
+        .number()
+        .nullable()
+        .openapi({ description: "第一条别人回复的等待时间的中位数，秒；没人回复过时为 null" }),
+    })
+    .openapi({ description: "这一段在论坛上发的问答帖，不算群里收录的" }),
   logins: Logins,
+});
+
+const Made = z.object({
+  replies: z.number().openapi({ description: "这一段公开的新回复" }),
+  reactions: z.number().openapi({ description: "这一段公开的楼层收到的表情回应" }),
 });
 
 const Count = z.number().openapi({ description: "人次，每人每天算一次" });
@@ -134,7 +159,7 @@ export const statsRoutes = createRouter()
       method: "get",
       path: "/admin/stats",
       summary:
-        "数据页：活跃、成员、留存、访问、阅读、登录、邮件和带宽，按北京时间逐天，不算 bot 和站长",
+        "数据页：活跃、成员、留存、访问、内容、阅读、登录、邮件、带宽和排行，按北京时间逐天，不算 bot 和站长",
       request: {
         query: z.object({
           range: z.coerce
@@ -168,6 +193,7 @@ export const statsRoutes = createRouter()
                     guest_views: z.number().nullable(),
                     member_views: z.number().nullable(),
                     bytes: Bytes.nullable().openapi({ description: "发出的字节数" }),
+                    content: Content,
                     logins: Logins,
                   }),
                 ),
@@ -217,6 +243,19 @@ export const statsRoutes = createRouter()
                     }),
                   )
                   .openapi({ description: "这一段的邮件，按类，发得多的在前" }),
+                top: z
+                  .object({
+                    threads: z.array(
+                      z.object({ id: z.number(), title: z.string(), ...Made.shape }),
+                    ),
+                    boards: z.array(
+                      z.object({ slug: z.string(), name: z.string(), ...Made.shape }),
+                    ),
+                    tags: z.array(z.object({ name: z.string(), ...Made.shape })),
+                  })
+                  .openapi({
+                    description: "这一段新回复和表情回应合起来最多的帖子、版块和标签，各前 10",
+                  }),
               }),
             },
           },
