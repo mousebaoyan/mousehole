@@ -15,6 +15,7 @@ import {
 import { UserBriefSchema, UserRefSchema, WriterSchema } from "../users/schemas.ts";
 import {
   clearArchiveFlags,
+  countArchiveFlags,
   flagArchived,
   handleReport,
   lift,
@@ -325,6 +326,24 @@ export const moderationRoutes = createRouter()
         },
         200,
       );
+    },
+  )
+  .openapi(
+    createRoute({
+      method: "get",
+      path: "/admin/archive-flags/count",
+      summary: "被反馈收录有误、还公开着的楼层有几层，后台的菜单上显示",
+      responses: {
+        200: {
+          description: "层数",
+          content: { "application/json": { schema: z.object({ count: z.number() }) } },
+        },
+        403: errorResponse("不是版主"),
+      },
+    }),
+    async (c) => {
+      authorize(c, "moderate");
+      return c.json({ count: await countArchiveFlags() }, 200);
     },
   )
   .openapi(

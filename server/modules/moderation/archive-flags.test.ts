@@ -47,6 +47,12 @@ function flag(id: number, who: Who) {
   return api.posts[":id"]["archive-flag"].$put({ param: { id: String(id) } }, who);
 }
 
+async function counted() {
+  const res = await api.admin["archive-flags"].count.$get({}, moderator);
+  if (!res.ok) throw new Error(`status ${res.status}`);
+  return (await res.json()).count;
+}
+
 async function flagged() {
   const res = await api.admin["archive-flags"].$get({}, moderator);
   if (!res.ok) throw new Error(`status ${res.status}`);
@@ -75,6 +81,7 @@ describe("收录有误", () => {
   });
 
   test("版主看到反馈多的在前；隐藏的楼层不列出，清掉反馈后不再列出；普通成员看不到", async () => {
+    const before = await counted();
     const { ids } = await floorsOf([true, true]);
     const [more, fewer] = ids;
     await flag(fewer, first);
@@ -84,6 +91,7 @@ describe("收录有误", () => {
     expect(await flagged()).toEqual(expect.arrayContaining([[more, 2]]));
     const order = (await flagged()).map(([id]) => id);
     expect(order.indexOf(more)).toBeLessThan(order.indexOf(fewer));
+    expect(await counted()).toBe(before + 2);
 
     const hidden = await api.posts[":id"].$patch(
       { param: { id: String(fewer) }, json: { status: "hidden", reason: "收录有误" } },
@@ -91,12 +99,14 @@ describe("收录有误", () => {
     );
     expect(hidden.status).toBe(200);
     expect((await flagged()).map(([id]) => id)).not.toContain(fewer);
+    expect(await counted()).toBe(before + 1);
 
     const param = { id: String(more) };
     expect((await api.admin["archive-flags"][":id"].$delete({ param }, moderator)).status).toBe(
       204,
     );
     expect((await flagged()).map(([id]) => id)).not.toContain(more);
+    expect(await counted()).toBe(before);
     expect((await api.admin["archive-flags"][":id"].$delete({ param }, moderator)).status).toBe(
       404,
     );
