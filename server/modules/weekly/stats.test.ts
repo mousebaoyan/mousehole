@@ -58,8 +58,11 @@ async function like(postId: number, times: number) {
   }
 }
 
+// The week up to an hour from now, so what the test has just written falls inside it even if time
+// sync sets the clock back meanwhile, as it does by over half a second on some machines.
 async function stats() {
-  const res = await api.bot.stats.weekly.$get({ query: {} }, bot);
+  const until = String(Math.floor(Date.now() / 1000) + 3600);
+  const res = await api.bot.stats.weekly.$get({ query: { until } }, bot);
   if (!res.ok) throw new Error(`status ${res.status}`);
   return res.json();
 }
