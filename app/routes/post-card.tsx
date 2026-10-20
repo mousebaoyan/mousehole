@@ -7,7 +7,9 @@ import {
   ChevronDown,
   ChevronUp,
   CircleCheck,
+  Clock,
   Ellipsis,
+  EyeOff,
   Flag,
   Forward,
   MessagesSquare,
@@ -117,6 +119,13 @@ export function PostCard({
   const author = shown(post.author);
   const boostButton = <BoostButton mine={boosts.mine} onSave={boosts.save} />;
   const replyTo = post.reply_to;
+  // Waiting for review or hidden, so only its author and moderators see it: its writer and words
+  // faded, back in full under the pointer, while menus and buttons keep theirs. A reply says so in
+  // a dashed frame, as an accepted one does in a solid one; the opening post's state is the
+  // thread's, said above it.
+  const unseen = post.status !== "visible";
+  const framed = unseen && post.floor > 1;
+  const faded = unseen && "opacity-60 transition-opacity group-hover/unseen:opacity-100";
   const target = parent ?? parentFetcher.data;
 
   // Its author keeps their content from guests (design §8.10).
@@ -139,11 +148,26 @@ export function PostCard({
       data-floor={post.floor}
       className={cn(
         // A faint rule above each post, starting under the name like the body does.
-        "relative scroll-mt-20 px-3 py-5 before:absolute before:top-0 before:right-3 before:left-3 before:h-px before:bg-border/70 first:before:hidden sm:px-4 sm:before:right-4 sm:before:left-[4.25rem]",
-        accepted &&
-          "my-2 rounded-2xl border border-success/30 bg-success/[0.04] before:hidden [&+li]:before:hidden",
+        "group/unseen relative scroll-mt-20 px-3 py-5 before:absolute before:top-0 before:right-3 before:left-3 before:h-px before:bg-border/70 first:before:hidden sm:px-4 sm:before:right-4 sm:before:left-[4.25rem]",
+        (accepted || framed) && "my-2 rounded-2xl border before:hidden [&+li]:before:hidden",
+        framed
+          ? "border-dashed border-warning/50"
+          : accepted && "border-success/30 bg-success/[0.04]",
       )}
     >
+      {framed && (
+        <div className="mb-3 flex items-center gap-1 text-meta font-medium text-warning">
+          {post.status === "pending" ? (
+            <>
+              <Clock className="size-4" /> 正在审核，通过后其他人才能看到
+            </>
+          ) : (
+            <>
+              <EyeOff className="size-4" /> 已隐藏，仅作者和版主可见
+            </>
+          )}
+        </div>
+      )}
       {accepted && (
         <div className="mb-3 inline-flex items-center gap-1 text-meta font-medium text-success">
           <CircleCheck className="size-4" /> 已采纳
@@ -162,22 +186,18 @@ export function PostCard({
             <UserAvatar
               user={author}
               thread={threadId}
-              className="size-10 shrink-0 max-sm:size-9"
+              className={cn("size-10 shrink-0 max-sm:size-9", faded)}
               frame
             />
-            <span className="truncate text-body font-semibold">{author.display_name}</span>
+            <span className={cn("truncate text-body font-semibold", faded)}>
+              {author.display_name}
+            </span>
           </UserCard>
           <div className="flex shrink-0 items-center gap-x-1.5">
             {"user_status" in author && author.user_status && (
               <StatusEmoji status={author.user_status} />
             )}
             <UserBadges user={author} op={op} mine={own} />
-            {/* The opening post's state is the thread's, shown above it. */}
-            {post.floor > 1 && post.status !== "visible" && (
-              <span className="rounded bg-warning/10 px-1.5 py-px text-2xs font-medium text-warning">
-                {post.status === "pending" ? "待审核" : "已隐藏"}
-              </span>
-            )}
           </div>
         </div>
         <span className="flex shrink-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs whitespace-nowrap text-muted-foreground max-sm:-mt-1.5 max-sm:basis-full max-sm:pl-12 sm:ml-auto">
@@ -261,7 +281,7 @@ export function PostCard({
             )}
           </div>
         )}
-        <PostBody html={post.html ?? ""} className={cn(PROSE, "mt-2")} />
+        <PostBody html={post.html ?? ""} className={cn(PROSE, "mt-2", faded)} />
         {card}
 
         {/* Relative: the boost input floats from this row when there are no boosts yet. */}

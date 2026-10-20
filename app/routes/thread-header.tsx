@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type Ref } from "react";
 import { Link, useFetcher, useNavigate } from "react-router";
+import { cn } from "~/cn";
 import {
   ArrowRightLeft,
   Check,
@@ -125,7 +126,13 @@ export function ThreadHeader({
               </span>
             )}
           </div>
-          <h1 className="mt-2.5 text-xl leading-snug font-semibold tracking-tight text-pretty sm:text-2xl">
+          {/* Faded while only its author and moderators see it, like its opening post. */}
+          <h1
+            className={cn(
+              "mt-2.5 text-xl leading-snug font-semibold tracking-tight text-pretty sm:text-2xl",
+              thread.status !== "visible" && "text-muted-foreground",
+            )}
+          >
             {thread.title}
             {(editable || suggesting) && (
               <button
