@@ -235,7 +235,8 @@ token 由站长在后台创建，只显示一次。每个 token 绑定一个 bot
 
 | 方法 | 路径 | 说明 | 权限 |
 | --- | --- | --- | --- |
-| GET | `/users` | `q`：按名字找成员，全是数字时也按 QQ 号找（QQ 号以它开头），最多 8 个：QQ 号正好是它的在前，再是名字以它开头的，再按最近活跃；不含 bot、冻结的账号和站长。每项比用户简要信息多一个 `qq`。编辑器的 @ 补全用 | 已登录 / `read` |
+| GET | `/users` | `q`：找成员，最多 8 个，匹配和排序同 `/users/search`；不含冻结的账号。每项比用户简要信息多一个 `qq`。编辑器的 @ 补全用 | 已登录 / `read` |
+| GET | `/users/search` | 搜索页找人，每页 20 个：`q`（最多 30 个字）、`cursor`。名字、所在群（启用的群、还没退）的群名片、QQ 昵称包含 `q` 的，`q` 是 5 位以上的数字时还有 QQ 号以它开头的；QQ 号正好是它的在前，再是还在群里的、名字以它开头的，再按最近活跃；不含 bot 和站长。每项比用户简要信息多 `qq`、`frozen`（已冻结）、`thread_count`、`post_count` 和 `match`：名字以外对上的，`{ field: "card", text, group }` 是 `group` 群里的群名片，`{ field: "qq_nickname", text, group: null }` 是 QQ 昵称，名字或 QQ 号对上的为 `null`。冻结的账号返回 `403` | 成员 |
 | GET | `/users/{user}` | 资料卡，`members_only` 为 `false`：显示名、头像、角色、专属头衔、个性签名，以及统计（帖子数、回复数、获赞数、认可数、被采纳的回答数 `solved`、徽章有几种 `badges`、访问天数、阅读时间、读过的帖子和回复数、帮到的人 `people_reached`、被读次数 `reads`；本人另有最近 7 天的 `reads_week`），`badges`（本人选的展示徽章，按选的顺序；没选过的最多 3 枚，金的在前，同档的最近得到的在前），以及个性化（总体设计 §8.16）：`frame`、`user_status` 同楼层里的用户，`background`（预设的 `{ preset, moving }` 或上传的 `{ card_url, profile_url }`，没有为 `null`）、`background_opacity`（背景浓淡，20–100）、`theme`（`null` 是默认）；QQ 号，群名片、入群时间和最近发言时间（和名字取自同一个群），是否冻结、是否激活、是否公开赞和关系（`relations_public`）只给成员和 bot。统计里还有关注数、粉丝数和认可数；登录时带 `followed`、`endorsed`，表示自己是否关注、认可了 TA。本人设置了不给访客看时，访客只拿到 `id`、显示名、头像、角色和等级，`members_only` 为 `true` | 访客 |
 | GET | `/users/{user}/showcase` | 个人主页上的展柜和代表作（总体设计 §8.16），资料卡用不到，所以单独取：`showcase_html`（渲染好的展柜，图片显示成链接，没有为 `null`）、`pins`（按 TA 排的顺序，每项 `{ id, title, board, reply_count, like_count }`；删除、隐藏了的和看的人打不开的不在里面）。TA 设置了不给访客看时，访客拿到的都是空的 | 访客 |
 | GET | `/users/{user}/threads` | 发过的帖子，最新的在前，每页 30 个，不含匿名内容 | 访客 |

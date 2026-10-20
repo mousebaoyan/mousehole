@@ -1214,36 +1214,93 @@ export async function userBriefs(ids: number[]) {
   };
 }
 
-// For @ in the editor: members whose name contains the text, names starting with it first, then
-// the recently active.
-// Members by name, and by QQ number when the text is digits: the numbers starting with them,
-// that very number first. Each comes with the number, which tells namesakes apart.
-export async function searchUsers(text: string) {
-  const pattern = text.replaceAll(/[\\%_]/g, "\\$&");
-  const digits = /^\d+$/.test(text);
-  const rows = await db
+// People whose name, card in any group they are in, or QQ nickname contains the text, or whose QQ
+// number starts with it when it is five digits or more (design §8.5): that very number first, then
+// those still in the groups, names starting with the text, and the recently active.
+function matchUsers(text: string) {
+  const escaped = text.replaceAll(/[\\%_]/g, "\\$&");
+  const pattern = `%${escaped}%`;
+  const byQq = /^\d{5,}$/.test(text);
+  return db
     .selectFrom("users")
-    .select(["id", "qq"])
-    .where((eb) =>
-      digits
-        ? eb.or([
-            eb("display_name", "ilike", `%${pattern}%`),
-            eb(sql<string>`qq::text`, "like", `${text}%`),
-          ])
-        : eb("display_name", "ilike", `%${pattern}%`),
+    .leftJoinLateral(
+      (eb) =>
+        eb
+          .selectFrom("group_members")
+          .innerJoin("qq_groups", "qq_groups.id", "group_members.group_id")
+          .select(["group_members.card", "qq_groups.name as group_name"])
+          .whereRef("group_members.user_id", "=", "users.id")
+          .where("group_members.left_at", "is", null)
+          .where("qq_groups.enabled", "=", true)
+          .where("group_members.card", "ilike", pattern)
+          .limit(1)
+          .as("carded"),
+      (join) => join.onTrue(),
     )
-    .where("role", "<>", "bot")
-    .where("member_status", "=", "member")
-    .where("qq", "is not", null)
+    .select([
+      "users.id",
+      "users.qq",
+      "users.member_status",
+      "users.thread_count",
+      "users.post_count",
+      "users.qq_nickname",
+      "carded.card",
+      "carded.group_name",
+      sql<boolean>`users.display_name ILIKE ${pattern}`.as("by_name"),
+      sql<boolean>`users.qq_nickname ILIKE ${pattern}`.as("by_nickname"),
+    ])
+    .where((eb) =>
+      eb.or([
+        eb("users.display_name", "ilike", pattern),
+        eb("users.qq_nickname", "ilike", pattern),
+        eb("carded.card", "is not", null),
+        ...(byQq ? [eb(sql<string>`users.qq::text`, "like", `${text}%`)] : []),
+      ]),
+    )
+    .where("users.role", "<>", "bot")
+    .where("users.qq", "is not", null)
     .$narrowType<{ qq: NotNull }>()
-    .orderBy(sql`qq::text = ${text}`, "desc")
-    .orderBy(sql`display_name ILIKE ${`${pattern}%`}`, "desc")
-    .orderBy(sql`last_seen_at DESC NULLS LAST`)
-    .orderBy("id")
+    .orderBy(sql`users.qq::text = ${text}`, "desc")
+    .orderBy(sql`users.member_status = 'member'`, "desc")
+    .orderBy(sql`users.display_name ILIKE ${`${escaped}%`}`, "desc")
+    .orderBy(sql`users.last_seen_at DESC NULLS LAST`)
+    .orderBy("users.id");
+}
+
+// For @ in the editor: members only, each with the QQ number, which tells namesakes apart.
+export async function searchUsers(text: string) {
+  const rows = await matchUsers(text)
+    .where("users.member_status", "=", "member")
     .limit(8)
     .execute();
   const user = await userBriefs(rows.map((r) => r.id));
   return rows.map((r) => ({ ...user(r.id), qq: r.qq }));
+}
+
+const USERS_PAGE = 20;
+
+// For the search page: those who left the groups too, each with where a name other than theirs
+// matched.
+export async function findUsers(text: string, offset: number) {
+  const rows = await matchUsers(text).offset(offset).limit(USERS_PAGE).execute();
+  const user = await userBriefs(rows.map((r) => r.id));
+  return {
+    items: rows.map((r) => ({
+      ...user(r.id),
+      qq: r.qq,
+      frozen: r.member_status === "frozen",
+      thread_count: r.thread_count,
+      post_count: r.post_count,
+      match: r.by_name
+        ? null
+        : r.card !== null
+          ? { field: "card" as const, text: r.card, group: r.group_name }
+          : r.by_nickname
+            ? { field: "qq_nickname" as const, text: r.qq_nickname, group: null }
+            : null,
+    })),
+    next_cursor: rows.length === USERS_PAGE ? String(offset + USERS_PAGE) : null,
+  };
 }
 
 // Forum members by QQ number, for @ in messages from QQ.
