@@ -85,7 +85,7 @@ test/                   Vitest 的全局准备：测试用的数据库
 
 ## 4. 前端
 
-- 数据走 loader 和 action，提交用 `<Form>` 或 `useFetcher`。上传图片是例外：编辑器用 `app/browser-api.ts` 直接 `POST /api/v1/uploads`，文件大，经过 action 要多读一遍、多传一次。不用 `useEffect` 拉数据或同步派生状态，不引入全局状态库和请求库（Redux、Zustand、TanStack Query 等）。
+- 数据走 loader 和 action，提交用 `<Form>` 或 `useFetcher`。上传图片是例外：编辑器用 `app/browser-api.ts` 直接 `POST /api/v1/uploads`，文件大，经过 action 要多读一遍、多传一次。不用 `useEffect` 拉数据或同步派生状态，不引入全局状态库和请求库（Redux、Zustand、TanStack Query 等）。GET 的 `<Form>` 写明 `action`：不写时用当前地址，服务端会把查询串重新编码，地址里有空格、冒号这类字符时和浏览器里的对不上，页面激活时报不一致；查询串本来就会被表单字段换掉。
 - React Compiler 已开启，不手写 `useMemo`、`useCallback`、`memo`。
 - 组件先用 shadcn/ui（用它的 CLI 加进仓库再改）；样式写 Tailwind 工具类，除了主题变量不写单独的 CSS。
 - 界面控件统一用 `components/ui/` 里的组件：按钮、输入框、下拉框、复选框、单选、开关、对话框、确认框和轻提示。页面里不直接写原生的 `<select>`、复选框和单选框，也不用浏览器的 `confirm`、`alert`、`prompt`：它们的样子跟着系统走，和站点对不上。缺的组件先补进 `components/ui/`，再在页面里用。下拉框（`Select`）和菜单一样，弹出的是站点自己的面板，不是系统的选择列表；确认和填理由用 `confirmDialog`、`promptDialog`，失败提示用 `toast`，都可以在事件处理里直接调用，lint 的 `no-alert` 会拦下浏览器自带的那几个。
