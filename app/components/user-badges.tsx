@@ -1,4 +1,4 @@
-import { cn } from "cn";
+import { cn } from "~/cn";
 import type { Writer } from "~/api-types";
 import { TIER_STYLES } from "~/components/badge-chip";
 import { levelName } from "../../server/platform/site.ts";

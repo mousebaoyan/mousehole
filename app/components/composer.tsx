@@ -10,7 +10,7 @@ import {
   type RefObject,
 } from "react";
 import { Link, useFetcher, useLocation, useNavigate } from "react-router";
-import { cn } from "cn";
+import { cn } from "~/cn";
 import {
   ChevronDown,
   ChevronUp,

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { flushSync } from "react-dom";
 import { Link, useFetcher, useRevalidator } from "react-router";
-import { cn } from "cn";
+import { cn } from "~/cn";
 import {
   ArrowDown,
   ArrowUp,

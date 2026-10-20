@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { data } from "react-router";
-import { cn } from "cn";
+import { cn } from "~/cn";
 import { Checkbox } from "~/components/ui/checkbox";
 
 // Pieces of the forms on the settings and admin pages.

@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { flushSync } from "react-dom";
-import { cn } from "cn";
+import { cn } from "~/cn";
 import { Check, ChevronDown } from "~/components/icons";
 import {
   matching,

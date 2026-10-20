@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useFetcher, useNavigate } from "react-router";
-import { cn } from "cn";
+import { cn } from "~/cn";
 import { Check, Flag, Rocket, Trash2, X } from "~/components/icons";
 import type { PostItem, Writer } from "~/api-types";
 import { Dropdown, menuItem, useDismiss } from "~/components/disclosure";

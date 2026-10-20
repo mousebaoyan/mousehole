@@ -1,5 +1,5 @@
 import type * as React from "react";
-import { cn } from "cn";
+import { cn } from "~/cn";
 import { Check } from "~/components/icons";
 
 // Native inputs drawn by the site instead of the system, so forms keep working as they are.

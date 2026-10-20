@@ -22,7 +22,7 @@ import {
   TriangleAlert,
 } from "~/components/icons";
 import type { loader as mentionLoader } from "~/routes/mention";
-import { cn } from "cn";
+import { cn } from "~/cn";
 import type { UserBrief } from "~/api-types";
 import { browserApi } from "~/browser-api";
 import { Dropdown, menuItem } from "~/components/disclosure";

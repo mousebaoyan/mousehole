@@ -1,5 +1,5 @@
 import { Link, redirect } from "react-router";
-import { cn } from "cn";
+import { cn } from "~/cn";
 import { apiContext } from "../api.server.ts";
 import type { ReactNode } from "react";
 import {

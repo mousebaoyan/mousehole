@@ -1,4 +1,4 @@
-import { cn } from "cn";
+import { cn } from "~/cn";
 
 // How far along something is (the next level's, a badge's), full once `have` reaches `need`. The
 // numbers are written next to it, so it is only for looking at.

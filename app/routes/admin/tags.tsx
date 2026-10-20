@@ -3,7 +3,7 @@ import { pageTitle } from "~/share-meta";
 import { useEffect, useRef } from "react";
 import { Form, Link, useNavigation } from "react-router";
 import { apiContext } from "../../api.server.ts";
-import { cn } from "cn";
+import { cn } from "~/cn";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Select } from "~/components/ui/select";

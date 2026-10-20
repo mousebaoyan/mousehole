@@ -20,7 +20,7 @@ import { pageTitle } from "~/share-meta";
 import { useEffect, useRef } from "react";
 import { data, Link, NavLink, Outlet, redirect, useLocation } from "react-router";
 import { apiContext } from "../../api.server.ts";
-import { cn } from "cn";
+import { cn } from "~/cn";
 import { Logo } from "~/components/logo";
 import { PageTransition } from "~/components/page-transition";
 import { ThemeToggle } from "~/components/theme-toggle";

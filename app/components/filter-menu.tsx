@@ -1,6 +1,6 @@
 import { Fragment, useRef, useState, type ReactNode } from "react";
 import { Link, useLocation, useNavigate } from "react-router";
-import { cn } from "cn";
+import { cn } from "~/cn";
 import { Check, ChevronDown } from "~/components/icons";
 import { Dropdown, matching, menuItem, SEARCH_FROM, SearchBox } from "~/components/disclosure";
 

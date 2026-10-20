@@ -1,5 +1,5 @@
 import type * as React from "react";
-import { cn } from "cn";
+import { cn } from "~/cn";
 
 // A plain <input>, like Textarea: Base UI's version only adds Field integration we don't use.
 function Input({ className, ...props }: React.ComponentProps<"input">) {

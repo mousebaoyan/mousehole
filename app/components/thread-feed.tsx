@@ -1,5 +1,5 @@
 import { Link } from "react-router";
-import { cn } from "cn";
+import { cn } from "~/cn";
 import type { Api, ThreadItem } from "~/api-types";
 import { NewThreadButton } from "~/components/composer";
 import { Dot, FilterMenu } from "~/components/filter-menu";

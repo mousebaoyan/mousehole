@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import { Link, useFetcher } from "react-router";
-import { cn } from "cn";
+import { cn } from "~/cn";
 import { Heart } from "~/components/icons";
 import type { UserBrief } from "~/api-types";
 import { useDismiss } from "~/components/disclosure";

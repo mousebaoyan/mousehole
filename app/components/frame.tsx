@@ -1,5 +1,5 @@
 import { useId } from "react";
-import { cn } from "cn";
+import { cn } from "~/cn";
 import type { Frame } from "../../server/modules/users/customization.ts";
 
 // Avatar frames (design §8.16), drawn around an avatar whose circle is (50, 50) r 50, a fifth

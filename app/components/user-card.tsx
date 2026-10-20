@@ -8,7 +8,7 @@ import {
   type ReactNode,
 } from "react";
 import { Link, useFetcher, useNavigate } from "react-router";
-import { cn } from "cn";
+import { cn } from "~/cn";
 import { Award, UserCheck, UserPlus } from "~/components/icons";
 import { useDismiss } from "~/components/disclosure";
 import { Button, buttonVariants } from "~/components/ui/button";

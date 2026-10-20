@@ -5,7 +5,7 @@ import {
   type ComponentProps,
   type MouseEvent,
 } from "react";
-import { cn } from "cn";
+import { cn } from "~/cn";
 import { Button } from "~/components/ui/button";
 import { Textarea } from "~/components/ui/textarea";
 

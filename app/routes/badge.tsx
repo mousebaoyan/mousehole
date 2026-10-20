@@ -2,7 +2,7 @@ import { type Loaded, Pages } from "~/components/pages";
 import { Award, Lock } from "~/components/icons";
 import { pageTitle } from "~/share-meta";
 import { data, Link } from "react-router";
-import { cn } from "cn";
+import { cn } from "~/cn";
 import { apiContext } from "../api.server.ts";
 import { holdersText, TIER_STYLES } from "~/components/badge-chip";
 import { ProgressBar } from "~/components/progress-bar";

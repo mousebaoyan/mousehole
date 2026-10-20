@@ -1,5 +1,5 @@
 import { useRef, useState, useSyncExternalStore, type RefObject } from "react";
-import { cn } from "cn";
+import { cn } from "~/cn";
 import { ChevronDown } from "~/components/icons";
 import { Backdrop } from "~/components/backdrop";
 import { BadgeChip } from "~/components/badge-chip";

@@ -4,7 +4,7 @@ import { pageTitle } from "~/share-meta";
 import { Fragment } from "react";
 import { data, Form, Link } from "react-router";
 import { apiContext } from "../api.server.ts";
-import { cn } from "cn";
+import { cn } from "~/cn";
 import { BoardBadge } from "~/components/board-badge";
 import { Dot, FILTER, FilterMenu } from "~/components/filter-menu";
 import { tagChoices } from "~/components/thread-feed";

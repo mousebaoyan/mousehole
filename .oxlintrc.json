@@ -41,6 +41,10 @@
             "importNames": ["useMemo", "useCallback", "memo"],
             "message": "React Compiler memoizes automatically.",
             "allowTypeImports": true
+          },
+          {
+            "name": "cn",
+            "message": "Import cn from ~/cn, which knows the theme's font sizes."
           }
         ]
       }
