@@ -85,7 +85,7 @@ describe("搜索", () => {
     expect(await titles("套磁")).toEqual(["导师选择和套磁"]);
   });
 
-  test("筛选：只搜标题、类型、还在等回答、楼主；排序：回复最多、最新发布", async () => {
+  test("筛选：只搜标题、类型、还在等回答、楼主；排序：最热、最新发布", async () => {
     const other = as(await login((await createUser()).id));
     const discussion = await thread("考研还是保研", "纠结");
     const question = await api.threads.$post(
@@ -115,7 +115,7 @@ describe("搜索", () => {
     expect(await ids({ solved: "false" })).toEqual([asked]);
     expect(await ids({ solved: "true" })).toEqual([]);
     expect(await ids({ author: `${(await whoAmI(other)).id}` })).toEqual([asked]);
-    expect((await ids({ sort: "replies" }))[0]).toBe(mentioned);
+    expect((await ids({ sort: "hot" }))[0]).toBe(mentioned);
     expect(await ids({ sort: "created" })).toEqual([mentioned, asked, discussion]);
   });
 

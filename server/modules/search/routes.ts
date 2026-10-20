@@ -37,7 +37,7 @@ export const searchRoutes = createRouter()
             .transform((v) => v === "true"),
           sort: z.enum(SORTS).default("relevance").openapi({
             description:
-              "relevance 相关度，旧的逐渐靠后；created 最新发布；last_post 最新回复；replies 回复最多；likes 点赞最多",
+              "relevance 相关度，旧的逐渐靠后；created 最新发布；last_post 最新回复；hot 最热，按回复数 × 2 + 赞数 + 浏览数 / 20",
           }),
           cursor: z.coerce.number().int().min(0).default(0),
         }),

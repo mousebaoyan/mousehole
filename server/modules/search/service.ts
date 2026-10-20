@@ -79,14 +79,16 @@ function visiblePosts(reach: number) {
     );
 }
 
-export const SORTS = ["relevance", "created", "last_post", "replies", "likes"] as const;
+export const SORTS = ["relevance", "created", "last_post", "hot"] as const;
 
-const SORT_KEYS = {
-  created: "created_at",
-  last_post: "last_post_at",
-  replies: "reply_count",
-  likes: "like_count",
-} as const;
+// Relevance puts older ones gradually behind. Hot weighs replies, likes and views as the lists'
+// 热门 does, without its decay: a search reaches back years (design §8.5).
+const ORDERS = {
+  relevance: sql`rank / (1 + extract(epoch FROM now() - created_at) / 86400 / 365)`,
+  created: sql`created_at`,
+  last_post: sql`last_post_at`,
+  hot: sql`reply_count * 2 + like_count + view_count / 20.0`,
+};
 
 const SINCE = { week: "7 days", month: "1 month", year: "1 year" } as const;
 
@@ -120,6 +122,7 @@ export async function search(reach: number, q: string, filter: SearchFilter, off
     "threads.last_post_at",
     "threads.reply_count",
     "threads.like_count",
+    "threads.view_count",
     single
       ? sql<number>`1`.as("rank")
       : sql<number>`ts_rank_cd(post_search.document, ${query})`.as("rank"),
@@ -167,12 +170,7 @@ export async function search(reach: number, q: string, filter: SearchFilter, off
         .as("best"),
     )
     .selectAll()
-    .orderBy(
-      filter.sort === "relevance"
-        ? sql`rank / (1 + extract(epoch FROM now() - created_at) / 86400 / 365)`
-        : sql.ref(SORT_KEYS[filter.sort]),
-      "desc",
-    )
+    .orderBy(ORDERS[filter.sort], "desc")
     .orderBy("thread_id", "desc")
     .offset(offset)
     .limit(PAGE)
