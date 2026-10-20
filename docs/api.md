@@ -381,6 +381,7 @@ token 由站长在后台创建，只显示一次。每个 token 绑定一个 bot
 | GET | `/admin/reports` | 举报列表，最新的在前，每页 30 条：`status`（默认 `open`）、`cursor`（上一页最后一条的 ID）；每条带举报人、理由、被举报的楼层（帖子、楼层号、作者、摘要、是否已删除）或短评、处理人 | 版主 / `moderate` |
 | PATCH | `/admin/reports/{id}` | 处理举报：`{ status }`，可选 `resolved`（已处理，内容另外删除或隐藏）、`dismissed`（驳回）；记操作日志 | 版主 / `moderate` |
 | GET | `/admin/archive-flags` | 被反馈收录有误、还公开着的楼层，反馈的人多的在前，再按最近反馈的时间，最多 100 层；每层带帖子、楼层号、作者、摘要、在群里发出的时间，反馈的人数 `count` 和最近一次反馈的时间 `flagged_at` | 版主 / `moderate` |
+| GET | `/admin/archive-flags/count` | 被反馈收录有误、还公开着的楼层有几层：`{ count }`，后台的菜单上显示 | 版主 / `moderate` |
 | DELETE | `/admin/archive-flags/{id}` | 处理完一层的反馈，`id` 是楼层的 ID：清掉它收到的全部反馈，楼层要隐藏的另外用 `PATCH`；没有反馈返回 `404 archive_flags_not_found`；记操作日志 | 版主 / `moderate` |
 | GET | `/admin/suggestions` | 待处理的修改建议，最新的在前，每页 30 条：`cursor`（上一页最后一条的 ID）；每条同 `GET /threads/{id}` 的 `suggestions`，另带帖子现在的 `thread`（`id`、`title`、`board`、`tags`）。帖子删了的不列 | 版主 / `moderate` |
 | GET | `/admin/audit-logs` | 操作日志，最新的在前，每页 50 条：`actor`（用户 ID 或 `qq:号码`）、`ip`、`action`、`target_type`、`target_id`、`cursor`；每条带以谁的身份、经由哪个 token、谁让 bot 做的、`data`、IP、`user_agent` 和从它看出的 `device` | 站长，只能在网页上操作 |

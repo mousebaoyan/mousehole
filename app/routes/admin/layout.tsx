@@ -71,7 +71,10 @@ export async function loader({ context, request }: Route.LoaderArgs) {
   if (page && RANKS.indexOf(page.from) > RANKS.indexOf(rank)) {
     throw data("没有权限访问此页面", { status: 403 });
   }
-  return { rank };
+  // Floors flagged as wrongly collected, counted beside their page in the menu.
+  const flags = await context.get(apiContext).admin["archive-flags"].count.$get();
+  if (!flags.ok) throw new Error("Archive flag count failed");
+  return { rank, flagged: (await flags.json()).count };
 }
 
 const link = ({ isActive }: { isActive: boolean }) =>
@@ -80,7 +83,7 @@ const link = ({ isActive }: { isActive: boolean }) =>
     isActive && "bg-background font-medium text-foreground shadow-sm",
   );
 
-export default function AdminLayout({ loaderData: { rank } }: Route.ComponentProps) {
+export default function AdminLayout({ loaderData: { rank, flagged } }: Route.ComponentProps) {
   const { pathname } = useLocation();
   const nav = useRef<HTMLElement>(null);
   // On phones the row may have scrolled the current page out of sight.
@@ -111,6 +114,11 @@ export default function AdminLayout({ loaderData: { rank } }: Route.ComponentPro
             .map((p) => (
               <NavLink key={p.to} to={p.to} end={p.end} className={link}>
                 <p.icon className="size-4" /> {p.label}
+                {p.to === "/admin/archive-flags" && flagged > 0 && (
+                  <span className="rounded-full bg-warning/15 px-1.5 text-2xs font-medium text-warning tabular-nums md:ml-auto">
+                    {flagged}
+                  </span>
+                )}
               </NavLink>
             ))}
         </nav>
