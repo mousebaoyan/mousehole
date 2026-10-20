@@ -10,9 +10,10 @@ import {
   Int,
   IntParam,
   readerOf,
+  UnixSecondsParam,
 } from "../../platform/http.ts";
 import { UserBriefSchema } from "../users/schemas.ts";
-import { closePoll, getPoll, listVoters, vote } from "./polls.ts";
+import { closePoll, getPoll, listNewPolls, listVoters, vote } from "./polls.ts";
 import { pollJson, PollSchema } from "./schemas.ts";
 import { getThread } from "./service.ts";
 
@@ -96,5 +97,45 @@ export const pollRoutes = createRouter()
       const { id, option } = c.req.valid("param");
       const thread = await getThread(id, readerOf(c));
       return c.json({ items: await listVoters(thread.poll, option) }, 200);
+    },
+  )
+  .openapi(
+    createRoute({
+      method: "get",
+      path: "/bot/polls",
+      summary: "[since, until) 里发的、还能投的投票帖，给插件每天在群里汇总",
+      request: {
+        query: z.object({
+          since: UnixSecondsParam.openapi({ description: "Unix 秒" }),
+          until: UnixSecondsParam.optional().openapi({ description: "Unix 秒，默认现在" }),
+        }),
+      },
+      responses: {
+        200: {
+          description: "投票帖，先发的在前",
+          content: {
+            "application/json": {
+              schema: z.object({
+                items: z.array(
+                  z.object({
+                    thread: z.object({ id: z.number(), title: z.string() }),
+                    voters: z.number().openapi({ description: "到现在投了票的人数" }),
+                    url: z.string(),
+                  }),
+                ),
+              }),
+            },
+          },
+        },
+      },
+    }),
+    async (c) => {
+      authorize(c, "read");
+      const { since, until } = c.req.valid("query");
+      const items = await listNewPolls(
+        new Date(since * 1000),
+        until === undefined ? new Date() : new Date(until * 1000),
+      );
+      return c.json({ items }, 200);
     },
   );

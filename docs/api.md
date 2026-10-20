@@ -399,6 +399,7 @@ token 由站长在后台创建，只显示一次。每个 token 绑定一个 bot
 | GET | `/bot/summaries/{thread}/source` | 写总结用的内容：`thread`（`id`、`kind`、`title`、`board`（版块名）、`tags`、`positioning`：是不是保研定位帖）、`replies`（现在的回复数，推送时带回来）、`posts`：公开、没删的楼层，按楼层号排，每层 `{ floor, op, accepted, likes, text }`，`op` 是不是楼主写的，`text` 是正文的纯文字，图片写成"[图片]"，最多 1000 个字。不带名字，也不带投票的结果。帖子不该写总结时返回 `404` | `read` |
 | PUT | `/bot/summaries/{thread}` | 推送写好的总结：`{ lead, points, replies }`，`lead` 最多 80 个字，`points` 1–5 条，每条 `{ text, floors }`，`text` 最多 80 个字，`floors` 1–5 个这个帖子里有的楼层号；`replies` 是取内容时的回复数。覆盖原来的；这个帖子的总结被版主关闭了返回 `409 summary_disabled`，后台关着 AI 总结返回 `403` | `moderate` |
 | GET | `/bot/bounties` | 开始悬赏的问题（总体设计 §8.19），给插件每天在群里发：`since`、`until`（Unix 秒，算 `[since, until)` 里开始的，`until` 默认现在）。返回 `{ items, reward }`：`items` 是到现在还没有别人回复的，先开始的在前，每项 `{ thread: { id, title, kind }, board: { slug, name }, url, until }`，`until` 是悬赏的截止时间；`reward` 是奖励的鼠币，`{ reply, answer }` | `read` |
+| GET | `/bot/polls` | 新的投票帖，给插件每天在群里汇总（总体设计 §8.6）：`since`、`until`（Unix 秒，算 `[since, until)` 里发的，`until` 默认现在）。返回 `{ items }`，先发的在前，每项 `{ thread: { id, title }, voters, url }`，`voters` 是到现在投了票的人数。包括保研定位帖；帖子要公开、没锁定、还能投，所在版块的阅读门槛是访客或成员 | `read` |
 | GET | `/bot/events` | SSE 事件流，见第 5 节 | `events` |
 | GET | `/bot/events/batch` | 按游标拉取事件：`after`、`limit`（1–500，默认 100）、`types`，返回 `{ items: [{ id, type, data, created_at }], next_after }`，`next_after` 是下次的 `after` | `events` |
 
