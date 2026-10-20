@@ -226,7 +226,7 @@ describe("投票", () => {
     expect(row.map((o) => o.abstain)).toEqual([false, false, false, false, false, true]);
   });
 
-  test("待投票：近 7 天他人发的、还在投票、自己没投过的投票帖，数量和列表一致；投了不清楚也算投过", async () => {
+  test("待投票：他人发的、还在投票、自己没投过的投票帖，不论发了多久，数量和列表一致；投了不清楚也算投过", async () => {
     const unvoted = async (who: Who) => {
       const query = { board: "polls" };
       const [list, counts] = await Promise.all([
@@ -254,10 +254,10 @@ describe("投票", () => {
 
     await db
       .updateTable("threads")
-      .set({ created_at: sql<Date>`now() - interval '8 days'` })
+      .set({ created_at: sql<Date>`now() - interval '60 days'` })
       .where("id", "=", id)
       .execute();
-    expect(await unvoted(people.second)).not.toContain(id);
+    expect(await unvoted(people.second)).toContain(id);
 
     const param = { id: String(plain.id) };
     await api.threads[":id"].poll.close.$post({ param }, people.author);

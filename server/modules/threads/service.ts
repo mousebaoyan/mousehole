@@ -210,11 +210,10 @@ const UNSOLVED = sql<boolean>`threads.kind = 'question' AND threads.accepted_cou
   AND NOT EXISTS (SELECT 1 FROM posts
     WHERE posts.thread_id = threads.id AND posts.floor = 1 AND posts.via = 'qq')`;
 
-// Polls, 保研定位 among them, that someone else started in the past week, still taking votes and
-// not yet voted in by the reader, who can't vote in a locked thread (design §8.11).
+// Polls, 保研定位 among them, that someone else started, still taking votes and not yet voted in
+// by the reader, who can't vote in a locked thread (design §8.11).
 function unvoted(userId: number | null) {
-  return sql<boolean>`threads.kind = 'poll' AND threads.created_at > now() - interval '7 days'
-    AND threads.author_id <> ${userId} AND NOT threads.locked
+  return sql<boolean>`threads.kind = 'poll' AND threads.author_id <> ${userId} AND NOT threads.locked
     AND EXISTS (SELECT 1 FROM polls
       WHERE polls.thread_id = threads.id AND polls.closed_at IS NULL
         AND (polls.closes_at IS NULL OR polls.closes_at > now()))
