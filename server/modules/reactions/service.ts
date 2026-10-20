@@ -136,11 +136,12 @@ export async function setBoost(
     .where("id", "=", post.thread_id)
     .executeTakeFirstOrThrow();
   const anonymous = writesAnonymously(thread, viewer.id);
+  const via = archived ? "qq" : actor.tokenId === null ? "web" : "bot";
   const row = await db.transaction().execute(async (trx) => {
     const { replaced, ...saved } = await trx
       .insertInto("boosts")
-      .values({ post_id: postId, user_id: viewer.id, body, anonymous, created_at: at })
-      .onConflict((oc) => oc.columns(["post_id", "user_id"]).doUpdateSet({ body }))
+      .values({ post_id: postId, user_id: viewer.id, body, anonymous, created_at: at, via })
+      .onConflict((oc) => oc.columns(["post_id", "user_id"]).doUpdateSet({ body, via }))
       .returning(["id", "post_id", "user_id", "body", "created_at"])
       .returning(sql<number | null>`old.id`.as("replaced"))
       .executeTakeFirstOrThrow();

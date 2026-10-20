@@ -84,7 +84,7 @@
 表：`reactions`、`boosts`、`thread_users`、`user_follows`、`endorsements`、`notifications`、`mail_queue`。
 
 - 表情回应每人每条一个，主键 `(post_id, user_id)`，换表情就是覆盖。`via` 和楼层的一样记从哪来（`web`、`bot`、`qq`），换表情时跟着换，数据页按它分来源；加这一列以前的，没登录过的人留的算 `qq`，其余算 `web`。每个表情都算一次赞：`posts.like_count` 是总数，`posts.reactions` 是各表情的数量，都和写入在同一个事务里更新。
-- 短评每人每层一条，`UNIQUE (post_id, user_id)`，修改就是覆盖，排序位置不变。字数（16 个字，emoji 算一个）由应用按字素计数，库里不设长度约束。
+- 短评每人每层一条，`UNIQUE (post_id, user_id)`，修改就是覆盖，排序位置不变。`via` 同表情回应，修改时跟着换，数据页的活跃用户按它只算网页上写的；加这一列以前的，bot 留的算 `qq`（插件收录短评都带来源消息），其余算 `web`。字数（16 个字，emoji 算一个）由应用按字素计数，库里不设长度约束。
 - 短评数冗余在 `posts.boost_count`，楼层列表每层取前 6 条短评，其余点开再取。删除短评是真删除，它的举报跟着删掉。
 
 - 关注级别：`watching` 每个新楼层都通知，`normal` 只在回复我、@我时通知，`muted` 都不通知。发帖时自动设为 `watching`。
@@ -199,7 +199,7 @@
 - `visits` 每天每个"IP + User-Agent"一行，`user_id` 为空的是访客，登录了的另记一行（唯一约束 `NULLS NOT DISTINCT`）。`user_agent` 截到 500 字，`views` 是浏览数，`referrer` 是这天第一次从别的网站来时的域名，`landing` 是这天第一个打开的页面的路径。在进程内累计，每分钟写一次，记到写入时的那天，和浏览数一样。成员的行留 400 天，访客的留 90 天。成员主页上的访问记录走 `visits_user`（`user_id, day DESC`），同一个 IP 上的账号走 `visits_ip`（`ip, day DESC`）。
 - `mail_log` 每封邮件一行，留 400 天：`kind` 是通知类型、`weekly`、`login`（验证码）或 `test`；`sent_at` 发出去的时间，`dropped_at` 丢掉的时间，`opened_at`、`clicked_at` 第一次打开、点击的时间，数据页按 `created_at` 分天。提醒和每周来信和 `mail_queue` 的那一行在同一个事务里写，`mail_queue.mail_id` 指向它；验证码和测试邮件不排队，发完记一行。由发邮件的 `platform/mail.ts` 写。
 - `search_terms` 每天每个词一行，留 400 天：`term` 是去掉首尾空白、合并中间空白、转成小写后的搜索词，最多 100 字；`searches` 搜了几人次，`empty` 其中没有结果的几次。同一个人（用户 ID，访客按 IP）一天内搜同一个词只算第一次：这天谁搜过哪个词只记在进程内，不存库。只记网页上搜的第一页，不算 bot、站长和爬虫，由 `search` 模块写。
-- 登录方式现查操作日志里 `action = 'auth.login'` 的 `data->>'method'`，鼠币现查 `coin_ledger`，内容和排行现查 `threads`、`posts`、`reactions`。这些只有数据页用，不另加索引。
+- 登录方式现查操作日志里 `action = 'auth.login'` 的 `data->>'method'`，鼠币现查 `coin_ledger`，内容和排行现查 `threads`、`posts`、`reactions`，活跃用户再加上 `active_days`、`poll_votes`、`boosts`。这些只有数据页用，不另加索引。
 
 ## 二期（占位）
 

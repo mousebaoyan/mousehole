@@ -1,12 +1,14 @@
-import type { ReactNode } from "react";
-import { Link } from "react-router";
+import { useId, type ReactNode } from "react";
+import { Link, useNavigate, useSearchParams } from "react-router";
 import { cn } from "~/cn";
 import { apiContext } from "../../api.server.ts";
 import { ArrowDown, ArrowUp } from "~/components/icons";
 import { Section } from "~/components/form-parts";
+import { Checkbox } from "~/components/ui/checkbox";
+import { UserAvatar } from "~/components/user-avatar";
 import { pageTitle } from "~/share-meta";
 import { NOTIFICATION_LABELS } from "../../../server/modules/notifications/types.ts";
-import { BOT_NAME } from "../../../server/platform/site.ts";
+import { BOT_NAME, levelName } from "../../../server/platform/site.ts";
 import type { Route } from "./+types/stats.ts";
 import { LineChart, monthDay } from "./stats-chart.tsx";
 
@@ -21,16 +23,52 @@ const RANGES = [
   { range: "365", label: "一年" },
 ] as const;
 
+// The page's tabs, the first by default; each but the last shows some of the figures.
+const TABS = [
+  { tab: "overview", label: "概况" },
+  { tab: "visits", label: "访问" },
+  { tab: "content", label: "内容" },
+  { tab: "operations", label: "运营" },
+  { tab: "users", label: "活跃用户" },
+] as const;
+
+// The active users' columns, each sorted by from the most; posts by default.
+const USER_COLUMNS = [
+  { sort: "days", label: "访问天数" },
+  { sort: "posts", label: "帖子 / 回复" },
+  { sort: "accepted", label: "被采纳" },
+  { sort: "likes", label: "获赞" },
+  { sort: "votes", label: "投票" },
+  { sort: "boosts", label: "短评" },
+] as const;
+
 export async function loader({ context, request }: Route.LoaderArgs) {
   const search = new URL(request.url).searchParams;
   const range = RANGES.find((r) => r.range === search.get("range"))?.range ?? "30";
+  const tab = TABS.find((t) => t.tab === search.get("tab"))?.tab ?? "overview";
   // The layout already checked that this is an admin.
-  const res = await context.get(apiContext).admin.stats.$get({ query: { range } });
+  const api = context.get(apiContext).admin.stats;
+  if (tab === "users") {
+    const sort = USER_COLUMNS.find((c) => c.sort === search.get("sort"))?.sort;
+    const staff = search.get("staff") === "false" ? "false" : undefined;
+    const res = await api.users.$get({ query: { range, sort, staff } });
+    if (!res.ok) throw new Error("Active users failed");
+    const { items } = await res.json();
+    return {
+      tab,
+      range: Number(range),
+      users: items,
+      sort: sort ?? "posts",
+      staff: staff === undefined,
+    };
+  }
+  const res = await api.$get({ query: { range } });
   if (!res.ok) throw new Error("Admin stats failed");
-  return res.json();
+  return { tab, range: Number(range), stats: await res.json() };
 }
 
-type Stats = Route.ComponentProps["loaderData"];
+type Data = Route.ComponentProps["loaderData"];
+type Stats = Extract<Data, { stats: unknown }>["stats"];
 
 const KINDS = [
   { kind: "site", label: "论坛", color: "var(--chart-1)" },
@@ -59,25 +97,43 @@ function recordedSince(days: Day[], recorded: (day: Day) => boolean, what: strin
   return first && first !== days[0] ? `${what}自 ${monthDay(first.day)}起记录` : undefined;
 }
 
-export default function Stats({ loaderData: stats }: Route.ComponentProps) {
-  const { range, days, totals } = stats;
-  const dates = days.map((d) => d.day);
+// This page's address with some parameters changed; an empty value drops one.
+function useHref() {
+  const [params] = useSearchParams();
+  return (change: Record<string, string>) => {
+    const next = new URLSearchParams(params);
+    for (const [name, value] of Object.entries(change)) {
+      if (value === "") next.delete(name);
+      else next.set(name, value);
+    }
+    return `?${next}`;
+  };
+}
+
+// One of a row of links to choose from, the chosen one filled in.
+function choice(chosen: boolean) {
+  return cn(
+    "shrink-0 rounded-full px-3 py-1 text-sm whitespace-nowrap text-muted-foreground hover:text-foreground",
+    chosen && "bg-secondary font-medium text-foreground",
+  );
+}
+
+export default function StatsPage({ loaderData }: Route.ComponentProps) {
+  const { tab, range } = loaderData;
+  const href = useHref();
   const period = RANGES.find((r) => r.range === String(range))?.label;
   return (
     <>
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
         <h1 className="mr-auto text-xl font-semibold">数据</h1>
-        <nav aria-label="时间范围" className="flex gap-1">
+        <nav aria-label="时间范围" className="flex gap-0.5 rounded-full border p-0.5">
           {RANGES.map((r) => (
             <Link
               key={r.range}
-              to={`?range=${r.range}`}
+              to={href({ range: r.range })}
               preventScrollReset
               aria-current={r.range === String(range) ? "page" : undefined}
-              className={cn(
-                "rounded-full px-3 py-1 text-sm text-muted-foreground hover:text-foreground",
-                r.range === String(range) && "bg-secondary font-medium text-foreground",
-              )}
+              className={choice(r.range === String(range))}
             >
               {r.label}
             </Link>
@@ -85,9 +141,91 @@ export default function Stats({ loaderData: stats }: Route.ComponentProps) {
         </nav>
       </div>
       <p className="mt-1 text-meta text-muted-foreground">
-        按北京时间统计，箭头表示与之前 {period}相比的变化
+        按北京时间统计{tab !== "users" && `，箭头表示与之前 ${period}相比的变化`}
       </p>
+      <nav
+        aria-label="栏目"
+        className="-mx-1 mt-4 flex gap-1 overflow-x-auto px-1 [scrollbar-width:none]"
+      >
+        {TABS.map((t) => (
+          <Link
+            key={t.tab}
+            to={href({ tab: t.tab === "overview" ? "" : t.tab, sort: "", staff: "" })}
+            preventScrollReset
+            aria-current={t.tab === tab ? "page" : undefined}
+            className={cn(choice(t.tab === tab), "px-3.5 py-1.5")}
+          >
+            {t.label}
+          </Link>
+        ))}
+      </nav>
+      {loaderData.tab === "users" ? (
+        <ActiveUsers {...loaderData} />
+      ) : (
+        <Figures tab={loaderData.tab} stats={loaderData.stats} />
+      )}
+    </>
+  );
+}
 
+function Figures({ tab, stats }: { tab: Exclude<Data["tab"], "users">; stats: Stats }) {
+  const { days, totals } = stats;
+  const dates = days.map((d) => d.day);
+  if (tab === "visits") {
+    return (
+      <>
+        <Visits stats={stats} dates={dates} />
+        <Section title="阅读">
+          <div className="grid grid-cols-2 gap-3">
+            <Figure
+              label="阅读时长（小时）"
+              value={hours(totals.now.read_seconds)}
+              before={hours(totals.before.read_seconds)}
+            />
+            <Figure
+              label="读过的楼层"
+              value={totals.now.posts_read}
+              before={totals.before.posts_read}
+            />
+          </div>
+          <div className="mt-6">
+            <LineChart
+              title="每天的阅读时长（小时）"
+              days={dates}
+              series={[
+                {
+                  label: "阅读时长",
+                  color: "var(--chart-1)",
+                  values: days.map((d) => hours(d.read_seconds)),
+                },
+              ]}
+            />
+          </div>
+        </Section>
+        <Logins stats={stats} dates={dates} />
+        <Bandwidth stats={stats} dates={dates} />
+      </>
+    );
+  }
+  if (tab === "content") {
+    return (
+      <>
+        <Content stats={stats} dates={dates} />
+        <Top top={stats.top} />
+        <Searches searches={stats.searches} />
+      </>
+    );
+  }
+  if (tab === "operations") {
+    return (
+      <>
+        <Mail mail={stats.mail} />
+        <Coins stats={stats} dates={dates} />
+      </>
+    );
+  }
+  return (
+    <>
       <Section
         title="活跃"
         description={`论坛指打开过论坛的成员，群里指在群里发言、内容被收录或通过${BOT_NAME} 发帖的成员`}
@@ -105,56 +243,10 @@ export default function Stats({ loaderData: stats }: Route.ComponentProps) {
           />
         </div>
       </Section>
-
       <Members stats={stats} dates={dates} />
-
       <Section title="留存" description="按激活的那一周分组，之后各周来过论坛的人数占比">
         <Retention cohorts={stats.retention} />
       </Section>
-
-      <Visits stats={stats} dates={dates} />
-
-      <Content stats={stats} dates={dates} />
-
-      <Section title="阅读">
-        <div className="grid grid-cols-2 gap-3">
-          <Figure
-            label="阅读时长（小时）"
-            value={hours(totals.now.read_seconds)}
-            before={hours(totals.before.read_seconds)}
-          />
-          <Figure
-            label="读过的楼层"
-            value={totals.now.posts_read}
-            before={totals.before.posts_read}
-          />
-        </div>
-        <div className="mt-6">
-          <LineChart
-            title="每天的阅读时长（小时）"
-            days={dates}
-            series={[
-              {
-                label: "阅读时长",
-                color: "var(--chart-1)",
-                values: days.map((d) => hours(d.read_seconds)),
-              },
-            ]}
-          />
-        </div>
-      </Section>
-
-      <Logins stats={stats} dates={dates} />
-
-      <Mail mail={stats.mail} />
-
-      <Searches searches={stats.searches} />
-
-      <Coins stats={stats} dates={dates} />
-
-      <Bandwidth stats={stats} dates={dates} />
-
-      <Top top={stats.top} />
     </>
   );
 }
@@ -969,6 +1061,112 @@ function Bandwidth({ stats, dates }: { stats: Stats; dates: string[] }) {
           }))}
         />
       </div>
+    </Section>
+  );
+}
+
+const ROLE_NAMES: Partial<Record<string, string>> = { moderator: "版主", admin: "管理员" };
+
+// The name column stays put while the figures scroll sideways under it; on phones a line marks
+// its edge.
+const pinned = "sticky left-0 z-10 bg-card max-sm:shadow-[inset_-1px_0_var(--border)]";
+
+// Who did the most on the forum itself, sorted by the column chosen.
+function ActiveUsers({ users, sort, staff }: Extract<Data, { tab: "users" }>) {
+  const href = useHref();
+  const navigate = useNavigate();
+  const staffId = useId();
+  return (
+    <Section
+      title="活跃用户"
+      description={`这段时间在论坛上最活跃的 30 位成员，只统计本人在网页上的操作，不含群里收录、${BOT_NAME} 代发和匿名的内容`}
+    >
+      <label htmlFor={staffId} className="inline-flex items-center gap-2 text-sm">
+        <Checkbox
+          id={staffId}
+          checked={!staff}
+          onChange={() =>
+            navigate(href({ staff: staff ? "false" : "" }), { preventScrollReset: true })
+          }
+        />
+        不含版主和管理员
+      </label>
+      {users.length === 0 ? (
+        <p className="py-10 text-center text-sm text-muted-foreground">这段时间暂无记录</p>
+      ) : (
+        <div className="-mx-5 mt-3 overflow-x-auto overscroll-x-contain">
+          <table className="w-full text-sm whitespace-nowrap tabular-nums">
+            <thead className="text-left text-meta text-muted-foreground">
+              <tr>
+                <th className={cn(pinned, "py-2 pr-2 pl-5 font-medium")}>成员</th>
+                {USER_COLUMNS.map((c) => (
+                  <th
+                    key={c.sort}
+                    aria-sort={c.sort === sort ? "descending" : undefined}
+                    className="px-2 py-2 text-right font-medium last:pr-5 sm:px-3"
+                  >
+                    <Link
+                      to={href({ sort: c.sort === "posts" ? "" : c.sort })}
+                      preventScrollReset
+                      className={cn(
+                        "inline-flex items-center gap-0.5 hover:text-foreground",
+                        c.sort === sort && "text-foreground",
+                      )}
+                    >
+                      {c.label}
+                      {c.sort === sort && <ArrowDown aria-label="从多到少" className="size-3.5" />}
+                    </Link>
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y border-t">
+              {users.map((u, i) => {
+                const role = ROLE_NAMES[u.user.role];
+                return (
+                  <tr key={u.user.id}>
+                    <td className={cn(pinned, "py-2 pr-2 pl-5")}>
+                      <Link
+                        to={`/u/${u.user.id}`}
+                        className="flex w-36 items-center gap-2 sm:w-auto sm:min-w-48"
+                      >
+                        <span className="w-4 shrink-0 text-right text-meta text-muted-foreground">
+                          {i + 1}
+                        </span>
+                        <UserAvatar user={u.user} className="size-8 shrink-0" />
+                        <span className="min-w-0">
+                          <span className="block truncate font-medium">{u.user.display_name}</span>
+                          <span
+                            className={cn(
+                              "text-meta",
+                              role ? "text-primary" : "text-muted-foreground",
+                            )}
+                          >
+                            {role ?? levelName(u.user.level)}
+                          </span>
+                        </span>
+                      </Link>
+                    </td>
+                    {USER_COLUMNS.map((c) => (
+                      <td
+                        key={c.sort}
+                        className={cn(
+                          "px-2 py-2 text-right last:pr-5 sm:px-3",
+                          c.sort === sort && "font-semibold",
+                        )}
+                      >
+                        {c.sort === "posts"
+                          ? `${number(u.threads)} / ${number(u.replies)}`
+                          : number(u[c.sort])}
+                      </td>
+                    ))}
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
     </Section>
   );
 }
