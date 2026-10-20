@@ -7,14 +7,15 @@ import { Pages } from "~/components/pages";
 import { ThreadList, ThreadRows } from "~/components/thread-list";
 import { useBoards, useTags, type Board } from "~/forum";
 
-// New and unread are the reader's own (design §8.9): only for someone signed in, with how many;
-// so is how many are unsolved.
+// New, unread (design §8.9) and polls not yet voted in (design §8.11) are the reader's own: only
+// for someone signed in, with how many; so is how many are unsolved.
 const VIEWS = [
   { view: "latest", label: "最新", own: false },
   { view: "new", label: "新", own: true },
   { view: "unread", label: "未读", own: true },
   { view: "hot", label: "热门", own: false },
   { view: "unsolved", label: "待解答", own: false },
+  { view: "unvoted", label: "待投票", own: true },
 ] as const;
 
 export type ThreadView = (typeof VIEWS)[number]["view"];
@@ -73,6 +74,13 @@ export function tagChoices(
   );
 }
 
+// On phones the tabs scroll sideways: the chosen one is brought into the middle, so a tab at the
+// end, opened from a link, isn't left cut off.
+function keepInSight(tab: HTMLElement | null) {
+  const tabs = tab?.parentElement;
+  if (tab && tabs) tabs.scrollLeft = tab.offsetLeft - (tabs.clientWidth - tab.offsetWidth) / 2;
+}
+
 // Board in the path, the rest in the query; defaults are left out.
 function listUrl(board: string | null, tag: string | null, view: ThreadView) {
   const params = new URLSearchParams();
@@ -83,7 +91,7 @@ function listUrl(board: string | null, tag: string | null, view: ThreadView) {
 
 type Page = { threads: ThreadItem[]; next_cursor: string | null; now: number };
 
-export type Counts = { new: number; unread: number; unsolved: number };
+export type Counts = { new: number; unread: number; unsolved: number; unvoted: number };
 
 // The board and tag filters stack, and both keep the current view. `counts` is null for guests.
 export function ThreadFeed({
@@ -134,13 +142,14 @@ export function ThreadFeed({
         </div>
         <nav
           aria-label="帖子列表"
-          className="-mx-1 flex overflow-x-auto px-1 [scrollbar-width:none] max-sm:w-full"
+          className="relative -mx-1 flex overflow-x-auto px-1 [scrollbar-width:none] max-sm:w-full"
         >
           {VIEWS.filter((v) => !v.own || counts).map((v) => {
             const count = v.view === "latest" || v.view === "hot" ? undefined : counts?.[v.view];
             return (
               <Link
                 key={v.view}
+                ref={v.view === view ? keepInSight : undefined}
                 to={listUrl(slug, tag, v.view)}
                 aria-current={v.view === view ? "page" : undefined}
                 className={cn(

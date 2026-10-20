@@ -45,7 +45,6 @@ import { SummarySchema, summaryJson } from "../summaries/schemas.ts";
 import { threadSummary } from "../summaries/service.ts";
 import { assertRelationsShown, findUserId, relationsShown, userBriefs } from "../users/service.ts";
 import {
-  awaitingVotes,
   countTabs,
   createPost,
   createThread,
@@ -458,7 +457,7 @@ const postResponse = {
 };
 
 // Lists of the reader's own, for someone signed in.
-const OWN_VIEWS = new Set<ThreadView>(["new", "unread", "read", "posted", "bookmarked"]);
+const OWN_VIEWS = new Set<ThreadView>(["unvoted", "new", "unread", "read", "posted", "bookmarked"]);
 
 export const threadsRoutes = createRouter()
   .openapi(
@@ -472,7 +471,7 @@ export const threadsRoutes = createRouter()
           tag: z.string().optional(),
           view: z.enum(VIEWS).default("latest").openapi({
             description:
-              "latest 按最后回复，created 按发布时间，hot 热门，unsolved 待解答；要登录的：new 最近 7 天发布、自己没打开过，unread 读过、之后有新楼层，read 读过的、按最后阅读时间，posted 自己发过或回复过的，bookmarked 自己收藏的、按收藏时间",
+              "latest 按最后回复，created 按发布时间，hot 热门，unsolved 待解答；要登录的：unvoted 待投票，最近 7 天他人发的、还在投票、自己没投过的投票帖，new 最近 7 天发布、自己没打开过，unread 读过、之后有新楼层，read 读过的、按最后阅读时间，posted 自己发过或回复过的，bookmarked 自己收藏的、按收藏时间",
           }),
           cursor: z.string().optional(),
           limit: z.coerce
@@ -668,53 +667,24 @@ export const threadsRoutes = createRouter()
       return c.json({ top_posts, likers: people(likers), liked: people(liked) }, 200);
     },
   )
-  // Before /threads/{id}, which would take these for an ID.
-  .openapi(
-    createRoute({
-      method: "get",
-      path: "/threads/awaiting-votes",
-      summary:
-        "等自己投票的保研定位帖：近 7 天发的、还在投票、自己没投过也不是自己发的，最新的在前，最多 3 个；首页用",
-      responses: {
-        200: {
-          description: "帖子",
-          content: {
-            "application/json": {
-              schema: z.object({
-                items: z.array(
-                  z.object({
-                    id: z.number(),
-                    title: z.string(),
-                    schools: z.number().openapi({ description: "目标院校有几所" }),
-                    voter_count: z.number(),
-                  }),
-                ),
-              }),
-            },
-          },
-        },
-        401: errorResponse("没有登录"),
-        403: errorResponse("不是成员或被禁言，不能投票"),
-      },
-    }),
-    async (c) => {
-      const viewer = authorizePosting(c);
-      const reach = reachOf(viewer, c.var.bot);
-      return c.json({ items: await awaitingVotes(reach, viewer.id) }, 200);
-    },
-  )
+  // Before /threads/{id}, which would take "counts" for an ID.
   .openapi(
     createRoute({
       method: "get",
       path: "/threads/counts",
-      summary: "当前范围里新、未读和待解答的帖子各有几个，列表的标签页用",
+      summary: "当前范围里待投票、新、未读和待解答的帖子各有几个，列表的标签页和首页的提示用",
       request: { query: z.object({ board: z.string().optional(), tag: z.string().optional() }) },
       responses: {
         200: {
           description: "数量",
           content: {
             "application/json": {
-              schema: z.object({ new: z.number(), unread: z.number(), unsolved: z.number() }),
+              schema: z.object({
+                new: z.number(),
+                unread: z.number(),
+                unsolved: z.number(),
+                unvoted: z.number(),
+              }),
             },
           },
         },
