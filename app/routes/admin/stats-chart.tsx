@@ -257,7 +257,7 @@ function DataTable({
           <tbody className="divide-y border-t">
             {days
               .map((day, i) => ({ day, i }))
-              .toReversed()
+              .reverse()
               .map(({ day, i }) => (
                 <tr key={day}>
                   <td className="px-3 py-1.5">{longDay(day)}</td>

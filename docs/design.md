@@ -81,6 +81,7 @@ mousehole 容器（Hono + React Router 8，Node 26）── 图片目录（数�
 | 层 | 选型 | 说明 |
 | --- | --- | --- |
 | 运行时 | Node.js 26 LTS，pnpm | 2026 年 10 月 28 日转为 LTS，支持到 2029 年 4 月 |
+| 浏览器 | iOS 15.4、Chrome 100、Firefox 128 及以上 | 大部分人在 QQ 里打开：iOS 上是系统的 Safari 内核，群里还有人用 iOS 15；安卓上是系统 WebView，不少没有更新。更旧的浏览器不支持 cascade layers，Tailwind 的样式整个失效。怎么保证见[开发约定 §4](development.md#4-前端) |
 | 语言 | TypeScript 7 | Go 实现的编译器，类型检查快 8–12 倍 |
 | 前端 | React 19，开启 React Compiler | 编译时自动做组件级的性能优化，不用手写 memo |
 | 全栈框架 | React Router 8（框架模式） | 服务端渲染，SEO 和 QQ 链接卡片都正常；路由参数和 loader 数据都有生成的类型 |

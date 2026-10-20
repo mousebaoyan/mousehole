@@ -85,6 +85,10 @@
       }
     ],
     "typescript/switch-exhaustiveness-check": "error",
+    // They want toSorted() and toReversed(), which the oldest browsers we support lack
+    // (development.md §4).
+    "unicorn/no-array-sort": "off",
+    "unicorn/no-array-reverse": "off",
     "react/react-in-jsx-scope": "off"
   }
 }

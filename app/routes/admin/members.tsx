@@ -107,13 +107,9 @@ function pick<T extends string>(options: readonly { value: T }[], value: string)
 // The columns picked here, kept for the next visit in a cookie so the server renders them too.
 const COOKIE = "member_columns";
 
+// Not cookieStore, which Safari has only since 18.4.
 function remember(columns: Column[]) {
-  void cookieStore.set({
-    name: COOKIE,
-    value: columns.join("."),
-    path: "/admin",
-    expires: Date.now() + 365 * 24 * 3600_000,
-  });
+  document.cookie = `${COOKIE}=${columns.join(".")}; path=/admin; max-age=${365 * 24 * 3600}`;
 }
 
 export async function loader({ request, context }: Route.LoaderArgs) {

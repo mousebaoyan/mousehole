@@ -52,7 +52,7 @@ export function useReaction(
   if (mine !== null) counts[mine] = (counts[mine] ?? 0) + 1;
   const sorted = Object.entries(counts)
     .filter(([, n]) => n > 0)
-    .toSorted(([, a], [, b]) => b - a);
+    .sort(([, a], [, b]) => b - a);
   return {
     sorted,
     mine,
