@@ -460,6 +460,7 @@ function ThreadPage({
                 op={sameWriter(post.author, thread.author)}
                 accepted={post.accepted}
                 unread={read === null ? undefined : !read.has(post.floor)}
+                landed={post.floor === start}
                 now={now}
                 parent={posts.find((p) => p.id === post.reply_to?.id)}
                 self={self}

@@ -43,13 +43,15 @@ import { ReviewItems, type Review } from "./review-items.tsx";
 // `manage` holds what the reader may do to this floor besides replying: edit it, delete it,
 // read its edit history, delete the whole thread from its opening post, remove other
 // people's boosts, accept it as the answer, review it. `unread` is left out for guests, whose
-// reading isn't tracked; `onReply` for a thread that isn't public yet.
+// reading isn't tracked; `onReply` for a thread that isn't public yet. `landed` is whether the page
+// was opened at this floor.
 export function PostCard({
   post,
   threadId,
   op,
   accepted,
   unread,
+  landed,
   now,
   parent,
   manage,
@@ -67,6 +69,7 @@ export function PostCard({
   op: boolean;
   accepted: boolean;
   unread: boolean | undefined;
+  landed: boolean;
   now: number;
   parent: PostItem | undefined;
   manage: {
@@ -90,6 +93,7 @@ export function PostCard({
 }) {
   const [parentOpen, setParentOpen] = useState(false);
   const [repliesOpen, setRepliesOpen] = useState(false);
+  const [unfolded, setUnfolded] = useState(landed);
   const parentFetcher = useFetcher<PostItem>();
   const repliesFetcher = useFetcher<PostItem[]>();
   const [reporting, setReporting] = useState<ReportTarget | null>(null);
@@ -142,6 +146,34 @@ export function PostCard({
     );
   }
 
+  // A hidden reply is folded to a line, out of the way of the rest, unless the page was opened at
+  // it: then it was gone to on purpose, from a notice or the admin's pages.
+  const hidden = framed && post.status === "hidden";
+  if (hidden && !unfolded) {
+    return (
+      <li
+        id={`floor-${post.floor}`}
+        data-floor={post.floor}
+        className="scroll-mt-20 py-2 [&+li]:before:hidden"
+      >
+        <button
+          type="button"
+          aria-expanded={false}
+          onClick={() => setUnfolded(true)}
+          className="flex w-full items-center gap-2 rounded-2xl border border-dashed border-warning/50 px-3 py-2.5 text-left text-meta hover:bg-warning/5 sm:px-4"
+        >
+          <EyeOff className="size-4 shrink-0 text-warning" />
+          <span className="shrink-0 font-medium text-warning">已隐藏</span>
+          <span className="shrink-0 text-muted-foreground tabular-nums">#{post.floor}</span>
+          <span className="truncate text-muted-foreground">{author.display_name}</span>
+          <span className="ml-auto inline-flex shrink-0 items-center gap-0.5 text-muted-foreground">
+            展开 <ChevronDown className="size-4" />
+          </span>
+        </button>
+      </li>
+    );
+  }
+
   return (
     <li
       id={`floor-${post.floor}`}
@@ -165,6 +197,16 @@ export function PostCard({
             <>
               <EyeOff className="size-4" /> 已隐藏，仅作者和版主可见
             </>
+          )}
+          {hidden && (
+            <button
+              type="button"
+              aria-expanded
+              onClick={() => setUnfolded(false)}
+              className="-my-1 ml-auto inline-flex shrink-0 items-center gap-0.5 rounded-full px-2 py-1 font-normal text-muted-foreground hover:bg-accent hover:text-foreground"
+            >
+              收起 <ChevronUp className="size-4" />
+            </button>
           )}
         </div>
       )}
