@@ -64,7 +64,7 @@
 - 删除只设 `deleted_at`，楼层号保留，页面显示"该楼已删除"，指向某一楼的链接不会错位。删除回复时帖子的回复数、被回复那层的 `reply_count`、版块和作者的回复数都减一；删除帖子时版块、标签和作者的帖子数减一，版块的回复数减去这个帖子的回复数。
 - 编辑：`UPDATE posts ... RETURNING edit_count, old.body` 一步拿到新的版本号和旧正文，再插入 `post_revisions`，并发编辑不会撞号。改标题也算主楼的一次编辑，旧标题存在 `post_revisions.title`。
 - 正文：`body` 是 Markdown 原文，`html` 是渲染好的，`render_version` 记 `html` 出自哪一版渲染器（`markdown.ts` 的 `RENDER_VERSION`）。渲染规则一变就把常量加一，启动时把版本更旧的楼层分批重新渲染、重建索引；更新时带上"版本仍然更旧"的条件，期间被编辑过的楼层不会被盖掉。
-- "最新发布"排序直接按 `id DESC` 走主键，不用单独建索引。热门和"新"从最近 7 天的帖子开始找，走部分索引 `threads_recent`。
+- "最新发布"排序直接按 `id DESC` 走主键，不用单独建索引。热门从最近 7 天的帖子开始找，走部分索引 `threads_recent`。
 - 采纳（[总体设计 §8.1](design.md#81-版块帖子与楼层)）：`posts.accepted_at` 是被采纳的时间，不为空的就是被采纳的回答（周榜按它数本周被采纳的），一个问答帖可以有几层；`posts.accepted_by` 是谁采纳的，和 `accepted_at` 同时为空或不为空，等于作者本人的（楼主或版主采纳自己的）不算回答，不给鼠币、不进徽章和周榜；`threads.accepted_count` 是其中公开、没删的层数，采纳、取消、隐藏、恢复和删除时在同一个事务里加减，为 0 的问答帖是待解答，走部分索引 `threads_unsolved`；收录来的（主楼的 `via` 是 `qq`）不算。
 - 计数：`threads.reply_count` 只算公开的回复（不含主楼）；`boards.post_count`、`users.post_count` 只算公开的帖子里公开的回复，帖子隐藏、恢复、删除时连同里面的回复一起加减；`users.thread_count` 算公开的帖子；`users` 的两个数不算匿名的内容；都和发帖在同一个事务里更新。
 - 列表翻页的游标是最后一个帖子的 `last_post_at`（微秒，JavaScript 的 Date 只到毫秒）和 ID，"最新发布"是 ID，收藏列表是 `thread_users.bookmarked_at`（微秒）和 ID。
