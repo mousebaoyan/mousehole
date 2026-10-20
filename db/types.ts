@@ -41,6 +41,12 @@ export interface ApiTokens {
   token_hash: Buffer;
 }
 
+export interface ArchiveFlags {
+  created_at: Generated<Timestamp>;
+  post_id: number;
+  user_id: number;
+}
+
 export interface AuditLogs {
   action: string;
   actor_id: number | null;
@@ -599,6 +605,7 @@ export interface Visits {
 export interface DB {
   active_days: ActiveDays;
   api_tokens: ApiTokens;
+  archive_flags: ArchiveFlags;
   audit_logs: AuditLogs;
   badges: Badges;
   boards: Boards;

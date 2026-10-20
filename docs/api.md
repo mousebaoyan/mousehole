@@ -86,12 +86,14 @@
   "entry": "button", "min_level": 1, "draws_at": 1760600000, "drawn_at": 1760600030, "cancelled": false,
   "seed_hash": "9f86d0…", "seed": "3a7bd3…", "entry_count": 25, "entered": true }
 
-// 楼层。正文只带 html 或 body 中的一个，见上面的「正文」；via 为 qq 的是从群聊收录的；
+// 楼层。正文只带 html 或 body 中的一个，见上面的「正文」；via 为 qq 的是从群聊收录的，
+// 只有它们带 my_archive_flag：自己有没有反馈它收录有误（总体设计 §6.5），访客为 false；
 // 删除的楼层 deleted 为 true，正文为空字符串；status 同帖子，主楼的跟着帖子；accepted 表示问答帖里被采纳为答案；
 // 作者设置了不给访客看时，访客拿到的 members_only 为 true，正文为空，没有表情和短评（总体设计 §8.10）
 { "id": 108, "thread_id": 42, "floor": 3, "reply_to": { "id": 105, "floor": 2, "author": { … } },
-  "author": { … }, "html": "<p>…</p>", "via": "qq", "deleted": false, "members_only": false,
-  "status": "visible", "reactions": { "heart": 2, "+1": 1 }, "my_reaction": "heart", "reply_count": 1,
+  "author": { … }, "html": "<p>…</p>", "via": "qq", "my_archive_flag": false, "deleted": false,
+  "members_only": false, "status": "visible", "reactions": { "heart": 2, "+1": 1 }, "my_reaction": "heart",
+  "reply_count": 1,
   "boosts": [ { "id": 31, "user": { … }, "body": "学到了", "created_at": 1760000100 } ],
   "boost_count": 9, "my_boost": "已收藏", "accepted": false,
   "edited_at": null, "created_at": 1760000000 }
@@ -142,7 +144,7 @@ token 由站长在后台创建，只显示一次。每个 token 绑定一个 bot
 - **只能代表成员**：被代表的人必须是同步过的账号，否则返回 `404 unknown_member`；站长账号也是这样，bot 不能代表站长，站长也不能做操作人。冻结的账号只能读，写操作返回 `403 member_frozen`；带 `source` 的收录（发帖、回复、更新、表情回应、短评）例外，那是他还在群里时说的话，退群的人在群里留下的问答照样能收录。没同步过的退群成员，插件可以先用增量同步推一条 `in_group: false` 的记录给他建账号，见第 4 节。有人刚进群、论坛还没同步到时，插件先推送一条增量。
 - **代发开关**：成员在设置里关掉"群聊收录"（`allow_proxy`）后，只有他本人让 bot 操作（`X-Operator` 就是本人）时才放行，否则写操作返回 `403 proxy_disabled`。读操作不受影响。
 - **操作人校验**：带 `X-Operator` 时，论坛会检查操作人有没有资格：代表别人操作时，操作人必须是版主或管理员；执行版主或管理员操作时，操作人自己也必须有这个权限。不通过返回 `403 operator_not_allowed`。没有操作人的场景（例如定时任务、成员同步）可以不带这个头；后台可以设为代表成员时必须带，没带的返回 `400 operator_required`，bot 以自己的账号操作不受影响。
-- **来源标注**：代表成员发的内容，带来源消息时 `via` 为 `qq`，页面标"整理自群聊"；否则为 `bot`。本人可以编辑和删除。
+- **来源标注**：代表成员发的内容，带来源消息时 `via` 为 `qq`，页面标"群聊收录"；否则为 `bot`。本人可以编辑和删除。
 - **审计**：经由 bot 的写操作都写入审计日志，记录以谁的身份、操作人、token、来源消息和 IP。
 
 ### 2.4 幂等
@@ -178,7 +180,7 @@ token 由站长在后台创建，只显示一次。每个 token 绑定一个 bot
 | `video`、`record`、`forward`、`json` | "[视频]""[语音]""[聊天记录]""[卡片]" |
 | 其他 | "[消息]" |
 
-转换后没有内容（例如只有一个 `@全体成员`）返回 `400 invalid_request`。带 `source` 的内容标为整理自群聊（`via: "qq"`）。
+转换后没有内容（例如只有一个 `@全体成员`）返回 `400 invalid_request`。带 `source` 的内容标为群聊收录（`via: "qq"`）。
 
 `chat_log` 用来发"聊天记录帖"（`kind: "chatlog"`，二期），每条消息的 `message` 同样是 OneBot 消息段。插件把合并转发的节点展开后传进来即可。
 
@@ -322,6 +324,8 @@ token 由站长在后台创建，只显示一次。每个 token 绑定一个 bot
 | DELETE | `/posts/{id}/reaction` | 取消自己的回应 | 成员 / `act` |
 | GET | `/posts/{id}/reactions` | 谁回应了什么，最近的在前，每次 50 个：可按 `emoji` 筛选，`cursor` 翻页 | 访客 |
 | POST | `/posts/{id}/report` | 举报：`{ reason }`（最多 200 个字）；每人对每层一次，再举报返回 `409 already_reported`；产生 `report.created` 事件。L4 举报等级比自己低的人的回复时，这一层先隐藏，驳回举报时恢复 | 没被禁言的成员 / `act` |
+| PUT | `/posts/{id}/archive-flag` | 反馈这一层收录有误（总体设计 §6.5），已反馈过的不变；不是从群聊收录的楼层返回 `400` | 没被禁言的成员 / `act` |
+| DELETE | `/posts/{id}/archive-flag` | 撤回自己的收录有误反馈 | 没被禁言的成员 / `act` |
 | PUT | `/posts/{id}/boost` | 留下或修改自己在这一层的短评：`{ body }`，不超过 16 个字（emoji 算一个），首尾空白去掉；返回这条短评。从群里收录的带 `source` 和 `created_at`（2.5 节） | 成员 / `act` |
 | DELETE | `/posts/{id}/boost` | 删除自己的短评 | 成员 / `act` |
 | GET | `/posts/{id}/boosts` | 这一层的全部短评，按时间排序；楼层列表里每层只带前 6 条 | 访客 |
@@ -359,7 +363,7 @@ token 由站长在后台创建，只显示一次。每个 token 绑定一个 bot
 
 | 方法 | 路径 | 说明 | 权限 |
 | --- | --- | --- | --- |
-| GET | `/admin/overview` | 概览：`members`（`total`、`activated`、`frozen`，不算 bot 和站长）、`content`（`threads_today`、`posts_today`：今天公开的帖子和回复，按北京时间；`pending`：待审核；`reports`：待处理的举报；`suggestions`：待处理的修改建议）、`events`（`streams`：现在连着的事件流；`polled_at`：最近一次按游标拉取的时间，进程重启后为 `null`）、`storage`（`database`、`uploads`：数据库和上传图片占用的字节数）；群的同步状态见 `/admin/groups` | 管理员 / `admin` |
+| GET | `/admin/overview` | 概览：`members`（`total`、`activated`、`frozen`，不算 bot 和站长）、`content`（`threads_today`、`posts_today`：今天公开的帖子和回复，按北京时间；`pending`：待审核；`reports`：待处理的举报；`suggestions`：待处理的修改建议；`archive_flags`：被反馈收录有误、还公开着的楼层）、`events`（`streams`：现在连着的事件流；`polled_at`：最近一次按游标拉取的时间，进程重启后为 `null`）、`storage`（`database`、`uploads`：数据库和上传图片占用的字节数）；群的同步状态见 `/admin/groups` | 管理员 / `admin` |
 | GET | `/admin/stats` | 数据页（总体设计 §10.1），按北京时间，不算 bot 和站长：`range` 为 `7`、`30`（默认）、`90` 或 `365`，最近几天，含今天。`days` 是逐天的数组，每天 `{ day, active: { site, qq, total }, members, activated, new_activated, joined, left, read_seconds, posts_read, guests, guest_views, member_views, bytes, content, logins, coins }`：`active` 是论坛、群里、合起来的日活；`members`、`activated` 是那天的群成员数和其中已激活的，开始记录以前为 `null`；`joined`、`left` 是进群、退群的人次，按群算；`guests` 是访客人数，`guest_views`、`member_views` 是访客和成员的浏览量，`bytes` 是发出的字节数 `{ page, api, image, asset }`，这四项开始记录以前为 `null`；`content` 是公开的新帖、回复和表情回应 `{ threads, replies, reactions }`，各分网页、bot 代发、群里收录 `{ web, bot, qq }`，收录的按在群里发出的时间算；`logins` 是口令、链接、QQ 邮箱验证码三种方式各登录了几次 `{ code, link, email }`，同一个人登录几次算几次；`coins` 是按记账的那天算的鼠币，`earned` 是发放的 `{ check_in, liked, accepted, bounty }`，`spent` 是消耗的 `{ question, look }`，都是正数。`totals` 有 `now`（这一段）和 `before`（之前同样长的一段），各是 `{ dau, wau, mau, new_activated, read_seconds, posts_read, guests, guest_views, member_views, bytes, content, questions, logins, coins }`：`dau` 是过完了的天的平均日活，`wau`、`mau` 是截至最后一天的 7 天、30 天里来过的人，三项都分 `site`、`qq`、`total`；访问和字节数是过完了的天里有记录的那些天的平均数，一天都没有时为 `null`；`content`、`logins`、`coins` 是整段的合计；`questions` 是这一段在论坛上发的问答帖（不算群里收录的）`{ asked, solved, answered, wait }`：`solved` 是其中已解决的，`answered` 是有别人回复的，`wait` 是提问后第一条别人回复的等待时间的中位数（秒），没人回复过时为 `null`。`retention` 是最近 12 周激活的人，最新的在前，每周 `{ week, size, back }`：`week` 是那周的周一，`back` 是其中第 1、2、4、8 周来过论坛的人数，那一周还没过完时为 `null`。这一段里访客的 `referrers`（`{ host, visits }`，来源网站的域名）、`landings`（`{ path, title, visits }`，最先打开的页面，帖子页带标题）各前 10，`devices` 是访客和成员用的浏览器和系统 `{ guests, members }`，各前 10，每项 `{ device, visits }`；`visits` 是人次，每人每天算一次。`mail` 是这一段的邮件，按类，发得多的在前，每类 `{ kind, sent, dropped, opened, clicked }`：`kind` 是通知类型、`weekly`、`login`（验证码）或 `test`，`dropped` 是发不出去丢掉的，`opened`、`clicked` 是其中打开过、点击过的，验证码和测试邮件不记，为 `null`。`searches` 是这一段网页上搜得最多的词 `most` 和没有结果的词 `unfound`，各前 20，每项 `{ term, searches }`：`term` 转成了小写，`searches` 是人次（`unfound` 里是没有结果的人次），每人每天搜同一个词算一次。`top` 是这一段公开的新回复和表情回应合起来最多的帖子 `threads`（`{ id, title, replies, reactions }`）、版块 `boards`（`{ slug, name, replies, reactions }`）和标签 `tags`（`{ name, replies, reactions }`），各前 10 | 管理员 / `admin` |
 | GET | `/admin/settings` | 站点设置，按分组返回：`site`（`banner` 公告横幅，`qq_public` 访客能否看到 QQ 号，`summaries` 是否显示和生成 AI 总结）、`login`（三种登录方式的开关和口令提示）、`smtp`（`accounts`：发信邮箱，按使用的顺序，每个是 `host`、`port`、`secure`、`user`，密码只返回 `password_set`）、`bot`（`require_operator`）、`notify`（`email`：每类通知的邮件规则，`on` 默认发送、`off` 默认不发、`never` 不发送，成员也不能打开；`unactivated`：未激活的成员也发通知邮件和每周来信，默认 `false`）、`weekly`（每周来信：`enabled`，`min_reads`、`min_likes` 被读和获赞的门槛，`top_likes` 写进信里的楼层至少几个赞） | 站长，只能在网页上操作 |
 | PATCH | `/admin/settings` | 修改站点设置，立即生效：只改带了的分组和字段。`smtp.accounts` 整组替换，最多 10 个；某个邮箱不带 `password` 就沿用这个账号原来的密码；`notify.email` 只改带了的类型。改了的字段连同改前改后的值记进操作日志，密码只记哪个邮箱的改了 | 站长，只能在网页上操作 |
@@ -375,6 +379,8 @@ token 由站长在后台创建，只显示一次。每个 token 绑定一个 bot
 | GET | `/admin/content` | 待审核或已隐藏的内容，最新的在前，每页 30 条：`status`（`pending`，默认；`hidden`）、`cursor`（上一页最后一条的 ID）；帖子以主楼出现，每条带楼层号、帖子、版块、作者和摘要 | 版主 / `moderate` |
 | GET | `/admin/reports` | 举报列表，最新的在前，每页 30 条：`status`（默认 `open`）、`cursor`（上一页最后一条的 ID）；每条带举报人、理由、被举报的楼层（帖子、楼层号、作者、摘要、是否已删除）或短评、处理人 | 版主 / `moderate` |
 | PATCH | `/admin/reports/{id}` | 处理举报：`{ status }`，可选 `resolved`（已处理，内容另外删除或隐藏）、`dismissed`（驳回）；记操作日志 | 版主 / `moderate` |
+| GET | `/admin/archive-flags` | 被反馈收录有误、还公开着的楼层，反馈的人多的在前，再按最近反馈的时间，最多 100 层；每层带帖子、楼层号、作者、摘要、在群里发出的时间，反馈的人数 `count` 和最近一次反馈的时间 `flagged_at` | 版主 / `moderate` |
+| DELETE | `/admin/archive-flags/{id}` | 处理完一层的反馈，`id` 是楼层的 ID：清掉它收到的全部反馈，楼层要隐藏的另外用 `PATCH`；没有反馈返回 `404 archive_flags_not_found`；记操作日志 | 版主 / `moderate` |
 | GET | `/admin/suggestions` | 待处理的修改建议，最新的在前，每页 30 条：`cursor`（上一页最后一条的 ID）；每条同 `GET /threads/{id}` 的 `suggestions`，另带帖子现在的 `thread`（`id`、`title`、`board`、`tags`）。帖子删了的不列 | 版主 / `moderate` |
 | GET | `/admin/audit-logs` | 操作日志，最新的在前，每页 50 条：`actor`（用户 ID 或 `qq:号码`）、`ip`、`action`、`target_type`、`target_id`、`cursor`；每条带以谁的身份、经由哪个 token、谁让 bot 做的、`data`、IP、`user_agent` 和从它看出的 `device` | 站长，只能在网页上操作 |
 | GET | `/admin/tokens` | bot token 列表，包括已吊销的；不含 token 本身 | 站长，只能在网页上操作 |
@@ -571,7 +577,7 @@ sequenceDiagram
     participant F as 论坛
     A->>P: 分两条消息提问：7731、7733
     P->>F: POST /threads，X-Act-As 为 A，带 Idempotency-Key，source 为 7731、7733
-    F-->>P: 帖子 42，主楼是楼层 108，标"整理自群聊"
+    F-->>P: 帖子 42，主楼是楼层 108，标"群聊收录"
     C->>P: 引用 7731 回答：7736
     P->>F: POST /threads/42/posts，X-Act-As 为 C，source 为 7736
     F-->>P: 记为回复主楼

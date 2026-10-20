@@ -60,7 +60,7 @@ async function lookUp(message: number) {
 }
 
 describe("群消息收录到论坛", () => {
-  test("消息段转成正文，标为整理自群聊；转存不了的图片显示「图片已失效」", async () => {
+  test("消息段转成正文，标为群聊收录；转存不了的图片显示「图片已失效」", async () => {
     const res = await postThread([
       { type: "at", data: { qq: String(memberQq) } },
       { type: "text", data: { text: " rank 30% **能冲吗**" } },

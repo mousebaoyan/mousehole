@@ -25,6 +25,7 @@ const PAGES = [
   "/admin",
   "/admin/content",
   "/admin/reports",
+  "/admin/archive-flags",
   "/admin/suggestions",
   "/admin/members",
   "/admin/boards",

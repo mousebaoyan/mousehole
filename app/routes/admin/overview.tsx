@@ -42,6 +42,7 @@ export default function Overview({ loaderData }: Route.ComponentProps) {
     { label: "今天的回复", value: content.posts_today },
     { label: "待审核", value: content.pending, to: "/admin/content" },
     { label: "待处理的举报", value: content.reports, to: "/admin/reports" },
+    { label: "收录有误", value: content.archive_flags, to: "/admin/archive-flags" },
     { label: "待处理的修改建议", value: content.suggestions, to: "/admin/suggestions" },
   ];
   return (

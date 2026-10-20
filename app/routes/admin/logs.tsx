@@ -54,6 +54,7 @@ const ACTIONS: Record<string, string> = {
   "report.create": "举报",
   "report.resolve": "处理举报",
   "report.dismiss": "驳回举报",
+  "archive_flag.clear": "处理收录有误",
   "user.restrict": "禁言或封禁",
   "user.unrestrict": "解除禁言或封禁",
   "user.bootstrap": "命令行创建账号",

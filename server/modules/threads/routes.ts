@@ -1,6 +1,6 @@
 import { createRoute, z } from "@hono/zod-openapi";
 import type { Context } from "hono";
-import { GUEST, isMember, reachOf } from "../../platform/access.ts";
+import { GUEST, isMember, reachOf, type Reader } from "../../platform/access.ts";
 import { env } from "../../platform/env.ts";
 import { AppError } from "../../platform/errors.ts";
 import {
@@ -26,6 +26,7 @@ import { rateLimit } from "../../platform/rate-limit.ts";
 import { listBoards } from "../boards/service.ts";
 import { onEvent } from "../events/service.ts";
 import { BoostSchema, boostJson } from "../reactions/schemas.ts";
+import { archiveFlagsOf } from "../moderation/service.ts";
 import { floorExtras } from "../reactions/service.ts";
 import { CREATED_WITH_SOURCE, CreatedAt, createdWithSource, Source } from "../qq/schemas.ts";
 import { showImages } from "../uploads/service.ts";
@@ -173,6 +174,9 @@ const PostSchema = z
     boosts: z.array(BoostSchema).openapi({ description: "最先留下的 6 条短评" }),
     boost_count: z.number(),
     my_boost: z.string().nullable().openapi({ description: "自己的短评；访客为 null" }),
+    my_archive_flag: z.boolean().optional().openapi({
+      description: "自己是否反馈过这一层收录有误；只有从群聊收录的楼层有",
+    }),
     deleted: z.boolean().openapi({ description: "已删除的楼层保留楼层号，没有正文" }),
     members_only: z.boolean().openapi({
       description: "作者设置了不给访客看：访客拿到的这一层没有正文、表情和短评",
@@ -228,7 +232,24 @@ type Thread = Awaited<ReturnType<typeof getThread>>;
 // Characters of the opening post in a thread's details, for the card a shared link shows.
 const SHARE_EXCERPT = 100;
 type Post = Awaited<ReturnType<typeof getPost>>;
-type Extras = Awaited<ReturnType<typeof floorExtras>>;
+
+// The reader's own on these floors: reactions and boosts, and which of those collected from the
+// group chats they flagged as wrongly collected (design §6.5).
+async function readerExtras(reader: Reader, posts: Post[]) {
+  const [extras, flagged] = await Promise.all([
+    floorExtras(
+      reader,
+      posts.map((p) => p.id),
+    ),
+    archiveFlagsOf(
+      reader.id,
+      posts.filter((p) => p.via === "qq").map((p) => p.id),
+    ),
+  ]);
+  return { ...extras, flagged };
+}
+
+type Extras = Awaited<ReturnType<typeof readerExtras>>;
 
 function threadDetailJson(t: Thread, signedIn: boolean) {
   return {
@@ -271,6 +292,7 @@ function postJson(p: Post, form: "html" | "markdown", extras: Extras) {
     boosts: p.members_only ? [] : (extras.boosts.get(p.id) ?? []).map(boostJson),
     boost_count: p.members_only ? 0 : p.boost_count,
     my_boost: extras.myBoost.get(p.id) ?? null,
+    ...(p.via === "qq" && { my_archive_flag: extras.flagged.has(p.id) }),
     deleted,
     members_only: p.members_only,
     status: p.status,
@@ -800,10 +822,7 @@ export const threadsRoutes = createRouter()
       const { after, before, body } = c.req.valid("query");
       const range = before === undefined ? { after: after ?? 0 } : { before };
       const posts = await listPosts(c.req.valid("param").id, readerOf(c), range);
-      const extras = await floorExtras(
-        readerOf(c),
-        posts.map((p) => p.id),
-      );
+      const extras = await readerExtras(readerOf(c), posts);
       return c.json({ items: posts.map((p) => postJson(p, body, extras)) }, 200);
     },
   )
@@ -817,7 +836,7 @@ export const threadsRoutes = createRouter()
     }),
     async (c) => {
       const post = await getPost(c.req.valid("param").id, readerOf(c));
-      const extras = await floorExtras(readerOf(c), [post.id]);
+      const extras = await readerExtras(readerOf(c), [post]);
       return c.json(postJson(post, c.req.valid("query").body, extras), 200);
     },
   )
@@ -841,10 +860,7 @@ export const threadsRoutes = createRouter()
     async (c) => {
       const { after, body } = c.req.valid("query");
       const replies = await listReplies(c.req.valid("param").id, readerOf(c), after);
-      const extras = await floorExtras(
-        readerOf(c),
-        replies.map((p) => p.id),
-      );
+      const extras = await readerExtras(readerOf(c), replies);
       return c.json({ items: replies.map((p) => postJson(p, body, extras)) }, 200);
     },
   )
@@ -948,7 +964,7 @@ export const threadsRoutes = createRouter()
         c.req.valid("param").id,
         c.req.valid("json"),
       );
-      return c.json(postJson(post, "html", await floorExtras(readerOf(c), [])), 201);
+      return c.json(postJson(post, "html", await readerExtras(readerOf(c), [])), 201);
     },
   )
   .openapi(
@@ -1060,7 +1076,7 @@ export const threadsRoutes = createRouter()
         });
       }
       const post = await getPost(id, readerOf(c));
-      return c.json(postJson(post, "html", await floorExtras(readerOf(c), [post.id])), 200);
+      return c.json(postJson(post, "html", await readerExtras(readerOf(c), [post])), 200);
     },
   )
   .openapi(

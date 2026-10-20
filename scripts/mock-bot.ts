@@ -520,7 +520,7 @@ async function demo() {
     },
   });
   check(
-    "引用提问回答：记为回复主楼，标为整理自群聊",
+    "引用提问回答：记为回复主楼，标为群聊收录",
     Fields.safeParse(field(answer.data, "reply_to")).data?.floor === 1 &&
       field(answer.data, "via") === "qq",
     answer.data,

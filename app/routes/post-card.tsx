@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode, type Ref } from "react";
 import { useFetcher, useNavigate } from "react-router";
-import { Popover } from "@base-ui/react/popover";
 import { cn } from "~/cn";
 import {
   ArrowDown,
@@ -29,6 +28,7 @@ import { isMine, useShown } from "~/components/writer";
 import { Button, buttonVariants } from "~/components/ui/button";
 import type { PostItem, UserBrief } from "~/api-types";
 import { useMe } from "~/forum";
+import { useSavedValue } from "~/saved-value";
 import { Dialog } from "~/components/ui/dialog";
 import { stamp } from "~/time";
 import { BoostButton, BoostChip, useBoosts, type Self } from "./boosts.tsx";
@@ -149,10 +149,11 @@ export function PostCard({
           <CircleCheck className="size-4" /> 已采纳
         </div>
       )}
-      {/* On phones the time and the rest go on a line of their own, under the name. */}
-      <div className="flex items-center gap-x-2 max-sm:flex-wrap">
+      {/* On phones the time and the rest go on a line of their own, under the name; on wider
+          screens too, at the right, when they don't fit beside it. */}
+      <div className="flex flex-wrap items-center gap-x-2 sm:gap-y-1">
         {/* A long name is cut short rather than pushing the badges onto a line of their own. */}
-        <div className="flex min-w-0 flex-1 items-center gap-x-2 max-sm:basis-full">
+        <div className="flex min-w-0 grow items-center gap-x-2 max-sm:basis-full">
           {/* Avatar and name are one control, so either opens the same card in the same place. */}
           <UserCard
             user={author}
@@ -179,7 +180,7 @@ export function PostCard({
             )}
           </div>
         </div>
-        <span className="flex shrink-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs whitespace-nowrap text-muted-foreground max-sm:-mt-1.5 max-sm:basis-full max-sm:pl-12">
+        <span className="flex shrink-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs whitespace-nowrap text-muted-foreground max-sm:-mt-1.5 max-sm:basis-full max-sm:pl-12 sm:ml-auto">
           {replyTo && (
             <button
               type="button"
@@ -208,25 +209,7 @@ export function PostCard({
               </span>
             </button>
           )}
-          {/* Phones have no hover, so a tap opens it too. */}
-          {post.via === "qq" && (
-            <Popover.Root>
-              <Popover.Trigger
-                openOnHover
-                aria-label="整理自群聊"
-                className="-m-1 rounded p-1 hover:bg-accent hover:text-foreground"
-              >
-                <MessagesSquare className="size-3.5" />
-              </Popover.Trigger>
-              <Popover.Portal>
-                <Popover.Positioner sideOffset={4} className="z-50">
-                  <Popover.Popup className="rounded-lg border bg-popover px-2.5 py-1 text-xs text-popover-foreground shadow-md">
-                    整理自群聊
-                  </Popover.Popup>
-                </Popover.Positioner>
-              </Popover.Portal>
-            </Popover.Root>
-          )}
+          {post.via === "qq" && <Archived post={post} threadId={threadId} />}
           {post.edited_at !== null &&
             (manage.history ? (
               <button
@@ -460,6 +443,45 @@ type Revision = {
   editor: UserBrief;
   created_at: number;
 };
+
+// A floor collected from the group chats says so, and members can flag it as wrongly collected,
+// pressing again to take that back (design §6.5). Wider screens keep the author's name in the same
+// row, so there the button is only its icon.
+function Archived({ post, threadId }: { post: PostItem; threadId: number }) {
+  const me = useMe();
+  const { value: flagged, save } = useSavedValue(
+    post.my_archive_flag ?? false,
+    `/t/${threadId}`,
+    "flagged",
+    (raw) => raw === "true",
+  );
+  return (
+    <>
+      <span className="inline-flex items-center gap-1 rounded-full bg-secondary px-2 py-0.5 text-2xs font-medium text-secondary-foreground">
+        <MessagesSquare className="size-3" />
+        群聊收录
+      </span>
+      {me && (
+        <button
+          type="button"
+          aria-pressed={flagged}
+          title={flagged ? "已反馈收录有误，再点一下撤回" : "串台、截断或答非所问时，反馈收录有误"}
+          onClick={() =>
+            save({ intent: "archive-flag", post_id: post.id, flagged: String(!flagged) })
+          }
+          className={cn(
+            "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-2xs hover:bg-accent hover:text-foreground sm:p-1",
+            flagged &&
+              "bg-warning/10 font-medium text-warning hover:bg-warning/15 hover:text-warning",
+          )}
+        >
+          <Flag className={cn("size-3", flagged && "fill-current")} />
+          <span className="sm:sr-only">{flagged ? "已反馈有误" : "收录有误"}</span>
+        </button>
+      )}
+    </>
+  );
+}
 
 // Each version as it was before a change, newest first, in Markdown.
 function HistoryDialog({
