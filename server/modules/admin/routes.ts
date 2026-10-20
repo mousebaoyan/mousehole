@@ -11,7 +11,7 @@ import { testMailboxes } from "../../platform/mail.ts";
 import { getSettings } from "../../platform/settings.ts";
 import { botListening } from "../events/service.ts";
 import { emailPolicies, NOTIFICATION_TYPES } from "../notifications/service.ts";
-import { countOpenReports } from "../moderation/service.ts";
+import { countArchiveFlags, countOpenReports } from "../moderation/service.ts";
 import { countOpenSuggestions } from "../threads/suggestions.ts";
 import { contentStats } from "../threads/service.ts";
 import { uploadBytes } from "../uploads/service.ts";
@@ -117,6 +117,9 @@ export const adminRoutes = createRouter()
                   posts_today: z.number().openapi({ description: "今天公开的回复" }),
                   pending: z.number().openapi({ description: "待审核的帖子和回复" }),
                   reports: z.number().openapi({ description: "待处理的举报" }),
+                  archive_flags: z
+                    .number()
+                    .openapi({ description: "被反馈收录有误、还没处理的楼层" }),
                   suggestions: z.number().openapi({ description: "待处理的修改建议" }),
                 }),
                 events: z.object({
@@ -141,19 +144,21 @@ export const adminRoutes = createRouter()
     }),
     async (c) => {
       authorize(c, "admin");
-      const [members, content, reports, suggestions, database, uploads] = await Promise.all([
-        memberStats(),
-        contentStats(),
-        countOpenReports(),
-        countOpenSuggestions(),
-        databaseBytes(),
-        uploadBytes(),
-      ]);
+      const [members, content, reports, archive_flags, suggestions, database, uploads] =
+        await Promise.all([
+          memberStats(),
+          contentStats(),
+          countOpenReports(),
+          countArchiveFlags(),
+          countOpenSuggestions(),
+          databaseBytes(),
+          uploadBytes(),
+        ]);
       const events = botListening();
       return c.json(
         {
           members,
-          content: { ...content, reports, suggestions },
+          content: { ...content, reports, archive_flags, suggestions },
           events: {
             streams: events.streams,
             polled_at: events.polled_at && unix(events.polled_at),

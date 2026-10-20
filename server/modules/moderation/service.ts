@@ -291,3 +291,123 @@ export async function handleReport(actor: Actor, id: number, status: "resolved" 
     });
   });
 }
+
+// ---- 收录有误: members flag floors collected from the group chats that shouldn't have been, and
+// moderators hide them or find them fine; see design §6.5.
+
+const FLAGGED_SHOWN = 100;
+
+export async function flagArchived(
+  viewer: Viewer,
+  reach: number,
+  postId: number,
+  flagged: boolean,
+) {
+  const post = await getPost(postId, { reach, id: viewer.id, staff: false });
+  if (post.deleted_at !== null) throw new AppError(404, "post_not_found", "回复不存在");
+  if (post.via !== "qq") throw new AppError(400, "invalid_request", "这一层不是从群聊收录的");
+  if (flagged) {
+    await db
+      .insertInto("archive_flags")
+      .values({ post_id: post.id, user_id: viewer.id })
+      .onConflict((oc) => oc.doNothing())
+      .execute();
+  } else {
+    await db
+      .deleteFrom("archive_flags")
+      .where("post_id", "=", post.id)
+      .where("user_id", "=", viewer.id)
+      .execute();
+  }
+}
+
+// Which of these floors the reader flagged.
+export async function archiveFlagsOf(userId: number | null, postIds: number[]) {
+  if (userId === null || postIds.length === 0) return new Set<number>();
+  const rows = await db
+    .selectFrom("archive_flags")
+    .select("post_id")
+    .where("user_id", "=", userId)
+    .where("post_id", "in", postIds)
+    .execute();
+  return new Set(rows.map((r) => r.post_id));
+}
+
+// Floors still shown; the flags on one hidden or deleted wait in case it comes back.
+function flaggedFloors() {
+  return db
+    .selectFrom("archive_flags")
+    .innerJoin("posts", "posts.id", "archive_flags.post_id")
+    .innerJoin("threads", "threads.id", "posts.thread_id")
+    .where("posts.deleted_at", "is", null)
+    .where("posts.status", "=", "visible")
+    .where("threads.deleted_at", "is", null)
+    .where("threads.status", "=", "visible");
+}
+
+// For moderators: the most flagged first, then the latest flagged.
+export async function listArchiveFlags() {
+  const rows = await flaggedFloors()
+    .leftJoin("thread_aliases as alias", (join) =>
+      join
+        .onRef("alias.thread_id", "=", "posts.thread_id")
+        .onRef("alias.user_id", "=", "posts.author_id")
+        .on("posts.anonymous", "=", true),
+    )
+    .select([
+      "posts.id",
+      "posts.floor",
+      "posts.html",
+      "posts.author_id",
+      "posts.created_at",
+      "threads.id as thread_id",
+      "threads.title",
+      "alias.number as alias",
+      sql<number>`count(*)::integer`.as("count"),
+      sql<Date>`max(archive_flags.created_at)`.as("flagged_at"),
+    ])
+    .groupBy(["posts.id", "threads.id", "alias.number"])
+    .orderBy(sql`count(*)`, "desc")
+    .orderBy(sql`max(archive_flags.created_at)`, "desc")
+    .limit(FLAGGED_SHOWN)
+    .execute();
+  const user = await userBriefs(rows.map((r) => r.author_id));
+  return rows.map((r) => ({
+    post: {
+      id: r.id,
+      floor: r.floor,
+      thread: { id: r.thread_id, title: r.title },
+      author: writer(user, r.author_id, r.alias),
+      excerpt: excerpt(r.html, REPORT_EXCERPT),
+      created_at: r.created_at,
+    },
+    count: r.count,
+    flagged_at: r.flagged_at,
+  }));
+}
+
+export async function countArchiveFlags() {
+  const { count } = await flaggedFloors()
+    .select(sql<number>`count(DISTINCT archive_flags.post_id)::integer`.as("count"))
+    .executeTakeFirstOrThrow();
+  return count;
+}
+
+// Once handled: the floor hidden, or found fine.
+export async function clearArchiveFlags(actor: Actor, postId: number) {
+  await db.transaction().execute(async (trx) => {
+    const { numDeletedRows } = await trx
+      .deleteFrom("archive_flags")
+      .where("post_id", "=", postId)
+      .executeTakeFirst();
+    if (numDeletedRows === 0n) {
+      throw new AppError(404, "archive_flags_not_found", "这一层没有收录有误的反馈");
+    }
+    await recordAudit(trx, actor, {
+      action: "archive_flag.clear",
+      target_type: "post",
+      target_id: postId,
+      data: { count: Number(numDeletedRows) },
+    });
+  });
+}

@@ -176,6 +176,13 @@ export async function action({ params, request, context }: Route.ActionArgs) {
     if (res.ok) return { ok: true as const };
     return { ok: false as const, message: (await res.json()).error.message };
   }
+  if (text("intent") === "archive-flag") {
+    const flagged = text("flagged") === "true";
+    const flag = api.posts[":id"]["archive-flag"];
+    const res = flagged ? await flag.$put({ param: post }) : await flag.$delete({ param: post });
+    if (res.ok) return { ok: true as const, saved: flagged };
+    return { ok: false as const, message: (await res.json()).error.message };
+  }
   if (text("intent") === "bookmark") {
     const bookmarked = text("bookmarked") === "true";
     const res = bookmarked

@@ -13,7 +13,17 @@ import {
   UnixSeconds,
 } from "../../platform/http.ts";
 import { UserBriefSchema, UserRefSchema, WriterSchema } from "../users/schemas.ts";
-import { handleReport, lift, listReports, reportBoost, reportPost, restrict } from "./service.ts";
+import {
+  clearArchiveFlags,
+  flagArchived,
+  handleReport,
+  lift,
+  listArchiveFlags,
+  listReports,
+  reportBoost,
+  reportPost,
+  restrict,
+} from "./service.ts";
 
 const UserParam = z.object({ user: UserRefSchema });
 const Reason = z.string().trim().min(1).max(200);
@@ -56,6 +66,28 @@ const ReportSchema = z
     created_at: z.number(),
   })
   .openapi("Report");
+
+const flagged = {
+  204: { description: "已保存" },
+  400: errorResponse("这一层不是从群聊收录的"),
+  403: errorResponse("不是成员，或者被禁言了"),
+  404: errorResponse("回复不存在"),
+};
+
+const ArchiveFlagSchema = z
+  .object({
+    post: z.object({
+      id: z.number(),
+      floor: z.number(),
+      thread: z.object({ id: z.number(), title: z.string() }),
+      author: WriterSchema,
+      excerpt: z.string(),
+      created_at: z.number().openapi({ description: "在群里发出的时间" }),
+    }),
+    count: z.number().openapi({ description: "几个人反馈了" }),
+    flagged_at: z.number().openapi({ description: "最近一次反馈的时间" }),
+  })
+  .openapi("ArchiveFlag");
 
 export const moderationRoutes = createRouter()
   .openapi(
@@ -234,6 +266,83 @@ export const moderationRoutes = createRouter()
     async (c) => {
       const viewer = authorize(c, "moderate");
       await handleReport(actorOf(c, viewer), c.req.valid("param").id, c.req.valid("json").status);
+      return c.body(null, 204);
+    },
+  )
+  .openapi(
+    createRoute({
+      method: "put",
+      path: "/posts/{id}/archive-flag",
+      summary: "反馈这一层收录有误：只有从群聊收录的楼层能反馈，已反馈过的不变",
+      request: { params: IdParam },
+      responses: flagged,
+    }),
+    async (c) => {
+      const viewer = authorizePosting(c);
+      await flagArchived(viewer, reachOf(viewer, c.var.bot), c.req.valid("param").id, true);
+      return c.body(null, 204);
+    },
+  )
+  .openapi(
+    createRoute({
+      method: "delete",
+      path: "/posts/{id}/archive-flag",
+      summary: "撤回自己对这一层收录有误的反馈",
+      request: { params: IdParam },
+      responses: flagged,
+    }),
+    async (c) => {
+      const viewer = authorizePosting(c);
+      await flagArchived(viewer, reachOf(viewer, c.var.bot), c.req.valid("param").id, false);
+      return c.body(null, 204);
+    },
+  )
+  .openapi(
+    createRoute({
+      method: "get",
+      path: "/admin/archive-flags",
+      summary: "被反馈收录有误、还公开着的楼层，反馈的人多的在前，再按最近反馈的时间，最多 100 层",
+      responses: {
+        200: {
+          description: "楼层",
+          content: {
+            "application/json": { schema: z.object({ items: z.array(ArchiveFlagSchema) }) },
+          },
+        },
+        403: errorResponse("不是版主"),
+      },
+    }),
+    async (c) => {
+      authorize(c, "moderate");
+      const items = await listArchiveFlags();
+      return c.json(
+        {
+          items: items.map((f) => ({
+            ...f,
+            post: { ...f.post, created_at: unix(f.post.created_at) },
+            flagged_at: unix(f.flagged_at),
+          })),
+        },
+        200,
+      );
+    },
+  )
+  .openapi(
+    createRoute({
+      method: "delete",
+      path: "/admin/archive-flags/{id}",
+      summary:
+        "处理完一层的反馈（楼层另外隐藏，或者没有问题），清掉它收到的全部反馈；id 是楼层的 ID",
+      request: { params: IdParam },
+      responses: {
+        204: { description: "已清除" },
+        403: errorResponse("不是版主"),
+        404: errorResponse("这一层没有反馈"),
+      },
+    }),
+    async (c) => {
+      const viewer = authorize(c, "moderate");
+      await clearArchiveFlags(actorOf(c, viewer), c.req.valid("param").id);
       return c.body(null, 204);
     },
   );

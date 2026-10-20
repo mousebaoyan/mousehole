@@ -42,6 +42,7 @@ export default [
     route("stats", "routes/admin/stats.tsx"),
     route("content", "routes/admin/content.tsx"),
     route("reports", "routes/admin/reports.tsx"),
+    route("archive-flags", "routes/admin/archive-flags.tsx"),
     route("suggestions", "routes/admin/suggestions.tsx"),
     route("members", "routes/admin/members.tsx"),
     route("logs", "routes/admin/logs.tsx"),
