@@ -899,9 +899,10 @@ bot 把 QQ 群的信息推送给论坛。两种方式都支持，推荐一起用
   2. 在 `main` 上打标签并推送，等 release 工作流把镜像推到 GHCR。
   3. 在服务器的项目目录里运行 `DOCKER_CONFIG=<空目录> docker compose pull && docker compose up -d`。服务器 root 的 Docker 配置里有一个拉不了这个包的 ghcr.io 登录，换成空配置匿名拉取公开镜像，那个登录不动。
   4. 确认 `kysely_migration` 表里有最新的迁移，`/healthz` 返回 200。
+  5. 删掉被换下来的旧镜像：`docker image prune -f --filter label=org.opencontainers.image.source=https://github.com/mousebaoyan/mousehole`。每个版本单独占 240MB 左右，回滚时按版本号从 GHCR 重新拉。
 - **数据库**：1Panel 的 PostgreSQL 里的 `mousehole` 库和同名账号，这个账号只有 `mousehole` 库的权限；连接串通过环境变量传入。
 - **迁移**：启动时自动执行，先取 advisory lock，防止重复执行。
-- **备份**：1Panel 的计划任务每天备份，本机（`/opt/1panel/backup`）和 Google Drive（1Panel 的 Google Drive 备份账号，路径 `1panel`）各存一份，各留 30 份。
+- **备份**：1Panel 的计划任务每天备份，本机（`/opt/1panel/backup`）和 Google Drive（1Panel 的 Google Drive 备份账号，路径 `1panel`）各存一份，各留 7 份。服务器的盘只有 58GB，和其他服务共用；`data/` 每份都是整个目录，留多了就是把同样的图片存很多遍。
 
   | 内容 | 计划任务 | 时间 | 文件 |
   | --- | --- | --- | --- |
