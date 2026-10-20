@@ -336,7 +336,7 @@ token 由站长在后台创建，只显示一次。每个 token 绑定一个 bot
 
 | 方法 | 路径 | 说明 | 权限 |
 | --- | --- | --- | --- |
-| GET | `/search` | `q`（最多 100 个字）；筛选 `board`、`tag`、`author`（楼主）、`kind`（`discussion`、`question`）、`solved`（`true` 已解决，`false` 还在等回答的问答帖）、`since`（`week`、`month`、`year` 内发的）、`title_only=true`（只搜标题）；排序 `sort`：`relevance`（默认，相关度，旧的逐渐靠后）、`created`（最新发布）、`last_post`（最新回复）、`replies`（回复最多）、`likes`（点赞最多）；`cursor`。每个帖子一条，带最相关的那一层（`post`：`id`、`floor`）和命中处前后的纯文本 `snippet`，每页 20 个。只有一个汉字时只搜标题。网页上搜的第一页记进数据页的搜索词（总体设计 §10.1） | 访客 |
+| GET | `/search` | `q`（最多 100 个字）；筛选 `board`、`tag`、`author`（楼主）、`kind`（`discussion`、`question`）、`solved`（`true` 已解决，`false` 还在等回答的问答帖）、`since`（`week`、`month`、`year` 内发的）、`title_only=true`（只搜标题）；排序 `sort`：`relevance`（默认，相关度，旧的逐渐靠后）、`created`（最新发布）、`last_post`（最新回复）、`hot`（最热：回复数 × 2 + 赞数 + 浏览数 / 20）；`cursor`。每个帖子一条，带最相关的那一层（`post`：`id`、`floor`）和命中处前后的纯文本 `snippet`，每页 20 个。只有一个汉字时只搜标题。网页上搜的第一页记进数据页的搜索词（总体设计 §10.1） | 访客 |
 | GET | `/search/similar` | `text`：一段提问原文（最多 2000 个字）；返回最相似的 5 个帖子和 0 到 1 之间的得分 `score` | 访客 |
 
 ### 3.7 上传

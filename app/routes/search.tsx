@@ -44,8 +44,7 @@ const SORTS = [
   { value: "", label: "相关度" },
   { value: "created", label: "最新发布" },
   { value: "last_post", label: "最新回复" },
-  { value: "replies", label: "回复最多" },
-  { value: "likes", label: "点赞最多" },
+  { value: "hot", label: "最热" },
 ] as const;
 
 function pick<T extends string>(options: readonly { value: T }[], value: string | null) {
@@ -163,6 +162,27 @@ export default function Search({ loaderData }: Route.ComponentProps) {
           ))}
         </div>
       )}
+      {q !== "" && (
+        <nav
+          aria-label="排序"
+          className="-mx-1 mb-1 flex gap-1 overflow-x-auto px-1 [scrollbar-width:none]"
+        >
+          {SORTS.map((s) => (
+            <Link
+              key={s.value}
+              to={searchUrl(filters, { sort: s.value })}
+              preventScrollReset
+              aria-current={s.value === filters.sort ? "page" : undefined}
+              className={cn(
+                "shrink-0 rounded-full px-3.5 py-1.5 text-sm whitespace-nowrap text-muted-foreground hover:text-foreground",
+                s.value === filters.sort && "bg-secondary font-medium text-foreground",
+              )}
+            >
+              {s.label}
+            </Link>
+          ))}
+        </nav>
+      )}
       {q !== "" && results.length === 0 && (
         <p className="py-16 text-center text-sm text-muted-foreground">未找到相关内容</p>
       )}
@@ -247,7 +267,6 @@ function SearchFilters({ filters, authorName }: { filters: Filters; authorName: 
         value={filters.since}
         to={(since) => url({ since })}
       />
-      <OptionMenu label="排序" options={SORTS} value={filters.sort} to={(sort) => url({ sort })} />
       <Link
         to={url({ title_only: filters.title_only ? "" : "true" })}
         aria-pressed={filters.title_only !== ""}
