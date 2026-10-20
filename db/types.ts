@@ -103,6 +103,7 @@ export interface Boosts {
   id: Generated<number>;
   post_id: number;
   user_id: number;
+  via: Generated<string>;
 }
 
 export interface CoinBalances {

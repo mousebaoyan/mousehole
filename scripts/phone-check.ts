@@ -23,6 +23,7 @@ const PAGES = [
   "/drafts",
   "/my/posts",
   "/admin",
+  "/admin/stats",
   "/admin/content",
   "/admin/reports",
   "/admin/archive-flags",

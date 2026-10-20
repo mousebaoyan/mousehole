@@ -15,6 +15,7 @@ import {
 import { UserBriefSchema, UserRefSchema } from "../users/schemas.ts";
 import { findUserId, userBriefs } from "../users/service.ts";
 import {
+  activeUsers,
   getStats,
   listVisits,
   othersAtAddresses,
@@ -22,9 +23,16 @@ import {
   recordSent,
   recordVisit,
   type Sent,
+  USER_SORTS,
 } from "./service.ts";
 
 const SITE = new URL(env.PUBLIC_URL).origin;
+
+const Range = z.coerce
+  .number()
+  .pipe(z.literal(RANGES))
+  .default(30)
+  .openapi({ description: "最近几天，含今天" });
 
 // The page a response opened: its HTML, or its data fetched in the browser on the way there. Not
 // what the pages' fetchers load, which `_routes` names, nor a page loading again after a change,
@@ -174,11 +182,7 @@ export const statsRoutes = createRouter()
         "数据页：活跃、成员、留存、访问、内容、阅读、登录、邮件、搜索、鼠币、带宽和排行，按北京时间逐天，不算 bot 和站长",
       request: {
         query: z.object({
-          range: z.coerce
-            .number()
-            .pipe(z.literal(RANGES))
-            .default(30)
-            .openapi({ description: "最近几天，含今天" }),
+          range: Range,
         }),
       },
       responses: {
@@ -291,6 +295,61 @@ export const statsRoutes = createRouter()
     async (c) => {
       authorize(c, "admin");
       return c.json(await getStats(c.req.valid("query").range), 200);
+    },
+  )
+  .openapi(
+    createRoute({
+      method: "get",
+      path: "/admin/stats/users",
+      summary:
+        "数据页的活跃用户：这段时间在论坛上做得最多的前 30 人，按北京时间，不算 bot 和站长，也不算群里收录、bot 代发和匿名的",
+      request: {
+        query: z.object({
+          range: Range,
+          sort: z
+            .enum(USER_SORTS)
+            .default("posts")
+            .openapi({ description: "按哪一项排，posts 是发帖和回复合起来；这一项为 0 的不列" }),
+          staff: z
+            .enum(["true", "false"])
+            .default("true")
+            .transform((v) => v === "true")
+            .openapi({ description: "false 时不含版主和管理员" }),
+        }),
+      },
+      responses: {
+        200: {
+          description: "从多到少",
+          content: {
+            "application/json": {
+              schema: z.object({
+                items: z.array(
+                  z.object({
+                    user: UserBriefSchema,
+                    days: z.number().openapi({ description: "来过论坛的天数" }),
+                    threads: z.number().openapi({ description: "在网页上发的帖子" }),
+                    replies: z.number().openapi({ description: "在网页上发的回复" }),
+                    accepted: z.number().openapi({ description: "回复被别人采纳的次数" }),
+                    likes: z
+                      .number()
+                      .openapi({ description: "网页上写的楼层在网页上收到的表情回应" }),
+                    votes: z.number().openapi({ description: "投过票的投票帖" }),
+                    boosts: z.number().openapi({ description: "在网页上写的短评" }),
+                  }),
+                ),
+              }),
+            },
+          },
+        },
+        403: errorResponse("不是管理员"),
+      },
+    }),
+    async (c) => {
+      authorize(c, "admin");
+      const { range, sort, staff } = c.req.valid("query");
+      const rows = await activeUsers(range, sort, staff);
+      const user = await userBriefs(rows.map((r) => r.id));
+      return c.json({ items: rows.map(({ id, ...r }) => ({ user: user(id), ...r })) }, 200);
     },
   )
   .openapi(

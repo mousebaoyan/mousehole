@@ -662,3 +662,73 @@ export async function getStats(range: Range) {
     top,
   };
 }
+
+// ---- Active users: who did the most on the forum itself over the range (design §10.1). Nothing
+// archived from the groups or left through the bot counts, nor anything anonymous, which would
+// tell who wrote it; what others gave counts only on what they wrote here.
+
+export const USER_SORTS = ["posts", "days", "accepted", "likes", "votes", "boosts"] as const;
+export type UserSort = (typeof USER_SORTS)[number];
+const USERS_SHOWN = 30;
+
+// Written on the site under their name, and public as the content figures count it.
+const WRITTEN = sql<boolean>`p.via = 'web' AND NOT p.anonymous AND ${PUBLIC}`;
+
+// Those with any of the sorted figure, the most first; `posts` is threads and replies together.
+// `staff` keeps moderators and admins in.
+export async function activeUsers(range: Range, sort: UserSort, staff: boolean) {
+  const since = startOf(range);
+  const { rows } = await sql<{
+    id: number;
+    days: number;
+    threads: number;
+    replies: number;
+    accepted: number;
+    likes: number;
+    votes: number;
+    boosts: number;
+  }>`
+    SELECT id, days, threads, replies, accepted, likes, votes, boosts FROM (
+      SELECT users.id, coalesce(d.days, 0) AS days, coalesce(w.threads, 0) AS threads,
+        coalesce(w.replies, 0) AS replies, coalesce(w.threads + w.replies, 0) AS posts,
+        coalesce(a.accepted, 0) AS accepted, coalesce(l.likes, 0) AS likes,
+        coalesce(v.votes, 0) AS votes, coalesce(b.boosts, 0) AS boosts
+      FROM users
+      LEFT JOIN (
+        SELECT user_id, count(*)::integer AS days FROM active_days
+        WHERE site AND day >= ${daysAgo(range - 1)} GROUP BY user_id
+      ) d ON d.user_id = users.id
+      LEFT JOIN (
+        SELECT p.author_id, count(*) FILTER (WHERE p.floor = 1)::integer AS threads,
+          count(*) FILTER (WHERE p.floor > 1)::integer AS replies
+        FROM posts p JOIN threads t ON t.id = p.thread_id
+        WHERE p.created_at >= ${since} AND ${WRITTEN} GROUP BY p.author_id
+      ) w ON w.author_id = users.id
+      LEFT JOIN (
+        SELECT p.author_id, count(*)::integer AS accepted
+        FROM posts p JOIN threads t ON t.id = p.thread_id
+        WHERE p.accepted_at >= ${since} AND p.accepted_by <> p.author_id AND ${WRITTEN}
+        GROUP BY p.author_id
+      ) a ON a.author_id = users.id
+      LEFT JOIN (
+        SELECT p.author_id, count(*)::integer AS likes
+        FROM reactions r JOIN posts p ON p.id = r.post_id JOIN threads t ON t.id = p.thread_id
+        WHERE r.via = 'web' AND r.created_at >= ${since} AND ${WRITTEN} GROUP BY p.author_id
+      ) l ON l.author_id = users.id
+      LEFT JOIN (
+        SELECT user_id, count(DISTINCT thread_id)::integer AS votes FROM poll_votes
+        WHERE created_at >= ${since} GROUP BY user_id
+      ) v ON v.user_id = users.id
+      LEFT JOIN (
+        SELECT b.user_id, count(*)::integer AS boosts
+        FROM boosts b JOIN posts p ON p.id = b.post_id JOIN threads t ON t.id = p.thread_id
+        WHERE b.via = 'web' AND NOT b.anonymous AND b.created_at >= ${since} AND ${PUBLIC}
+        GROUP BY b.user_id
+      ) b ON b.user_id = users.id
+      WHERE ${PEOPLE} ${staff ? sql`` : sql`AND users.role NOT IN ('moderator', 'admin')`}
+    ) s
+    WHERE ${sql.ref(sort)} > 0
+    ORDER BY ${sql.ref(sort)} DESC, posts DESC, days DESC, id
+    LIMIT ${USERS_SHOWN}`.execute(db);
+  return rows;
+}
