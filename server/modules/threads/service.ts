@@ -1736,7 +1736,8 @@ function statusAction(from: string, to: "visible" | "hidden") {
 }
 
 // Moderators approve what waits, hide what is visible and show again what was hidden. The
-// opening post goes with its thread. The author is told, with the reason when it is hidden.
+// opening post goes with its thread. The author is told, with the reason when it is hidden, unless
+// it was collected from the groups: they didn't post it here, and many never come (design §8.4).
 export async function setThreadStatus(
   actor: Actor,
   viewer: Viewer,
@@ -1749,7 +1750,7 @@ export async function setThreadStatus(
   const thread = await getThread(threadId, reader);
   const opening = await db
     .selectFrom("posts")
-    .select(["id", "body"])
+    .select(["id", "body", "via"])
     .where("thread_id", "=", threadId)
     .where("floor", "=", 1)
     .executeTakeFirstOrThrow();
@@ -1770,11 +1771,13 @@ export async function setThreadStatus(
     } else if (action === "hide") {
       await withdrawThread(trx, threadId, viewer.id, reason);
     }
-    const post = { id: opening.id, thread_id: threadId, author_id: thread.author_id };
-    await notifyOnPost(trx, "moderation", post, viewer.id, null, {
-      action,
-      reason: reason ?? "",
-    });
+    if (opening.via !== "qq") {
+      const post = { id: opening.id, thread_id: threadId, author_id: thread.author_id };
+      await notifyOnPost(trx, "moderation", post, viewer.id, null, {
+        action,
+        reason: reason ?? "",
+      });
+    }
     await recordAudit(trx, actor, {
       action: `thread.${action}`,
       target_type: "thread",
@@ -1817,10 +1820,12 @@ export async function setPostStatus(
     } else if (action === "hide") {
       await withdrawPost(trx, postId, viewer.id, reason);
     }
-    await notifyOnPost(trx, "moderation", post, viewer.id, null, {
-      action,
-      reason: reason ?? "",
-    });
+    if (post.via !== "qq") {
+      await notifyOnPost(trx, "moderation", post, viewer.id, null, {
+        action,
+        reason: reason ?? "",
+      });
+    }
     await recordAudit(trx, actor, {
       action: `post.${action}`,
       target_type: "post",

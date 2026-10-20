@@ -202,6 +202,25 @@ describe("隐藏和恢复", () => {
     expect(await events("post.created", { post: { id: post.id } })).toHaveLength(1);
   });
 
+  test("从群里收录的楼层和帖子，隐藏、恢复都不通知作者", async () => {
+    const board = await newBoard("after");
+    const thread = await newThread(board);
+    const post = await reply(thread.id);
+    await db.updateTable("posts").set({ via: "qq" }).where("thread_id", "=", thread.id).execute();
+
+    expect((await setPost(post.id, "hidden", "串台")).status).toBe(200);
+    expect((await setPost(post.id, "visible")).status).toBe(200);
+    expect((await setThread(thread.id, "hidden", moderator, "串台")).status).toBe(200);
+    expect((await setThread(thread.id, "visible")).status).toBe(200);
+    const notices = await db
+      .selectFrom("notifications")
+      .select("id")
+      .where("user_id", "=", author.id)
+      .where("thread_id", "=", thread.id)
+      .execute();
+    expect(notices).toEqual([]);
+  });
+
   test("隐藏的帖子里删掉回复、再删掉帖子，计数不会重复扣", async () => {
     const board = await newBoard("after");
     const thread = await newThread(board);
