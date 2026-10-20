@@ -202,7 +202,7 @@ describe("新、未读和已读", () => {
     expect(await list("new")).toEqual([untouched]);
     expect(await list("unread")).toEqual([replied, partly]);
     expect(await list("read")).toEqual([partly, replied]);
-    expect(await counts()).toEqual({ new: 1, unread: 2, unsolved: 0 });
+    expect(await counts()).toEqual({ new: 1, unread: 2, unsolved: 0, unvoted: 0 });
 
     await report(replied, [[2, 2]], 5);
     await db
@@ -210,7 +210,7 @@ describe("新、未读和已读", () => {
       .set({ created_at: sql<Date>`now() - interval '8 days'` })
       .where("id", "=", untouched)
       .execute();
-    expect(await counts()).toEqual({ new: 0, unread: 1, unsolved: 0 });
+    expect(await counts()).toEqual({ new: 0, unread: 1, unsolved: 0, unvoted: 0 });
     expect(await list("read")).toEqual([replied, partly]);
   });
 

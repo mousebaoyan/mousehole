@@ -66,6 +66,7 @@ export const VIEWS = [
   "created",
   "hot",
   "unsolved",
+  "unvoted",
   "new",
   "unread",
   "read",
@@ -214,6 +215,18 @@ const UNSOLVED = sql<boolean>`threads.kind IN ('question', 'poll') AND threads.a
   AND NOT EXISTS (SELECT 1 FROM posts
     WHERE posts.thread_id = threads.id AND posts.floor = 1 AND posts.via = 'qq')`;
 
+// Polls, 保研定位 among them, that someone else started in the past week, still taking votes and
+// not yet voted in by the reader, who can't vote in a locked thread (design §8.11).
+function unvoted(userId: number | null) {
+  return sql<boolean>`threads.kind = 'poll' AND threads.created_at > now() - interval '7 days'
+    AND threads.author_id <> ${userId} AND NOT threads.locked
+    AND EXISTS (SELECT 1 FROM polls
+      WHERE polls.thread_id = threads.id AND polls.closed_at IS NULL
+        AND (polls.closes_at IS NULL OR polls.closes_at > now()))
+    AND NOT EXISTS (SELECT 1 FROM poll_votes
+      WHERE poll_votes.thread_id = threads.id AND poll_votes.user_id = ${userId})`;
+}
+
 // The threads someone started or replied in, deleted replies aside.
 function postedIn(userId: number | null) {
   return db
@@ -340,6 +353,7 @@ export async function listThreads(
     next = () => String(offset + limit);
   } else {
     if (view === "unsolved") query = query.where(UNSOLVED);
+    if (view === "unvoted") query = query.where(unvoted(userId));
     if (view === "new") query = query.where(NEW);
     if (view === "unread") query = query.where(UNREAD);
     if (view === "read") query = query.where("mine.last_read_at", "is not", null);
@@ -386,41 +400,10 @@ export async function countTabs(
       sql<number>`(count(*) FILTER (WHERE ${NEW}))::integer`.as("new"),
       sql<number>`(count(*) FILTER (WHERE ${UNREAD}))::integer`.as("unread"),
       sql<number>`(count(*) FILTER (WHERE ${UNSOLVED}))::integer`.as("unsolved"),
+      sql<number>`(count(*) FILTER (WHERE ${unvoted(userId)}))::integer`.as("unvoted"),
     ])
     .where(inScope(await scopeOf(reach, filter)))
     .executeTakeFirstOrThrow();
-}
-
-// 保研定位 threads of the past week still taking votes that the reader neither started nor voted
-// in, newest first, for the home page to ask them (design §8.14).
-export async function awaitingVotes(reach: number, userId: number) {
-  return visibleThreads(reach)
-    .innerJoin("polls", "polls.thread_id", "threads.id")
-    .select([
-      "threads.id",
-      "threads.title",
-      sql<number>`cardinality(polls.rows)`.as("schools"),
-      "polls.voter_count",
-    ])
-    .where("polls.preset", "=", "positioning")
-    .where("polls.closed_at", "is", null)
-    .where("threads.locked", "=", false)
-    .where("threads.author_id", "<>", userId)
-    .where("threads.created_at", ">", sql<Date>`now() - interval '7 days'`)
-    .where((eb) =>
-      eb.not(
-        eb.exists(
-          eb
-            .selectFrom("poll_votes")
-            .select("poll_votes.thread_id")
-            .whereRef("poll_votes.thread_id", "=", "threads.id")
-            .where("poll_votes.user_id", "=", userId),
-        ),
-      ),
-    )
-    .orderBy("threads.id", "desc")
-    .limit(3)
-    .execute();
 }
 
 // How many threads the reader's own lists have, for the sidebar (design §9).

@@ -1,6 +1,6 @@
 import { data, Link, redirect } from "react-router";
 import { apiContext } from "../api.server.ts";
-import { ChartBar } from "~/components/icons";
+import { ChartBar, ChevronRight } from "~/components/icons";
 import { feedTitle, readCounts, readFilter, ThreadFeed } from "~/components/thread-feed";
 import { shareMeta } from "~/share-meta";
 import { unixNow } from "~/time";
@@ -19,56 +19,40 @@ export async function loader({ request, context }: Route.LoaderArgs) {
   const api = context.get(apiContext);
   const { view, tag, cursor } = readFilter(request.url);
   const scope = { tag: tag ?? undefined };
-  // The plain first page asks members to vote on 保研定位 threads (design §8.14).
-  const asking = view === "latest" && tag === null && cursor === null;
-  const [res, counts, awaiting] = await Promise.all([
+  const [res, counts] = await Promise.all([
     api.threads.$get({ query: { ...scope, view, cursor: cursor ?? undefined } }),
     readCounts(api, scope, cursor),
-    asking ? api.threads["awaiting-votes"].$get() : null,
   ]);
   if (res.status === 401) return redirect("/login");
   if (!res.ok) throw data((await res.json()).error.message, { status: res.status });
   const page = await res.json();
-  return {
-    view,
-    tag,
-    counts,
-    threads: page.items,
-    next_cursor: page.next_cursor,
-    now: unixNow(),
-    awaiting: awaiting?.ok ? (await awaiting.json()).items : [],
-  };
+  return { view, tag, counts, threads: page.items, next_cursor: page.next_cursor, now: unixNow() };
 }
 
 export default function Home({ loaderData }: Route.ComponentProps) {
+  const { view, tag, counts } = loaderData;
+  // The plain first page tells members how many polls wait for their vote (design §8.11); the
+  // counts are there only for someone signed in, on a first page.
+  const unvoted = view === "latest" && tag === null && counts ? counts.unvoted : 0;
   return (
     <>
-      {loaderData.awaiting.length > 0 && <AwaitingVotes threads={loaderData.awaiting} />}
+      {unvoted > 0 && (
+        <Link
+          to="/?view=unvoted"
+          className="mb-3 flex items-center gap-2.5 rounded-xl bg-primary/8 px-3.5 py-2.5 text-sm transition-colors hover:bg-primary/12"
+        >
+          <ChartBar className="size-4 shrink-0 text-primary" />
+          <span className="min-w-0 flex-1">
+            还有 <span className="font-semibold text-primary tabular-nums">{unvoted}</span>{" "}
+            个投票等你参与
+          </span>
+          <span className="flex shrink-0 items-center text-meta text-primary">
+            去投票
+            <ChevronRight className="size-4" />
+          </span>
+        </Link>
+      )}
       <ThreadFeed {...loaderData} board={null} />
     </>
-  );
-}
-
-function AwaitingVotes({ threads }: { threads: Route.ComponentProps["loaderData"]["awaiting"] }) {
-  return (
-    <section aria-label="等你投票" className="mb-4 rounded-2xl border bg-card px-4 py-3">
-      <h2 className="mb-1 flex items-center gap-1.5 text-sm font-medium">
-        <ChartBar className="size-4 text-primary" />
-        等你投票
-        <span className="text-meta font-normal text-muted-foreground">保研定位</span>
-      </h2>
-      <ul>
-        {threads.map((t) => (
-          <li key={t.id}>
-            <Link to={`/t/${t.id}`} className="flex items-baseline gap-3 py-1.5 hover:text-primary">
-              <span className="min-w-0 flex-1 truncate">{t.title}</span>
-              <span className="shrink-0 text-meta text-muted-foreground tabular-nums">
-                {t.schools} 所院校 · {t.voter_count} 人已投
-              </span>
-            </Link>
-          </li>
-        ))}
-      </ul>
-    </section>
   );
 }
