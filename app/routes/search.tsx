@@ -126,7 +126,10 @@ export default function Search({ loaderData }: Route.ComponentProps) {
   const { q } = filters;
   return (
     <section>
-      <Form className="mb-3 flex h-11 items-center gap-2 rounded-full bg-secondary px-4 focus-within:ring-2 focus-within:ring-ring/40">
+      <Form
+        action="/search"
+        className="mb-3 flex h-11 items-center gap-2 rounded-full bg-secondary px-4 focus-within:ring-2 focus-within:ring-ring/40"
+      >
         <SearchIcon className="size-4 shrink-0 text-muted-foreground" />
         <input
           type="search"

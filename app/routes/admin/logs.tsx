@@ -121,7 +121,10 @@ export default function Logs({ loaderData }: Route.ComponentProps) {
   return (
     <>
       <h1 className="text-xl font-semibold">操作日志</h1>
-      <Form className="mt-4 grid grid-cols-2 gap-2 text-sm sm:flex sm:flex-wrap">
+      <Form
+        action="/admin/logs"
+        className="mt-4 grid grid-cols-2 gap-2 text-sm sm:flex sm:flex-wrap"
+      >
         <label className="col-span-2 flex h-9 min-w-40 flex-1 items-center gap-2 rounded-lg border px-3 focus-within:ring-2 focus-within:ring-ring/40">
           <Search className="size-4 text-muted-foreground" />
           <input

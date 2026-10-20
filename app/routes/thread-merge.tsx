@@ -101,7 +101,7 @@ export default function ThreadMerge({ loaderData }: Route.ComponentProps) {
         </p>
       ) : (
         <>
-          <Form method="get" className="mt-4 rounded-2xl border bg-card p-4">
+          <Form action={`/t/${thread.id}/merge`} className="mt-4 rounded-2xl border bg-card p-4">
             <label htmlFor="merge-with" className="text-sm font-medium">
               另一个帖子
             </label>
