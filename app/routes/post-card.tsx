@@ -444,9 +444,9 @@ type Revision = {
   created_at: number;
 };
 
-// A floor collected from the group chats says so, and members can flag it as wrongly collected,
-// pressing again to take that back (design §6.5). Wider screens keep the author's name in the same
-// row, so there the button is only its icon.
+// A floor collected from the group chats says so, and members can flag it as wrongly collected
+// with the flag in that label, pressing again to take that back (design §6.5). Phones show no
+// tooltip, so a saved flag says what it did.
 function Archived({ post, threadId }: { post: PostItem; threadId: number }) {
   const me = useMe();
   const { value: flagged, save } = useSavedValue(
@@ -454,32 +454,35 @@ function Archived({ post, threadId }: { post: PostItem; threadId: number }) {
     `/t/${threadId}`,
     "flagged",
     (raw) => raw === "true",
+    (saved) => (saved ? "已反馈收录有误，再点一下可以撤回" : "已撤回反馈"),
   );
   return (
-    <>
-      <span className="inline-flex items-center gap-1 rounded-full bg-secondary px-2 py-0.5 text-2xs font-medium text-secondary-foreground">
-        <MessagesSquare className="size-3" />
-        群聊收录
-      </span>
+    <span
+      className={cn(
+        "inline-flex items-center gap-1 rounded-full bg-secondary py-0.5 pl-2 text-2xs",
+        me ? "pr-1.5" : "pr-2",
+      )}
+    >
+      <MessagesSquare className="size-3" />
+      群聊收录
       {me && (
         <button
           type="button"
+          aria-label="收录有误"
           aria-pressed={flagged}
           title={flagged ? "已反馈收录有误，再点一下撤回" : "串台、截断或答非所问时，反馈收录有误"}
           onClick={() =>
             save({ intent: "archive-flag", post_id: post.id, flagged: String(!flagged) })
           }
           className={cn(
-            "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-2xs hover:bg-accent hover:text-foreground sm:p-1",
-            flagged &&
-              "bg-warning/10 font-medium text-warning hover:bg-warning/15 hover:text-warning",
+            "relative ml-0.5 border-l border-foreground/15 pl-1.5 after:absolute after:-inset-x-1.5 after:-inset-y-2 hover:text-foreground",
+            flagged && "text-warning hover:text-warning",
           )}
         >
           <Flag className={cn("size-3", flagged && "fill-current")} />
-          <span className="sm:sr-only">{flagged ? "已反馈有误" : "收录有误"}</span>
         </button>
       )}
-    </>
+    </span>
   );
 }
 
