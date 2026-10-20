@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { Link } from "react-router";
-import { cn } from "cn";
+import { cn } from "~/cn";
 import {
   ChartBar,
   CircleCheck,

@@ -1,4 +1,4 @@
-import { cn } from "cn";
+import { cn } from "~/cn";
 import type * as React from "react";
 
 // The class for each look, defined in app.css.

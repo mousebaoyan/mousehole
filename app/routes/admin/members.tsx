@@ -1,6 +1,6 @@
 import { ArrowDown, ArrowUp, Columns3, Lock, Search } from "~/components/icons";
 import { pageTitle } from "~/share-meta";
-import { cn } from "cn";
+import { cn } from "~/cn";
 import { useState } from "react";
 import { Form, Link, useRouteLoaderData, useSearchParams } from "react-router";
 import { apiContext } from "../../api.server.ts";

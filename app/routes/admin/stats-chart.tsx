@@ -1,5 +1,5 @@
 import { useState, type PointerEvent } from "react";
-import { cn } from "cn";
+import { cn } from "~/cn";
 
 // A line chart of daily figures for the stats page (design §10.1). The lines are an SVG stretched
 // over the plot, kept 2px wide; the axis labels, dots and readout are HTML placed by percentage,

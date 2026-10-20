@@ -1,5 +1,5 @@
 import type { CSSProperties, ReactNode } from "react";
-import { cn } from "cn";
+import { cn } from "~/cn";
 import type { BackgroundPreset } from "../../server/modules/users/customization.ts";
 
 // What lies under a card and the head of a page (design §8.16), as strongly as they chose: a

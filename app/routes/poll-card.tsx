@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useFetcher } from "react-router";
-import { cn } from "cn";
+import { cn } from "~/cn";
 import { ChartBar, Check } from "~/components/icons";
 import type { ThreadDetail } from "~/api-types";
 import { PeoplePopover } from "~/components/people-popover";

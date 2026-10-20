@@ -8,7 +8,7 @@ import {
   type RefObject,
 } from "react";
 import { flushSync } from "react-dom";
-import { cn } from "cn";
+import { cn } from "~/cn";
 import { Input } from "~/components/ui/input";
 
 // Hand-rolled instead of Base UI's Menu and Dialog: the header is on every page, and those

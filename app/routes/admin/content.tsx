@@ -1,7 +1,7 @@
 import { Check, Eye, EyeOff } from "~/components/icons";
 import { pageTitle } from "~/share-meta";
 import { Form, Link, useNavigation } from "react-router";
-import { cn } from "cn";
+import { cn } from "~/cn";
 import { apiContext } from "../../api.server.ts";
 import { readForm, Result, Time } from "~/components/form-parts";
 import { Button } from "~/components/ui/button";

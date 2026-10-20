@@ -1,4 +1,4 @@
-import { cn } from "cn";
+import { cn } from "~/cn";
 import { AvatarFrame } from "~/components/frame";
 import { Rat } from "~/components/icons";
 import type { Writer } from "~/api-types";

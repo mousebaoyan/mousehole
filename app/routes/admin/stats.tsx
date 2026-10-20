@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { Link } from "react-router";
-import { cn } from "cn";
+import { cn } from "~/cn";
 import { apiContext } from "../../api.server.ts";
 import { ArrowDown, ArrowUp } from "~/components/icons";
 import { Section } from "~/components/form-parts";

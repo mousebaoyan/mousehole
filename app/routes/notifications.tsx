@@ -15,7 +15,7 @@ import {
 } from "~/components/icons";
 import { pageTitle } from "~/share-meta";
 import { data, Form, Link, redirect, useNavigation, useSubmit } from "react-router";
-import { cn } from "cn";
+import { cn } from "~/cn";
 import { apiContext } from "../api.server.ts";
 import { type Loaded, Pages } from "~/components/pages";
 import { Button } from "~/components/ui/button";

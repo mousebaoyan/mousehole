@@ -1,6 +1,6 @@
 import { pageTitle } from "~/share-meta";
 import { Link } from "react-router";
-import { cn } from "cn";
+import { cn } from "~/cn";
 import { apiContext } from "../../api.server.ts";
 import type { Route } from "./+types/overview.ts";
 import { Section, Time } from "~/components/form-parts";

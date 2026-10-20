@@ -12,7 +12,7 @@ import {
 import { pageTitle } from "~/share-meta";
 import { useEffect, useRef, useState } from "react";
 import { data, Link } from "react-router";
-import { cn } from "cn";
+import { cn } from "~/cn";
 import { apiContext } from "../api.server.ts";
 import { Pages } from "~/components/pages";
 import { BadgeChip, TIER_STYLES } from "~/components/badge-chip";
