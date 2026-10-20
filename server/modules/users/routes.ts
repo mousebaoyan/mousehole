@@ -49,6 +49,7 @@ import {
   buyLook,
   clearCustomization,
   findUserId,
+  findUsers,
   getProfile,
   getSettings,
   getShowcase,
@@ -310,8 +311,7 @@ export const usersRoutes = createRouter()
     createRoute({
       method: "get",
       path: "/users",
-      summary:
-        "按名字或 QQ 号找成员，最多 8 个：QQ 号正好是它的在前，再是名字以它开头的，再按最近活跃；编辑器的 @ 补全用",
+      summary: "找成员，最多 8 个，匹配和排序同 /users/search，不含冻结的账号；编辑器的 @ 补全用",
       request: { query: z.object({ q: z.string().trim().min(1).max(20) }) },
       responses: {
         200: {
@@ -328,6 +328,60 @@ export const usersRoutes = createRouter()
     async (c) => {
       authorize(c, "read");
       return c.json({ items: await searchUsers(c.req.valid("query").q) }, 200);
+    },
+  )
+  // Before /users/{user}, which would take "search" for a user.
+  .openapi(
+    createRoute({
+      method: "get",
+      path: "/users/search",
+      summary:
+        "搜索页找用户，每页 20 个：名字、所在群的群名片、QQ 昵称包含它，或者 5 位以上的数字是 QQ 号的开头；QQ 号正好是它的在前，再是还在群里的、名字以它开头的，再按最近活跃",
+      request: {
+        query: z.object({
+          q: z.string().trim().min(1).max(30),
+          cursor: z.coerce.number().int().min(0).default(0),
+        }),
+      },
+      responses: {
+        200: {
+          description: "找到的用户",
+          content: {
+            "application/json": {
+              schema: z.object({
+                items: z.array(
+                  UserBriefSchema.extend({
+                    qq: z.number(),
+                    frozen: z.boolean().openapi({ description: "已冻结（退了所有的群）" }),
+                    thread_count: z.number(),
+                    post_count: z.number(),
+                    match: z
+                      .object({
+                        field: z.enum(["card", "qq_nickname"]),
+                        text: z.string(),
+                        group: z.string().nullable(),
+                      })
+                      .nullable()
+                      .openapi({
+                        description:
+                          "名字以外对上的：card 是 group 群里的群名片，qq_nickname 是 QQ 昵称；名字或 QQ 号对上的为 null",
+                      }),
+                  }),
+                ),
+                next_cursor: z.string().nullable(),
+              }),
+            },
+          },
+        },
+        401: errorResponse("没有登录"),
+        403: errorResponse("不是成员"),
+      },
+    }),
+    async (c) => {
+      const viewer = authorize(c, "read");
+      if (!isMember(viewer, c.var.bot)) throw new AppError(403, "forbidden", "仅成员可查看");
+      const { q, cursor } = c.req.valid("query");
+      return c.json(await findUsers(q, cursor), 200);
     },
   )
   .openapi(

@@ -1,5 +1,5 @@
 import { type Loaded, Pages } from "~/components/pages";
-import { Search as SearchIcon, X } from "~/components/icons";
+import { Search as SearchIcon, Snowflake, X } from "~/components/icons";
 import { pageTitle } from "~/share-meta";
 import { Fragment } from "react";
 import { data, Form, Link } from "react-router";
@@ -9,7 +9,8 @@ import { BoardBadge } from "~/components/board-badge";
 import { Dot, FILTER, FilterMenu } from "~/components/filter-menu";
 import { tagChoices } from "~/components/thread-feed";
 import { UserAvatar } from "~/components/user-avatar";
-import { useBoards, useTags } from "~/forum";
+import { UserBadges } from "~/components/user-badges";
+import { useBoards, useMe, useTags } from "~/forum";
 import { ago, unixNow } from "~/time";
 import type { Route } from "./+types/search.ts";
 
@@ -51,10 +52,12 @@ function pick<T extends string>(options: readonly { value: T }[], value: string 
   return options.find((o) => o.value === value)?.value ?? options[0].value;
 }
 
-// The filters in the address (design §8.5); defaults are left out.
+// The filters in the address (design §8.5); defaults are left out. `type` is what is looked for,
+// threads unless it says users; the threads' filters stay in the address while looking for users.
 function readSearch(url: string) {
   const params = new URL(url).searchParams;
   return {
+    type: params.get("type") === "users" ? ("users" as const) : ("" as const),
     q: params.get("q")?.trim().slice(0, 100) ?? "",
     board: params.get("board") ?? "",
     tag: params.get("tag") ?? "",
@@ -76,14 +79,26 @@ function searchUrl(filters: Filters, change: Partial<Filters>) {
   return `/search?${params}`;
 }
 
-// Threads and replies for ?q= and the filters, a page at a time; on the first page, also members
-// by name for those signed in, and the 楼主 filtered on.
+// Threads and replies for ?q= and the filters, with the 楼主 filtered on; or people. A page at a
+// time.
 export async function loader({ request, context }: Route.LoaderArgs) {
   const api = context.get(apiContext);
   const filters = readSearch(request.url);
   const cursor = new URL(request.url).searchParams.get("cursor") ?? undefined;
   const { q } = filters;
-  const [res, people, author] = await Promise.all([
+  if (filters.type === "users") {
+    const res =
+      q === "" ? null : await api.users.search.$get({ query: { q: q.slice(0, 30), cursor } });
+    if (res && !res.ok) throw data((await res.json()).error.message, { status: res.status });
+    const page = res ? await res.json() : { items: [], next_cursor: null };
+    return {
+      type: "users" as const,
+      filters,
+      people: page.items,
+      next_cursor: page.next_cursor,
+    };
+  }
+  const [res, author] = await Promise.all([
     q === ""
       ? null
       : api.search.$get({
@@ -100,29 +115,37 @@ export async function loader({ request, context }: Route.LoaderArgs) {
             cursor,
           },
         }),
-    q === "" || cursor !== undefined ? null : api.users.$get({ query: { q: q.slice(0, 20) } }),
     filters.author === "" ? null : api.users[":user"].$get({ param: { user: filters.author } }),
   ]);
   if (res && !res.ok) throw data((await res.json()).error.message, { status: res.status });
   const page = res ? await res.json() : { items: [], next_cursor: null };
   return {
+    type: "threads" as const,
     filters,
     authorName: author?.ok ? (await author.json()).display_name : null,
     results: page.items,
-    users: people?.ok ? (await people.json()).items : [],
     next_cursor: page.next_cursor,
     now: unixNow(),
   };
 }
 
-type Result = Route.ComponentProps["loaderData"]["results"][number];
+type Data = Route.ComponentProps["loaderData"];
+type Result = Extract<Data, { type: "threads" }>["results"][number];
+type Person = Extract<Data, { type: "users" }>["people"][number];
 
 // The pages of results each entry of the history showed (components/pages.tsx).
 const kept = new Map<string, Loaded<typeof loader>[]>();
 
+const TYPES = [
+  { value: "", label: "帖子" },
+  { value: "users", label: "用户" },
+] as const;
+
 export default function Search({ loaderData }: Route.ComponentProps) {
-  const { filters, authorName, results, users } = loaderData;
+  const me = useMe();
+  const { filters } = loaderData;
   const { q } = filters;
+  const users = filters.type === "users";
   return (
     <section>
       <Form
@@ -136,8 +159,8 @@ export default function Search({ loaderData }: Route.ComponentProps) {
           defaultValue={q}
           key={q}
           aria-label="搜索"
-          placeholder="搜索帖子、回复、用户"
-          maxLength={100}
+          placeholder={users ? "搜索名字、群名片、QQ 昵称或 QQ 号" : "搜索帖子和回复"}
+          maxLength={users ? 30 : 100}
           className="w-full bg-transparent outline-none placeholder:text-muted-foreground"
         />
         {/* Searching again keeps the filters. */}
@@ -147,21 +170,50 @@ export default function Search({ loaderData }: Route.ComponentProps) {
             value !== "" && <input key={name} type="hidden" name={name} value={value} />,
         )}
       </Form>
-      <SearchFilters filters={filters} authorName={authorName} />
-      {users.length > 0 && (
-        <div className="mb-4 flex flex-wrap gap-2 px-1">
-          {users.map((u) => (
+      {/* Group cards and QQ numbers are for members, so guests look for threads only. */}
+      {me && (
+        <nav aria-label="搜索范围" className="mb-4 flex gap-6 border-b px-2">
+          {TYPES.map((t) => (
             <Link
-              key={u.id}
-              to={`/u/${u.id}`}
-              className="inline-flex items-center gap-1.5 rounded-full border bg-card py-1 pr-3 pl-1 text-sm hover:bg-accent"
+              key={t.value}
+              to={searchUrl(filters, { type: t.value })}
+              aria-current={t.value === filters.type ? "page" : undefined}
+              className={cn(
+                "-mb-px border-b-2 border-transparent px-1 pb-2 text-sm text-muted-foreground hover:text-foreground",
+                t.value === filters.type && "border-foreground font-medium text-foreground",
+              )}
             >
-              <UserAvatar user={u} className="size-6 text-2xs" />
-              {u.display_name}
+              {t.label}
             </Link>
           ))}
-        </div>
+        </nav>
       )}
+      {loaderData.type === "users" ? (
+        <>
+          {q !== "" && loaderData.people.length === 0 && (
+            <p className="py-16 text-center text-sm text-muted-foreground">未找到相关用户</p>
+          )}
+          <ul className="stagger">
+            <Pages<typeof loader> kept={kept} first={loaderData} next={(page) => page.next_cursor}>
+              {(page) =>
+                page.type === "users" && <People people={page.people} q={page.filters.q} />
+              }
+            </Pages>
+          </ul>
+        </>
+      ) : (
+        <Threads data={loaderData} />
+      )}
+    </section>
+  );
+}
+
+function Threads({ data: loaded }: { data: Extract<Data, { type: "threads" }> }) {
+  const { filters, authorName, results } = loaded;
+  const { q } = filters;
+  return (
+    <>
+      <SearchFilters filters={filters} authorName={authorName} />
       {q !== "" && (
         <nav
           aria-label="排序"
@@ -187,11 +239,15 @@ export default function Search({ loaderData }: Route.ComponentProps) {
         <p className="py-16 text-center text-sm text-muted-foreground">未找到相关内容</p>
       )}
       <ul className="stagger">
-        <Pages<typeof loader> kept={kept} first={loaderData} next={(page) => page.next_cursor}>
-          {(page) => <Results results={page.results} q={page.filters.q} now={page.now} />}
+        <Pages<typeof loader> kept={kept} first={loaded} next={(page) => page.next_cursor}>
+          {(page) =>
+            page.type === "threads" && (
+              <Results results={page.results} q={page.filters.q} now={page.now} />
+            )
+          }
         </Pages>
       </ul>
-    </section>
+    </>
   );
 }
 
@@ -282,6 +338,50 @@ function SearchFilters({ filters, authorName }: { filters: Filters; authorName: 
       )}
     </div>
   );
+}
+
+// Each with what matched when it wasn't the name, and the QQ number, which tells namesakes apart.
+function People({ people, q }: { people: Person[]; q: string }) {
+  return people.map((u) => (
+    <li
+      key={u.id}
+      className="relative flex items-center gap-3 rounded-xl px-3 py-3 before:absolute before:inset-x-3 before:bottom-0 before:h-px before:bg-border/70 last:before:hidden transition-colors hover:bg-accent/60 sm:px-4"
+    >
+      <UserAvatar user={u} className="size-10 shrink-0" />
+      <div className="min-w-0">
+        <div className="flex items-center gap-1.5">
+          <Link
+            to={`/u/${u.id}`}
+            className="min-w-0 truncate font-medium after:absolute after:inset-0"
+          >
+            <Marked text={u.display_name} q={q} />
+          </Link>
+          {/* A long name is cut short rather than these. */}
+          <span className="flex shrink-0 items-center gap-1.5">
+            <UserBadges user={u} />
+            {u.frozen && (
+              <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                <Snowflake className="size-3" /> 已冻结
+              </span>
+            )}
+          </span>
+        </div>
+        <p className="mt-1 flex flex-wrap gap-x-2.5 gap-y-1 text-xs text-muted-foreground">
+          {u.match && (
+            <span>
+              {u.match.field === "card" ? "群名片" : "QQ 昵称"}「
+              <Marked text={u.match.text} q={q} />」{u.match.group && `（${u.match.group}）`}
+            </span>
+          )}
+          <span className="tabular-nums">
+            QQ <Marked text={String(u.qq)} q={q} />
+          </span>
+          <span>帖子 {u.thread_count}</span>
+          <span>回复 {u.post_count}</span>
+        </p>
+      </div>
+    </li>
+  ));
 }
 
 function Results({ results, q, now }: { results: Result[]; q: string; now: number }) {
