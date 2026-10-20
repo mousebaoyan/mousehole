@@ -174,7 +174,7 @@ describe("阅读记录", () => {
   });
 });
 
-async function list(view: "new" | "unread" | "read") {
+async function list(view: "unread" | "read") {
   const res = await api.threads.$get({ query: { board: "lists", view } }, reader.who);
   if (!res.ok) throw new Error(`status ${res.status}`);
   return (await res.json()).items.map((t) => t.id);
@@ -186,12 +186,13 @@ async function counts() {
   return res.json();
 }
 
-describe("新、未读和已读", () => {
-  test("没打开过的是新，读过又有新楼层的是未读，已读按最后阅读时间排", async () => {
+describe("未读和已读", () => {
+  test("读过又有新楼层的是未读，没打开过的不算，已读按最后阅读时间排", async () => {
     await api.boards.$post({ json: { slug: "lists", name: "列表" } }, admin);
     const replied = await newThread(0, "lists");
     const partly = await newThread(2, "lists");
-    const untouched = await newThread(0, "lists");
+    // Never opened, so in neither list.
+    await newThread(0, "lists");
     await report(replied, [[1, 1]], 5);
     await report(partly, [[1, 1]], 5);
     await api.threads[":id"].posts.$post(
@@ -199,18 +200,12 @@ describe("新、未读和已读", () => {
       author,
     );
 
-    expect(await list("new")).toEqual([untouched]);
     expect(await list("unread")).toEqual([replied, partly]);
     expect(await list("read")).toEqual([partly, replied]);
-    expect(await counts()).toEqual({ new: 1, unread: 2, unsolved: 0, unvoted: 0 });
+    expect(await counts()).toEqual({ unread: 2, unsolved: 0, unvoted: 0 });
 
     await report(replied, [[2, 2]], 5);
-    await db
-      .updateTable("threads")
-      .set({ created_at: sql<Date>`now() - interval '8 days'` })
-      .where("id", "=", untouched)
-      .execute();
-    expect(await counts()).toEqual({ new: 0, unread: 1, unsolved: 0, unvoted: 0 });
+    expect(await counts()).toEqual({ unread: 1, unsolved: 0, unvoted: 0 });
     expect(await list("read")).toEqual([replied, partly]);
   });
 

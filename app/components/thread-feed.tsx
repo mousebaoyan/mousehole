@@ -7,11 +7,10 @@ import { Pages } from "~/components/pages";
 import { ThreadList, ThreadRows } from "~/components/thread-list";
 import { useBoards, useTags, type Board } from "~/forum";
 
-// New, unread (design §8.9) and polls not yet voted in (design §8.11) are the reader's own: only
-// for someone signed in, with how many; so is how many are unsolved.
+// Unread (design §8.9) and polls not yet voted in (design §8.11) are the reader's own: only for
+// someone signed in, with how many; so is how many are unsolved.
 const VIEWS = [
   { view: "latest", label: "最新", own: false },
-  { view: "new", label: "新", own: true },
   { view: "unread", label: "未读", own: true },
   { view: "hot", label: "热门", own: false },
   { view: "unsolved", label: "待解答", own: false },
@@ -38,7 +37,7 @@ export function feedTitle(view: ThreadView, tag: string | null) {
   ];
 }
 
-// For the first page of a list: the counts beside new and unread, null for guests.
+// For the first page of a list: the counts beside the reader's own tabs, null for guests.
 export async function readCounts(
   api: Api,
   scope: { board?: string; tag?: string },
@@ -91,7 +90,7 @@ function listUrl(board: string | null, tag: string | null, view: ThreadView) {
 
 type Page = { threads: ThreadItem[]; next_cursor: string | null; now: number };
 
-export type Counts = { new: number; unread: number; unsolved: number; unvoted: number };
+export type Counts = { unread: number; unsolved: number; unvoted: number };
 
 // The board and tag filters stack, and both keep the current view. `counts` is null for guests.
 export function ThreadFeed({

@@ -137,7 +137,6 @@ describe("热点查询走索引", () => {
       "hot",
       "unsolved",
       "unvoted",
-      "new",
       "unread",
       "posted",
       "bookmarked",

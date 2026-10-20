@@ -67,7 +67,6 @@ export const VIEWS = [
   "hot",
   "unsolved",
   "unvoted",
-  "new",
   "unread",
   "read",
   "posted",
@@ -198,10 +197,8 @@ function badCursor(): never {
   throw new AppError(400, "invalid_request", "cursor 无效");
 }
 
-// The reader's own, from their row in thread_users: new is this week's and never opened; unread
-// has floors past the highest one they read. See design §8.9.
-const NEW = sql<boolean>`threads.created_at > now() - interval '7 days'
-  AND mine.last_read_at IS NULL`;
+// The reader's own, from their row in thread_users: floors past the highest one they read. See
+// design §8.9.
 const UNREAD = sql<boolean>`mine.last_read_at IS NOT NULL
   AND coalesce(upper(mine.read_floors) - 1, 0) < threads.floor_count`;
 // Questions asked on the forum with no accepted answer. Those collected from the groups are left
@@ -348,7 +345,6 @@ export async function listThreads(
   } else {
     if (view === "unsolved") query = query.where(UNSOLVED);
     if (view === "unvoted") query = query.where(unvoted(userId));
-    if (view === "new") query = query.where(NEW);
     if (view === "unread") query = query.where(UNREAD);
     if (view === "read") query = query.where("mine.last_read_at", "is not", null);
     if (view === "bookmarked") query = query.where("mine.bookmarked_at", "is not", null);
@@ -379,8 +375,8 @@ export async function listThreads(
   };
 }
 
-// For the list's tabs: how many threads in this board or tag are new and unread to the reader,
-// and how many are unsolved.
+// For the list's tabs: how many threads in this board or tag are unread to the reader and not yet
+// voted in by them, and how many are unsolved.
 export async function countTabs(
   reach: number,
   userId: number,
@@ -391,7 +387,6 @@ export async function countTabs(
       join.onRef("mine.thread_id", "=", "threads.id").on("mine.user_id", "=", userId),
     )
     .select([
-      sql<number>`(count(*) FILTER (WHERE ${NEW}))::integer`.as("new"),
       sql<number>`(count(*) FILTER (WHERE ${UNREAD}))::integer`.as("unread"),
       sql<number>`(count(*) FILTER (WHERE ${UNSOLVED}))::integer`.as("unsolved"),
       sql<number>`(count(*) FILTER (WHERE ${unvoted(userId)}))::integer`.as("unvoted"),
