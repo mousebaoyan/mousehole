@@ -6,10 +6,16 @@
   "engines": {
     "node": ">=26"
   },
+  "browserslist": [
+    "ios_saf >= 15.4",
+    "safari >= 15.4",
+    "chrome >= 100",
+    "firefox >= 128"
+  ],
   "scripts": {
     "postinstall": "node scripts/copy-emoji-data.ts",
     "dev": "react-router dev",
-    "build": "react-router build && node scripts/compress-assets.ts",
+    "build": "react-router build && es-check checkBrowser --module --checkFeatures 'build/client/assets/*.js' && node scripts/compress-assets.ts",
     "start": "node build/server/index.js",
     "typecheck": "react-router typegen && tsc",
     "lint": "oxlint",
@@ -65,6 +71,7 @@
     "@types/react-dom": "^19.3.0",
     "babel-plugin-react-compiler": "^1.0.0",
     "emojibase-data": "^17.0.0",
+    "es-check": "^9.8.1",
     "kysely-codegen": "^0.20.0",
     "oxlint": "^1.87.0",
     "oxlint-tsgolint": "^7.0.2004",

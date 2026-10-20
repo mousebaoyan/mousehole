@@ -143,11 +143,13 @@ function Asking({ question }: { question: Question }) {
   );
 }
 
-// A submit button's onClick: asks first, then sends the form as if the button had been clicked.
+// A submit button's onClick: asks first, then clicks the button again, a click that doesn't come
+// from the user and so goes through. Safari 15 has no requestSubmit() to send the form directly.
 export function confirmSubmit(text: string, action: string) {
   return (e: MouseEvent<HTMLButtonElement>) => {
+    if (!e.isTrusted) return;
     e.preventDefault();
     const button = e.currentTarget;
-    void confirmDialog(text, action).then((ok) => ok && button.form?.requestSubmit(button));
+    void confirmDialog(text, action).then((ok) => ok && button.click());
   };
 }

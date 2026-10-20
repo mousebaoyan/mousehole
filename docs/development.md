@@ -102,6 +102,9 @@ test/                   Vitest 的全局准备：测试用的数据库
   - 宽表格在手机上横向滚动（`overflow-x-auto overscroll-x-contain`）。固定在左侧的列要有背景和 `z-10`：单元格里的下拉框是定位元素，会盖在没有层级的固定列上面；固定列在手机上收窄，长名字截断。
   - 表单里有两个以上文本框又没有提交按钮时，浏览器不会因回车提交，这时加一个 `sr-only` 的提交按钮。`Select` 只在 `required` 时用文本框存值，不占这个数。
   - 改了界面，开着 `pnpm dev` 运行 `pnpm phone-check [路径…]`（`scripts/phone-check.ts`）：它以站长身份按 360px 宽打开页面，逐个展开菜单和下拉框，报告超出屏幕的元素，截图存在 `test-results/phone/`。报告为空、截图里排版和文案都没问题再提交。
+- 浏览器端的代码（`app/` 和它引用的 `server/` 里的文件）要能在[总体设计 §5.1](design.md#51-选型) 定的最旧浏览器上运行，也就是 `package.json` 里的 `browserslist`；`vite.config.ts` 的 `target` 是同一份名单，改的时候一起改。
+  - `pnpm build` 会用 es-check 检查打包结果，用到这些浏览器没有的 JS 方法或语法（如 `toSorted`、`Object.groupBy`、Set 的新方法）时，构建失败，CI 也通不过。排序和倒序在副本上用 `sort()`、`reverse()`，lint 已经关掉了要求改用 `toSorted()`、`toReversed()` 的两条 unicorn 规则。
+  - es-check 查不到的要自己留意：浏览器 API（如 `requestSubmit()`、`cookieStore`）先在 MDN 上查支持的版本，不够的就换写法，或者像 `startViewTransition` 那样先判断有没有再用；不用迭代器方法（`map.values().map()`）和正则的后行断言（`(?<=…)`）。
 - 表情选择器用 frimousse，打开时才加载。表情数据（emojibase-data 的中文版，约 100KB gzip）在安装依赖时由 `scripts/copy-emoji-data.ts` 复制到 `public/emojibase/{版本}/`，由我们自己提供，不走默认的 jsDelivr（国内不稳定）；路径带版本号，所以服务器给 `/emojibase/` 发一年的缓存（`server/main.ts`）。
 - 带宽很紧（[总体设计 §11.2](design.md#112-带宽)）：不用网络字体；不往浏览器里打包大依赖，Markdown 渲染和代码高亮只在服务端做；图片用显示档、懒加载并写明宽高；管理后台的代码只在后台的路由里引用。加前端依赖前，先看它让打包结果大了多少。
 - 能点的元素用 `button`、`a`、`form`，不给 `div` 绑点击事件。

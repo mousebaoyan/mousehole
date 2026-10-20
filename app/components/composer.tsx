@@ -1126,7 +1126,12 @@ function PollOptions({ poll, onChange }: { poll: PollDraft; onChange: (poll: Pol
           <li key={i} className="flex items-center gap-2">
             <Input
               value={option}
-              onChange={(e) => onChange({ ...poll, options: poll.options.with(i, e.target.value) })}
+              onChange={(e) =>
+                onChange({
+                  ...poll,
+                  options: poll.options.map((o, j) => (j === i ? e.target.value : o)),
+                })
+              }
               aria-label={`选项 ${i + 1}`}
               placeholder={`选项 ${i + 1}`}
               maxLength={50}
@@ -1138,7 +1143,9 @@ function PollOptions({ poll, onChange }: { poll: PollDraft; onChange: (poll: Pol
                 size="icon-sm"
                 aria-label={`删除选项 ${i + 1}`}
                 title="删除"
-                onClick={() => onChange({ ...poll, options: poll.options.toSpliced(i, 1) })}
+                onClick={() =>
+                  onChange({ ...poll, options: poll.options.filter((_, j) => j !== i) })
+                }
               >
                 <X />
               </Button>
@@ -1207,7 +1214,7 @@ function PositioningFields({
                   onChange={(e) =>
                     onChange({
                       ...positioning,
-                      schools: positioning.schools.with(i, e.target.value),
+                      schools: positioning.schools.map((s, j) => (j === i ? e.target.value : s)),
                     })
                   }
                   aria-label={`目标院校 ${i + 1}`}
@@ -1222,7 +1229,10 @@ function PositioningFields({
                     aria-label={`删除目标院校 ${i + 1}`}
                     title="删除"
                     onClick={() =>
-                      onChange({ ...positioning, schools: positioning.schools.toSpliced(i, 1) })
+                      onChange({
+                        ...positioning,
+                        schools: positioning.schools.filter((_, j) => j !== i),
+                      })
                     }
                   >
                     <X />
@@ -1314,7 +1324,10 @@ function LotteryPrizes({
             <Input
               value={prize.name}
               onChange={(e) =>
-                onChange({ ...lottery, prizes: prizes.with(i, { ...prize, name: e.target.value }) })
+                onChange({
+                  ...lottery,
+                  prizes: prizes.map((p, j) => (j === i ? { ...prize, name: e.target.value } : p)),
+                })
               }
               aria-label={`奖项 ${i + 1}`}
               placeholder={i === 0 ? "奖品，例如「一等奖：机械键盘」" : `奖项 ${i + 1}`}
@@ -1332,10 +1345,9 @@ function LotteryPrizes({
                 onChange={(e) =>
                   onChange({
                     ...lottery,
-                    prizes: prizes.with(i, {
-                      ...prize,
-                      winners: Math.trunc(Number(e.target.value)),
-                    }),
+                    prizes: prizes.map((p, j) =>
+                      j === i ? { ...prize, winners: Math.trunc(Number(e.target.value)) } : p,
+                    ),
                   })
                 }
                 aria-label={`奖项 ${i + 1} 抽几人`}
@@ -1349,7 +1361,7 @@ function LotteryPrizes({
                 size="icon-sm"
                 aria-label={`删除奖项 ${i + 1}`}
                 title="删除"
-                onClick={() => onChange({ ...lottery, prizes: prizes.toSpliced(i, 1) })}
+                onClick={() => onChange({ ...lottery, prizes: prizes.filter((_, j) => j !== i) })}
               >
                 <X />
               </Button>

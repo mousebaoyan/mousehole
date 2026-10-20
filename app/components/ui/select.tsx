@@ -97,7 +97,10 @@ export function Select({
     // Tells the form, as a native field would.
     input.current?.dispatchEvent(new Event("input", { bubbles: true }));
     onValueChange?.(next);
-    if (submitOnChange) input.current?.form?.requestSubmit();
+    // React Router's <Form> sends itself on the event. Safari 15 has no requestSubmit().
+    if (submitOnChange) {
+      input.current?.form?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    }
   }
 
   function onItemKey(e: KeyboardEvent<HTMLButtonElement>) {

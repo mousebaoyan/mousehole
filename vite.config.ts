@@ -22,5 +22,10 @@ export default defineConfig(({ mode }) => {
       babel({ include: /\/app\/.+\.tsx?$/, plugins: ["babel-plugin-react-compiler"] }),
     ],
     resolve: { tsconfigPaths: true },
+    // The browsers in `browserslist` (package.json), named Vite's way, so it rewrites the syntax
+    // they lack; its default starts at iOS 16.4.
+    environments: {
+      client: { build: { target: ["ios15.4", "safari15.4", "chrome100", "firefox128"] } },
+    },
   };
 });

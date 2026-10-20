@@ -23,7 +23,7 @@ function floorSet(ranges: Ranges | undefined) {
 // 1, 2, 3, 7 → [[1, 3], [7, 7]].
 function rangesOf(floors: Set<number>) {
   const ranges: Ranges = [];
-  for (const f of [...floors].toSorted((a, b) => a - b)) {
+  for (const f of [...floors].sort((a, b) => a - b)) {
     const last = ranges.at(-1);
     if (last && last[1] === f - 1) last[1] = f;
     else ranges.push([f, f]);
