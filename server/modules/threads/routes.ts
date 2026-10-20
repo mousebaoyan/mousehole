@@ -493,7 +493,7 @@ export const threadsRoutes = createRouter()
           tag: z.string().optional(),
           view: z.enum(VIEWS).default("latest").openapi({
             description:
-              "latest 按最后回复，created 按发布时间，hot 热门，unsolved 待解答；要登录的：unvoted 待投票，最近 7 天他人发的、还在投票、自己没投过的投票帖，new 最近 7 天发布、自己没打开过，unread 读过、之后有新楼层，read 读过的、按最后阅读时间，posted 自己发过或回复过的，bookmarked 自己收藏的、按收藏时间",
+              "latest 按最后回复，created 按发布时间，hot 热门，unsolved 待解答；要登录的：unvoted 待投票，他人发的、还在投票、自己没投过的投票帖，new 最近 7 天发布、自己没打开过，unread 读过、之后有新楼层，read 读过的、按最后阅读时间，posted 自己发过或回复过的，bookmarked 自己收藏的、按收藏时间",
           }),
           cursor: z.string().optional(),
           limit: z.coerce
