@@ -1,9 +1,11 @@
 import { testClient } from "hono/testing";
 import { sql } from "kysely";
 import { beforeAll, describe, expect, test } from "vitest";
-import { as, createUser, login } from "../../../test/fixtures.ts";
+import { as, createUser, login, nextQq } from "../../../test/fixtures.ts";
 import { app } from "../../app.ts";
 import { db } from "../../platform/db.ts";
+import { env } from "../../platform/env.ts";
+import { createBotToken } from "../auth/service.ts";
 
 const api = testClient(app).api.v1;
 
@@ -274,5 +276,62 @@ describe("投票", () => {
     const secret = await newPoll({ options: ["去", "不去"], anonymous: true });
     await voted(secret.id, [secret.options[0]], people.first);
     expect((await voters(secret.id, secret.options[0], people.first)).status).toBe(403);
+  });
+});
+
+describe("群里的投票汇总", () => {
+  test("bot 拿到这段时间里发的、还能投的投票帖和投票人数；结束了的、锁定的、门槛高的版块里的不给", async () => {
+    const { id: owner } = await createUser("admin");
+    const { token } = await createBotToken(
+      { userId: owner, operatorId: null, tokenId: null, ip: null, userAgent: null },
+      { name: "插件", botQq: nextQq(), scopes: ["read"] },
+    );
+    const bot = { headers: { authorization: `Bearer ${token}` } };
+    await api.boards.$post(
+      { json: { slug: "polls-l3", name: "高阶投票", read_level: 3 } },
+      people.admin,
+    );
+    const since = Math.floor(Date.now() / 1000);
+    const made = [];
+    for (let i = 0; i < 7; i++) made.push(await newPoll({ options: ["去", "不去"] }));
+    const [quiet, popular, closed, expired, locked, guarded, earlier] = made;
+    await voted(popular.id, [popular.options[0]], people.first);
+    await api.threads[":id"].poll.close.$post({ param: { id: String(closed.id) } }, people.author);
+    await db
+      .updateTable("polls")
+      .set({ closes_at: sql<Date>`now()` })
+      .where("thread_id", "=", expired.id)
+      .execute();
+    await db.updateTable("threads").set({ locked: true }).where("id", "=", locked.id).execute();
+    const { id: board } = await db
+      .selectFrom("boards")
+      .select("id")
+      .where("slug", "=", "polls-l3")
+      .executeTakeFirstOrThrow();
+    await db.updateTable("threads").set({ board_id: board }).where("id", "=", guarded.id).execute();
+    await db
+      .updateTable("threads")
+      .set({ created_at: sql<Date>`now() - interval '1 day'` })
+      .where("id", "=", earlier.id)
+      .execute();
+
+    const mine = new Set(made.map((p) => p.id));
+    const listed = async (query: { since: string; until?: string }) => {
+      const res = await api.bot.polls.$get({ query }, bot);
+      return (await res.json()).items.filter((i) => mine.has(i.thread.id));
+    };
+    expect(await listed({ since: String(since) })).toEqual([
+      {
+        thread: { id: quiet.id, title: "大家报了几个夏令营" },
+        voters: 0,
+        url: `${env.PUBLIC_URL}/t/${quiet.id}`,
+      },
+      {
+        thread: { id: popular.id, title: "大家报了几个夏令营" },
+        voters: 1,
+        url: `${env.PUBLIC_URL}/t/${popular.id}`,
+      },
+    ]);
+    expect(await listed({ since: String(since), until: String(since) })).toEqual([]);
   });
 });

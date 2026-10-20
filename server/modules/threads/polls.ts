@@ -2,6 +2,7 @@ import { sql, type Transaction } from "kysely";
 import type { DB } from "../../../db/types.ts";
 import type { Actor } from "../../platform/access.ts";
 import { db } from "../../platform/db.ts";
+import { env } from "../../platform/env.ts";
 import { AppError } from "../../platform/errors.ts";
 import { recordAudit } from "../audit/service.ts";
 import { userBriefs } from "../users/service.ts";
@@ -253,4 +254,32 @@ export async function listVoters(poll: Poll | null, optionId: number) {
     .execute();
   const user = await userBriefs(rows.map((r) => r.user_id));
   return rows.map((r) => user(r.user_id));
+}
+
+// For the bot plugin's evening digest in the groups (design §8.6): polls put up in [since, until)
+// that can still be voted on, in boards all members read, the first first. Each comes up in one
+// digest only, as the plugin asks from where it left off.
+export async function listNewPolls(since: Date, until: Date) {
+  const rows = await db
+    .selectFrom("polls")
+    .innerJoin("threads", "threads.id", "polls.thread_id")
+    .innerJoin("boards", "boards.id", "threads.board_id")
+    .select(["threads.id", "threads.title", "polls.voter_count"])
+    .where("threads.created_at", ">=", since)
+    .where("threads.created_at", "<", until)
+    .where("threads.deleted_at", "is", null)
+    .where("threads.status", "=", "visible")
+    .where("threads.locked", "=", false)
+    .where("boards.read_level", "=", 0)
+    .where("polls.closed_at", "is", null)
+    .where((eb) =>
+      eb.or([eb("polls.closes_at", "is", null), eb("polls.closes_at", ">", sql<Date>`now()`)]),
+    )
+    .orderBy("threads.created_at")
+    .execute();
+  return rows.map((r) => ({
+    thread: { id: r.id, title: r.title },
+    voters: r.voter_count,
+    url: `${env.PUBLIC_URL}/t/${r.id}`,
+  }));
 }
