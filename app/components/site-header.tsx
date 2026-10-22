@@ -1,6 +1,17 @@
 import { useEffect, useRef, useState } from "react";
-import { Form, Link, useLocation, useParams } from "react-router";
-import { Bell, Coins, LogOut, Menu, Search, Settings, User, Wrench, X } from "~/components/icons";
+import { Form, Link, useLocation, useNavigate, useParams, useRouteLoaderData } from "react-router";
+import {
+  ArrowLeft,
+  Bell,
+  Coins,
+  LogOut,
+  Menu,
+  Search,
+  Settings,
+  User,
+  Wrench,
+  X,
+} from "~/components/icons";
 import { NewThreadButton } from "~/components/composer";
 import { Drawer, Dropdown, menuItem } from "~/components/disclosure";
 import { ForumNav } from "~/components/forum-nav";
@@ -8,6 +19,7 @@ import { Logo } from "~/components/logo";
 import { ThemeToggle } from "~/components/theme-toggle";
 import { UserAvatar } from "~/components/user-avatar";
 import { buttonVariants } from "~/components/ui/button";
+import type { loader as threadLoader } from "~/routes/thread";
 import { STAFF } from "../../server/platform/site.ts";
 
 type Me = {
@@ -48,6 +60,31 @@ function useSlashToSearch() {
   return box;
 }
 
+// QQ on some Android phones closes its browser on the system Back, whatever the history (design
+// §9). With a forum page before it, this goes back the same way, so a list comes back as it was;
+// opened from a link, it leads up to the thread's board or the home page.
+function BackLink() {
+  const navigate = useNavigate();
+  const thread = useRouteLoaderData<typeof threadLoader>("routes/thread")?.thread;
+  return (
+    <Link
+      to={thread ? `/b/${thread.board.slug}` : "/"}
+      aria-label="返回"
+      onClick={(e) => {
+        // React Router numbers the entries it makes in history.state; 0 is where the forum opened.
+        const state: unknown = history.state;
+        if (state instanceof Object && "idx" in state && Number(state.idx) > 0) {
+          e.preventDefault();
+          void navigate(-1);
+        }
+      }}
+      className="flex size-9 items-center justify-center rounded-lg hover:bg-accent md:hidden"
+    >
+      <ArrowLeft className="size-5" />
+    </Link>
+  );
+}
+
 // `unread` is how many notifications the reader hasn't read.
 export function SiteHeader({ me, unread: loaded }: { me: Me | null; unread: number }) {
   const unread = useUnread(loaded, me !== null);
@@ -60,6 +97,7 @@ export function SiteHeader({ me, unread: loaded }: { me: Me | null; unread: numb
       {/* The outer columns share the leftover width, so the search box sits in the middle. */}
       <div className="mx-auto flex h-14 max-w-7xl items-center gap-2 px-3 sm:px-5 md:grid md:grid-cols-[1fr_minmax(0,30rem)_1fr]">
         <div className="flex items-center gap-2">
+          {pathname !== "/" && <BackLink />}
           <Drawer key={pathname} label="导航" trigger={<Menu className="size-5" />}>
             <ForumNav />
           </Drawer>
