@@ -6,7 +6,6 @@ import {
   Bookmark,
   CirclePlay,
   CircleQuestionMark,
-  ExternalLink,
   FilePen,
   History,
   Home,
@@ -99,12 +98,13 @@ export function ForumNav() {
         ))}
       </div>
       {/* Wider screens link to it from the header. */}
-      <div className="flex flex-col gap-0.5 md:hidden">
+      <div className="flex flex-col gap-0.5 xl:hidden">
         <a
           href={MAIN_SITE}
-          className="flex items-center gap-1 px-2.5 pb-1 text-xs font-medium text-muted-foreground hover:text-foreground"
+          className="flex items-center gap-1.5 px-2.5 pb-1 text-xs font-medium text-muted-foreground hover:text-foreground"
         >
-          鼠群官网 <ExternalLink className="size-3" />
+          <img src="/mousebaoyan.webp" alt="" width={16} height={16} className="rounded" />
+          鼠群官网
         </a>
         {mainSite.map((s) => (
           <a key={s.path} href={MAIN_SITE + s.path} className={item({ isActive: false })}>
