@@ -10,7 +10,7 @@
 - 回复数、点赞数等计数冗余存在父行里，和写入在同一个事务里更新，列表页不做聚合。`threads`、`posts` 设 `fillfactor = 90`，计数更新可以走 HOT 更新，不用改索引。
 - 列表用游标分页，沿索引顺序取下一页；帖子内按楼层号分页，第 N 页直接定位楼层范围，不用 OFFSET。
 - 正文列用 lz4 压缩，超过约 2KB 的长文会自动压缩。
-- 会话、登录链接、bot token 等令牌只存 SHA-256 哈希。
+- 会话、登录链接、bot token、成员的令牌、授权码和应用的密钥等令牌只存 SHA-256 哈希。
 - 连接：`pg`（node-postgres）连接池最多 10 个连接，另用 1 个单独的连接 LISTEN 事件通知。论坛账号设置 `statement_timeout = '5s'`、`idle_in_transaction_session_timeout = '30s'`。
 - 迁移是按编号排列的 SQL 文件，启动时由 Kysely 的 Migrator 依次执行，执行前先取 advisory lock。改完表结构后用 kysely-codegen 重新生成类型，CI 检查生成的类型和迁移是否一致。
 - `bigint` 在应用里读成 JS 的 `number`：QQ 号和各种 ID 都远小于 2^53。
@@ -32,13 +32,20 @@
   - 名单里没有、仍在群里、`observed_at` 又早于这次全量的成员，标记为退群（`left_reason = 'unknown'`）。
   - 要标记的人数超过当前人数的 20% 时，这次只更新资料、记下 `shrink_held_at`；下一次全量仍然这样，就照常标记。
 
-## 登录与 bot
+## 登录、令牌与应用
 
-表：`sessions`、`login_tickets`、`email_codes`、`api_tokens`、`idempotency_keys`。
+表：`sessions`、`login_tickets`、`email_codes`、`api_tokens`、`idempotency_keys`、`oauth_clients`、`oauth_codes`。
 
 - 邮件验证码每人一条，重发就覆盖。每次校验在同一条 `UPDATE` 里累加 `attempts` 并取出验证码，第 5 次之后作废，并发校验也不会多试。
 - 登录票据用完立即删除。过期的口令票据在申请新口令时顺手删掉，这样表不会变大，旧口令也能再被抽到；过期的链接票据由定时任务清理。口令票据创建时 `user_id` 为空，bot 确认后填入，浏览器换到会话后删除。
-- 每个 bot token 绑定一个 `bot` 角色的账号（`bot_user_id`），创建 token 时按 bot 的 QQ 号找到或新建，角色锁定；登录过的账号不能用作 bot。`last_used_at` 最多一分钟写一次。
+- `api_tokens` 存 bot token 和成员的令牌（[总体设计 §6.7](design.md#67-agent-和自家应用)），`user_id` 是以谁的身份操作：账号是 `bot` 角色的是 bot token，其余是成员的令牌。`last_used_at` 最多一分钟写一次。
+  - 每个 bot token 绑定一个 `bot` 角色的账号，创建 token 时按 bot 的 QQ 号找到或新建，角色锁定；登录过的账号不能用作 bot。
+  - 成员的令牌：`client_id` 指向 `oauth_clients`，应用授权的才有；`name` 在个人令牌是自己起的名字，在应用的令牌是授权时的应用名。`last_used_at`（没用过看 `created_at`）早于 90 天前就失效，撤销记 `revoked_at`。失效的行不删，操作日志和幂等键引用着它们。自家应用的令牌每人一个：签发新的时，把这个人在这个应用的旧令牌标为撤销。设置页按部分索引 `(user_id) WHERE revoked_at IS NULL` 查自己的令牌。
+- `oauth_clients` 是应用，`client_id` 都由论坛随机生成。有 `secret_hash` 的是自家应用，没有的是 Agent 注册的。
+  - 自家应用由站长登记：`secret_hash` 存密钥的 SHA-256，`redirect_uris` 和 `scopes` 是登记的；停用记 `disabled_at`，它的令牌随即失效。
+  - Agent 注册时建行，`name`、`redirect_uris` 是它报的。一天内没换到令牌的，由定时任务删除。
+- `oauth_codes` 是授权码：只存 SHA-256，带应用、本人、回调地址、范围和 `code_challenge`，5 分钟过期。换令牌时在同一条 `DELETE … RETURNING` 里取出，用过就没了，并发换也只有一次成功；过期的由定时任务清理。
+- 通过成员的令牌写的楼层、表情回应和短评，`via` 为 `agent`：`posts`、`reactions`、`boosts` 的 CHECK 都加上它。
 - 幂等：收到带键的请求，先插入一行占位（`status` 为 NULL）再执行，成功了回填状态码和响应；出错（4xx、5xx）不算结果，删掉占位让重试重新执行。回填在业务事务提交之后，两者之间进程崩溃的话，占位超过 5 分钟视为中断，重试会再执行一次；从群消息创建内容的请求另有 `409 source_exists` 兜底。超过 7 天的键当作新键，旧行由定时任务清理。
 
 ## 版块与标签
@@ -235,4 +242,6 @@
 | 由楼层找来源消息 | `qq_message_links_post` |
 | 事件流续传 | `events` 主键 |
 | 校验会话 | `sessions.token_hash` 唯一索引 |
+| 校验 bot token 和成员的令牌 | `api_tokens.token_hash` 唯一索引 |
+| 设置页里自己的令牌 | `api_tokens_user`（`user_id`，只含没撤销的） |
 | 全文搜索 | `post_search_document` |
