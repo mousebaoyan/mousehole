@@ -4,6 +4,7 @@ import {
   ArrowLeft,
   Bell,
   Coins,
+  ExternalLink,
   LogOut,
   Menu,
   Search,
@@ -20,7 +21,7 @@ import { ThemeToggle } from "~/components/theme-toggle";
 import { UserAvatar } from "~/components/user-avatar";
 import { buttonVariants } from "~/components/ui/button";
 import type { loader as threadLoader } from "~/routes/thread";
-import { STAFF } from "../../server/platform/site.ts";
+import { MAIN_SITE, STAFF } from "../../server/platform/site.ts";
 
 type Me = {
   id: number;
@@ -102,6 +103,12 @@ export function SiteHeader({ me, unread: loaded }: { me: Me | null; unread: numb
             <ForumNav />
           </Drawer>
           <Logo />
+          <a
+            href={MAIN_SITE}
+            className="ml-1 hidden shrink-0 items-center gap-1 rounded-lg whitespace-nowrap px-2.5 py-1.5 text-sm text-foreground/80 hover:bg-accent hover:text-foreground md:flex"
+          >
+            鼠群官网 <ExternalLink className="size-3.5" />
+          </a>
         </div>
         {/* The browser's own clear button is hidden: it ignores the theme. Ours is a reset button,
             shown in place of the shortcut hint once something is typed. */}
