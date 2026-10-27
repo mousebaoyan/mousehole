@@ -4,7 +4,6 @@ import {
   ArrowLeft,
   Bell,
   Coins,
-  ExternalLink,
   LogOut,
   Menu,
   Search,
@@ -105,9 +104,10 @@ export function SiteHeader({ me, unread: loaded }: { me: Me | null; unread: numb
           <Logo />
           <a
             href={MAIN_SITE}
-            className="ml-1 hidden shrink-0 items-center gap-1 rounded-lg whitespace-nowrap px-2.5 py-1.5 text-sm text-foreground/80 hover:bg-accent hover:text-foreground md:flex"
+            className="ml-2 hidden h-8 shrink-0 items-center gap-1.5 rounded-lg border border-border pr-2.5 pl-1.5 text-sm whitespace-nowrap text-foreground/80 hover:bg-accent hover:text-foreground xl:flex"
           >
-            鼠群官网 <ExternalLink className="size-3.5" />
+            <img src="/mousebaoyan.webp" alt="" width={20} height={20} className="rounded-md" />
+            鼠群官网
           </a>
         </div>
         {/* The browser's own clear button is hidden: it ignores the theme. Ours is a reset button,
