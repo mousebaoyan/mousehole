@@ -140,6 +140,10 @@ test/                   Vitest 的全局准备：测试用的数据库
 | 访客 | guest | 没登录的人和冻结的账号 | 游客 |
 | 代发、代操作 | act-as | bot 以某位成员的身份操作 | |
 | 鼬鼬bot | `BOT_NAME` | 群里的 bot，给成员看的文案用这个名字；后台讲 token、bot 账号时叫 bot | 机器人 |
+| Agent | agent | 成员自己的 AI 程序（Claude Code、Codex 等），用令牌以本人身份调接口和 MCP | 机器人、AI 助手 |
+| 令牌 | token | 成员的凭证：设置里生成的个人令牌，或者授权时发给应用的；bot 的叫 bot token | 密钥、API Key |
+| 应用 | app（OAuth client） | 经授权以成员身份访问论坛的程序：Agent 的应用，和用鼠洞账号登录的自家应用（如鼠钟） | 客户端、第三方 |
+| 授权 | authorize | 本人允许某个应用以自己的身份访问 | |
 | 草稿 | draft | 编辑器里还没发出的内容 | |
 | 收录 | archive | bot 把群里的提问和回答整理成帖子和回复；一层整理自的那几条消息是它的来源（source） | 转存、转发 |
 | 个性签名 | bio | 资料里的一句话，默认取 QQ 的 | 简介 |
