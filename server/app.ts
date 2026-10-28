@@ -17,6 +17,7 @@ import { notificationsRoutes } from "./modules/notifications/routes.ts";
 import { qqRoutes } from "./modules/qq/routes.ts";
 import { reactionsRoutes } from "./modules/reactions/routes.ts";
 import { searchRoutes } from "./modules/search/routes.ts";
+import { serveSponsorCode, sponsorsRoutes } from "./modules/sponsors/routes.ts";
 import { serveMailOpen, statsRoutes } from "./modules/stats/routes.ts";
 import { summariesRoutes } from "./modules/summaries/routes.ts";
 import { bountyRoutes } from "./modules/threads/bounty-routes.ts";
@@ -43,6 +44,7 @@ const api = createRouter()
   .route("/", levelsRoutes)
   .route("/", badgesRoutes)
   .route("/", coinsRoutes)
+  .route("/", sponsorsRoutes)
   .route("/", membersRoutes)
   .route("/", boardsRoutes)
   .route("/", threadsRoutes)
@@ -112,6 +114,7 @@ export const app = new Hono<AppEnv>()
     bearerToken(c) || c.req.path === "/unsubscribe" ? next() : checkOrigin(c, next),
   )
   .use(authenticate)
+  .get("/sponsor/:file{(?:wechat|alipay)\\.png}", serveSponsorCode)
   .use("/api/v1/*", requestBody, idempotency)
   .get("/healthz", async (c) => {
     await sql`select 1`.execute(db);

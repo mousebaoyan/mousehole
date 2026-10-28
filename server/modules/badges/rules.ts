@@ -700,6 +700,17 @@ export const RULES: Rule[] = [
       AND EXISTS (SELECT 1 FROM polls WHERE polls.thread_id = t.id AND polls.preset IS NULL)`),
   },
   {
+    slug: "sponsor",
+    name: "投喂鼠",
+    description: "赞助过鼠群，以自己的名字上了感谢墙",
+    tier: "bronze",
+    grouping: "community",
+    // Not for anonymous ones, or the badge would tell who they were (design §8.21).
+    earned: people(
+      sql`SELECT user_id FROM sponsorships WHERE status = 'confirmed' AND NOT anonymous`,
+    ),
+  },
+  {
     slug: "coins_100",
     name: "颊囊鼓鼓",
     description: "累计获得 100 鼠币",

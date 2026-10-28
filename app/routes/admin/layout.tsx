@@ -6,6 +6,7 @@ import {
   ClipboardCheck,
   FilePen,
   Flag,
+  HandHeart,
   LayoutDashboard,
   LayoutList,
   Mail,
@@ -32,11 +33,18 @@ export function meta() {
 }
 
 // Who sees which pages (design §10): moderators those for their work, starting at reports;
-// admins the forum's as well; the owner also the system's.
+// admins the forum's as well; the owner also the system's. Sponsorships are the payee's and the
+// owner's (design §8.21).
 const RANKS = ["moderator", "admin", "owner"] as const;
 type Rank = (typeof RANKS)[number];
 
-const pages: { to: string; label: string; icon: LucideIcon; end?: boolean; from: Rank }[] = [
+const pages: {
+  to: string;
+  label: string;
+  icon: LucideIcon;
+  end?: boolean;
+  from: Rank | "payee";
+}[] = [
   { to: "/admin", label: "概览", icon: LayoutDashboard, end: true, from: "admin" },
   { to: "/admin/stats", label: "数据", icon: ChartLine, from: "admin" },
   { to: "/admin/content", label: "内容", icon: ClipboardCheck, from: "moderator" },
@@ -52,6 +60,7 @@ const pages: { to: string; label: string; icon: LucideIcon; end?: boolean; from:
   { to: "/admin/boards", label: "版块", icon: LayoutList, from: "admin" },
   { to: "/admin/tags", label: "标签", icon: Tags, from: "admin" },
   { to: "/admin/badges", label: "徽章", icon: Award, from: "admin" },
+  { to: "/admin/sponsor", label: "赞助", icon: HandHeart, from: "payee" },
   { to: "/admin/site", label: "站点", icon: Settings, from: "owner" },
   { to: "/admin/groups", label: "QQ 群", icon: UsersRound, from: "owner" },
   { to: "/admin/email", label: "邮件", icon: Mail, from: "owner" },
@@ -59,22 +68,35 @@ const pages: { to: string; label: string; icon: LucideIcon; end?: boolean; from:
   { to: "/admin/logs", label: "操作日志", icon: ScrollText, from: "owner" },
 ];
 
+// `pending` is null for those who don't see to sponsorships.
+function opens(page: (typeof pages)[number], rank: Rank, pending: number | null) {
+  return page.from === "payee" ? pending !== null : RANKS.indexOf(page.from) <= RANKS.indexOf(rank);
+}
+
 export async function loader({ context, request }: Route.LoaderArgs) {
-  const res = await context.get(apiContext).me.$get();
+  const api = context.get(apiContext);
+  const res = await api.me.$get();
   if (!res.ok) return redirect("/login");
   const { role } = await res.json();
   const rank = RANKS.find((r) => r === role);
   if (!rank) throw data("仅版主、管理员和站长可以进入管理后台", { status: 403 });
   const { pathname } = new URL(request.url);
   if (rank === "moderator" && pathname === "/admin") return redirect("/admin/reports");
-  const page = pages.find((p) => p.to === pathname);
-  if (page && RANKS.indexOf(page.from) > RANKS.indexOf(rank)) {
-    throw data("没有权限访问此页面", { status: 403 });
-  }
-  // Floors flagged as wrongly collected, counted beside their page in the menu.
-  const flags = await context.get(apiContext).admin["archive-flags"].count.$get();
+  // Floors flagged as wrongly collected and sponsorships to confirm, counted beside their pages in
+  // the menu; only the payee and the owner get the latter.
+  const [flags, sponsorships] = await Promise.all([
+    api.admin["archive-flags"].count.$get(),
+    api.admin.sponsorships.count.$get(),
+  ]);
   if (!flags.ok) throw new Error("Archive flag count failed");
-  return { rank, flagged: (await flags.json()).count };
+  const pending = sponsorships.ok ? (await sponsorships.json()).count : null;
+  const page = pages.find((p) => p.to === pathname);
+  if (page && !opens(page, rank, pending)) throw data("没有权限访问此页面", { status: 403 });
+  const counts: Record<string, number> = {
+    "/admin/archive-flags": (await flags.json()).count,
+    "/admin/sponsor": pending ?? 0,
+  };
+  return { rank, pending, counts };
 }
 
 const link = ({ isActive }: { isActive: boolean }) =>
@@ -83,7 +105,9 @@ const link = ({ isActive }: { isActive: boolean }) =>
     isActive && "bg-background font-medium text-foreground shadow-sm",
   );
 
-export default function AdminLayout({ loaderData: { rank, flagged } }: Route.ComponentProps) {
+export default function AdminLayout({
+  loaderData: { rank, pending, counts },
+}: Route.ComponentProps) {
   const { pathname } = useLocation();
   const nav = useRef<HTMLElement>(null);
   // On phones the row may have scrolled the current page out of sight.
@@ -110,13 +134,13 @@ export default function AdminLayout({ loaderData: { rank, flagged } }: Route.Com
           className="-mx-1 flex gap-1 overflow-x-auto px-1 text-sm [scrollbar-width:none] md:flex-col"
         >
           {pages
-            .filter((p) => RANKS.indexOf(p.from) <= RANKS.indexOf(rank))
+            .filter((p) => opens(p, rank, pending))
             .map((p) => (
               <NavLink key={p.to} to={p.to} end={p.end} className={link}>
                 <p.icon className="size-4" /> {p.label}
-                {p.to === "/admin/archive-flags" && flagged > 0 && (
+                {!!counts[p.to] && (
                   <span className="rounded-full bg-warning/15 px-1.5 text-2xs font-medium text-warning tabular-nums md:ml-auto">
-                    {flagged}
+                    {counts[p.to]}
                   </span>
                 )}
               </NavLink>

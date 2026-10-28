@@ -103,7 +103,9 @@
 // moderation 版主审核或隐藏了我的内容（data 带 action：approve 通过、reject 不通过、hide 隐藏、unhide 恢复、merge 并进了别的帖子（thread 是留下的帖子），以及 reason），
 // level 我升级了（data 带 level，没有 actor、thread、post，都为 null），
 // lottery 抽奖开奖或取消了（data 带 result：won 中奖、lost 没中、drawn 自己发起的开奖了、cancelled 取消了；中奖的还带 prize，奖项名；没有 actor、post），
-// badge 得到了徽章（data 带 badge：id、name、tier；能得多次的带上那一层的 thread、post，其余没有 actor、thread、post）。
+// badge 得到了徽章（data 带 badge：id、name、tier；能得多次的带上那一层的 thread、post，其余没有 actor、thread、post），
+// sponsor 赞助（data 带 action：pending 有人登记了，发给收款人，actor 是赞助的人，匿名的也是；confirmed 确认或补录了、rejected 没收到，发给赞助的人，没有 actor，
+// rejected 附了理由的带 reason；都带 amount，金额以分记；没有 thread、post）。
 // like、boost 按楼层，thread_reply、watching 按帖子，
 // 未读期间合并成一条：actor 是最近的人，count 是次数。post 是新的那一层，点赞和短评是被赞的那一层；
 // excerpt 是它正文的前 80 个字，待审核和已隐藏的只给作者看，别人为空字符串；data 里点赞带最近的 emoji，短评带最近的 body
@@ -370,8 +372,8 @@ token 由站长在后台创建，只显示一次。每个 token 绑定一个 bot
 | GET | `/admin/overview` | 概览：`members`（`total`、`activated`、`frozen`，不算 bot 和站长）、`content`（`threads_today`、`posts_today`：今天公开的帖子和回复，按北京时间；`pending`：待审核；`reports`：待处理的举报；`suggestions`：待处理的修改建议；`archive_flags`：被反馈收录有误、还公开着的楼层）、`events`（`streams`：现在连着的事件流；`polled_at`：最近一次按游标拉取的时间，进程重启后为 `null`）、`storage`（`database`、`uploads`：数据库和上传图片占用的字节数）；群的同步状态见 `/admin/groups` | 管理员 / `admin` |
 | GET | `/admin/stats` | 数据页（总体设计 §10.1），按北京时间，不算 bot 和站长：`range` 为 `7`、`30`（默认）、`90` 或 `365`，最近几天，含今天。`days` 是逐天的数组，每天 `{ day, active: { site, qq, total }, members, activated, new_activated, joined, left, read_seconds, posts_read, guests, guest_views, member_views, bytes, content, logins, coins }`：`active` 是论坛、群里、合起来的日活；`members`、`activated` 是那天的群成员数和其中已激活的，开始记录以前为 `null`；`joined`、`left` 是进群、退群的人次，按群算；`guests` 是访客人数，`guest_views`、`member_views` 是访客和成员的浏览量，`bytes` 是发出的字节数 `{ page, api, image, asset }`，这四项开始记录以前为 `null`；`content` 是公开的新帖、回复和表情回应 `{ threads, replies, reactions }`，各分网页、bot 代发、群里收录 `{ web, bot, qq }`，收录的按在群里发出的时间算；`logins` 是口令、链接、QQ 邮箱验证码三种方式各登录了几次 `{ code, link, email }`，同一个人登录几次算几次；`coins` 是按记账的那天算的鼠币，`earned` 是发放的 `{ check_in, liked, accepted, bounty }`，`spent` 是消耗的 `{ question, look }`，都是正数。`totals` 有 `now`（这一段）和 `before`（之前同样长的一段），各是 `{ dau, wau, mau, new_activated, read_seconds, posts_read, guests, guest_views, member_views, bytes, content, questions, logins, coins }`：`dau` 是过完了的天的平均日活，`wau`、`mau` 是截至最后一天的 7 天、30 天里来过的人，三项都分 `site`、`qq`、`total`；访问和字节数是过完了的天里有记录的那些天的平均数，一天都没有时为 `null`；`content`、`logins`、`coins` 是整段的合计；`questions` 是这一段在论坛上发的问答帖（不算群里收录的）`{ asked, solved, answered, wait }`：`solved` 是其中已解决的，`answered` 是有别人回复的，`wait` 是提问后第一条别人回复的等待时间的中位数（秒），没人回复过时为 `null`。`retention` 是最近 12 周激活的人，最新的在前，每周 `{ week, size, back }`：`week` 是那周的周一，`back` 是其中第 1、2、4、8 周来过论坛的人数，那一周还没过完时为 `null`。这一段里访客的 `referrers`（`{ host, visits }`，来源网站的域名）、`landings`（`{ path, title, visits }`，最先打开的页面，帖子页带标题）各前 10，`devices` 是访客和成员用的浏览器和系统 `{ guests, members }`，各前 10，每项 `{ device, visits }`；`visits` 是人次，每人每天算一次。`mail` 是这一段的邮件，按类，发得多的在前，每类 `{ kind, sent, dropped, opened, clicked }`：`kind` 是通知类型、`weekly`、`login`（验证码）或 `test`，`dropped` 是发不出去丢掉的，`opened`、`clicked` 是其中打开过、点击过的，验证码和测试邮件不记，为 `null`。`searches` 是这一段网页上搜得最多的词 `most` 和没有结果的词 `unfound`，各前 20，每项 `{ term, searches }`：`term` 转成了小写，`searches` 是人次（`unfound` 里是没有结果的人次），每人每天搜同一个词算一次。`top` 是这一段公开的新回复和表情回应合起来最多的帖子 `threads`（`{ id, title, replies, reactions }`）、版块 `boards`（`{ slug, name, replies, reactions }`）和标签 `tags`（`{ name, replies, reactions }`），各前 10 | 管理员 / `admin` |
 | GET | `/admin/stats/users` | 数据页的活跃用户（总体设计 §10.1），按北京时间，不算 bot 和站长：`range` 同上；`sort` 为 `posts`（默认，帖子和回复合起来）、`days`、`accepted`、`likes`、`votes` 或 `boosts`，这一项为 0 的不列；`staff` 为 `false` 时不含版主和管理员。返回 `{ items }`，最多 30 项，从多到少，每项 `{ user, days, threads, replies, accepted, likes, votes, boosts }`：`days` 是来过论坛的天数；`threads`、`replies` 是在网页上以本人名义发的公开帖子和回复；`accepted` 是其中的回复被他人采纳的次数；`likes` 是这些楼层在网页上收到的表情回应；`votes` 是投过票的投票帖；`boosts` 是在网页上以本人名义写的短评 | 管理员 / `admin` |
-| GET | `/admin/settings` | 站点设置，按分组返回：`site`（`banner` 公告横幅，`qq_public` 访客能否看到 QQ 号，`summaries` 是否显示和生成 AI 总结）、`login`（三种登录方式的开关和口令提示）、`smtp`（`accounts`：发信邮箱，按使用的顺序，每个是 `host`、`port`、`secure`、`user`，密码只返回 `password_set`）、`bot`（`require_operator`）、`notify`（`email`：每类通知的邮件规则，`on` 默认发送、`off` 默认不发、`never` 不发送，成员也不能打开；`unactivated`：未激活的成员也发通知邮件和每周来信，默认 `false`）、`weekly`（每周来信：`enabled`，`min_reads`、`min_likes` 被读和获赞的门槛，`top_likes` 写进信里的楼层至少几个赞） | 站长，只能在网页上操作 |
-| PATCH | `/admin/settings` | 修改站点设置，立即生效：只改带了的分组和字段。`smtp.accounts` 整组替换，最多 10 个；某个邮箱不带 `password` 就沿用这个账号原来的密码；`notify.email` 只改带了的类型。改了的字段连同改前改后的值记进操作日志，密码只记哪个邮箱的改了 | 站长，只能在网页上操作 |
+| GET | `/admin/settings` | 站点设置，按分组返回：`site`（`banner` 公告横幅，`qq_public` 访客能否看到 QQ 号，`summaries` 是否显示和生成 AI 总结）、`login`（三种登录方式的开关和口令提示）、`smtp`（`accounts`：发信邮箱，按使用的顺序，每个是 `host`、`port`、`secure`、`user`，密码只返回 `password_set`）、`bot`（`require_operator`）、`notify`（`email`：每类通知的邮件规则，`on` 默认发送、`off` 默认不发、`never` 不发送，成员也不能打开；`unactivated`：未激活的成员也发通知邮件和每周来信，默认 `false`）、`weekly`（每周来信：`enabled`，`min_reads`、`min_likes` 被读和获赞的门槛，`top_likes` 写进信里的楼层至少几个赞）、`sponsor`（赞助：`payee` 收款人，同用户简要信息，另带 `qq`，没设为 `null`；`wechat`、`alipay` 收款码的内容，没设为空字符串） | 站长，只能在网页上操作 |
+| PATCH | `/admin/settings` | 修改站点设置，立即生效：只改带了的分组和字段。`smtp.accounts` 整组替换，最多 10 个；某个邮箱不带 `password` 就沿用这个账号原来的密码；`notify.email` 只改带了的类型；`sponsor.payee` 写用户（ID 或 `qq:号码`）或 `null`，只能是管理员，`wechat` 要以 `wxp://` 开头、`alipay` 要以 `https://qr.alipay.com/` 开头，都最多 200 个字，不对返回 `400`。改了的字段连同改前改后的值记进操作日志，密码只记哪个邮箱的改了 | 站长，只能在网页上操作 |
 | POST | `/admin/badges` | 新建活动徽章：`{ name, description, tier, frame }`，名字最多 12 个字，说明最多 60 个字；`frame` 是配的活动框的 key，可以为 `null`（总体设计 §8.16）；重名返回 `409 badge_exists` | 管理员 / `admin` |
 | PATCH | `/admin/badges/{id}` | 改活动徽章的名字、说明、活动框；自动授予的徽章不能改（`403`） | 管理员 / `admin` |
 | POST | `/admin/badges/{id}/grants` | 手动授予活动徽章：`{ user, reason }`，理由必填；已经有了返回 `409 badge_granted`。本人收到通知；记操作日志 | 管理员 / `admin` |
@@ -386,6 +388,11 @@ token 由站长在后台创建，只显示一次。每个 token 绑定一个 bot
 | PATCH | `/admin/reports/{id}` | 处理举报：`{ status }`，可选 `resolved`（已处理，内容另外删除或隐藏）、`dismissed`（驳回）；记操作日志 | 版主 / `moderate` |
 | GET | `/admin/archive-flags` | 被反馈收录有误、还公开着的楼层，反馈的人多的在前，再按最近反馈的时间，最多 100 层；每层带帖子、楼层号、作者、摘要、在群里发出的时间，反馈的人数 `count` 和最近一次反馈的时间 `flagged_at` | 版主 / `moderate` |
 | GET | `/admin/archive-flags/count` | 被反馈收录有误、还公开着的楼层有几层：`{ count }`，后台的菜单上显示 | 版主 / `moderate` |
+| GET | `/admin/sponsorships` | 赞助记录（总体设计 §8.21），每页 30 条：`status`（默认 `pending`；`confirmed`、`rejected`）、`cursor`；待确认的先登记的在前，其余最近登记的在前。每条同 `/me/sponsorships`，另带 `user`（匿名的也给，带 `qq`）、`reviewer`、`reviewed_at`、`created_at` | 站长、收款人（须是未冻结的管理员），只能在网页上操作 |
+| GET | `/admin/sponsorships/count` | 待确认的赞助有几条：`{ count }`，后台的菜单上显示 | 站长、收款人（须是未冻结的管理员），只能在网页上操作 |
+| POST | `/admin/sponsorships` | 补录：`{ user, method, amount, paid_at, message }`，`paid_at` 不能晚于现在；直接是已确认，匿名；本人收到通知。返回这条记录 | 站长、收款人（须是未冻结的管理员），只能在网页上操作 |
+| PATCH | `/admin/sponsorships/{id}` | 只改带了的字段：`status`（`confirmed` 确认，`rejected` 没收到或撤销确认，可附 `reason`，最多 200 个字）、`amount`、`message`（只能为 `null`，删除留言）。状态变了时本人收到通知 | 站长、收款人（须是未冻结的管理员），只能在网页上操作 |
+| DELETE | `/admin/sponsorships/{id}` | 删掉记错的赞助记录 | 站长、收款人（须是未冻结的管理员），只能在网页上操作 |
 | DELETE | `/admin/archive-flags/{id}` | 处理完一层的反馈，`id` 是楼层的 ID：清掉它收到的全部反馈，楼层要隐藏的另外用 `PATCH`；没有反馈返回 `404 archive_flags_not_found`；记操作日志 | 版主 / `moderate` |
 | GET | `/admin/suggestions` | 待处理的修改建议，最新的在前，每页 30 条：`cursor`（上一页最后一条的 ID）；每条同 `GET /threads/{id}` 的 `suggestions`，另带帖子现在的 `thread`（`id`、`title`、`board`、`tags`）。帖子删了的不列 | 版主 / `moderate` |
 | GET | `/admin/audit-logs` | 操作日志，最新的在前，每页 50 条：`actor`（用户 ID 或 `qq:号码`）、`ip`、`action`、`target_type`、`target_id`、`cursor`；每条带以谁的身份、经由哪个 token、谁让 bot 做的、`data`、IP、`user_agent` 和从它看出的 `device` | 站长，只能在网页上操作 |
@@ -418,6 +425,19 @@ token 由站长在后台创建，只显示一次。每个 token 绑定一个 bot
 | GET | `/bot/polls` | 新的投票帖，给插件每天在群里汇总（总体设计 §8.6）：`since`、`until`（Unix 秒，算 `[since, until)` 里发的，`until` 默认现在）。返回 `{ items }`，先发的在前，每项 `{ thread: { id, title }, voters, url }`，`voters` 是到现在投了票的人数。包括保研定位帖；帖子要公开、没锁定、还能投，所在版块的阅读门槛是访客或成员 | `read` |
 | GET | `/bot/events` | SSE 事件流，见第 5 节 | `events` |
 | GET | `/bot/events/batch` | 按游标拉取事件：`after`、`limit`（1–500，默认 100）、`types`，返回 `{ items: [{ id, type, data, created_at }], next_after }`，`next_after` 是下次的 `after` | `events` |
+
+### 3.11 赞助
+
+见[总体设计 §8.21](design.md#821-赞助)。金额都以分记；赞助记录的增删改都记操作日志，收款人和站长的接口见 [3.9](#39-管理后台)。
+
+| 方法 | 路径 | 说明 | 权限 |
+| --- | --- | --- | --- |
+| GET | `/sponsor` | 赞助页：`payee`（收款人，同楼层里的用户；没设时为 `null`，不能登记）、`codes`（收款码的内容 `{ wechat, alipay }`，没设的为 `null`；只给成员，访客为 `null`）、`year`（今年确认过的赞助 `{ amount, count }`，按北京时间） | 访客 |
+| GET | `/sponsorships` | 感谢墙：确认过的，最近登记的在前，每页 50 条，`cursor`；每条 `{ id, user, days, message, paid_at }`，不带金额。匿名的 `user` 为 `null`；`days` 是档位，`7`（¥24 起）、`4`（¥14 起）、`2`（¥7 起），不到 ¥7 的为 `null`。设了不给访客看的人，访客拿到的没有 TA 的那条 | 访客 |
+| GET | `/me/sponsorships` | 自己的赞助记录，最新的在前，最多 50 条：每条 `{ id, amount, method, status, message, anonymous, paid_at, reason }`，`status` 为 `pending`、`confirmed`、`rejected` | 已登录 / `read` |
+| POST | `/sponsorships` | 登记：`{ method, amount, message, anonymous }`，`amount` 为 100–100000，`message` 最多 50 个字，可以为 `null`。记为待确认，收款人收到通知；返回这条记录。没设收款人或这种方式的码返回 `403 sponsor_closed`，已有待确认的返回 `409 sponsorship_pending` | 成员，只能在网页上 |
+| PATCH | `/sponsorships/{id}` | 改自己的记录：`{ anonymous?, message? }`，至少带一个；`message` 只能为 `null`，删除留言 | 本人，只能在网页上 |
+| DELETE | `/sponsorships/{id}` | 撤回自己待确认的记录；已经确认或标为没收到的返回 `409 sponsorship_reviewed` | 本人，只能在网页上 |
 
 ## 4. 成员同步
 

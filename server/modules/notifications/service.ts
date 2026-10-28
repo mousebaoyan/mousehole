@@ -13,7 +13,9 @@ import {
   floorReminders,
   levelReminder,
   lotteryReminders,
+  sponsorReminder,
   type Notice,
+  type Sponsored,
   type Standing,
   type Told,
 } from "./reminders.ts";
@@ -35,6 +37,7 @@ const EMAIL_BY_DEFAULT = new Set<NotificationType>([
   "moderation",
   "level",
   "lottery",
+  "sponsor",
 ]);
 
 function policyOf(settings: Settings, type: NotificationType): EmailPolicy {
@@ -303,6 +306,47 @@ export async function notifyBadges(
     return p?.email ? [{ person: p, post_id: g.post_id }] : [];
   });
   if (emailed.length > 0) await queueMail(trx, await badgeReminders(trx, badge, emailed));
+}
+
+// A sponsorship registered, told to the payee, or confirmed or turned down, told to whoever paid
+// (design §8.21); not to whoever did it themselves.
+export async function notifySponsorship(
+  trx: Transaction<DB>,
+  userId: number,
+  doneBy: number,
+  sponsored: Sponsored,
+) {
+  if (userId === doneBy) return;
+  const type = "sponsor";
+  const { action, sponsorship } = sponsored;
+  const person = await trx
+    .selectFrom("users")
+    .select(["id", "qq", ...(await switches(type))])
+    .where("id", "=", userId)
+    .where("member_status", "=", "member")
+    .where("qq", "is not", null)
+    .$narrowType<{ qq: NotNull }>()
+    .executeTakeFirst();
+  if (!person) return;
+  if (person.site) {
+    await trx
+      .insertInto("notifications")
+      .values({
+        user_id: userId,
+        type,
+        // The payee sees who paid; whoever paid hears it from nobody in particular.
+        actor_id: action === "pending" ? sponsorship.user_id : null,
+        data: {
+          action,
+          amount: String(sponsorship.amount),
+          ...(action === "rejected" &&
+            sponsorship.reason !== null && { reason: sponsorship.reason }),
+        },
+      })
+      .execute();
+    await tellUnread(trx, [userId]);
+  }
+  if (person.email) await queueMail(trx, [await sponsorReminder(trx, person, sponsored)]);
 }
 
 // A new floor: the author of the floor it replies to, then those @-ed in it, then the thread's

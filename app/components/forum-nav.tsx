@@ -7,6 +7,7 @@ import {
   CirclePlay,
   CircleQuestionMark,
   FilePen,
+  HandHeart,
   History,
   Home,
   Library,
@@ -140,6 +141,9 @@ export function ForumNav() {
           </div>
         </div>
       )}
+      <NavLink to="/sponsor" className={item}>
+        <HandHeart className="size-4" /> 赞助鼠群
+      </NavLink>
     </nav>
   );
 }

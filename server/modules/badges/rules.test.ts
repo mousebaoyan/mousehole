@@ -429,6 +429,23 @@ describe("更多徽章的规则", () => {
     expect(await slugsOf(secret.id)).not.toContain("poll_host");
   });
 
+  test("投喂鼠：确认过、不匿名的赞助才算", async () => {
+    const [shown, hidden, waiting] = [await createUser(), await createUser(), await createUser()];
+    const paid = { amount: 700, method: "wechat" } as const;
+    await db
+      .insertInto("sponsorships")
+      .values([
+        { ...paid, user_id: shown.id, status: "confirmed" },
+        { ...paid, user_id: hidden.id, status: "confirmed", anonymous: true },
+        { ...paid, user_id: waiting.id },
+      ])
+      .execute();
+
+    expect(await slugsOf(shown.id)).toContain("sponsor");
+    expect(await slugsOf(hidden.id)).not.toContain("sponsor");
+    expect(await slugsOf(waiting.id)).not.toContain("sponsor");
+  });
+
   test("鼠币按挣到的算，花掉的不扣；兑换的装扮按款数", async () => {
     const [saver, spender, poor] = [await createUser(), await createUser(), await createUser()];
     await ledger(saver.id, 60, "check_in", 2);

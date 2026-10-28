@@ -578,7 +578,12 @@ async function badgeUnlocks(executor: Kysely<DB>, userId: number) {
 // For what guests get: leaves out what people who keep their content from guests wrote, given the
 // column holding the writer's user ID (design §8.10).
 export function shownToGuests(
-  column: "threads.author_id" | "posts.author_id" | "boosts.user_id" | "user_badges.user_id",
+  column:
+    | "threads.author_id"
+    | "posts.author_id"
+    | "boosts.user_id"
+    | "user_badges.user_id"
+    | "sponsorships.user_id",
 ) {
   return sql<boolean>`NOT EXISTS (SELECT 1 FROM users
     WHERE users.id = ${sql.ref(column)} AND users.hide_from_guests)`;

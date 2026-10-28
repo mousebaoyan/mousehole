@@ -98,7 +98,7 @@
 - 收藏是 `thread_users.bookmarked_at`，重复收藏保留第一次的时间。帖子的查询都 left join 读者自己的那行（访客没有），详情里的收藏和关注级别、收藏列表都从这里来。
 - 关注用户（`user_follows`）和认可（`endorsements`）每对人一行，不能对自己。关注数、粉丝数、认可数不冗余存，资料卡里直接数，各是一段索引范围。
 - 个人主页的名单（[总体设计 §9](design.md#9-页面)）：赞过按 `reactions_user`（`user_id, created_at`）倒序取；关系名单分别走 `user_follows` 的主键和 `user_follows_followee`、`endorsements` 的主键和 `endorsements_endorser`，都按 `created_at` 倒序、用偏移翻页。`users.relations_public` 关掉时，别人看不到这几项，这个人也不出现在别人的名单和概要里。概要的两份名单现算：按楼层作者或回应的人分组数表情回应，不算匿名楼层。
-- 通知的 `type`：`reply`、`thread_reply`、`mention`、`like`、`boost`、`watching`、`following`、`solved`、`moderation`、`level`、`lottery`、`badge`，含义见[接口](api.md)的通知对象。都和触发它的写入在同一个事务里插入。
+- 通知的 `type`：`reply`、`thread_reply`、`mention`、`like`、`boost`、`watching`、`following`、`solved`、`moderation`、`level`、`lottery`、`badge`、`sponsor`，含义见[接口](api.md)的通知对象。都和触发它的写入在同一个事务里插入。
 - 一条新楼层只给每人一条通知，按先后取第一个适用的：被回复的那一层的作者（`reply`）；@到的人（`mention`）；没指定楼层时是楼主（`thread_reply`）；关注这个帖子的人（`watching`）。新帖通知 @到的人和作者的粉丝（`following`）。从群里收录来的帖子和楼层（`via` 为 `qq`）不产生通知。
 - 合并通知：`like:{楼层 ID}`、`boost:{楼层 ID}`、`thread_reply:{帖子 ID}`、`watching:{帖子 ID}` 是 `group_key`，未读期间再次触发只更新触发者、次数、`data` 和时间，不新增行；`post_id` 留着第一次的，点进去从最早没看的那层开始。
 - 不通知：自己做的事、冻结的账号、把这个帖子设为 `muted` 的人、在 `users.notify_prefs` 里关掉了这类站内通知的人。`notify_prefs` 形如 `{ "like": { "site": false, "email": true } }`，站内通知没写的按开着算，邮件没写的按站长设的默认值（`settings` 的 `notify`，形如 `{ "email": { "thread_reply": "on", "like": "never" }, "unactivated": false }`，没写的类型用代码里的默认）；站长设为 `never` 的类型不管怎么写都不发邮件。`users.notify_email` 是邮件提醒的总开关，关掉时哪类都不发邮件，`notify_prefs` 里的设置留着。`activated_at` 为空的人只在 `notify.unactivated` 为 `true` 时收到邮件，每周来信也一样。
@@ -146,6 +146,15 @@
 - 签到：`users` 记新的一天（`recordDay`，见上面的阅读统计）时调用 `checkIn`；成员同步写入的 `group_members.last_sent_at` 往后移时，也给那一天签到。都只认今天和昨天；冻结的账号、bot 和站长不签到。
 - 结算：每小时的任务看 `job_runs` 里 `coins` 结算到了哪天，昨天还没结算就结算，一天一个事务。获赞：`reactions.created_at` 落在那天、给赞的人不是 bot、楼层没删没隐藏也不匿名、作者是成员的，按（作者，给赞的人）去重计数；采纳：`posts.accepted_at` 落在那天、同样条件的楼层，有就记一次。悬赏：悬赏期间发的、不是楼主的、不是收录来的回复，`created_at` 或 `accepted_at` 落在那天的，每人取一条，被采纳的优先，记上它的帖子。
 - 明细按 `(user_id, id DESC)` 分页。排行榜现算：按 `day` 的范围汇总 `amount > 0` 的流水，走 `coin_ledger (day)`。
+
+## 赞助
+
+表：`sponsorships`（[总体设计 §8.21](design.md#821-赞助)），只由 `sponsors` 模块写入。收款人和收款码存在 `settings` 的 `sponsor`：`payee` 是收款人的用户 ID，`wechat`、`alipay` 是收款码的内容，空字符串是没设。
+
+- 每笔赞助一行：`user_id` 赞助的人；`amount` 金额，以分记，`CHECK (amount > 0)`；`method` 取 `wechat`、`alipay`；`status` 取 `pending`、`confirmed`、`rejected`；`message` 留言，没有为 `NULL`；`anonymous` 上墙时是否匿名；`paid_at` 付款时间，自己登记的是登记的时间，补录的由收款人填；`reviewer_id`、`reviewed_at`、`reason` 是最近一次确认或标为没收到的人、时间和理由。
+- 每人同时只有一条待确认的：部分唯一索引 `(user_id) WHERE status = 'pending'`，登记时冲突返回 `409 sponsorship_pending`。撤回待确认的、删掉记错的，都直接删掉这一行。
+- 感谢墙和后台按状态的列表走 `sponsorships_status`（`status, id`），按 `id` 翻页；自己的记录走 `sponsorships_user`（`user_id, id`）。档位不存，按金额现算。今年的合计和笔数现算，一年几十笔。
+- 「投喂鼠」徽章的规则（`badges/rules.ts`）查 `status = 'confirmed' AND NOT anonymous` 的人。
 
 ## 图片
 

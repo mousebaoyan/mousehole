@@ -79,6 +79,7 @@ export const Flag = icon(lucide.Flag);
 export const Forward = icon(lucide.Forward);
 export const Gift = icon(lucide.Gift);
 export const HandCoins = icon(lucide.HandCoins);
+export const HandHeart = icon(lucide.HandHeart);
 export const Heart = icon(lucide.Heart);
 export const Highlighter = icon(lucide.Highlighter);
 export const History = icon(lucide.History);
