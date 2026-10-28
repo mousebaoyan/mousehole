@@ -431,7 +431,7 @@ describe("更多徽章的规则", () => {
 
   test("投喂鼠：确认过、不匿名的赞助才算", async () => {
     const [shown, hidden, waiting] = [await createUser(), await createUser(), await createUser()];
-    const paid = { amount: 700, method: "wechat" } as const;
+    const paid = { amount: 700, method: "wechat", show_amount: false } as const;
     await db
       .insertInto("sponsorships")
       .values([

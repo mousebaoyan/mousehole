@@ -390,7 +390,7 @@ token 由站长在后台创建，只显示一次。每个 token 绑定一个 bot
 | GET | `/admin/archive-flags/count` | 被反馈收录有误、还公开着的楼层有几层：`{ count }`，后台的菜单上显示 | 版主 / `moderate` |
 | GET | `/admin/sponsorships` | 赞助记录（总体设计 §8.21），每页 30 条：`status`（默认 `pending`；`confirmed`、`rejected`）、`cursor`；待确认的先登记的在前，其余最近登记的在前。每条同 `/me/sponsorships`，另带 `user`（匿名的也给，带 `qq`）、`reviewer`、`reviewed_at`、`created_at` | 站长、收款人（须是未冻结的管理员），只能在网页上操作 |
 | GET | `/admin/sponsorships/count` | 待确认的赞助有几条：`{ count }`，后台的菜单上显示 | 站长、收款人（须是未冻结的管理员），只能在网页上操作 |
-| POST | `/admin/sponsorships` | 补录：`{ user, method, amount, paid_at, message }`，`paid_at` 不能晚于现在；直接是已确认，匿名；本人收到通知。返回这条记录 | 站长、收款人（须是未冻结的管理员），只能在网页上操作 |
+| POST | `/admin/sponsorships` | 补录：`{ user, method, amount, paid_at, message }`，`paid_at` 不能晚于现在；直接是已确认，匿名、不显示金额；本人收到通知。返回这条记录 | 站长、收款人（须是未冻结的管理员），只能在网页上操作 |
 | PATCH | `/admin/sponsorships/{id}` | 只改带了的字段：`status`（`confirmed` 确认，`rejected` 没收到或撤销确认，可附 `reason`，最多 200 个字）、`amount`、`anonymous`（感谢墙上是否匿名）、`message`（新的留言，最多 50 个字；为 `null` 或空时删除留言）。状态变了时本人收到通知 | 站长、收款人（须是未冻结的管理员），只能在网页上操作 |
 | DELETE | `/admin/sponsorships/{id}` | 删掉记错的赞助记录 | 站长、收款人（须是未冻结的管理员），只能在网页上操作 |
 | DELETE | `/admin/archive-flags/{id}` | 处理完一层的反馈，`id` 是楼层的 ID：清掉它收到的全部反馈，楼层要隐藏的另外用 `PATCH`；没有反馈返回 `404 archive_flags_not_found`；记操作日志 | 版主 / `moderate` |
@@ -433,10 +433,10 @@ token 由站长在后台创建，只显示一次。每个 token 绑定一个 bot
 | 方法 | 路径 | 说明 | 权限 |
 | --- | --- | --- | --- |
 | GET | `/sponsor` | 赞助页：`payee`（收款人，同楼层里的用户；没设时为 `null`，不能登记）、`codes`（收款码的内容 `{ wechat, alipay }`，没设的为 `null`；只给成员，访客为 `null`）、`year`（今年确认过的赞助 `{ amount, count }`，按北京时间） | 访客 |
-| GET | `/sponsorships` | 感谢墙：确认过的，最近登记的在前，每页 50 条，`cursor`；每条 `{ id, user, days, message, paid_at }`，不带金额。匿名的 `user` 为 `null`；`days` 是档位，`7`（¥24 起）、`4`（¥14 起）、`2`（¥7 起），不到 ¥7 的为 `null`。设了不给访客看的人，访客拿到的没有 TA 的那条 | 访客 |
-| GET | `/me/sponsorships` | 自己的赞助记录，最新的在前，最多 50 条：每条 `{ id, amount, method, status, message, anonymous, paid_at, reason }`，`status` 为 `pending`、`confirmed`、`rejected` | 已登录 / `read` |
-| POST | `/sponsorships` | 登记：`{ method, amount, message, anonymous }`，`amount` 为 100–100000，`message` 最多 50 个字，可以为 `null`。记为待确认，收款人收到通知；返回这条记录。没设收款人或这种方式的码返回 `403 sponsor_closed`，已有待确认的返回 `409 sponsorship_pending` | 成员，只能在网页上 |
-| PATCH | `/sponsorships/{id}` | 改自己的记录：`{ anonymous?, message? }`，至少带一个；`message` 只能为 `null`，删除留言 | 本人，只能在网页上 |
+| GET | `/sponsorships` | 感谢墙：确认过的，最近登记的在前，每页 50 条，`cursor`；每条 `{ id, user, days, amount, message, paid_at }`。匿名的 `user` 为 `null`；`amount` 只有本人选了显示金额的才有，以分记，其余为 `null`；`days` 是档位，`7`（¥24 起）、`4`（¥14 起）、`2`（¥7 起），不到 ¥7 的为 `null`。设了不给访客看的人，访客拿到的没有 TA 的那条 | 访客 |
+| GET | `/me/sponsorships` | 自己的赞助记录，最新的在前，最多 50 条：每条 `{ id, amount, method, status, message, anonymous, show_amount, paid_at, reason }`，`status` 为 `pending`、`confirmed`、`rejected` | 已登录 / `read` |
+| POST | `/sponsorships` | 登记：`{ method, amount, message, anonymous, show_amount }`，`show_amount` 是感谢墙上是否显示金额，`amount` 为 100–100000，`message` 最多 50 个字，可以为 `null`。记为待确认，收款人收到通知；返回这条记录。没设收款人或这种方式的码返回 `403 sponsor_closed`，已有待确认的返回 `409 sponsorship_pending` | 成员，只能在网页上 |
+| PATCH | `/sponsorships/{id}` | 改自己的记录：`{ anonymous?, show_amount?, message? }`，至少带一个；`message` 只能为 `null`，删除留言 | 本人，只能在网页上 |
 | DELETE | `/sponsorships/{id}` | 撤回自己待确认的记录；已经确认或标为没收到的返回 `409 sponsorship_reviewed` | 本人，只能在网页上 |
 
 ## 4. 成员同步

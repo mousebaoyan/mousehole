@@ -24,9 +24,9 @@ async function configure(sponsor: { payee?: string | null; wechat?: string; alip
   return api.admin.settings.$patch({ json: { sponsor } }, owner);
 }
 
-async function register(who: Who, amount = 700, anonymous = false) {
+async function register(who: Who, amount = 700, { anonymous = false, show_amount = false } = {}) {
   const res = await api.sponsorships.$post(
-    { json: { method: "wechat", amount, message: "  加油  ", anonymous } },
+    { json: { method: "wechat", amount, message: "  加油  ", anonymous, show_amount } },
     who,
   );
   if (res.status !== 201) throw new Error(`register failed: ${res.status}`);
@@ -84,7 +84,15 @@ describe("设置", () => {
     await configure({ payee: null });
     expect(await (await api.sponsor.$get({}, someone.who)).json()).toMatchObject({ payee: null });
     const closed = await api.sponsorships.$post(
-      { json: { method: "wechat", amount: 700, message: null, anonymous: false } },
+      {
+        json: {
+          method: "wechat",
+          amount: 700,
+          message: null,
+          anonymous: false,
+          show_amount: false,
+        },
+      },
       someone.who,
     );
     expect(closed.status).toBe(403);
@@ -95,7 +103,15 @@ describe("设置", () => {
       codes: { wechat: CODES.wechat, alipay: null },
     });
     const alipay = await api.sponsorships.$post(
-      { json: { method: "alipay", amount: 700, message: null, anonymous: false } },
+      {
+        json: {
+          method: "alipay",
+          amount: 700,
+          message: null,
+          anonymous: false,
+          show_amount: false,
+        },
+      },
       someone.who,
     );
     expect(alipay.status).toBe(403);
@@ -132,7 +148,15 @@ describe("登记和确认", () => {
     expect(
       (
         await api.sponsorships.$post(
-          { json: { method: "wechat", amount: 1400, message: null, anonymous: false } },
+          {
+            json: {
+              method: "wechat",
+              amount: 1400,
+              message: null,
+              anonymous: false,
+              show_amount: false,
+            },
+          },
           someone.who,
         )
       ).status,
@@ -146,11 +170,11 @@ describe("登记和确认", () => {
     await register(someone.who);
   });
 
-  test("按实收金额确认：本人收到通知，感谢墙显示档位不显示金额，匿名的不带名字", async () => {
+  test("按实收金额确认：本人收到通知，感谢墙按本人的选择显示金额，匿名的不带名字", async () => {
     const [named, hidden] = [await member(), await member()];
     const before = (await (await api.sponsor.$get()).json()).year;
-    const first = await register(named.who, 1400);
-    const second = await register(hidden.who, 700, true);
+    const first = await register(named.who, 1400, { show_amount: true });
+    const second = await register(hidden.who, 700, { anonymous: true });
 
     expect((await review(first, { status: "confirmed", amount: 2400 })).status).toBe(204);
     expect((await review(second, { status: "confirmed" })).status).toBe(204);
@@ -162,10 +186,10 @@ describe("登记和确认", () => {
     expect(shown.find((t) => t.id === first)).toMatchObject({
       user: { id: named.id },
       days: 7,
+      amount: 2400,
       message: "加油",
     });
-    expect(shown.find((t) => t.id === second)).toMatchObject({ user: null, days: 2 });
-    expect(JSON.stringify(shown)).not.toContain("amount");
+    expect(shown.find((t) => t.id === second)).toMatchObject({ user: null, days: 2, amount: null });
     expect((await (await api.sponsor.$get()).json()).year).toEqual({
       amount: before.amount + 3100,
       count: before.count + 2,
@@ -187,7 +211,7 @@ describe("登记和确认", () => {
 
   test("收款人可以改是否匿名", async () => {
     const someone = await member();
-    const id = await register(someone.who, 700, true);
+    const id = await register(someone.who, 700, { anonymous: true });
     await review(id, { status: "confirmed" });
     expect((await wall()).find((t) => t.id === id)).toMatchObject({ user: null });
     expect((await review(id, { anonymous: false })).status).toBe(204);
@@ -239,7 +263,7 @@ describe("登记和确认", () => {
     expect((await confirm()).status).toBe(403);
   });
 
-  test("补录的直接确认，默认匿名；本人可以改成显示名字", async () => {
+  test("补录的直接确认，默认匿名、不显示金额；本人可以改", async () => {
     const someone = await member();
     const add = (paid_at: number) =>
       api.admin.sponsorships.$post(
@@ -258,16 +282,23 @@ describe("登记和确认", () => {
     const res = await add(1_767_225_600);
     if (!res.ok) throw new Error(`status ${res.status}`);
     const { id } = await res.json();
-    expect((await wall()).find((t) => t.id === id)).toMatchObject({ user: null, days: 2 });
+    expect((await wall()).find((t) => t.id === id)).toMatchObject({
+      user: null,
+      days: 2,
+      amount: null,
+    });
     expect(await told(someone.id)).toEqual([
       { actor_id: null, data: { action: "confirmed", amount: "1000" } },
     ]);
 
-    const edit = (json: { anonymous?: boolean }) =>
+    const edit = (json: { anonymous?: boolean; show_amount?: boolean }) =>
       api.sponsorships[":id"].$patch({ param: { id: String(id) }, json }, someone.who);
     expect((await edit({})).status).toBe(400);
-    await edit({ anonymous: false });
-    expect((await wall()).find((t) => t.id === id)).toMatchObject({ user: { id: someone.id } });
+    await edit({ anonymous: false, show_amount: true });
+    expect((await wall()).find((t) => t.id === id)).toMatchObject({
+      user: { id: someone.id },
+      amount: 1000,
+    });
   });
 
   test("设了不给访客看的人，访客看不到 TA 的那条", async () => {

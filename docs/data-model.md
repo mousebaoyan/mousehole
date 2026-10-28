@@ -151,7 +151,7 @@
 
 表：`sponsorships`（[总体设计 §8.21](design.md#821-赞助)），只由 `sponsors` 模块写入。收款人和收款码存在 `settings` 的 `sponsor`：`payee` 是收款人的用户 ID，`wechat`、`alipay` 是收款码的内容，空字符串是没设。
 
-- 每笔赞助一行：`user_id` 赞助的人；`amount` 金额，以分记，`CHECK (amount > 0)`；`method` 取 `wechat`、`alipay`；`status` 取 `pending`、`confirmed`、`rejected`；`message` 留言，没有为 `NULL`；`anonymous` 上墙时是否匿名；`paid_at` 付款时间，自己登记的是登记的时间，补录的由收款人填；`reviewer_id`、`reviewed_at`、`reason` 是最近一次确认或标为没收到的人、时间和理由。
+- 每笔赞助一行：`user_id` 赞助的人；`amount` 金额，以分记，`CHECK (amount > 0)`；`method` 取 `wechat`、`alipay`；`status` 取 `pending`、`confirmed`、`rejected`；`message` 留言，没有为 `NULL`；`anonymous` 上墙时是否匿名；`show_amount` 感谢墙上是否显示金额，没有默认值，登记时本人选，补录的为 false，加这一列以前登记的也是 false（那时说过只显示档位）；`paid_at` 付款时间，自己登记的是登记的时间，补录的由收款人填；`reviewer_id`、`reviewed_at`、`reason` 是最近一次确认或标为没收到的人、时间和理由。
 - 每人同时只有一条待确认的：部分唯一索引 `(user_id) WHERE status = 'pending'`，登记时冲突返回 `409 sponsorship_pending`。撤回待确认的、删掉记错的，都直接删掉这一行。
 - 感谢墙和后台按状态的列表走 `sponsorships_status`（`status, id`），按 `id` 翻页；自己的记录走 `sponsorships_user`（`user_id, id`）。档位不存，按金额现算。今年的合计和笔数现算，一年几十笔。
 - 「投喂鼠」徽章的规则（`badges/rules.ts`）查 `status = 'confirmed' AND NOT anonymous` 的人。
