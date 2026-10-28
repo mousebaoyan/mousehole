@@ -12,12 +12,13 @@ export const STATUS_NAMES: Record<Status, string> = {
   rejected: "未收到",
 };
 
-// The items the payee set on the WeChat code, in fen: what keeps the group running so many days.
-// The thanks wall shows the tier an amount reaches instead of the amount.
+// The items the payee set on the WeChat code, in fen: what keeps the group running so many days,
+// with the sponsor page's name for each. The thanks wall shows the tier an amount reaches instead
+// of the amount.
 export const TIERS = [
-  { days: 2, amount: 700 },
-  { days: 4, amount: 1400 },
-  { days: 7, amount: 2400 },
+  { days: 2, amount: 700, label: "一包瓜子" },
+  { days: 4, amount: 1400, label: "一杯奶茶" },
+  { days: 7, amount: 2400, label: "上岸还愿" },
 ] as const;
 
 export const MIN_AMOUNT = 100;

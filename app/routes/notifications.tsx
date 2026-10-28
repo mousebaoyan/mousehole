@@ -138,7 +138,7 @@ function headline(n: Item) {
     case "sponsor": {
       const amount = `¥${yuan(Number(n.data.amount))}`;
       if (n.data.action === "pending") return `${who} 登记了一笔 ${amount} 的赞助`;
-      if (n.data.action === "confirmed") return `你赞助的 ${amount} 已确认，谢谢你！`;
+      if (n.data.action === "confirmed") return `你赞助的 ${amount} 已确认，衷心感谢你的支持`;
       return `收款人未查到你登记的 ${amount} 赞助${n.data.reason ? `：${n.data.reason}` : ""}`;
     }
     default:

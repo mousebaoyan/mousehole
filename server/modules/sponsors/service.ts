@@ -119,7 +119,7 @@ export async function registerSponsorship(
   const { sponsor } = await getSettings();
   const payee = sponsor.payee;
   if (payee === null || sponsor[entry.method] === "") {
-    throw new AppError(403, "sponsor_closed", "暂未开放这种方式的赞助");
+    throw new AppError(403, "sponsor_closed", "暂未开放这种付款方式");
   }
   return db.transaction().execute(async (trx) => {
     const row = await trx
@@ -130,7 +130,7 @@ export async function registerSponsorship(
       .$narrowType<{ method: Method; status: Status }>()
       .executeTakeFirst();
     if (!row) {
-      throw new AppError(409, "sponsorship_pending", "你有一笔待确认的赞助，确认后才能再登记");
+      throw new AppError(409, "sponsorship_pending", "你有一笔赞助待确认，确认后才能再次登记");
     }
     await notifySponsorship(trx, payee, actor.userId, { action: "pending", sponsorship: row });
     await recordAudit(trx, actor, {
@@ -174,7 +174,7 @@ export async function withdrawSponsorship(actor: Actor, id: number) {
     const row = await lockOne(trx, id);
     if (row.user_id !== actor.userId) notFound();
     if (row.status !== "pending") {
-      throw new AppError(409, "sponsorship_reviewed", "收款人已经处理过这笔赞助，不能撤回");
+      throw new AppError(409, "sponsorship_reviewed", "收款人已处理这笔赞助，无法撤回");
     }
     await trx.deleteFrom("sponsorships").where("id", "=", id).execute();
     await recordAudit(trx, actor, {

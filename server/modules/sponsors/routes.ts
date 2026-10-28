@@ -483,7 +483,7 @@ export const sponsorsRoutes = createRouter()
 // replaced finds nothing, so caching it a while is safe.
 export async function serveSponsorCode(c: Context<AppEnv>) {
   if (!isMember(c.var.viewer, c.var.bot)) {
-    throw new AppError(403, "forbidden", "登录后才能看到收款码");
+    throw new AppError(403, "forbidden", "收款码仅成员可见");
   }
   const method = METHODS.find((m) => c.req.path === `/sponsor/${m}.png`);
   const text = method && (await getSettings()).sponsor[method];

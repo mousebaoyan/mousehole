@@ -9,7 +9,6 @@ import sharp from "sharp";
 const MODULE = 12;
 const QUIET = 3;
 const INK = "#1f2a28";
-const TEAL = "#2b7a6b";
 
 function svg(text: string) {
   const code = generate(text, { minCorrectionLevel: correction.M });
@@ -29,8 +28,8 @@ function svg(text: string) {
   }
   const finders = corners.map(
     ([x, y]) =>
-      `<rect x="${x + 0.5}" y="${y + 0.5}" width="6" height="6" rx="1.6" fill="none" stroke="${TEAL}"/>` +
-      `<rect x="${x + 2}" y="${y + 2}" width="3" height="3" rx="0.8" fill="${TEAL}"/>`,
+      `<rect x="${x + 0.5}" y="${y + 0.5}" width="6" height="6" rx="1.6" fill="none" stroke="${INK}"/>` +
+      `<rect x="${x + 2}" y="${y + 2}" width="3" height="3" rx="0.8" fill="${INK}"/>`,
   );
   const side = n + QUIET * 2;
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${-QUIET} ${-QUIET} ${side} ${side}" width="${side * MODULE}" height="${side * MODULE}">

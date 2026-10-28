@@ -629,7 +629,7 @@ export async function sponsorReminder(
       blocks: [
         paid,
         s.message !== null && { kind: "quote", text: s.message },
-        s.anonymous && { kind: "small", text: "TA 选了匿名上感谢墙。" },
+        s.anonymous && { kind: "small", text: "TA 选择在感谢墙上匿名。" },
         { kind: "text", text: `请对照${METHOD_NAMES[s.method]}的收款记录，收到后确认。` },
       ],
       button: "去确认",
@@ -638,10 +638,10 @@ export async function sponsorReminder(
   }
   const tier = tierName(daysOf(s.amount));
   return reminder(person, "sponsor", {
-    subject: action === "confirmed" ? "谢谢你赞助鼠群" : "你登记的赞助未查到",
+    subject: action === "confirmed" ? "感谢你赞助鼠群" : "你登记的赞助未查到",
     said:
       action === "confirmed"
-        ? "收款人确认收到了你的赞助，谢谢你！"
+        ? "收款人已确认收到你的赞助，衷心感谢你的支持。"
         : "收款人未查到你登记的这笔赞助",
     blocks:
       action === "confirmed"
@@ -650,8 +650,8 @@ export async function sponsorReminder(
             {
               kind: "text",
               text: s.anonymous
-                ? `你以「匿名鼠鼠」上了感谢墙：${tier}。想显示名字，可以在赞助页修改。`
-                : `你上了感谢墙：${tier}。`,
+                ? `你已以「匿名鼠鼠」列入感谢墙（${tier}），如需显示名字，可在赞助页修改。`
+                : `你已列入感谢墙（${tier}）。`,
             },
           ]
         : [
