@@ -60,6 +60,7 @@ const DONE: Record<string, string> = {
   amount: "已修改金额",
   reject: "已标为未收到",
   message: "已保存留言",
+  anonymous: "已修改",
   delete: "已删除",
 };
 
@@ -101,7 +102,9 @@ export async function action({ request, context }: Route.ActionArgs) {
                     ? { amount: fen() }
                     : intent === "reject"
                       ? { status: "rejected", reason: field("reason") }
-                      : { message: field("message") },
+                      : intent === "anonymous"
+                        ? { anonymous: field("anonymous") === "on" }
+                        : { message: field("message") },
             });
   if (res.ok) return { intent, ok: true, message: DONE[intent] ?? "已保存" };
   return { intent, ok: false, message: (await res.json()).error.message };
@@ -214,10 +217,12 @@ function Row({ item: r }: { item: Item }) {
           </>
         )}
       </p>
-      {/* Saved empty, the message is taken down. */}
+      {/* Saved empty, the message is taken down. The boxes are keyed by what's saved, so a change
+          from anywhere replaces what they hold. */}
       <Form method="post" className="mt-2 flex items-start gap-2">
         <input type="hidden" name="id" value={r.id} />
         <Textarea
+          key={r.message ?? ""}
           name="message"
           aria-label="留言"
           placeholder="无留言"
@@ -234,9 +239,11 @@ function Row({ item: r }: { item: Item }) {
       )}
       <Form method="post" className="mt-3 flex flex-wrap items-center gap-2">
         <input type="hidden" name="id" value={r.id} />
+        <input type="hidden" name="anonymous" value={r.anonymous ? "" : "on"} />
         <span className="flex items-center gap-1.5 text-sm">
           实收 ¥
           <Input
+            key={r.amount}
             {...AMOUNT_INPUT}
             aria-label="实收金额"
             defaultValue={yuan(r.amount)}
@@ -263,6 +270,20 @@ function Row({ item: r }: { item: Item }) {
             {confirmed ? "撤销确认" : "未收到"}
           </Button>
         )}
+        <Button
+          name="intent"
+          value="anonymous"
+          size="sm"
+          variant="outline"
+          disabled={busy}
+          onClick={
+            r.anonymous
+              ? confirmSubmit("确定在感谢墙上显示 TA 的名字？请先确认是本人的意思。", "显示名字")
+              : undefined
+          }
+        >
+          {r.anonymous ? "显示名字" : "改为匿名"}
+        </Button>
         <Button
           name="intent"
           value="delete"

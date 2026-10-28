@@ -219,8 +219,8 @@ export async function addSponsorship(
   });
 }
 
-// Confirmed with what really came, turned down with why, a confirmation taken back, or the message
-// corrected or taken down. Whoever paid hears when its status changes.
+// Confirmed with what really came, turned down with why, a confirmation taken back, the message
+// corrected or taken down, or anonymity set right. Whoever paid hears when its status changes.
 export async function reviewSponsorship(
   actor: Actor,
   id: number,
@@ -228,6 +228,7 @@ export async function reviewSponsorship(
     status?: "confirmed" | "rejected";
     reason?: string | null;
     amount?: number;
+    anonymous?: boolean;
     message?: string | null;
   },
 ) {
@@ -249,6 +250,7 @@ export async function reviewSponsorship(
       .updateTable("sponsorships")
       .set({
         amount: after.amount,
+        anonymous: after.anonymous,
         message: after.message,
         status: after.status,
         reason: after.reason,
@@ -273,6 +275,8 @@ export async function reviewSponsorship(
         amount: after.amount,
         ...(rest.amount !== undefined &&
           rest.amount !== before.amount && { amount_was: before.amount }),
+        ...(rest.anonymous !== undefined &&
+          rest.anonymous !== before.anonymous && { anonymous: after.anonymous }),
         ...(rest.message !== undefined &&
           rest.message !== before.message && {
             message: after.message,

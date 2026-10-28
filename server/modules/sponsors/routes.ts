@@ -441,6 +441,7 @@ export const sponsorsRoutes = createRouter()
                   .transform((r) => r || null)
                   .openapi({ description: "标为没收到的理由" }),
                 amount: Amount.optional(),
+                anonymous: z.boolean().optional().openapi({ description: "感谢墙上是否匿名" }),
                 message: Message.optional().openapi({
                   description: `新的留言，最多 ${MAX_MESSAGE} 个字；为 null 或空时删掉留言`,
                 }),

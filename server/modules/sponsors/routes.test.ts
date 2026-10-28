@@ -35,7 +35,12 @@ async function register(who: Who, amount = 700, anonymous = false) {
 
 function review(
   id: number,
-  json: { status?: "confirmed" | "rejected"; amount?: number; message?: string | null },
+  json: {
+    status?: "confirmed" | "rejected";
+    amount?: number;
+    anonymous?: boolean;
+    message?: string | null;
+  },
 ) {
   return api.admin.sponsorships[":id"].$patch({ param: { id: String(id) }, json }, payee.who);
 }
@@ -178,6 +183,15 @@ describe("登记和确认", () => {
     expect((await wall()).find((t) => t.id === id)).toMatchObject({ message: "祝大家都上岸" });
     await review(id, { message: "" });
     expect((await wall()).find((t) => t.id === id)).toMatchObject({ message: null });
+  });
+
+  test("收款人可以改是否匿名", async () => {
+    const someone = await member();
+    const id = await register(someone.who, 700, true);
+    await review(id, { status: "confirmed" });
+    expect((await wall()).find((t) => t.id === id)).toMatchObject({ user: null });
+    expect((await review(id, { anonymous: false })).status).toBe(204);
+    expect((await wall()).find((t) => t.id === id)).toMatchObject({ user: { id: someone.id } });
   });
 
   test("没收到的附理由通知本人，不上墙", async () => {
