@@ -61,6 +61,7 @@ const DONE: Record<string, string> = {
   reject: "已标为未收到",
   message: "已保存留言",
   anonymous: "已修改",
+  show_amount: "已修改",
   delete: "已删除",
 };
 
@@ -104,7 +105,9 @@ export async function action({ request, context }: Route.ActionArgs) {
                       ? { status: "rejected", reason: field("reason") }
                       : intent === "anonymous"
                         ? { anonymous: field("anonymous") === "on" }
-                        : { message: field("message") },
+                        : intent === "show_amount"
+                          ? { show_amount: field("show_amount") === "on" }
+                          : { message: field("message") },
             });
   if (res.ok) return { intent, ok: true, message: DONE[intent] ?? "已保存" };
   return { intent, ok: false, message: (await res.json()).error.message };
@@ -243,6 +246,7 @@ function Row({ item: r }: { item: Item }) {
       <Form method="post" className="mt-3 flex flex-wrap items-center gap-2">
         <input type="hidden" name="id" value={r.id} />
         <input type="hidden" name="anonymous" value={r.anonymous ? "" : "on"} />
+        <input type="hidden" name="show_amount" value={r.show_amount ? "" : "on"} />
         <span className="flex items-center gap-1.5 text-sm">
           实收 ¥
           <Input
@@ -287,6 +291,20 @@ function Row({ item: r }: { item: Item }) {
           }
         >
           {r.anonymous ? "显示名字" : "改为匿名"}
+        </Button>
+        <Button
+          name="intent"
+          value="show_amount"
+          size="sm"
+          variant="outline"
+          disabled={busy}
+          onClick={
+            r.show_amount
+              ? undefined
+              : confirmSubmit("确定在感谢墙上显示这笔金额？请先确认是本人的意思。", "显示金额")
+          }
+        >
+          {r.show_amount ? "隐藏金额" : "显示金额"}
         </Button>
         <Button
           name="intent"

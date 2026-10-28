@@ -229,7 +229,7 @@ export async function addSponsorship(
 }
 
 // Confirmed with what really came, turned down with why, a confirmation taken back, the message
-// corrected or taken down, or anonymity set right. Whoever paid hears when its status changes.
+// corrected or taken down, or anonymity and the amount's showing set right. Whoever paid hears when its status changes.
 export async function reviewSponsorship(
   actor: Actor,
   id: number,
@@ -238,6 +238,7 @@ export async function reviewSponsorship(
     reason?: string | null;
     amount?: number;
     anonymous?: boolean;
+    show_amount?: boolean;
     message?: string | null;
   },
 ) {
@@ -260,6 +261,7 @@ export async function reviewSponsorship(
       .set({
         amount: after.amount,
         anonymous: after.anonymous,
+        show_amount: after.show_amount,
         message: after.message,
         status: after.status,
         reason: after.reason,
@@ -286,6 +288,8 @@ export async function reviewSponsorship(
           rest.amount !== before.amount && { amount_was: before.amount }),
         ...(rest.anonymous !== undefined &&
           rest.anonymous !== before.anonymous && { anonymous: after.anonymous }),
+        ...(rest.show_amount !== undefined &&
+          rest.show_amount !== before.show_amount && { show_amount: after.show_amount }),
         ...(rest.message !== undefined &&
           rest.message !== before.message && {
             message: after.message,
