@@ -413,6 +413,21 @@ export interface Settings {
   value: Json;
 }
 
+export interface Sponsorships {
+  amount: number;
+  anonymous: Generated<boolean>;
+  created_at: Generated<Timestamp>;
+  id: Generated<number>;
+  message: string | null;
+  method: string;
+  paid_at: Generated<Timestamp>;
+  reason: string | null;
+  reviewed_at: Timestamp | null;
+  reviewer_id: number | null;
+  status: Generated<string>;
+  user_id: number;
+}
+
 export interface Tags {
   id: Generated<number>;
   kind: Generated<string>;
@@ -641,6 +656,7 @@ export interface DB {
   search_terms: SearchTerms;
   sessions: Sessions;
   settings: Settings;
+  sponsorships: Sponsorships;
   tags: Tags;
   thread_aliases: ThreadAliases;
   thread_merges: ThreadMerges;

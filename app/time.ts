@@ -18,7 +18,8 @@ function beijing(unix: number) {
   return new Date((unix + OFFSET_S) * 1000);
 }
 
-function date(unix: number, now: number) {
+// For days: "10月3日", with the year when not this one.
+export function date(unix: number, now: number) {
   const d = beijing(unix);
   const monthDay = `${d.getUTCMonth() + 1}月${d.getUTCDate()}日`;
   const year = d.getUTCFullYear();
