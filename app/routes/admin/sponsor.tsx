@@ -218,7 +218,8 @@ function Row({ item: r }: { item: Item }) {
         )}
       </p>
       {/* Saved empty, the message is taken down. The boxes are keyed by what's saved, so a change
-          from anywhere replaces what they hold. */}
+          from anywhere replaces what they hold; they are off while one is sent, or what is typed
+          meanwhile would be replaced too. */}
       <Form method="post" className="mt-2 flex items-start gap-2">
         <input type="hidden" name="id" value={r.id} />
         <Textarea
@@ -228,6 +229,7 @@ function Row({ item: r }: { item: Item }) {
           placeholder="无留言"
           defaultValue={r.message ?? ""}
           maxLength={MAX_MESSAGE}
+          disabled={busy}
           className="min-h-0 flex-1"
         />
         <Button name="intent" value="message" size="sm" variant="outline" disabled={busy}>
@@ -247,6 +249,7 @@ function Row({ item: r }: { item: Item }) {
             {...AMOUNT_INPUT}
             aria-label="实收金额"
             defaultValue={yuan(r.amount)}
+            disabled={busy}
             className="w-24"
           />
         </span>
