@@ -424,6 +424,7 @@ export interface Sponsorships {
   reason: string | null;
   reviewed_at: Timestamp | null;
   reviewer_id: number | null;
+  show_amount: boolean;
   status: Generated<string>;
   user_id: number;
 }

@@ -60,6 +60,7 @@ const DONE: Record<string, string> = {
   register: "已登记，收款人确认后会通知你",
   withdraw: "已撤回",
   anonymous: "已修改",
+  show_amount: "已修改",
   message: "已删除留言",
 };
 
@@ -79,6 +80,7 @@ export async function action({ request, context }: Route.ActionArgs) {
             amount: Math.round(Number(field("amount")) * 100),
             message: field("message") || null,
             anonymous: field("anonymous") === "on",
+            show_amount: field("show_amount") === "on",
           },
         })
       : intent === "withdraw"
@@ -88,7 +90,9 @@ export async function action({ request, context }: Route.ActionArgs) {
             json:
               intent === "anonymous"
                 ? { anonymous: field("anonymous") === "on" }
-                : { message: null },
+                : intent === "show_amount"
+                  ? { show_amount: field("show_amount") === "on" }
+                  : { message: null },
           });
   if (res.ok) return { intent, ok: true, message: DONE[intent] ?? "已保存" };
   return { intent, ok: false, message: (await res.json()).error.message };
@@ -131,16 +135,16 @@ export default function Sponsor({ loaderData, actionData }: Route.ComponentProps
 
 type Answer = { ok: boolean; message: string } | undefined;
 
-// A year's costs, estimated by share: the server runs other services too. 178 + 40 + (45 + 40) × 12,
-// about ¥1240 in fen, or ¥3.4 a day, which is what the tiers' days are reckoned by.
+// What running the group costs, in fen; the estimated ones are by share, as the server runs other
+// services too. The tiers' days are reckoned by what a day comes to, about ¥3.4.
 const COSTS = [
-  ["QQ 群的 2000 人规模", "¥178/年"],
-  ["域名 mousebaoyan.cn", "约 ¥40/年"],
-  ["鼠洞论坛服务器", "约 ¥45/月"],
-  [`${BOT_NAME} 的模型接口和电费`, "约 ¥40/月"],
-  ["网站托管和直播", "免费"],
+  { item: "QQ 群的 2000 人规模", fen: 17_800, per: "年", estimated: false },
+  { item: "域名 mousebaoyan.cn", fen: 4_000, per: "年", estimated: true },
+  { item: "鼠洞论坛服务器", fen: 4_500, per: "月", estimated: true },
+  { item: `${BOT_NAME} 的模型接口和电费`, fen: 4_000, per: "月", estimated: true },
+  { item: "网站托管和直播", fen: 0, per: "年", estimated: false },
 ] as const;
-const YEAR_COST = 124_000;
+const YEAR_COST = COSTS.reduce((sum, c) => sum + c.fen * (c.per === "月" ? 12 : 1), 0);
 
 function Costs({ year }: Pick<Loaded, "year">) {
   return (
@@ -150,14 +154,16 @@ function Costs({ year }: Pick<Loaded, "year">) {
         <span className="text-meta text-muted-foreground">服务器与其他服务共用，按分摊估算</span>
       </div>
       <dl className="mt-3 flex flex-col gap-1.5 text-sm">
-        {COSTS.map(([item, cost]) => (
-          <div key={item} className="flex items-baseline gap-2">
-            <dt>{item}</dt>
+        {COSTS.map((c) => (
+          <div key={c.item} className="flex items-baseline gap-2">
+            <dt>{c.item}</dt>
             <span
               aria-hidden
               className="flex-1 border-b border-dotted border-muted-foreground/40"
             />
-            <dd className="tabular-nums">{cost}</dd>
+            <dd className="tabular-nums">
+              {c.fen === 0 ? "免费" : `${c.estimated ? "约 " : ""}¥${yuan(c.fen)}/${c.per}`}
+            </dd>
           </div>
         ))}
         <div className="mt-1 flex items-baseline justify-between gap-2 border-t pt-2.5 font-medium">
@@ -269,7 +275,7 @@ function Codes({
       <input type="hidden" name="intent" value="register" />
       <input type="hidden" name="method" value={method} />
       <ol className="divide-y">
-        <Step n={1} title="选择金额" hint="感谢墙上只显示档位，不显示金额">
+        <Step n={1} title="选择金额" hint="登记时可以选择在感谢墙上显示金额，或只显示档位">
           {/* Off while one waits: with no button, Enter in the amount, the only field, sends the form. */}
           <fieldset disabled={pending} className="min-w-0">
             <ul className="grid gap-2 sm:grid-cols-3">
@@ -409,6 +415,7 @@ function Codes({
               <Field label="留言" hint="选填，显示在感谢墙上">
                 <Input name="message" maxLength={MAX_MESSAGE} />
               </Field>
+              <Check name="show_amount" label="在感谢墙上显示金额" checked />
               <Check name="anonymous" label="在感谢墙上匿名" checked={false} />
               <Button disabled={busy} className="self-start">
                 <HandHeart /> 登记赞助
@@ -486,7 +493,9 @@ function Mine({
         <h2 className="font-semibold">我的赞助</h2>
         <Result result={result} />
       </div>
-      <p className="mt-1 text-meta text-muted-foreground">金额仅你本人、收款人和站长可见</p>
+      <p className="mt-1 text-meta text-muted-foreground">
+        不在感谢墙上显示的金额，仅你本人、收款人和站长可见
+      </p>
       <ul className="mt-2 divide-y">
         {items.map((r) => (
           <li key={r.id} className="flex flex-col gap-1.5 py-3">
@@ -501,6 +510,7 @@ function Mine({
                 {STATUS_NAMES[r.status]}
               </span>
               {r.anonymous && <Badge>匿名</Badge>}
+              {!r.show_amount && <Badge>金额不公开</Badge>}
             </p>
             {r.message && <p className="text-sm break-words">{r.message}</p>}
             {r.status === "rejected" && r.reason && (
@@ -509,8 +519,12 @@ function Mine({
             <Form method="post" className="flex flex-wrap gap-1.5">
               <input type="hidden" name="id" value={r.id} />
               <input type="hidden" name="anonymous" value={r.anonymous ? "" : "on"} />
+              <input type="hidden" name="show_amount" value={r.show_amount ? "" : "on"} />
               <Button name="intent" value="anonymous" size="xs" variant="outline" disabled={busy}>
                 {r.anonymous ? "显示我的名字" : "改为匿名"}
+              </Button>
+              <Button name="intent" value="show_amount" size="xs" variant="outline" disabled={busy}>
+                {r.show_amount ? "隐藏金额" : "显示金额"}
               </Button>
               {r.message && (
                 <Button
@@ -587,9 +601,18 @@ function Wall({
                   className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1 text-meta font-medium whitespace-nowrap text-brand-strong"
                 >
                   {tier < 0 ? tierName(t.days) : TIERS[tier].label}
-                  <Pips days={t.days} />
+                  {t.amount === null ? (
+                    <Pips days={t.days} />
+                  ) : (
+                    <span className="text-sm font-semibold tabular-nums">¥{yuan(t.amount)}</span>
+                  )}
                 </p>
-                {t.message && <p className="text-sm leading-relaxed break-words">{t.message}</p>}
+                {/* Underlined like writing on ruled paper. */}
+                {t.message && (
+                  <p className="text-sm leading-relaxed break-words underline decoration-brand/60 underline-offset-[5px]">
+                    {t.message}
+                  </p>
+                )}
                 <div className="flex items-center gap-2">
                   {t.user ? (
                     <UserAvatar user={t.user} className="size-7" />

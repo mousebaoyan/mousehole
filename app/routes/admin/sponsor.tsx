@@ -123,7 +123,7 @@ export default function SponsorAdmin({ loaderData, actionData }: Route.Component
         <Result result={saved ? undefined : actionData} />
       </div>
       <p className="mt-1 text-meta text-muted-foreground">
-        对照微信和支付宝的收款记录确认群友登记的赞助，实收金额不一致时先修改金额再确认。金额仅本人、收款人和站长可见。
+        对照微信和支付宝的收款记录确认群友登记的赞助，实收金额不一致时先修改金额再确认。本人没选公开的金额，仅本人、收款人和站长可见。
       </p>
       <nav aria-label="状态" className="mt-4 flex gap-1">
         {STATUSES.map((s) => (
@@ -200,6 +200,7 @@ function Row({ item: r }: { item: Item }) {
           <span className="text-meta text-muted-foreground tabular-nums">QQ {r.user.qq}</span>
         )}
         {r.anonymous && <Badge>匿名上墙</Badge>}
+        {r.show_amount && <Badge>公开金额</Badge>}
         <span className="ml-auto font-semibold tabular-nums">¥{yuan(r.amount)}</span>
         <span className="text-meta text-muted-foreground">{METHOD_NAMES[r.method]}</span>
       </div>
@@ -310,7 +311,7 @@ function Add({ now }: { now: number }) {
   return (
     <Section
       title="补录"
-      description="付款后没有登记的，或论坛上线前赞助过的，在这里补录。补录的记录直接确认，默认匿名，本人会收到通知，可以自己改为显示名字。"
+      description="付款后没有登记的，或论坛上线前赞助过的，在这里补录。补录的记录直接确认，默认匿名、不公开金额，本人会收到通知，可以自己修改。"
     >
       <Form method="post" className="grid gap-3 sm:grid-cols-2">
         <input type="hidden" name="intent" value="add" />

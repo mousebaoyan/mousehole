@@ -24,6 +24,7 @@ const COLUMNS = [
   "status",
   "message",
   "anonymous",
+  "show_amount",
   "paid_at",
   "reviewer_id",
   "reviewed_at",
@@ -114,7 +115,13 @@ export async function countPending() {
 // One at a time each: until the payee sees to it, nobody piles up more.
 export async function registerSponsorship(
   actor: Actor,
-  entry: { method: Method; amount: number; message: string | null; anonymous: boolean },
+  entry: {
+    method: Method;
+    amount: number;
+    message: string | null;
+    anonymous: boolean;
+    show_amount: boolean;
+  },
 ) {
   const { sponsor } = await getSettings();
   const payee = sponsor.payee;
@@ -149,12 +156,13 @@ async function lockOne(trx: Transaction<DB>, id: number) {
   );
 }
 
-// Whoever paid may go anonymous or not at any time, and take the message down, but not reword it:
-// every message on the wall is one the payee has read, so corrections go through the payee.
+// Whoever paid may go anonymous or not and show the amount or not at any time, and take the message
+// down, but not reword it: every message on the wall is one the payee has read, so corrections go
+// through the payee.
 export async function editOwnSponsorship(
   actor: Actor,
   id: number,
-  change: { anonymous?: boolean; message?: null },
+  change: { anonymous?: boolean; show_amount?: boolean; message?: null },
 ) {
   await db.transaction().execute(async (trx) => {
     const row = await lockOne(trx, id);
@@ -186,8 +194,8 @@ export async function withdrawSponsorship(actor: Actor, id: number) {
   });
 }
 
-// Paid without registering, or before the forum: confirmed at once, and anonymous until whoever
-// paid chooses to show their name.
+// Paid without registering, or before the forum: confirmed at once, and anonymous with the amount
+// hidden until whoever paid chooses otherwise.
 export async function addSponsorship(
   actor: Actor,
   entry: { user_id: number; method: Method; amount: number; paid_at: Date; message: string | null },
@@ -199,6 +207,7 @@ export async function addSponsorship(
         ...entry,
         status: "confirmed",
         anonymous: true,
+        show_amount: false,
         reviewer_id: actor.userId,
         reviewed_at: sql<Date>`now()`,
       })

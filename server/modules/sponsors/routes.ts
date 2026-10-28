@@ -57,6 +57,7 @@ const SponsorshipSchema = z
       .openapi({ description: "pending 待确认、confirmed 已确认、rejected 没收到" }),
     message: z.string().nullable(),
     anonymous: z.boolean().openapi({ description: "在感谢墙上匿名" }),
+    show_amount: z.boolean().openapi({ description: "在感谢墙上显示金额" }),
     paid_at: z.number(),
     reason: z.string().nullable().openapi({ description: "标为没收到的理由" }),
   })
@@ -78,6 +79,10 @@ const ThanksSchema = z
     days: z.number().nullable().openapi({
       description: "档位：7（¥24 起）、4（¥14 起）、2（¥7 起），不到 ¥7 的为 null",
     }),
+    amount: z
+      .number()
+      .nullable()
+      .openapi({ description: "金额，以分记；本人没选显示金额的为 null" }),
     message: z.string().nullable(),
     paid_at: z.number(),
   })
@@ -93,6 +98,7 @@ function own(r: Awaited<ReturnType<typeof listMine>>[number]) {
     status: r.status,
     message: r.message,
     anonymous: r.anonymous,
+    show_amount: r.show_amount,
     paid_at: unix(r.paid_at),
     reason: r.reason,
   };
@@ -165,7 +171,7 @@ export const sponsorsRoutes = createRouter()
     createRoute({
       method: "get",
       path: "/sponsorships",
-      summary: "感谢墙：确认过的赞助，最近登记的在前，每页 50 条，不带金额",
+      summary: "感谢墙：确认过的赞助，最近登记的在前，每页 50 条，金额只带本人选了显示的",
       request: { query: Page },
       responses: {
         200: {
@@ -192,6 +198,7 @@ export const sponsorsRoutes = createRouter()
             id: r.id,
             user: r.anonymous ? null : user(r.user_id),
             days: daysOf(r.amount),
+            amount: r.show_amount ? r.amount : null,
             message: r.message,
             paid_at: unix(r.paid_at),
           })),
@@ -236,6 +243,7 @@ export const sponsorsRoutes = createRouter()
                 amount: Amount,
                 message: Message,
                 anonymous: z.boolean(),
+                show_amount: z.boolean(),
               }),
             },
           },
@@ -262,7 +270,7 @@ export const sponsorsRoutes = createRouter()
     createRoute({
       method: "patch",
       path: "/sponsorships/{id}",
-      summary: "改自己的记录：随时可以改匿名；留言只能删掉",
+      summary: "改自己的记录：随时可以改匿名和是否显示金额；留言只能删掉",
       request: {
         params: IdParam,
         body: {
@@ -272,11 +280,15 @@ export const sponsorsRoutes = createRouter()
               schema: z
                 .object({
                   anonymous: z.boolean().optional(),
+                  show_amount: z.boolean().optional(),
                   message: z.null().optional().openapi({ description: "为 null 时删掉留言" }),
                 })
                 .refine(
-                  (b) => b.anonymous !== undefined || b.message !== undefined,
-                  "anonymous 和 message 至少带一个",
+                  (b) =>
+                    b.anonymous !== undefined ||
+                    b.show_amount !== undefined ||
+                    b.message !== undefined,
+                  "anonymous、show_amount 和 message 至少带一个",
                 ),
             },
           },
@@ -379,7 +391,7 @@ export const sponsorsRoutes = createRouter()
     createRoute({
       method: "post",
       path: "/admin/sponsorships",
-      summary: "补录：直接是已确认、匿名的，本人收到通知",
+      summary: "补录：直接是已确认、匿名、不显示金额的，本人收到通知",
       request: {
         body: {
           required: true,
