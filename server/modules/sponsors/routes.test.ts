@@ -39,6 +39,7 @@ function review(
     status?: "confirmed" | "rejected";
     amount?: number;
     anonymous?: boolean;
+    show_amount?: boolean;
     message?: string | null;
   },
 ) {
@@ -209,13 +210,16 @@ describe("登记和确认", () => {
     expect((await wall()).find((t) => t.id === id)).toMatchObject({ message: null });
   });
 
-  test("收款人可以改是否匿名", async () => {
+  test("收款人可以改是否匿名、是否显示金额", async () => {
     const someone = await member();
     const id = await register(someone.who, 700, { anonymous: true });
     await review(id, { status: "confirmed" });
-    expect((await wall()).find((t) => t.id === id)).toMatchObject({ user: null });
-    expect((await review(id, { anonymous: false })).status).toBe(204);
-    expect((await wall()).find((t) => t.id === id)).toMatchObject({ user: { id: someone.id } });
+    expect((await wall()).find((t) => t.id === id)).toMatchObject({ user: null, amount: null });
+    expect((await review(id, { anonymous: false, show_amount: true })).status).toBe(204);
+    expect((await wall()).find((t) => t.id === id)).toMatchObject({
+      user: { id: someone.id },
+      amount: 700,
+    });
   });
 
   test("没收到的附理由通知本人，不上墙", async () => {
