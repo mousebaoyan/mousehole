@@ -7,6 +7,7 @@ import { Button } from "~/components/ui/button";
 import { confirmSubmit, promptDialog } from "~/components/ui/dialog";
 import { Input } from "~/components/ui/input";
 import { Select } from "~/components/ui/select";
+import { Textarea } from "~/components/ui/textarea";
 import { UserAvatar } from "~/components/user-avatar";
 import { pageTitle } from "~/share-meta";
 import { fromWallClock, unixNow, wallClock } from "~/time";
@@ -58,7 +59,7 @@ const DONE: Record<string, string> = {
   confirm: "已确认",
   amount: "已修改金额",
   reject: "已标为未收到",
-  message: "已删除留言",
+  message: "已保存留言",
   delete: "已删除",
 };
 
@@ -100,7 +101,7 @@ export async function action({ request, context }: Route.ActionArgs) {
                     ? { amount: fen() }
                     : intent === "reject"
                       ? { status: "rejected", reason: field("reason") }
-                      : { message: null },
+                      : { message: field("message") },
             });
   if (res.ok) return { intent, ok: true, message: DONE[intent] ?? "已保存" };
   return { intent, ok: false, message: (await res.json()).error.message };
@@ -213,9 +214,21 @@ function Row({ item: r }: { item: Item }) {
           </>
         )}
       </p>
-      {r.message && (
-        <p className="mt-2 rounded-xl bg-secondary/50 px-3 py-2 text-sm break-words">{r.message}</p>
-      )}
+      {/* Saved empty, the message is taken down. */}
+      <Form method="post" className="mt-2 flex items-start gap-2">
+        <input type="hidden" name="id" value={r.id} />
+        <Textarea
+          name="message"
+          aria-label="留言"
+          placeholder="无留言"
+          defaultValue={r.message ?? ""}
+          maxLength={MAX_MESSAGE}
+          className="min-h-0 flex-1"
+        />
+        <Button name="intent" value="message" size="sm" variant="outline" disabled={busy}>
+          保存留言
+        </Button>
+      </Form>
       {r.status === "rejected" && r.reason && (
         <p className="mt-2 text-meta text-muted-foreground">理由：{r.reason}</p>
       )}
@@ -248,18 +261,6 @@ function Row({ item: r }: { item: Item }) {
             onClick={() => void reject()}
           >
             {confirmed ? "撤销确认" : "未收到"}
-          </Button>
-        )}
-        {r.message && (
-          <Button
-            name="intent"
-            value="message"
-            size="sm"
-            variant="ghost"
-            disabled={busy}
-            onClick={confirmSubmit("确定删除这条留言？删除后无法恢复。", "删除")}
-          >
-            删除留言
           </Button>
         )}
         <Button

@@ -391,7 +391,7 @@ token 由站长在后台创建，只显示一次。每个 token 绑定一个 bot
 | GET | `/admin/sponsorships` | 赞助记录（总体设计 §8.21），每页 30 条：`status`（默认 `pending`；`confirmed`、`rejected`）、`cursor`；待确认的先登记的在前，其余最近登记的在前。每条同 `/me/sponsorships`，另带 `user`（匿名的也给，带 `qq`）、`reviewer`、`reviewed_at`、`created_at` | 站长、收款人（须是未冻结的管理员），只能在网页上操作 |
 | GET | `/admin/sponsorships/count` | 待确认的赞助有几条：`{ count }`，后台的菜单上显示 | 站长、收款人（须是未冻结的管理员），只能在网页上操作 |
 | POST | `/admin/sponsorships` | 补录：`{ user, method, amount, paid_at, message }`，`paid_at` 不能晚于现在；直接是已确认，匿名；本人收到通知。返回这条记录 | 站长、收款人（须是未冻结的管理员），只能在网页上操作 |
-| PATCH | `/admin/sponsorships/{id}` | 只改带了的字段：`status`（`confirmed` 确认，`rejected` 没收到或撤销确认，可附 `reason`，最多 200 个字）、`amount`、`message`（只能为 `null`，删除留言）。状态变了时本人收到通知 | 站长、收款人（须是未冻结的管理员），只能在网页上操作 |
+| PATCH | `/admin/sponsorships/{id}` | 只改带了的字段：`status`（`confirmed` 确认，`rejected` 没收到或撤销确认，可附 `reason`，最多 200 个字）、`amount`、`message`（新的留言，最多 50 个字；为 `null` 或空时删除留言）。状态变了时本人收到通知 | 站长、收款人（须是未冻结的管理员），只能在网页上操作 |
 | DELETE | `/admin/sponsorships/{id}` | 删掉记错的赞助记录 | 站长、收款人（须是未冻结的管理员），只能在网页上操作 |
 | DELETE | `/admin/archive-flags/{id}` | 处理完一层的反馈，`id` 是楼层的 ID：清掉它收到的全部反馈，楼层要隐藏的另外用 `PATCH`；没有反馈返回 `404 archive_flags_not_found`；记操作日志 | 版主 / `moderate` |
 | GET | `/admin/suggestions` | 待处理的修改建议，最新的在前，每页 30 条：`cursor`（上一页最后一条的 ID）；每条同 `GET /threads/{id}` 的 `suggestions`，另带帖子现在的 `thread`（`id`、`title`、`board`、`tags`）。帖子删了的不列 | 版主 / `moderate` |
