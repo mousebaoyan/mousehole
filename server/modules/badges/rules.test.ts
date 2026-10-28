@@ -72,8 +72,8 @@ async function addFloors(threadId: number, authorId: number, count: number) {
   );
 }
 
+// A check runs every rule over everyone, so tests check once for all they have set up, then read.
 async function badgesOf(userId: number) {
-  await checkBadges();
   return db
     .selectFrom("user_badges")
     .innerJoin("badges", "badges.id", "user_badges.badge_id")
@@ -212,37 +212,32 @@ describe("更多徽章的规则", () => {
   test("收藏不算楼主自己的，层数不算楼主自己的；精华每个帖子各得一次", async () => {
     const author = await person();
     const fans = await users(5);
-
-    const marked = await thread(author.who);
-    await bookmark(marked, author.id);
-    for (const fan of fans.slice(0, 4)) await bookmark(marked, fan.id);
-    expect(await slugsOf(author.id)).not.toContain("bookmarked_5");
-    await bookmark(marked, fans[4].id);
-    expect(await badgesOf(author.id)).toContainEqual({
-      slug: "bookmarked_5",
-      post_id: await opening(marked),
-    });
-
-    const talked = await thread(author.who);
+    const [marked, almost, talked, crowded] = [
+      await thread(author.who),
+      await thread(author.who),
+      await thread(author.who),
+      await thread(author.who),
+    ];
+    for (const fan of fans) await bookmark(marked, fan.id);
+    await bookmark(almost, author.id);
+    for (const fan of fans.slice(0, 4)) await bookmark(almost, fan.id);
     await addFloors(talked, author.id, 30);
-    expect(await slugsOf(author.id)).not.toContain("floors_30");
-    const crowded = await thread(author.who);
     await addFloors(crowded, fans[0].id, 30);
-    expect(await badgesOf(author.id)).toContainEqual({
-      slug: "floors_30",
-      post_id: await opening(crowded),
-    });
-
     await db
       .updateTable("threads")
       .set({ featured: true })
       .where("id", "in", [marked, talked])
       .execute();
-    const featured = (await badgesOf(author.id)).filter((b) => b.slug === "featured");
-    expect(featured.map((b) => b.post_id)).toEqual(
+    await checkBadges();
+
+    const got = await badgesOf(author.id);
+    const posts = (slug: string) => got.filter((b) => b.slug === slug).map((b) => b.post_id);
+    expect(posts("bookmarked_5")).toEqual([await opening(marked)]);
+    expect(posts("floors_30")).toEqual([await opening(crowded)]);
+    expect(posts("featured")).toHaveLength(2);
+    expect(posts("featured")).toEqual(
       expect.arrayContaining([await opening(marked), await opening(talked)]),
     );
-    expect(featured).toHaveLength(2);
   });
 
   test("揭榜挂帅：悬赏期间别人在论坛上的回复才算", async () => {
@@ -265,6 +260,7 @@ describe("更多徽章的规则", () => {
     await reply(late.who, lapsed);
     const fromGroup = await reply(grouped.who, bounty);
     await db.updateTable("posts").set({ via: "qq" }).where("id", "=", fromGroup).execute();
+    await checkBadges();
 
     expect(await slugsOf(answerer.id)).toContain("bounty_reply");
     expect(await slugsOf(asker.id)).not.toContain("bounty_reply");
@@ -292,6 +288,7 @@ describe("更多徽章的规则", () => {
       .set({ anonymous: true })
       .where("id", "=", sql<number>`(SELECT max(id) FROM posts WHERE author_id = ${near.id})`)
       .execute();
+    await checkBadges();
 
     const short = await slugsOf(near.id);
     for (const slug of ["hours_10", "visits_60", "replies_50"]) expect(short).not.toContain(slug);
@@ -317,8 +314,10 @@ describe("更多徽章的规则", () => {
         SELECT id, ${fan.id}, '+1' FROM posts
         WHERE thread_id = ${home} AND (${where})`.execute(db);
     await react(sql`floor BETWEEN 2 AND 100 OR author_id = ${fan.id}`);
+    await checkBadges();
     expect(await slugsOf(fan.id)).not.toContain("given_100");
     await react(sql`floor = 101`);
+    await checkBadges();
     expect(await slugsOf(fan.id)).not.toContain("given_100");
     await db
       .updateTable("posts")
@@ -326,6 +325,7 @@ describe("更多徽章的规则", () => {
       .where("thread_id", "=", home)
       .where("floor", "=", 2)
       .execute();
+    await checkBadges();
     expect(await slugsOf(fan.id)).toContain("given_100");
   });
 
@@ -350,6 +350,7 @@ describe("更多徽章的规则", () => {
     await member(left.id, active, 800, true);
     await member(retired.id, stopped, 800);
     await member(recent.id, active, 100);
+    await checkBadges();
 
     expect(await slugsOf(veteran.id)).toEqual(expect.arrayContaining(["group_1y", "group_2y"]));
     const mid = await slugsOf(steady.id);
@@ -379,6 +380,7 @@ describe("更多徽章的规则", () => {
       .insertInto("endorsements")
       .values(crowd.slice(1).map((c) => ({ user_id: almost.id, endorser_id: c.id })))
       .execute();
+    await checkBadges();
 
     expect(await slugsOf(popular.id)).toEqual(
       expect.arrayContaining(["followers_10", "endorsed_10"]),
@@ -402,6 +404,7 @@ describe("更多徽章的规则", () => {
     await report(dismissed.id, first, "dismissed");
     await suggest(first, suggester.id, "accepted");
     await suggest(first, rejected.id, "rejected");
+    await checkBadges();
 
     expect(await slugsOf(reporter.id)).toContain("reports_1");
     expect(await slugsOf(reporter.id)).not.toContain("reports_10");
@@ -421,6 +424,7 @@ describe("更多徽章的规则", () => {
     await poll(await thread(voter.who), null);
     await poll(await thread(positioner.who), "positioning");
     await poll(await thread(secret.who, true), null);
+    await checkBadges();
 
     expect(await slugsOf(host.id)).toContain("lottery_host");
     expect(await slugsOf(waiting.id)).not.toContain("lottery_host");
@@ -440,6 +444,7 @@ describe("更多徽章的规则", () => {
         { ...paid, user_id: waiting.id },
       ])
       .execute();
+    await checkBadges();
 
     expect(await slugsOf(shown.id)).toContain("sponsor");
     expect(await slugsOf(hidden.id)).not.toContain("sponsor");
@@ -454,6 +459,7 @@ describe("更多徽章的规则", () => {
     await ledger(spender.id, 400, "accepted", 0);
     for (const key of ["a", "b", "c", "d"]) await ledger(spender.id, -10, "look", 0, key);
     await ledger(poor.id, 99, "check_in", 0);
+    await checkBadges();
 
     const got = await slugsOf(saver.id);
     expect(got).toEqual(expect.arrayContaining(["coins_100", "looks_1"]));
@@ -475,6 +481,7 @@ describe("更多徽章的规则", () => {
       .set({ ...set, showcase: null })
       .where("id", "=", partly.id)
       .execute();
+    await checkBadges();
 
     expect(await slugsOf(done.id)).toContain("decorated");
     expect(await slugsOf(partly.id)).not.toContain("decorated");
@@ -501,6 +508,7 @@ describe("更多徽章的规则", () => {
     const eve = await postedAt("2027-02-05T18:00:00+08:00");
     const before = await postedAt("2027-02-05T17:59:59+08:00");
     const nextDay = await postedAt("2027-02-06T19:00:00+08:00");
+    await checkBadges();
 
     const got = new Map<number, string[]>();
     for (const id of [night, dawn, early, morning, noon, small, eve, before, nextDay]) {
@@ -543,8 +551,10 @@ describe("更多徽章的规则", () => {
         .values(ids.map((b) => ({ user_id: collector.id, badge_id: b.id })))
         .execute();
     await give(kinds.slice(0, 14));
+    await checkBadges();
     expect(await slugsOf(collector.id)).not.toContain("badges_15");
     await give(kinds.slice(14));
+    await checkBadges();
     expect(await slugsOf(collector.id)).toContain("badges_15");
     expect(await slugsOf(collector.id)).not.toContain("badges_30");
   });
