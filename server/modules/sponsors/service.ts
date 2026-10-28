@@ -149,8 +149,8 @@ async function lockOne(trx: Transaction<DB>, id: number) {
   );
 }
 
-// Whoever paid may go anonymous or not at any time, and take the message down; one shown on the
-// wall was read by the payee when confirming it, so it can't be changed afterwards.
+// Whoever paid may go anonymous or not at any time, and take the message down, but not reword it:
+// every message on the wall is one the payee has read, so corrections go through the payee.
 export async function editOwnSponsorship(
   actor: Actor,
   id: number,
@@ -219,8 +219,8 @@ export async function addSponsorship(
   });
 }
 
-// Confirmed with what really came, turned down with why, a confirmation taken back, or a message
-// taken down. Whoever paid hears when its status changes.
+// Confirmed with what really came, turned down with why, a confirmation taken back, the message
+// corrected or taken down, or anonymity set right. Whoever paid hears when its status changes.
 export async function reviewSponsorship(
   actor: Actor,
   id: number,
@@ -228,7 +228,8 @@ export async function reviewSponsorship(
     status?: "confirmed" | "rejected";
     reason?: string | null;
     amount?: number;
-    message?: null;
+    anonymous?: boolean;
+    message?: string | null;
   },
 ) {
   await db.transaction().execute(async (trx) => {
@@ -249,6 +250,7 @@ export async function reviewSponsorship(
       .updateTable("sponsorships")
       .set({
         amount: after.amount,
+        anonymous: after.anonymous,
         message: after.message,
         status: after.status,
         reason: after.reason,
@@ -273,7 +275,13 @@ export async function reviewSponsorship(
         amount: after.amount,
         ...(rest.amount !== undefined &&
           rest.amount !== before.amount && { amount_was: before.amount }),
-        ...(rest.message === null && before.message !== null && { message_was: before.message }),
+        ...(rest.anonymous !== undefined &&
+          rest.anonymous !== before.anonymous && { anonymous: after.anonymous }),
+        ...(rest.message !== undefined &&
+          rest.message !== before.message && {
+            message: after.message,
+            message_was: before.message,
+          }),
         ...(reviewed && { status_was: before.status, reason: after.reason }),
       },
     });

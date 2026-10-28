@@ -33,7 +33,15 @@ async function register(who: Who, amount = 700, anonymous = false) {
   return (await res.json()).id;
 }
 
-function review(id: number, json: { status?: "confirmed" | "rejected"; amount?: number }) {
+function review(
+  id: number,
+  json: {
+    status?: "confirmed" | "rejected";
+    amount?: number;
+    anonymous?: boolean;
+    message?: string | null;
+  },
+) {
   return api.admin.sponsorships[":id"].$patch({ param: { id: String(id) }, json }, payee.who);
 }
 
@@ -165,6 +173,25 @@ describe("登记和确认", () => {
 
     const late = await api.sponsorships[":id"].$delete({ param: { id: String(first) } }, named.who);
     expect(late.status).toBe(409);
+  });
+
+  test("收款人可以改墙上的留言，清空就删掉", async () => {
+    const someone = await member();
+    const id = await register(someone.who);
+    await review(id, { status: "confirmed" });
+    expect((await review(id, { message: "  祝大家都上岸  " })).status).toBe(204);
+    expect((await wall()).find((t) => t.id === id)).toMatchObject({ message: "祝大家都上岸" });
+    await review(id, { message: "" });
+    expect((await wall()).find((t) => t.id === id)).toMatchObject({ message: null });
+  });
+
+  test("收款人可以改是否匿名", async () => {
+    const someone = await member();
+    const id = await register(someone.who, 700, true);
+    await review(id, { status: "confirmed" });
+    expect((await wall()).find((t) => t.id === id)).toMatchObject({ user: null });
+    expect((await review(id, { anonymous: false })).status).toBe(204);
+    expect((await wall()).find((t) => t.id === id)).toMatchObject({ user: { id: someone.id } });
   });
 
   test("没收到的附理由通知本人，不上墙", async () => {
