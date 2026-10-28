@@ -123,7 +123,7 @@ export default function SponsorAdmin({ loaderData, actionData }: Route.Component
         <Result result={saved ? undefined : actionData} />
       </div>
       <p className="mt-1 text-meta text-muted-foreground">
-        对照微信和支付宝的收款记录确认群友登记的赞助，实收金额不一致时先修改金额再确认。本人没选公开的金额，仅本人、收款人和站长可见。
+        对照微信和支付宝的收款记录确认群友登记的赞助，实收金额不一致时先修改金额再确认。本人没选公开的金额不在感谢墙上单独显示，但计入赞助页上今年的合计。
       </p>
       <nav aria-label="状态" className="mt-4 flex gap-1">
         {STATUSES.map((s) => (

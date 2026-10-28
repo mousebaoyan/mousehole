@@ -415,7 +415,12 @@ function Codes({
               <Field label="留言" hint="选填，显示在感谢墙上">
                 <Input name="message" maxLength={MAX_MESSAGE} />
               </Field>
-              <Check name="show_amount" label="在感谢墙上显示金额" checked />
+              <Check
+                name="show_amount"
+                label="在感谢墙上显示金额"
+                hint="不显示时只显示档位，今年的合计仍包含这笔金额"
+                checked
+              />
               <Check name="anonymous" label="在感谢墙上匿名" checked={false} />
               <Button disabled={busy} className="self-start">
                 <HandHeart /> 登记赞助
@@ -494,7 +499,7 @@ function Mine({
         <Result result={result} />
       </div>
       <p className="mt-1 text-meta text-muted-foreground">
-        不在感谢墙上显示的金额，仅你本人、收款人和站长可见
+        不在感谢墙上显示的金额不会单独公开，但计入今年的合计
       </p>
       <ul className="mt-2 divide-y">
         {items.map((r) => (
