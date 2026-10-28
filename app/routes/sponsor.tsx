@@ -131,12 +131,13 @@ export default function Sponsor({ loaderData, actionData }: Route.ComponentProps
 
 type Answer = { ok: boolean; message: string } | undefined;
 
-// A year's costs, estimated by share: the server runs other services too. 40 + 50 × 12 × 2 in fen,
-// about ¥3.4 a day, which is what the tiers' days are reckoned by.
+// A year's costs, estimated by share: the server runs other services too. 178 + 40 + (45 + 40) × 12,
+// about ¥1240 in fen, or ¥3.4 a day, which is what the tiers' days are reckoned by.
 const COSTS = [
+  ["QQ 群的 2000 人规模", "¥178/年"],
   ["域名 mousebaoyan.cn", "约 ¥40/年"],
-  ["鼠洞论坛服务器", "约 ¥50/月"],
-  [`${BOT_NAME} 的模型接口和电费`, "约 ¥50/月"],
+  ["鼠洞论坛服务器", "约 ¥45/月"],
+  [`${BOT_NAME} 的模型接口和电费`, "约 ¥40/月"],
   ["网站托管和直播", "免费"],
 ] as const;
 const YEAR_COST = 124_000;
