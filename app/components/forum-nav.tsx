@@ -75,6 +75,9 @@ export function ForumNav() {
           <Award className="size-4" /> 徽章
           {me && <Count n={me.counts.badges} />}
         </NavLink>
+        <NavLink to="/sponsor" className={item}>
+          <HandHeart className="size-4" /> 赞助鼠群
+        </NavLink>
         {drafts.size > 0 && (
           <NavLink to="/drafts" className={item}>
             <FilePen className="size-4" /> 草稿
@@ -141,9 +144,6 @@ export function ForumNav() {
           </div>
         </div>
       )}
-      <NavLink to="/sponsor" className={item}>
-        <HandHeart className="size-4" /> 赞助鼠群
-      </NavLink>
     </nav>
   );
 }
