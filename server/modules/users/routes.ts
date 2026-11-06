@@ -2,7 +2,13 @@ import { readFile } from "node:fs/promises";
 import { createRoute, z } from "@hono/zod-openapi";
 import type { Context } from "hono";
 import { AppError } from "../../platform/errors.ts";
-import { isMember, reachOf, restrictionOf, type Restriction } from "../../platform/access.ts";
+import {
+  isMember,
+  reachOf,
+  restrictionOf,
+  type Actor,
+  type Restriction,
+} from "../../platform/access.ts";
 import { env } from "../../platform/env.ts";
 import { SITE_NAME, STAFF } from "../../platform/site.ts";
 import {
@@ -379,7 +385,7 @@ export const usersRoutes = createRouter()
     }),
     async (c) => {
       const viewer = authorize(c, "read");
-      if (!isMember(viewer, c.var.bot)) throw new AppError(403, "forbidden", "仅成员可查看");
+      if (!isMember(viewer, c.var.token)) throw new AppError(403, "forbidden", "仅成员可查看");
       const { q, cursor } = c.req.valid("query");
       return c.json(await findUsers(q, cursor), 200);
     },
@@ -403,9 +409,9 @@ export const usersRoutes = createRouter()
       },
     }),
     async (c) => {
-      const { viewer, bot } = c.var;
+      const { viewer, token } = c.var;
       const u = await getUser(c.req.valid("param").user, viewer?.id ?? null);
-      const members = isMember(viewer, bot);
+      const members = isMember(viewer, token);
       const brief = {
         id: u.id,
         display_name: u.display_name,
@@ -501,12 +507,12 @@ export const usersRoutes = createRouter()
       },
     }),
     async (c) => {
-      const { viewer, bot } = c.var;
+      const { viewer, token } = c.var;
       const shown = await getShowcase(c.req.valid("param").user);
-      if (shown.hide_from_guests && !isMember(viewer, bot)) {
+      if (shown.hide_from_guests && !isMember(viewer, token)) {
         return c.json({ showcase_html: null, pins: [] }, 200);
       }
-      const pins = shown.pins.length > 0 ? await listPins(reachOf(viewer, bot), shown.pins) : [];
+      const pins = shown.pins.length > 0 ? await listPins(reachOf(viewer, token), shown.pins) : [];
       return c.json(
         {
           showcase_html: shown.html,
@@ -582,7 +588,7 @@ export const usersRoutes = createRouter()
     }),
     async (c) => {
       const viewer = authorize(c, "read");
-      if (!isMember(viewer, c.var.bot)) throw new AppError(403, "forbidden", "仅成员可查看");
+      if (!isMember(viewer, c.var.token)) throw new AppError(403, "forbidden", "仅成员可查看");
       const userId = await findUserId(c.req.valid("param").user);
       await assertRelationsShown(viewer.id, userId);
       const { list, cursor } = c.req.valid("query");
@@ -860,10 +866,11 @@ export const usersRoutes = createRouter()
       if (!signedUnsubscribe(user_id, kind, sig)) {
         throw new AppError(400, "unsubscribe_invalid", "退订链接无效，请在设置中关闭邮件提醒");
       }
-      const actor = {
+      const actor: Actor = {
         userId: user_id,
         operatorId: null,
         tokenId: null,
+        via: "web",
         ip: clientIp(c),
         userAgent: c.req.header("user-agent") ?? null,
       };
@@ -1034,16 +1041,16 @@ export const usersRoutes = createRouter()
       responses: {
         200: { description: "当前用户", content: { "application/json": { schema: MeSchema } } },
         401: errorResponse("没有登录"),
-        403: errorResponse("bot token 没有 read 范围"),
+        403: errorResponse("token 没有 profile 范围"),
       },
     }),
     async (c) => {
-      const viewer = authorize(c, "read");
+      const viewer = authorize(c, "profile");
       const { id } = viewer;
       const [{ activated_at, ...profile }, coins, mine, badges] = await Promise.all([
         getProfile(id),
         coinBalance(id),
-        countMine(reachOf(viewer, c.var.bot), id),
+        countMine(reachOf(viewer, c.var.token), id),
         countUserBadges(id),
       ]);
       return c.json(

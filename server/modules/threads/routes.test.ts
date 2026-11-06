@@ -157,6 +157,7 @@ describe("发帖和回复", () => {
         userId: (await createUser("admin")).id,
         operatorId: null,
         tokenId: null,
+        via: "web",
         ip: null,
         userAgent: null,
       },

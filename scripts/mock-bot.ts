@@ -174,7 +174,14 @@ async function ownerActor() {
     .where("role", "=", "owner")
     .executeTakeFirst();
   if (!owner) throw new Error("还没有站长，先运行 pnpm bootstrap --owner");
-  return { userId: owner.id, operatorId: null, tokenId: null, ip: null, userAgent: null };
+  return {
+    userId: owner.id,
+    operatorId: null,
+    tokenId: null,
+    via: "web" as const,
+    ip: null,
+    userAgent: null,
+  };
 }
 
 async function setup(owner?: number) {

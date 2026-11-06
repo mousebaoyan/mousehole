@@ -1,12 +1,12 @@
 import { randomInt } from "node:crypto";
 import { html } from "hono/html";
-import type { Kysely, NotNull, Transaction } from "kysely";
+import { sql, type Kysely, type NotNull, type Transaction } from "kysely";
 import type { DB } from "../../../db/types.ts";
 import {
   restrictionOf,
   type Actor,
-  type Bot,
   type Scope,
+  type Token,
   type UserRef,
   type Viewer,
 } from "../../platform/access.ts";
@@ -77,10 +77,11 @@ export async function loginWithLink(token: string, client: Client) {
       .$narrowType<{ user_id: NotNull }>()
       .executeTakeFirst();
     if (!ticket) throw new AppError(400, "login_link_invalid", "登录链接无效或已过期，请重新获取");
-    const actor = {
+    const actor: Actor = {
       userId: ticket.user_id,
       operatorId: null,
       tokenId: null,
+      via: "web",
       ip: client.ip,
       userAgent: client.userAgent,
     };
@@ -199,19 +200,30 @@ async function memberOrThrow(ref: UserRef, who: string) {
   return member;
 }
 
-// Resolves a bot request to the viewer it acts as. The rules are in docs/api.md §2.3; checks
-// that depend on the route are in access.ts.
-export async function resolveBot(
-  token: string,
+// A member's token lapses after 90 days unused, as a login does, and is held to a rate that stops
+// an Agent run wild (design §6.7).
+const MEMBER_TOKEN_IDLE_MS = SESSION_TTL_MS;
+const MEMBER_TOKEN_PER_MINUTE = 60;
+
+function invalidToken() {
+  return new AppError(401, "invalid_token", "token 无效或已吊销");
+}
+
+// Resolves a request with a bearer token to the viewer it acts as: for a bot the member in
+// X-Act-As or else its own account (docs/api.md §2.3), for a member's token the member (§8.1).
+// Checks that depend on the route are in access.ts.
+export async function resolveToken(
+  secret: string,
   actAs: UserRef | null,
   operatorRef: UserRef | null,
-): Promise<{ viewer: Viewer; bot: Bot }> {
+): Promise<{ viewer: Viewer; token: Token }> {
   const row = await db
     .selectFrom("api_tokens")
-    .innerJoin("users", "users.id", "api_tokens.bot_user_id")
+    .innerJoin("users", "users.id", "api_tokens.user_id")
     .select([
       "api_tokens.id",
       "api_tokens.scopes",
+      "api_tokens.created_at",
       "api_tokens.last_used_at",
       "users.id as user_id",
       "users.role",
@@ -220,10 +232,27 @@ export async function resolveBot(
       "users.restriction",
       "users.restricted_until",
     ])
-    .where("api_tokens.token_hash", "=", hashToken(token))
+    .where("api_tokens.token_hash", "=", hashToken(secret))
     .where("api_tokens.revoked_at", "is", null)
     .executeTakeFirst();
-  if (!row) throw new AppError(401, "invalid_token", "token 无效或已吊销");
+  if (!row) throw invalidToken();
+  const own: Viewer = {
+    id: row.user_id,
+    role: row.role,
+    level: row.level,
+    member_status: row.member_status,
+    restriction: restrictionOf(row.restriction, row.restricted_until),
+  };
+  const bot = row.role === "bot";
+  if (!bot) {
+    if (Date.now() - (row.last_used_at ?? row.created_at).getTime() > MEMBER_TOKEN_IDLE_MS) {
+      throw invalidToken();
+    }
+    if (actAs || operatorRef) {
+      throw new AppError(403, "forbidden", "成员的令牌只能以本人的身份操作，不能带 X-Act-As");
+    }
+    rateLimit(`token:${row.id}`, MEMBER_TOKEN_PER_MINUTE, MINUTE);
+  }
 
   if (!row.last_used_at || Date.now() - row.last_used_at.getTime() > TOKEN_USE_WRITE_MS) {
     await db
@@ -232,6 +261,7 @@ export async function resolveBot(
       .where("id", "=", row.id)
       .execute();
   }
+  if (!bot) return { viewer: own, token: { kind: "member", id: row.id, scopes: row.scopes } };
 
   if (actAs && !operatorRef && (await getSettings()).bot.require_operator) {
     throw new AppError(
@@ -254,21 +284,16 @@ export async function resolveBot(
         member_status: member.member_status,
         restriction: restrictionOf(member.restriction, member.restricted_until),
       }
-    : {
-        id: row.user_id,
-        role: row.role,
-        level: row.level,
-        member_status: row.member_status,
-        restriction: restrictionOf(row.restriction, row.restricted_until),
-      };
-  const bot: Bot = {
-    tokenId: row.id,
+    : own;
+  const token: Token = {
+    kind: "bot",
+    id: row.id,
     scopes: row.scopes,
     actingAs: member !== null,
     operator: operator && { id: operator.id, role: operator.role },
     proxyAllowed: !member || member.allow_proxy || operator?.id === member.id,
   };
-  return { viewer, bot };
+  return { viewer, token };
 }
 
 export async function createBotToken(
@@ -284,7 +309,7 @@ export async function createBotToken(
         name: input.name,
         token_hash: hashToken(token),
         scopes: input.scopes,
-        bot_user_id: botUserId,
+        user_id: botUserId,
       })
       .returning("id")
       .executeTakeFirstOrThrow();
@@ -302,7 +327,7 @@ export async function listBotTokens() {
   return (
     db
       .selectFrom("api_tokens")
-      .innerJoin("users", "users.id", "api_tokens.bot_user_id")
+      .innerJoin("users", "users.id", "api_tokens.user_id")
       .select([
         "api_tokens.id",
         "api_tokens.name",
@@ -314,6 +339,7 @@ export async function listBotTokens() {
         "users.qq as bot_qq",
         "users.display_name as bot_name",
       ])
+      .where("users.role", "=", "bot")
       // A bot's account always has its QQ number; only the owner's has none.
       .$narrowType<{ bot_qq: NotNull }>()
       .orderBy("api_tokens.id", "desc")
@@ -328,10 +354,82 @@ export async function revokeBotToken(actor: Actor, id: number) {
       .set({ revoked_at: new Date() })
       .where("id", "=", id)
       .where("revoked_at", "is", null)
+      .where("user_id", "in", (eb) => eb.selectFrom("users").select("id").where("role", "=", "bot"))
       .executeTakeFirst();
     if (revoked.numUpdatedRows === 0n) throw new AppError(404, "not_found", "token 不存在或已吊销");
     await recordAudit(trx, actor, { action: "token.revoke", target_type: "token", target_id: id });
   });
+}
+
+// The tokens a member has given to their Agents and scripts that are still in force, the last
+// used first (design §6.7).
+export async function listMemberTokens(userId: number) {
+  const lastUse = sql<Date>`coalesce(last_used_at, created_at)`;
+  return db
+    .selectFrom("api_tokens")
+    .select(["id", "name", "scopes", "created_at", "last_used_at"])
+    .where("user_id", "=", userId)
+    .where("revoked_at", "is", null)
+    .where(lastUse, ">", new Date(Date.now() - MEMBER_TOKEN_IDLE_MS))
+    .orderBy(lastUse, "desc")
+    .orderBy("id", "desc")
+    .execute();
+}
+
+// A personal token, shown this once. Frozen accounts count as guests and the owner only runs the
+// system, so neither gives an Agent the run of the forum.
+export async function createMemberToken(
+  actor: Actor,
+  viewer: Viewer,
+  input: { name: string; scopes: Scope[] },
+) {
+  if (viewer.member_status !== "member" || viewer.role === "owner") {
+    throw new AppError(403, "forbidden", "冻结的账号和站长不能生成令牌");
+  }
+  return db.transaction().execute(async (trx) => {
+    const token = newToken();
+    const { id } = await trx
+      .insertInto("api_tokens")
+      .values({
+        name: input.name,
+        token_hash: hashToken(token),
+        scopes: input.scopes,
+        user_id: viewer.id,
+      })
+      .returning("id")
+      .executeTakeFirstOrThrow();
+    await recordAudit(trx, actor, {
+      action: "token.create",
+      target_type: "token",
+      target_id: id,
+      data: { name: input.name, scopes: input.scopes },
+    });
+    return { id, token };
+  });
+}
+
+export async function revokeMemberToken(actor: Actor, id: number) {
+  await db.transaction().execute(async (trx) => {
+    const revoked = await trx
+      .updateTable("api_tokens")
+      .set({ revoked_at: new Date() })
+      .where("id", "=", id)
+      .where("user_id", "=", actor.userId)
+      .where("revoked_at", "is", null)
+      .executeTakeFirst();
+    if (revoked.numUpdatedRows === 0n) throw new AppError(404, "not_found", "令牌不存在或已撤销");
+    await recordAudit(trx, actor, { action: "token.revoke", target_type: "token", target_id: id });
+  });
+}
+
+// A ban ends someone's tokens along with their logins (design §6.7).
+export async function revokeTokensOf(trx: Transaction<DB>, userId: number) {
+  await trx
+    .updateTable("api_tokens")
+    .set({ revoked_at: new Date() })
+    .where("user_id", "=", userId)
+    .where("revoked_at", "is", null)
+    .execute();
 }
 
 // Sends a 6-digit code to the member's QQ mailbox, after the code is stored and outside any
@@ -400,10 +498,11 @@ export async function loginWithEmailCode(qq: number, code: string, client: Clien
 
   return db.transaction().execute(async (trx) => {
     await trx.deleteFrom("email_codes").where("user_id", "=", member.id).execute();
-    const actor = {
+    const actor: Actor = {
       userId: member.id,
       operatorId: null,
       tokenId: null,
+      via: "web",
       ip: client.ip,
       userAgent: client.userAgent,
     };
@@ -476,10 +575,11 @@ export async function pollLoginCode(secret: string, client: Client) {
       .$narrowType<{ user_id: NotNull }>()
       .executeTakeFirst();
     if (!used) return null;
-    const actor = {
+    const actor: Actor = {
       userId: used.user_id,
       operatorId: null,
       tokenId: null,
+      via: "web",
       ip: client.ip,
       userAgent: client.userAgent,
     };

@@ -37,7 +37,7 @@ test("记网页上搜的词：每人每天每个词一次，不记 bot、站长�
   const member = (await createUser()).id;
   const signedIn = { headers: { ...from("10.0.0.9").headers, ...as(await login(member)).headers } };
   const { token } = await createBotToken(
-    { userId: member, operatorId: null, tokenId: null, ip: null, userAgent: null },
+    { userId: member, operatorId: null, tokenId: null, via: "web", ip: null, userAgent: null },
     { name: "插件", botQq: nextQq(), scopes: ["read"] },
   );
   const owner = await ownerSession();

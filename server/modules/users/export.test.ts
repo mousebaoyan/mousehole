@@ -73,6 +73,7 @@ describe("导出自己的内容", () => {
         userId: (await createUser("admin")).id,
         operatorId: null,
         tokenId: null,
+        via: "web",
         ip: null,
         userAgent: null,
       },

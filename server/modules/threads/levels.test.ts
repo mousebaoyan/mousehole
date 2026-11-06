@@ -21,7 +21,7 @@ beforeAll(async () => {
   const owner = await person(0, "admin");
   admin = owner.who;
   const { token } = await createBotToken(
-    { userId: owner.id, operatorId: null, tokenId: null, ip: null, userAgent: null },
+    { userId: owner.id, operatorId: null, tokenId: null, via: "web", ip: null, userAgent: null },
     { name: "插件", botQq: nextQq(), scopes: ["read", "act"] },
   );
   bot = { headers: { authorization: `Bearer ${token}` } };

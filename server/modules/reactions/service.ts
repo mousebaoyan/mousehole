@@ -60,7 +60,7 @@ export async function react(
         .where("user_id", "=", viewer.id)
         .execute();
     } else {
-      const via = archived ? "qq" : actor.tokenId === null ? "web" : "bot";
+      const via = archived ? "qq" : actor.via;
       await trx
         .insertInto("reactions")
         .values({ post_id: postId, user_id: viewer.id, emoji, created_at: at, via })
@@ -136,7 +136,7 @@ export async function setBoost(
     .where("id", "=", post.thread_id)
     .executeTakeFirstOrThrow();
   const anonymous = writesAnonymously(thread, viewer.id);
-  const via = archived ? "qq" : actor.tokenId === null ? "web" : "bot";
+  const via = archived ? "qq" : actor.via;
   const row = await db.transaction().execute(async (trx) => {
     const { replaced, ...saved } = await trx
       .insertInto("boosts")

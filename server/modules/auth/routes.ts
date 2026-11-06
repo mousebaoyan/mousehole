@@ -27,7 +27,7 @@ import {
   loginWithLink,
   pollLoginCode,
   requestEmailCode,
-  resolveBot,
+  resolveToken,
   resolveSession,
   SESSION_TTL_MS,
 } from "./service.ts";
@@ -75,10 +75,10 @@ export function asVisitor(request: Request, visitor: Visitor) {
   return request;
 }
 
-// Runs for every request, pages included. Bots authenticate with a bearer token; people with
-// the session cookie, whose sliding renewal also refreshes the cookie.
+// Runs for every request, pages included. Bots and members' Agents authenticate with a bearer
+// token; people with the session cookie, whose sliding renewal also refreshes the cookie.
 export const authenticate = createMiddleware<AppEnv>(async (c, next) => {
-  c.set("bot", null);
+  c.set("token", null);
   const known = visitors.get(c.req.raw);
   if (known) {
     c.set("viewer", known.viewer);
@@ -87,14 +87,14 @@ export const authenticate = createMiddleware<AppEnv>(async (c, next) => {
   }
   const bearer = bearerToken(c);
   if (bearer) {
-    const { viewer, bot } = await resolveBot(
+    const { viewer, token } = await resolveToken(
       bearer,
       userRefHeader(c, "X-Act-As"),
       userRefHeader(c, "X-Operator"),
     );
     c.set("viewer", viewer);
     c.set("sessionId", null);
-    c.set("bot", bot);
+    c.set("token", token);
     return next();
   }
 
@@ -132,7 +132,7 @@ const Qq = z.number().int().min(10000).max(99_999_999_999);
 // Login on someone's behalf only makes sense for the member in X-Act-As.
 function requireActAs(c: Context<AppEnv>) {
   const viewer = authorize(c, "auth");
-  if (!c.var.bot?.actingAs) {
+  if (c.var.token?.kind !== "bot" || !c.var.token.actingAs) {
     throw new AppError(400, "act_as_required", "需要用 X-Act-As 指定要登录的成员");
   }
   return viewer;

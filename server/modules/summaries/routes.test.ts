@@ -21,7 +21,7 @@ beforeAll(async () => {
   const adminWho = as(await login(admin.id));
   await api.boards.$post({ json: { slug: "sum", name: "总结" } }, adminWho);
   const { token } = await createBotToken(
-    { userId: admin.id, operatorId: null, tokenId: null, ip: null, userAgent: null },
+    { userId: admin.id, operatorId: null, tokenId: null, via: "web", ip: null, userAgent: null },
     { name: "插件", botQq: nextQq(), scopes: ["read", "moderate"] },
   );
   bot = { headers: { authorization: `Bearer ${token}` } };
