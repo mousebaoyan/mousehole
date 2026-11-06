@@ -21,6 +21,7 @@ export default [
     route("login", "routes/login.tsx"),
     route("login/link", "routes/login-link.tsx"),
     route("unsubscribe", "routes/unsubscribe.tsx"),
+    route("oauth/authorize", "routes/oauth-authorize.tsx"),
   ]),
   // For fetchers on the forum's pages.
   route("new", "routes/new-thread.ts"),
@@ -55,5 +56,6 @@ export default [
     route("site", "routes/admin/site.tsx"),
     route("email", "routes/admin/email.tsx"),
     route("tokens", "routes/admin/tokens.tsx"),
+    route("apps", "routes/admin/apps.tsx"),
   ]),
 ] satisfies RouteConfig;

@@ -83,6 +83,10 @@ const MeSchema = z
     level: z.number(),
     qq: z.number().nullable().openapi({ description: "站长账号没有 QQ 号，为 null" }),
     member_status: z.string(),
+    restriction: z
+      .object({ type: z.enum(["mute", "ban"]), until: z.number().nullable() })
+      .nullable()
+      .openapi({ description: "禁言（mute）或封禁（ban）和到期时间，没有为 null" }),
     activated: z.boolean(),
     coins: z.number().openapi({ description: "鼠币余额" }),
     counts: z
@@ -1054,7 +1058,13 @@ export const usersRoutes = createRouter()
         countUserBadges(id),
       ]);
       return c.json(
-        { ...profile, activated: activated_at !== null, coins, counts: { ...mine, badges } },
+        {
+          ...profile,
+          restriction: restrictionJson(viewer.restriction),
+          activated: activated_at !== null,
+          coins,
+          counts: { ...mine, badges },
+        },
         200,
       );
     },

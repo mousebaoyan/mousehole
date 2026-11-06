@@ -1,4 +1,5 @@
 import {
+  AppWindow,
   ArrowLeft,
   Award,
   Bot,
@@ -65,6 +66,7 @@ const pages: {
   { to: "/admin/groups", label: "QQ 群", icon: UsersRound, from: "owner" },
   { to: "/admin/email", label: "邮件", icon: Mail, from: "owner" },
   { to: "/admin/tokens", label: "bot", icon: Bot, from: "owner" },
+  { to: "/admin/apps", label: "应用", icon: AppWindow, from: "owner" },
   { to: "/admin/logs", label: "操作日志", icon: ScrollText, from: "owner" },
 ];
 

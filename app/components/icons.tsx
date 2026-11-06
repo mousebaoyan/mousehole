@@ -36,6 +36,7 @@ function icon(node: IconNode) {
 
 export type LucideIcon = ReturnType<typeof icon>;
 
+export const AppWindow = icon(lucide.AppWindow);
 export const ArrowDown = icon(lucide.ArrowDown);
 export const ArrowLeft = icon(lucide.ArrowLeft);
 export const ArrowRight = icon(lucide.ArrowRight);
