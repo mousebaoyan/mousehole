@@ -401,7 +401,7 @@ token 由站长在后台创建，只显示一次。每个 token 绑定一个 bot
 | DELETE | `/admin/tokens/{id}` | 吊销 | 站长，只能在网页上操作 |
 | GET | `/admin/apps` | 站长登记的自家应用（第 8.3 节），每个带 `id`、`client_id`、`name`、`redirect_uris`、`scopes`（能要的范围）、`tokens`（有效的令牌数）、`last_used_at`、`disabled`。Agent 注册的应用不在这里，成员在设置里管自己授权过的 | 站长，只能在网页上操作 |
 | POST | `/admin/apps` | 登记自家应用：`{ name, redirect_uris, scopes }`，`redirect_uris` 1–5 个，都是 https，本地开发可以是本机的 http 地址；返回 `{ id, client_id, client_secret }`，密钥只出现这一次 | 站长，只能在网页上操作 |
-| PATCH | `/admin/apps/{id}` | 只改带了的字段：`name`、`redirect_uris`、`scopes`、`disabled`。停用后它的令牌都失效，也不能再授权 | 站长，只能在网页上操作 |
+| PATCH | `/admin/apps/{id}` | 只改带了的字段：`name`、`redirect_uris`、`scopes`、`disabled`。停用后它的令牌都失效，也不能再授权；再启用时大家重新登录 | 站长，只能在网页上操作 |
 | POST | `/admin/apps/{id}/secret` | 给自家应用换一个密钥，旧的立即失效；返回 `{ client_secret }` | 站长，只能在网页上操作 |
 
 审核通过或隐藏内容，用 `PATCH /threads/{id}` 或 `PATCH /posts/{id}` 修改 `status`：待审核的改成 `visible` 是通过，改成 `hidden` 是不通过；公开的可以隐藏，隐藏的可以恢复。内容公开时才算进计数、列表和搜索，第一次公开时产生 `thread.created` 或 `post.created`，相关的人收到通知；隐藏时从计数里扣掉，产生带 `reason` 的 `post.deleted`。每次改动都通知作者，记操作日志。
@@ -742,7 +742,7 @@ OAuth 的几个地址不在 `/api/v1` 下，请求和返回按 OAuth 的规范�
 | `prompt` | `none`：只用于自家应用，没登录鼠洞时不去登录页，直接带着 `error=login_required` 跳回 |
 
 - `client_id`、`redirect_uri` 不对，或者应用已停用时，只在页面上报错，不跳回去。其余错误按 OAuth 的格式带 `error` 跳回 `redirect_uri`。
-- 没登录鼠洞的先去登录页，登录后回到授权页。
+- 没登录鼠洞的先去登录页（`/login?next=<授权页的地址>`），用口令或 QQ 邮箱登录后回到授权页。链接登录的链接在手机 QQ 里打开，回不到原来的浏览器。
 - 自家应用直接签发授权码；Agent 的应用显示授权页，本人可以去掉 `act`，然后允许或拒绝，拒绝时带 `error=access_denied` 跳回。冻结的账号和站长只能授权自家应用，授权 Agent 的应用时页面上说明原因。
 - 跳回时带 `code`（5 分钟内有效，只能用一次）、`state` 和 `iss`（RFC 9207）。`iss` 和元数据的 `issuer` 一字不差，都是 `https://bbs.mousebaoyan.cn`，末尾没有斜杠：Codex 会核对，对不上就拒绝。
 
@@ -751,7 +751,7 @@ OAuth 的几个地址不在 `/api/v1` 下，请求和返回按 OAuth 的规范�
 | 方法 | 路径 | 说明 | 权限 |
 | --- | --- | --- | --- |
 | GET | `/oauth/authorize` | 校验授权请求，参数同上，返回授权页要显示的：`app`（`{ name, first_party }`）、`redirect_host`（回调地址的主机名）、`local`（回调是不是本机）、`scopes`（请求的范围）、`level`（自己的等级，提示发内容要 L3）。`client_id`、`redirect_uri` 不对或应用已停用返回 `400 invalid_client` | 已登录，只能在网页上 |
-| POST | `/oauth/authorize` | 同样的参数，加 `approve`（是否允许）和 `scopes`（本人选定的范围，只能比请求的少）；返回 `{ redirect_url }`：带着授权码或错误的回跳地址。自家应用的授权页加载时直接调用它 | 已登录，只能在网页上 |
+| POST | `/oauth/authorize` | 同样的参数，加 `approve`（是否允许）和 `scopes`（本人选定的范围，只能比请求的少）；返回 `{ redirect_url }`：带着授权码或错误的回跳地址。自家应用的授权页加载时直接调用它。没登录时，带 `prompt=none` 的返回带着 `error=login_required` 的地址，不带的返回 `401`，授权页转去登录页 | 只能在网页上 |
 
 **换令牌**：应用的服务端或程序调 `POST /oauth/token`，`application/x-www-form-urlencoded`：
 

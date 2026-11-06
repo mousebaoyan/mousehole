@@ -42,9 +42,9 @@
   - 每个 bot token 绑定一个 `bot` 角色的账号，创建 token 时按 bot 的 QQ 号找到或新建，角色锁定；登录过的账号不能用作 bot。
   - 成员的令牌：`client_id` 指向 `oauth_clients`，应用授权的才有；`name` 在个人令牌是自己起的名字，在应用的令牌是授权时的应用名。`last_used_at`（没用过看 `created_at`）早于 90 天前就失效，撤销记 `revoked_at`。失效的行不删，操作日志和幂等键引用着它们。自家应用的令牌每人一个：签发新的时，把这个人在这个应用的旧令牌标为撤销。设置页按部分索引 `(user_id) WHERE revoked_at IS NULL` 查自己的令牌。
 - `oauth_clients` 是应用，`client_id` 都由论坛随机生成。有 `secret_hash` 的是自家应用，没有的是 Agent 注册的。
-  - 自家应用由站长登记：`secret_hash` 存密钥的 SHA-256，`redirect_uris` 和 `scopes` 是登记的；停用记 `disabled_at`，它的令牌随即失效。
+  - 自家应用由站长登记：`secret_hash` 存密钥的 SHA-256，`redirect_uris` 和 `scopes` 是登记的；停用记 `disabled_at`，同时把它的令牌都标为撤销。
   - Agent 注册时建行，`name`、`redirect_uris` 是它报的。一天内没换到令牌的，由定时任务删除。
-- `oauth_codes` 是授权码：只存 SHA-256，带应用、本人、回调地址、范围和 `code_challenge`，5 分钟过期。换令牌时在同一条 `DELETE … RETURNING` 里取出，用过就没了，并发换也只有一次成功；过期的由定时任务清理。
+- `oauth_codes` 是授权码：只存 SHA-256，带应用、本人、回调地址、范围和 `code_challenge`，5 分钟过期。换令牌时在同一条 `DELETE … RETURNING` 里取出，用过就没了，并发换也只有一次成功；封禁时删掉这个人的，过期的由定时任务清理。
 - 通过成员的令牌写的楼层、表情回应和短评，`via` 为 `agent`：`posts`、`reactions`、`boosts` 的 CHECK 都加上它。
 - 幂等：收到带键的请求，先插入一行占位（`status` 为 NULL）再执行，成功了回填状态码和响应；出错（4xx、5xx）不算结果，删掉占位让重试重新执行。回填在业务事务提交之后，两者之间进程崩溃的话，占位超过 5 分钟视为中断，重试会再执行一次；从群消息创建内容的请求另有 `409 source_exists` 兜底。超过 7 天的键当作新键，旧行由定时任务清理。
 

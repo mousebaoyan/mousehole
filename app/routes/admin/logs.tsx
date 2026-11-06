@@ -18,6 +18,7 @@ const ACTIONS: Record<string, string> = {
   "auth.session_end": "让设备下线",
   "auth.code_confirm": "确认登录口令",
   "auth.link_issue": "签发登录链接",
+  "auth.authorize": "登录应用",
   "thread.create": "发帖",
   "thread.update": "修改帖子",
   "thread.delete": "删除帖子",
@@ -93,6 +94,9 @@ const ACTIONS: Record<string, string> = {
   "settings.update": "修改站点设置",
   "token.create": "创建 token",
   "token.revoke": "吊销 token",
+  "app.create": "登记应用",
+  "app.update": "修改应用",
+  "app.secret": "更换应用密钥",
 };
 
 export async function loader({ request, context }: Route.LoaderArgs) {

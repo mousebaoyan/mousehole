@@ -202,7 +202,7 @@ async function memberOrThrow(ref: UserRef, who: string) {
 
 // A member's token lapses after 90 days unused, as a login does, and is held to a rate that stops
 // an Agent run wild (design §6.7).
-const MEMBER_TOKEN_IDLE_MS = SESSION_TTL_MS;
+export const MEMBER_TOKEN_IDLE_MS = SESSION_TTL_MS;
 const MEMBER_TOKEN_PER_MINUTE = 60;
 
 function invalidToken() {
@@ -422,7 +422,8 @@ export async function revokeMemberToken(actor: Actor, id: number) {
   });
 }
 
-// A ban ends someone's tokens along with their logins (design §6.7).
+// A ban ends someone's tokens along with their logins (design §6.7), and the codes an app has yet
+// to exchange for one.
 export async function revokeTokensOf(trx: Transaction<DB>, userId: number) {
   await trx
     .updateTable("api_tokens")
@@ -430,6 +431,7 @@ export async function revokeTokensOf(trx: Transaction<DB>, userId: number) {
     .where("user_id", "=", userId)
     .where("revoked_at", "is", null)
     .execute();
+  await trx.deleteFrom("oauth_codes").where("user_id", "=", userId).execute();
 }
 
 // Sends a 6-digit code to the member's QQ mailbox, after the code is stored and outside any
@@ -630,10 +632,12 @@ export async function issueLinkFor(actor: Actor) {
   });
 }
 
-// Daily: sessions, login codes and links, and email codes past their time.
+// Daily: sessions, login codes and links, email codes and apps' authorization codes past their
+// time.
 export async function clearExpiredLogins() {
   const now = new Date();
   await db.deleteFrom("sessions").where("expires_at", "<", now).execute();
   await db.deleteFrom("login_tickets").where("expires_at", "<", now).execute();
   await db.deleteFrom("email_codes").where("expires_at", "<", now).execute();
+  await db.deleteFrom("oauth_codes").where("expires_at", "<", now).execute();
 }
