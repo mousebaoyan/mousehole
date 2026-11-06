@@ -88,7 +88,7 @@ export const summariesRoutes = createRouter()
     }),
     async (c) => {
       const viewer = authorize(c, "read");
-      const source = await summarySource(c.req.valid("param").thread, reachOf(viewer, c.var.bot));
+      const source = await summarySource(c.req.valid("param").thread, reachOf(viewer, c.var.token));
       return c.json(source, 200);
     },
   )

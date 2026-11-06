@@ -2,14 +2,15 @@ import { OpenAPIHono, z } from "@hono/zod-openapi";
 import type { Context } from "hono";
 import { HTTPException } from "hono/http-exception";
 import {
+  assertAgentMayPost,
   assertNotMuted,
   checkOwner,
   checkPermission,
   reachOf,
   type Reader,
   type Actor,
-  type Bot,
   type Scope,
+  type Token,
   type Viewer,
 } from "./access.ts";
 import { AppError } from "./errors.ts";
@@ -19,7 +20,7 @@ import { describeIssue } from "./validation.ts";
 z.config({ ...z.locales.zhCN(), customError: describeIssue });
 
 export type AppEnv = {
-  Variables: { viewer: Viewer | null; sessionId: number | null; bot: Bot | null };
+  Variables: { viewer: Viewer | null; sessionId: number | null; token: Token | null };
 };
 
 export const ErrorSchema = z
@@ -70,18 +71,19 @@ export const UnixSecondsParam = z.coerce.number().int().min(0).max(LAST_SECOND);
 
 // The viewer, once they may do what the route needs; see access.ts for the rules.
 export function authorize(c: Context<AppEnv>, need: Scope) {
-  return checkPermission(c.var.viewer, c.var.bot, need);
+  return checkPermission(c.var.viewer, c.var.token, need);
 }
 
 export function authorizeOwner(c: Context<AppEnv>) {
-  return checkOwner(c.var.viewer, c.var.bot);
+  return checkOwner(c.var.viewer, c.var.token);
 }
 
 // For putting words and pictures up, which muted members can't: posts, edits, reactions,
 // boosts, uploads. `archived` as for checkPermission.
 export function authorizePosting(c: Context<AppEnv>, archived = false) {
-  const viewer = checkPermission(c.var.viewer, c.var.bot, "act", archived);
+  const viewer = checkPermission(c.var.viewer, c.var.token, "act", archived);
   assertNotMuted(viewer);
+  assertAgentMayPost(viewer, c.var.token);
   return viewer;
 }
 
@@ -89,7 +91,7 @@ export function authorizePosting(c: Context<AppEnv>, archived = false) {
 // editing someone else's post, say.
 export function can(c: Context<AppEnv>, need: Scope) {
   try {
-    checkPermission(c.var.viewer, c.var.bot, need);
+    checkPermission(c.var.viewer, c.var.token, need);
     return true;
   } catch (error) {
     if (error instanceof AppError) return false;
@@ -98,13 +100,13 @@ export function can(c: Context<AppEnv>, need: Scope) {
 }
 
 export function readerOf(c: Context<AppEnv>): Reader {
-  const { viewer, bot } = c.var;
-  return { reach: reachOf(viewer, bot), id: viewer?.id ?? null, staff: can(c, "moderate") };
+  const { viewer, token } = c.var;
+  return { reach: reachOf(viewer, token), id: viewer?.id ?? null, staff: can(c, "moderate") };
 }
 
-// For signed-in people only: login devices, bot tokens.
+// For signed-in people only: login devices, tokens, drafts.
 export function requireWeb(c: Context<AppEnv>) {
-  if (c.var.bot) throw new AppError(403, "forbidden", "只能在网页上操作");
+  if (c.var.token) throw new AppError(403, "forbidden", "只能在网页上操作");
   if (!c.var.viewer) throw new AppError(401, "unauthorized", "请先登录");
   return c.var.viewer;
 }
@@ -114,11 +116,12 @@ export function clientIp(c: Context) {
 }
 
 export function actorOf(c: Context<AppEnv>, viewer: Viewer): Actor {
-  const bot = c.var.bot;
+  const { token } = c.var;
   return {
     userId: viewer.id,
-    operatorId: bot?.operator?.id ?? null,
-    tokenId: bot?.tokenId ?? null,
+    operatorId: token?.kind === "bot" ? (token.operator?.id ?? null) : null,
+    tokenId: token?.id ?? null,
+    via: !token ? "web" : token.kind === "bot" ? "bot" : "agent",
     ip: clientIp(c),
     userAgent: c.req.header("user-agent") ?? null,
   };

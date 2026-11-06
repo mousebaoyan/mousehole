@@ -90,7 +90,7 @@
 
 表：`reactions`、`boosts`、`thread_users`、`user_follows`、`endorsements`、`notifications`、`mail_queue`。
 
-- 表情回应每人每条一个，主键 `(post_id, user_id)`，换表情就是覆盖。`via` 和楼层的一样记从哪来（`web`、`bot`、`qq`），换表情时跟着换，数据页按它分来源；加这一列以前的，没登录过的人留的算 `qq`，其余算 `web`。每个表情都算一次赞：`posts.like_count` 是总数，`posts.reactions` 是各表情的数量，都和写入在同一个事务里更新。
+- 表情回应每人每条一个，主键 `(post_id, user_id)`，换表情就是覆盖。`via` 和楼层的一样记从哪来（`web`、`bot`、`qq`、`agent`），换表情时跟着换，数据页按它分来源；加这一列以前的，没登录过的人留的算 `qq`，其余算 `web`。每个表情都算一次赞：`posts.like_count` 是总数，`posts.reactions` 是各表情的数量，都和写入在同一个事务里更新。
 - 短评每人每层一条，`UNIQUE (post_id, user_id)`，修改就是覆盖，排序位置不变。`via` 同表情回应，修改时跟着换，数据页的活跃用户按它只算网页上写的；加这一列以前的，bot 留的算 `qq`（插件收录短评都带来源消息），其余算 `web`。字数（16 个字，emoji 算一个）由应用按字素计数，库里不设长度约束。
 - 短评数冗余在 `posts.boost_count`，楼层列表每层取前 6 条短评，其余点开再取。删除短评是真删除，它的举报跟着删掉。
 

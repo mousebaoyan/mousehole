@@ -330,7 +330,7 @@ describe("邮件", () => {
     const t = await thread(author.who);
     await clear(author, other);
     const { token } = await createBotToken(
-      { userId: author.id, operatorId: null, tokenId: null, ip: null, userAgent: null },
+      { userId: author.id, operatorId: null, tokenId: null, via: "web", ip: null, userAgent: null },
       { name: "插件", botQq: nextQq(), scopes: ["read", "act"] },
     );
     const asker = await createUser();

@@ -160,7 +160,7 @@ export const sponsorsRoutes = createRouter()
       return c.json(
         {
           payee: payee === null ? null : user(payee),
-          codes: isMember(c.var.viewer, c.var.bot) ? codes : null,
+          codes: isMember(c.var.viewer, c.var.token) ? codes : null,
           year,
         },
         200,
@@ -189,7 +189,7 @@ export const sponsorsRoutes = createRouter()
       },
     }),
     async (c) => {
-      const guest = !isMember(c.var.viewer, c.var.bot);
+      const guest = !isMember(c.var.viewer, c.var.token);
       const page = await listThanks(guest, c.req.valid("query").cursor);
       const user = await userBriefs(page.rows.map((r) => r.user_id));
       return c.json(
@@ -501,7 +501,7 @@ export const sponsorsRoutes = createRouter()
 // (design §8.21). Pages name it by what it holds (codeImagePath), and a name for a code since
 // replaced finds nothing, so caching it a while is safe.
 export async function serveSponsorCode(c: Context<AppEnv>) {
-  if (!isMember(c.var.viewer, c.var.bot)) {
+  if (!isMember(c.var.viewer, c.var.token)) {
     throw new AppError(403, "forbidden", "收款码仅成员可见");
   }
   const method = METHODS.find((m) => c.req.path === `/sponsor/${m}.png`);

@@ -387,9 +387,11 @@ export async function recountPeopleReached() {
 }
 
 // Posting, reacting or leaving a boost is being active the day it is done, also when it comes from
-// the groups or a bot; for the stats, what comes through a bot was done in the groups.
+// the groups or a bot; for the stats, what comes through a bot was done in the groups. What an
+// Agent does isn't the member being active (design §10.1).
 export async function countActive(trx: Transaction<DB>, actor: Actor, at: RawBuilder<Date>) {
-  const where = actor.tokenId === null ? "site" : "qq";
+  if (actor.via === "agent") return;
+  const where = actor.via === "web" ? "site" : "qq";
   if ((await recordDay(trx, actor.userId, where, undefined, at)) === 0) return;
   await trx
     .updateTable("users")

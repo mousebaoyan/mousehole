@@ -52,7 +52,7 @@ export const suggestionRoutes = createRouter()
       await suggestChange(
         actorOf(c, viewer),
         viewer,
-        reachOf(viewer, c.var.bot),
+        reachOf(viewer, c.var.token),
         c.req.valid("param").id,
         c.req.valid("json"),
       );

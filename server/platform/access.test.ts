@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { checkPermission, type Bot, type Scope, type Viewer } from "./access.ts";
+import { checkPermission, type Scope, type Token, type Viewer } from "./access.ts";
 import { AppError } from "./errors.ts";
 
 const member: Viewer = {
@@ -24,9 +24,10 @@ const botAccount: Viewer = {
   restriction: null,
 };
 
-function bot(change: Partial<Bot> = {}): Bot {
+function bot(change: Partial<Extract<Token, { kind: "bot" }>> = {}): Token {
   return {
-    tokenId: 1,
+    kind: "bot",
+    id: 1,
     scopes: ["read", "act", "moderate", "admin"],
     actingAs: true,
     operator: null,
@@ -35,7 +36,7 @@ function bot(change: Partial<Bot> = {}): Bot {
   };
 }
 
-function code(viewer: Viewer | null, b: Bot | null, need: Scope, archived = false) {
+function code(viewer: Viewer | null, b: Token | null, need: Scope, archived = false) {
   try {
     checkPermission(viewer, b, need, archived);
     return "ok";

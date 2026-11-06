@@ -20,7 +20,7 @@ beforeAll(async () => {
   const { id } = await createUser("admin");
   admin = as(await login(id));
   const { token } = await createBotToken(
-    { userId: id, operatorId: null, tokenId: null, ip: null, userAgent: null },
+    { userId: id, operatorId: null, tokenId: null, via: "web", ip: null, userAgent: null },
     { name: "插件", botQq: nextQq(), scopes: ["read", "act", "sync"] },
   );
   bot = { headers: { authorization: `Bearer ${token}` } };

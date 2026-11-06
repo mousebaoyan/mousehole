@@ -72,7 +72,7 @@ export const reactionsRoutes = createRouter()
       await react(
         actorOf(c, viewer),
         viewer,
-        reachOf(viewer, c.var.bot),
+        reachOf(viewer, c.var.token),
         c.req.valid("param").id,
         emoji,
         source && { source, created_at },
@@ -91,7 +91,7 @@ export const reactionsRoutes = createRouter()
     async (c) => {
       const viewer = authorize(c, "act");
       const id = c.req.valid("param").id;
-      await react(actorOf(c, viewer), viewer, reachOf(viewer, c.var.bot), id, null);
+      await react(actorOf(c, viewer), viewer, reachOf(viewer, c.var.token), id, null);
       return c.body(null, 204);
     },
   )
@@ -126,7 +126,7 @@ export const reactionsRoutes = createRouter()
     }),
     async (c) => {
       const { emoji, cursor } = c.req.valid("query");
-      const reach = reachOf(c.var.viewer, c.var.bot);
+      const reach = reachOf(c.var.viewer, c.var.token);
       const page = await listReactions(reach, c.req.valid("param").id, emoji, cursor);
       return c.json(
         {
@@ -167,7 +167,7 @@ export const reactionsRoutes = createRouter()
     async (c) => {
       const { body, source, created_at } = c.req.valid("json");
       const viewer = authorizePosting(c, source !== undefined);
-      const reach = reachOf(viewer, c.var.bot);
+      const reach = reachOf(viewer, c.var.token);
       const boost = await setBoost(
         actorOf(c, viewer),
         viewer,
@@ -208,7 +208,7 @@ export const reactionsRoutes = createRouter()
       },
     }),
     async (c) => {
-      const reach = reachOf(c.var.viewer, c.var.bot);
+      const reach = reachOf(c.var.viewer, c.var.token);
       const boosts = await listBoosts(reach, c.req.valid("param").id);
       return c.json({ items: boosts.map(boostJson) }, 200);
     },

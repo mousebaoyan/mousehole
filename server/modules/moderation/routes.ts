@@ -167,7 +167,7 @@ export const moderationRoutes = createRouter()
     }),
     async (c) => {
       const viewer = authorizePosting(c);
-      const reach = reachOf(viewer, c.var.bot);
+      const reach = reachOf(viewer, c.var.token);
       await reportPost(
         actorOf(c, viewer),
         viewer,
@@ -188,7 +188,7 @@ export const moderationRoutes = createRouter()
     }),
     async (c) => {
       const viewer = authorizePosting(c);
-      const reach = reachOf(viewer, c.var.bot);
+      const reach = reachOf(viewer, c.var.token);
       await reportBoost(
         actorOf(c, viewer),
         viewer,
@@ -280,7 +280,7 @@ export const moderationRoutes = createRouter()
     }),
     async (c) => {
       const viewer = authorizePosting(c);
-      await flagArchived(viewer, reachOf(viewer, c.var.bot), c.req.valid("param").id, true);
+      await flagArchived(viewer, reachOf(viewer, c.var.token), c.req.valid("param").id, true);
       return c.body(null, 204);
     },
   )
@@ -294,7 +294,7 @@ export const moderationRoutes = createRouter()
     }),
     async (c) => {
       const viewer = authorizePosting(c);
-      await flagArchived(viewer, reachOf(viewer, c.var.bot), c.req.valid("param").id, false);
+      await flagArchived(viewer, reachOf(viewer, c.var.token), c.req.valid("param").id, false);
       return c.body(null, 204);
     },
   )

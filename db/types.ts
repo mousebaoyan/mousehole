@@ -31,7 +31,6 @@ export interface ActiveDays {
 }
 
 export interface ApiTokens {
-  bot_user_id: number;
   created_at: Generated<Timestamp>;
   id: Generated<number>;
   last_used_at: Timestamp | null;
@@ -39,6 +38,7 @@ export interface ApiTokens {
   revoked_at: Timestamp | null;
   scopes: string[];
   token_hash: Buffer;
+  user_id: number;
 }
 
 export interface ArchiveFlags {

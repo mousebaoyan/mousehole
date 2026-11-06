@@ -6,7 +6,7 @@ import { auditRoutes } from "./modules/audit/routes.ts";
 import { authenticate, authRoutes, bearerToken } from "./modules/auth/routes.ts";
 import { badgesRoutes } from "./modules/badges/routes.ts";
 import { coinsRoutes } from "./modules/coins/routes.ts";
-import { tokenRoutes } from "./modules/auth/token-routes.ts";
+import { memberTokenRoutes, tokenRoutes } from "./modules/auth/token-routes.ts";
 import { boardsRoutes } from "./modules/boards/routes.ts";
 import { draftsRoutes } from "./modules/drafts/routes.ts";
 import { eventsRoutes } from "./modules/events/routes.ts";
@@ -40,6 +40,7 @@ import { SITE_NAME } from "./platform/site.ts";
 const api = createRouter()
   .route("/", authRoutes)
   .route("/", tokenRoutes)
+  .route("/", memberTokenRoutes)
   .route("/", usersRoutes)
   .route("/", levelsRoutes)
   .route("/", badgesRoutes)
