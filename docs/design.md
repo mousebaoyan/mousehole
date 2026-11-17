@@ -1031,7 +1031,7 @@ QQ 群的 2000 人规模、服务器、域名和 bot 用的模型都要花钱，
 - **客户端 IP**：只认 OpenResty 设置的 `X-Real-IP`，不信任请求自带的 `X-Forwarded-For`。限流和登录记录都依赖它。
 - **限流**：分两层。OpenResty 按 IP 限制连接数和请求速率，先挡掉刷接口和采集；应用里再细分：申请口令和邮件验证码按 IP 和 QQ 号；发帖和回复按用户（每人每小时 20 个帖子、每 10 分钟 60 条回复），bot 按 token（每个 token 代所有人合计每分钟 120 次），挡住刷屏和失控的插件。
 - **请求大小**：JSON 请求体默认不超过 1MB，成员全量同步不超过 4MB，图片不超过 20MB；gzip 请求体按解压后的大小计算，防止压缩炸弹。慢速连接由 OpenResty 和 Node 的超时一起断开。
-- **响应头**（`platform/security-headers.ts`）：HSTS；CSP 只允许本站和 Umami（访问统计）的脚本，内联脚本带 nonce，样式允许内联（组件会设 `style` 属性），图片只能来自本站；`X-Content-Type-Options: nosniff`；`Referrer-Policy: strict-origin-when-cross-origin`；`frame-ancestors 'none'` 防止页面被嵌入别的网站做点击劫持。本地开发走 HTTP，不发 CSP 和 HSTS，免得挡住 Vite 热更新的内联脚本。
+- **响应头**（`platform/security-headers.ts`）：HSTS；CSP 只允许本站和 Umami（访问统计）的脚本，内联脚本带 nonce，样式允许内联（组件会设 `style` 属性），图片只能来自本站；`X-Content-Type-Options: nosniff`；`Referrer-Policy: strict-origin-when-cross-origin`；`Cross-Origin-Resource-Policy: same-site`，同一个域名下的自家网站（比如鼠钟）能显示头像，别的网站不能嵌入；`frame-ancestors 'none'` 防止页面被嵌入别的网站做点击劫持。本地开发走 HTTP，不发 CSP 和 HSTS，免得挡住 Vite 热更新的内联脚本。
 - **容器**：用非 root 用户运行，根文件系统只读，只有图片目录和临时目录可写；开启 `no-new-privileges`，去掉不需要的 capabilities。
 - **依赖和 CI**：pnpm 只安装发布满 1 天的版本，避开刚被投毒的包；只有白名单里的依赖能执行安装脚本。CI 按锁文件安装。GitHub Actions 按最小权限运行，第三方 Action 固定到具体的提交。仓库开启了 secret 扫描、推送拦截、依赖漏洞提醒和 Dependabot 安全更新：依赖出了已知漏洞，Dependabot 自动提升级的 PR，照常过 CI、审核后合并。
 - **大流量攻击**：攻击流量很容易占满 25Mbps。应急办法是把域名临时切到 Cloudflare 代理，防火墙只放行 Cloudflare 的 IP 段，攻击过去后再切回仅 DNS。
