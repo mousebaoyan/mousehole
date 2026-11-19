@@ -14,6 +14,8 @@ import { cn } from "~/cn";
 import {
   ChevronDown,
   ChevronUp,
+  CircleCheck,
+  Lightbulb,
   Maximize2,
   Minimize2,
   PenSquare,
@@ -33,6 +35,7 @@ import { Input } from "~/components/ui/input";
 import { Select } from "~/components/ui/select";
 import { useMe, usePostableBoards, useTags } from "~/forum";
 import { useHydrated } from "~/hydrated";
+import type { loader as similarLoader } from "~/routes/similar";
 import { fromWallClock, unixNow, wallClock } from "~/time";
 import { levelName, STAFF } from "../../server/platform/site.ts";
 import { QUESTION_COST } from "../../server/modules/coins/rules.ts";
@@ -755,7 +758,13 @@ function Composer({
                 the rest scrolls when a poll's options or lottery's prizes leave the editor too
                 little room. */}
             <div className="flex min-h-0 flex-1 flex-col max-sm:overflow-y-auto max-sm:overscroll-contain">
-              {target.mode === "thread" && <ThreadFields content={content} onChange={onChange} />}
+              {target.mode === "thread" && (
+                <ThreadFields
+                  content={content}
+                  onChange={onChange}
+                  onLeave={() => onCollapse(true)}
+                />
+              )}
               {withPoll && <PollSettings poll={content.poll} onChange={setPoll} />}
               {withLottery && <LotterySettings lottery={content.lottery} onChange={setLottery} />}
               <div className="flex min-h-0 flex-1 flex-col max-sm:min-h-auto sm:overflow-y-auto sm:overscroll-contain">
@@ -861,14 +870,21 @@ const KINDS = [
 const POSITIONING_BOARD = "qa";
 const POSITIONING_TAG = "定位";
 
+// The shortest title a thread may have; threads like a shorter one aren't looked up.
+const TITLE_MIN = 4;
+const TITLE_PAUSE_MS = 1000;
+const RELATED_SHOWN = 3;
+
 // A new thread's title, board, kind and tags above its body. Picking a board takes its kind,
-// unless a poll or lottery is being set up.
+// unless a poll or lottery is being set up. `onLeave` is for opening a related thread.
 function ThreadFields({
   content,
   onChange,
+  onLeave,
 }: {
   content: Content;
   onChange: (content: Content) => void;
+  onLeave: () => void;
 }) {
   const me = useMe();
   const staff = me !== null && STAFF.includes(me.role);
@@ -876,11 +892,35 @@ function ThreadFields({
   const forumTags = useTags();
   const id = useId();
   const positioning = content.kind === "positioning";
+  const related = useFetcher<typeof similarLoader>();
+  const pause = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const lookedUp = useRef("");
+  useEffect(() => () => clearTimeout(pause.current), []);
+  // Threads like this one, looked up once its title is written: as the field is left or typing
+  // pauses, not at every character (design §8.5). 保研定位 titles are made up from the table, and
+  // lotteries ask nothing.
+  function lookUp(title: string) {
+    clearTimeout(pause.current);
+    const text = title.trim();
+    if (text.length < TITLE_MIN || text === lookedUp.current) return;
+    lookedUp.current = text;
+    void related.load(`/similar?text=${encodeURIComponent(text)}`);
+  }
+  const shown =
+    positioning || content.kind === "lottery" || content.title.trim().length < TITLE_MIN
+      ? []
+      : (related.data ?? []).slice(0, RELATED_SHOWN);
   return (
     <div className="flex flex-col gap-2 border-t px-4 py-2.5">
       <Input
         value={content.title}
-        onChange={(e) => onChange({ ...content, title: e.target.value })}
+        onChange={(e) => {
+          const title = e.target.value;
+          onChange({ ...content, title });
+          clearTimeout(pause.current);
+          pause.current = setTimeout(() => lookUp(title), TITLE_PAUSE_MS);
+        }}
+        onBlur={(e) => lookUp(e.target.value)}
         aria-label="标题"
         placeholder={
           positioning
@@ -890,6 +930,34 @@ function ThreadFields({
         maxLength={80}
         className="h-9 text-base md:text-base"
       />
+      {shown.length > 0 && (
+        <section aria-label="相关的帖子" className="rounded-lg bg-secondary/60 px-3 py-2">
+          <div className="flex items-center gap-1.5 text-meta text-muted-foreground">
+            <Lightbulb className="size-3.5 text-warning" />
+            相关的帖子
+            <span className="ml-auto text-2xs">点开查看，草稿会保留</span>
+          </div>
+          <ul className="mt-1">
+            {shown.map((t) => (
+              <li key={t.id} className="flex items-center gap-2 py-0.5 text-sm">
+                <Link
+                  to={`/t/${t.id}`}
+                  onClick={onLeave}
+                  className="min-w-0 truncate hover:text-primary hover:underline"
+                >
+                  {t.title}
+                </Link>
+                {t.solved && (
+                  <CircleCheck aria-label="已解决" className="size-3.5 shrink-0 text-success" />
+                )}
+                <span className="ml-auto shrink-0 text-meta text-muted-foreground tabular-nums">
+                  {t.reply_count} 条回复
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
       <div className="flex flex-wrap items-center gap-2">
         <Select
           value={content.board}

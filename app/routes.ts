@@ -37,6 +37,7 @@ export default [
   route("u/:id/card", "routes/user-card.ts"),
   route("preview", "routes/preview.ts"),
   route("mention", "routes/mention.ts"),
+  route("similar", "routes/similar.ts"),
   route("login/code", "routes/login-code.ts"),
   route("logout", "routes/logout.ts"),
   route("admin", "routes/admin/layout.tsx", [
