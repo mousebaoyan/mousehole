@@ -375,6 +375,82 @@ export async function listThreads(
   };
 }
 
+// ---- Frequent questions (design §8.22): questions with new floors on many Beijing days of late.
+// The groups' questions are collected as questions, and asked again they are collected into the
+// same thread, on the day they were said there. Discussions are left out: a daily check-in thread
+// has floors every day, but nobody asks it. Counted every hour into memory, away from the pages
+// that read it; visibility and the tag still apply when the list is read.
+
+const FREQUENT_WITHIN_DAYS = 90;
+const FREQUENT_MIN_DAYS = 3;
+// Far more than anyone reads through.
+const FREQUENT_MAX = 200;
+let frequent: { ids: number[]; days: number[] } = { ids: [], days: [] };
+
+export async function countFrequent() {
+  const days = sql<number>`count(DISTINCT (posts.created_at AT TIME ZONE 'Asia/Shanghai')::date)::integer`;
+  const rows = await db
+    .selectFrom("posts")
+    .innerJoin("threads", "threads.id", "posts.thread_id")
+    .select(["threads.id", days.as("days")])
+    .where(
+      "posts.created_at",
+      ">",
+      sql<Date>`now() - make_interval(days => ${FREQUENT_WITHIN_DAYS})`,
+    )
+    .where("posts.deleted_at", "is", null)
+    .where("posts.status", "=", "visible")
+    .where("threads.deleted_at", "is", null)
+    .where("threads.status", "=", "visible")
+    .where("threads.kind", "=", "question")
+    .groupBy("threads.id")
+    .having(days, ">=", FREQUENT_MIN_DAYS)
+    .orderBy("days", "desc")
+    .orderBy(sql`max(posts.created_at)`, "desc")
+    .limit(FREQUENT_MAX)
+    .execute();
+  frequent = { ids: rows.map((r) => r.id), days: rows.map((r) => r.days) };
+}
+
+// A page of them, most days first, each with its days. The cursor is an offset, as for `hot`.
+export async function listFrequent(
+  reach: number,
+  userId: number | null,
+  filter: { tag?: string; cursor?: string },
+) {
+  if (filter.cursor !== undefined && !/^\d{1,9}$/.test(filter.cursor)) badCursor();
+  const offset = Number(filter.cursor ?? 0);
+  const { ids, days } = frequent;
+  const rank = sql<number>`array_position(${ids}::integer[], threads.id)`;
+  const rows = await selectThreads(visibleThreads(reach), userId)
+    .select(sql<number>`(${days}::integer[])[${rank}]`.as("days"))
+    .where("threads.id", "=", sql<number>`any(${ids}::integer[])`)
+    .where(inScope(await scopeOf(reach, filter)))
+    .orderBy(rank)
+    .offset(offset)
+    .limit(PAGE_SIZE)
+    .execute();
+  return {
+    items: await withUsers(rows),
+    next_cursor: rows.length === PAGE_SIZE ? String(offset + PAGE_SIZE) : null,
+  };
+}
+
+// The topic tags among them, with how many of them the reader can open, most first.
+export async function frequentTopics(reach: number) {
+  const { ids } = frequent;
+  return visibleThreads(reach)
+    .innerJoin("thread_tags", "thread_tags.thread_id", "threads.id")
+    .innerJoin("tags", "tags.id", "thread_tags.tag_id")
+    .select(["tags.name", sql<number>`count(*)::integer`.as("count")])
+    .where("threads.id", "=", sql<number>`any(${ids}::integer[])`)
+    .where("tags.kind", "=", "topic")
+    .groupBy("tags.name")
+    .orderBy("count", "desc")
+    .orderBy("tags.name")
+    .execute();
+}
+
 // For the list's tabs: how many threads in this board or tag are unread to the reader and not yet
 // voted in by them, and how many are unsolved.
 export async function countTabs(

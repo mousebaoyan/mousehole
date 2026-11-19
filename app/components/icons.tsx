@@ -103,6 +103,7 @@ export const Maximize2 = icon(lucide.Maximize2);
 export const Menu = icon(lucide.Menu);
 export const Merge = icon(lucide.Merge);
 export const MessageCircle = icon(lucide.MessageCircle);
+export const MessageCircleQuestionMark = icon(lucide.MessageCircleQuestionMark);
 export const MessageSquare = icon(lucide.MessageSquare);
 export const MessageSquareCode = icon(lucide.MessageSquareCode);
 export const MessageSquareWarning = icon(lucide.MessageSquareWarning);

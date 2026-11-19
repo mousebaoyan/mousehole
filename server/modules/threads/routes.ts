@@ -43,7 +43,7 @@ import {
 } from "./schemas.ts";
 import { threadSuggestions } from "./suggestions.ts";
 import { SummarySchema, summaryJson } from "../summaries/schemas.ts";
-import { threadSummary } from "../summaries/service.ts";
+import { summaryLeads, threadSummary } from "../summaries/service.ts";
 import { assertRelationsShown, findUserId, relationsShown, userBriefs } from "../users/service.ts";
 import {
   countTabs,
@@ -53,6 +53,7 @@ import {
   deleteThread,
   editPost,
   editThread,
+  frequentTopics,
   getPost,
   getThread,
   listPosts,
@@ -62,6 +63,7 @@ import {
   listThreads,
   listModerated,
   likeTallies,
+  listFrequent,
   listLikedPosts,
   listUserPosts,
   MAX_BODY,
@@ -717,6 +719,65 @@ export const threadsRoutes = createRouter()
       const viewer = authorize(c, "read");
       const reach = reachOf(viewer, c.var.token);
       return c.json(await countTabs(reach, viewer.id, c.req.valid("query")), 200);
+    },
+  )
+  // Also before /threads/{id}.
+  .openapi(
+    createRoute({
+      method: "get",
+      path: "/threads/frequent",
+      summary:
+        "高频问题：近 90 天里在至少 3 个不同的日子（北京时间）有新楼层的问答帖，收录的楼层按群里说话的时间算，按天数排，每页 30 个",
+      request: {
+        query: z.object({
+          tag: z.string().optional(),
+          cursor: z.string().optional(),
+        }),
+      },
+      responses: {
+        200: {
+          description: "天数多的在前，每小时重算一次",
+          content: {
+            "application/json": {
+              schema: z.object({
+                items: z.array(
+                  z.object({
+                    thread: ThreadSchema,
+                    days: z.number().openapi({ description: "近 90 天里有新楼层的天数" }),
+                    lead: z.string().nullable().openapi({
+                      description:
+                        "AI 总结的第一句；没有总结、没打开 AI 总结或者访客不能看时为 null",
+                    }),
+                  }),
+                ),
+                topics: z
+                  .array(z.object({ name: z.string(), count: z.number() }))
+                  .openapi({ description: "其中的话题标签和各有几个，多的在前" }),
+                next_cursor: z.string().nullable(),
+              }),
+            },
+          },
+        },
+        404: errorResponse("标签不存在"),
+      },
+    }),
+    async (c) => {
+      const { viewer, token } = c.var;
+      const reach = reachOf(viewer, token);
+      const [page, topics] = await Promise.all([
+        listFrequent(reach, viewer?.id ?? null, c.req.valid("query")),
+        frequentTopics(reach),
+      ]);
+      const leads = await summaryLeads(
+        page.items.map((t) => t.id),
+        reach,
+      );
+      const items = page.items.map((t) => ({
+        thread: threadJson(t, viewer !== null),
+        days: t.days,
+        lead: leads.get(t.id) ?? null,
+      }));
+      return c.json({ items, topics, next_cursor: page.next_cursor }, 200);
     },
   )
   .openapi(

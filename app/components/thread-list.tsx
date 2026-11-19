@@ -72,14 +72,19 @@ export function ThreadRows({
   return threads.map((t) => <ThreadRow key={t.id} thread={t} now={now} showBoard={showBoard} />);
 }
 
-function ThreadRow({
+// `meta` goes after the board and tags, `children` under them.
+export function ThreadRow({
   thread,
   now,
   showBoard,
+  meta,
+  children,
 }: {
   thread: ThreadItem;
   now: number;
   showBoard: boolean;
+  meta?: ReactNode;
+  children?: ReactNode;
 }) {
   const active = ago(thread.last_post_at, now);
   // Members' reading is tracked; guests have the browser's history of visited links.
@@ -162,7 +167,9 @@ function ThreadRow({
           {thread.tags.map((t) => (
             <span key={t}>#{t}</span>
           ))}
+          {meta}
         </div>
+        {children}
       </div>
       {/* The avatars sit above the title's link, which covers the row; this wrapper doesn't, so
           the space beside them opens the thread as well. */}
