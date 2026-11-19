@@ -1,4 +1,4 @@
-import { sql, type Transaction } from "kysely";
+import { sql, type NotNull, type Transaction } from "kysely";
 import type { DB } from "../../../db/types.ts";
 import { GUEST, type Actor, type Reader } from "../../platform/access.ts";
 import { db } from "../../platform/db.ts";
@@ -195,9 +195,14 @@ export async function setSummaryDisabled(actor: Actor, threadId: number, disable
   });
 }
 
-// For a thread's page: its summary, unless summaries are off, or the reader is a guest and some
-// floor in it is by someone who keeps theirs from guests (design §8.10). Moderators also learn
-// whether it was turned off.
+// Some floor of the thread is by someone who keeps theirs from guests (design §8.10), who then
+// aren't shown its summary.
+const KEPT_FROM_GUESTS = sql<boolean>`EXISTS (SELECT 1 FROM posts JOIN users ON users.id = posts.author_id
+  WHERE posts.thread_id = thread_summaries.thread_id AND posts.status = 'visible'
+    AND posts.deleted_at IS NULL AND users.hide_from_guests)`;
+
+// For a thread's page: its summary, unless summaries are off, or the reader is a guest kept from
+// it. Moderators also learn whether it was turned off.
 export async function threadSummary(threadId: number, reader: Reader) {
   if (!(await getSettings()).site.summaries) return null;
   const row = await db
@@ -208,9 +213,7 @@ export async function threadSummary(threadId: number, reader: Reader) {
       "replies",
       "disabled",
       "created_at",
-      sql<boolean>`EXISTS (SELECT 1 FROM posts JOIN users ON users.id = posts.author_id
-        WHERE posts.thread_id = thread_summaries.thread_id AND posts.status = 'visible'
-          AND posts.deleted_at IS NULL AND users.hide_from_guests)`.as("kept_from_guests"),
+      KEPT_FROM_GUESTS.as("kept_from_guests"),
     ])
     .where("thread_id", "=", threadId)
     .executeTakeFirst();
@@ -222,6 +225,22 @@ export async function threadSummary(threadId: number, reader: Reader) {
       ? { lead: row.lead, points: row.points, replies: row.replies, created_at: row.created_at }
       : null;
   return { summary: shown, disabled: row?.disabled ?? false };
+}
+
+// For a list of threads: the first sentence of each one's summary, by the same rules.
+export async function summaryLeads(threadIds: number[], reach: number) {
+  if (threadIds.length === 0 || !(await getSettings()).site.summaries) {
+    return new Map<number, string>();
+  }
+  const rows = await db
+    .selectFrom("thread_summaries")
+    .select(["thread_id", "lead"])
+    .where("thread_id", "in", threadIds)
+    .where("lead", "is not", null)
+    .$if(reach === GUEST, (qb) => qb.where(sql<boolean>`NOT ${KEPT_FROM_GUESTS}`))
+    .$narrowType<{ lead: NotNull }>()
+    .execute();
+  return new Map(rows.map((r) => [r.thread_id, r.lead]));
 }
 
 // A floor gone or hidden takes down the summary that cites it, to be written again.

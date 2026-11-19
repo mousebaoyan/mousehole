@@ -16,6 +16,7 @@ export default [
     route("settings", "routes/settings.tsx"),
     route("drafts", "routes/drafts.tsx"),
     route("search", "routes/search.tsx"),
+    route("frequent", "routes/frequent.tsx"),
   ]),
   layout("routes/login-layout.tsx", [
     route("login", "routes/login.tsx"),

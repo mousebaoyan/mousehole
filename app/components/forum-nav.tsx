@@ -12,6 +12,7 @@ import {
   Home,
   Library,
   Lock,
+  MessageCircleQuestionMark,
   MessagesSquare,
   NotebookPen,
 } from "~/components/icons";
@@ -63,6 +64,9 @@ export function ForumNav() {
         <NavLink to="/" end className={item}>
           <Home className="size-4" /> 全部帖子
           <Count n={boards.filter((b) => !locked(b)).reduce((sum, b) => sum + b.thread_count, 0)} />
+        </NavLink>
+        <NavLink to="/frequent" className={item}>
+          <MessageCircleQuestionMark className="size-4" /> 高频问题
         </NavLink>
         {me &&
           mine.map((m) => (

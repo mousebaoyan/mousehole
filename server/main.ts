@@ -23,7 +23,7 @@ import { countVisits } from "./modules/stats/routes.ts";
 import { clearOldStats, flushVisits, summarizeDays } from "./modules/stats/service.ts";
 import { startBounties } from "./modules/threads/bounties.ts";
 import { drawDue } from "./modules/threads/lotteries.ts";
-import { flushViews, recordView, rerenderPosts } from "./modules/threads/service.ts";
+import { countFrequent, flushViews, recordView, rerenderPosts } from "./modules/threads/service.ts";
 import { clearUnusedUploads } from "./modules/uploads/service.ts";
 import { clearOldDays, recountPeopleReached, refreshAvatars } from "./modules/users/service.ts";
 import { sendWeeklyLetters } from "./modules/weekly/service.ts";
@@ -48,6 +48,9 @@ listen({
 });
 indexMissingPosts().catch((error: unknown) => log("error", "Indexing posts failed", { error }));
 rerenderPosts().catch((error: unknown) => log("error", "Rendering posts again failed", { error }));
+countFrequent().catch((error: unknown) =>
+  log("error", "Counting frequent questions failed", { error }),
+);
 every(60_000, "Writing view counts", flushViews);
 every(60_000, "Writing visits and bytes sent", flushVisits);
 every(60_000, "Drawing lotteries", drawDue);
@@ -60,6 +63,7 @@ every(3600_000, "Sending weekly letters", () => sendWeeklyLetters());
 every(3600_000, "Starting bounties", startBounties);
 every(3600_000, "Settling coins", settleCoins);
 every(3600_000, "Summarizing the day's stats", summarizeDays);
+every(3600_000, "Counting frequent questions", countFrequent);
 const DAY_MS = 24 * 3600_000;
 every(DAY_MS, "Clearing unused uploads", clearUnusedUploads);
 every(DAY_MS, "Clearing expired logins", clearExpiredLogins);
