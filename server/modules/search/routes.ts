@@ -65,8 +65,8 @@ export const searchRoutes = createRouter()
     }),
     async (c) => {
       const { q, board, tag, author, title_only, cursor, ...rest } = c.req.valid("query");
-      const { viewer, bot } = c.var;
-      const reach = reachOf(viewer, bot);
+      const { viewer, token } = c.var;
+      const reach = reachOf(viewer, token);
       const filter = {
         ...rest,
         titleOnly: title_only,
@@ -96,7 +96,7 @@ export const searchRoutes = createRouter()
       const searcher = viewer ? `user ${viewer.id}` : clientIp(c);
       const userAgent = c.req.header("user-agent") ?? "";
       const person = userAgent !== "" && !isCrawler(userAgent) && viewer?.role !== "owner";
-      if (!bot && cursor === 0 && searcher !== null && person) {
+      if (!token && cursor === 0 && searcher !== null && person) {
         await recordSearch(searcher, q, items.length === 0);
       }
       return c.json({ items, next_cursor }, 200);
@@ -122,8 +122,8 @@ export const searchRoutes = createRouter()
       },
     }),
     async (c) => {
-      const { viewer, bot } = c.var;
-      const reach = reachOf(viewer, bot);
+      const { viewer, token } = c.var;
+      const reach = reachOf(viewer, token);
       const found = await similar(reach, c.req.valid("query").text);
       const threads = await threadsByIds(
         reach,

@@ -20,59 +20,84 @@ export type Viewer = {
   restriction: Restriction;
 };
 
-// What a bot request adds on top of the viewer. See docs/api.md §2.
-export type Bot = {
-  tokenId: number;
-  scopes: string[];
-  actingAs: boolean;
-  operator: { id: number; role: string } | null;
-  // False when the member turned off proxying and someone else asked the bot.
-  proxyAllowed: boolean;
-};
+// What a request with a bearer token adds on top of the viewer: a bot's, which may act for
+// members (docs/api.md §2), or a member's own, given to their Agent (§8.1).
+export type Token =
+  | {
+      kind: "bot";
+      id: number;
+      scopes: string[];
+      actingAs: boolean;
+      operator: { id: number; role: string } | null;
+      // False when the member turned off proxying and someone else asked the bot.
+      proxyAllowed: boolean;
+    }
+  | { kind: "member"; id: number; scopes: string[] };
 
 // How the API refers to a user: a forum user ID, or `qq:` and a QQ number.
 export type UserRef = { id: number } | { qq: number };
 
-// Who did a write, for the audit log.
+// Who did a write, for the audit log, and the way it came: the site, a bot, or a member's Agent.
 export type Actor = {
   userId: number;
   operatorId: number | null;
   tokenId: number | null;
+  via: "web" | "bot" | "agent";
   ip: string | null;
   userAgent: string | null;
 };
 
-// Bot token scopes, which double as the capability a route needs.
-export const SCOPES = ["read", "act", "moderate", "admin", "sync", "auth", "events"] as const;
+// Token scopes, which double as the capability a route needs. Members' tokens have only the
+// first three (design §6.7); `read` covers `profile`.
+export const SCOPES = [
+  "profile",
+  "read",
+  "act",
+  "moderate",
+  "admin",
+  "sync",
+  "auth",
+  "events",
+] as const;
 export type Scope = (typeof SCOPES)[number];
 
+const MEMBER_SCOPES = new Set<Scope>(["profile", "read", "act"]);
 const WRITES = new Set<Scope>(["act", "moderate", "admin"]);
 const BOT_ONLY = new Set<Scope>(["sync", "auth", "events"]);
 const ROLES: Partial<Record<Scope, string[]>> = { moderate: STAFF, admin: ["admin", "owner"] };
 
+function hasScope(scopes: string[], need: Scope) {
+  return scopes.includes(need) || (need === "profile" && scopes.includes("read"));
+}
+
 // `archived`: what the bot writes carries the group messages it was archived from.
 export function checkPermission(
   viewer: Viewer | null,
-  bot: Bot | null,
+  token: Token | null,
   need: Scope,
   archived = false,
 ) {
   if (!viewer) throw new AppError(401, "unauthorized", "请先登录");
-  if (bot && !bot.scopes.includes(need)) {
+  if (token?.kind !== "bot" && BOT_ONLY.has(need)) {
+    throw new AppError(403, "forbidden", "只有 bot 能调用这个接口");
+  }
+  if (token?.kind === "member" && !MEMBER_SCOPES.has(need)) {
+    throw new AppError(403, "forbidden", "版主和管理员的操作只能在网页上做");
+  }
+  if (token && !hasScope(token.scopes, need)) {
     throw new AppError(403, "scope_missing", `这个 token 没有 ${need} 权限`);
   }
-  if (!bot && BOT_ONLY.has(need)) throw new AppError(403, "forbidden", "只有 bot 能调用这个接口");
 
   if (WRITES.has(need)) {
     // What the bot archives was said in the group while they were in it.
-    if (viewer.member_status === "frozen" && !(bot && archived)) {
+    if (viewer.member_status === "frozen" && !(token?.kind === "bot" && archived)) {
       throw new AppError(403, "member_frozen", "账号已冻结，只能浏览");
     }
     // Banned people can't log in; this stops bots acting for them.
     if (viewer.restriction?.type === "ban") {
       throw new AppError(403, "banned", "账号已被封禁");
     }
-    if (bot && !bot.proxyAllowed) {
+    if (token?.kind === "bot" && !token.proxyAllowed) {
       throw new AppError(
         403,
         "proxy_disabled",
@@ -88,10 +113,10 @@ export function checkPermission(
   const roles = ROLES[need];
   if (roles) {
     // The bot's own account is limited by its token's scopes alone.
-    if ((!bot || bot.actingAs) && !roles.includes(viewer.role)) {
+    if ((token?.kind !== "bot" || token.actingAs) && !roles.includes(viewer.role)) {
       throw new AppError(403, "forbidden", "没有权限");
     }
-    if (bot?.operator && !roles.includes(bot.operator.role)) {
+    if (token?.kind === "bot" && token.operator && !roles.includes(token.operator.role)) {
       throw new AppError(403, "operator_not_allowed", "操作人没有这个权限");
     }
   }
@@ -99,9 +124,9 @@ export function checkPermission(
 }
 
 // The system's settings, mail, QQ groups, bot tokens and logs are the owner's alone, on the web.
-export function checkOwner(viewer: Viewer | null, bot: Bot | null) {
+export function checkOwner(viewer: Viewer | null, token: Token | null) {
   if (!viewer) throw new AppError(401, "unauthorized", "请先登录");
-  if (bot || viewer.role !== "owner") throw new AppError(403, "forbidden", "只有站长能操作");
+  if (token || viewer.role !== "owner") throw new AppError(403, "forbidden", "只有站长能操作");
   return viewer;
 }
 
@@ -110,8 +135,8 @@ export function checkOwner(viewer: Viewer | null, bot: Bot | null) {
 export type Reader = { reach: number; id: number | null; staff: boolean };
 
 // Who may see members-only boards and what is in them; everyone else gets the public site.
-export function isMember(viewer: Viewer | null, bot: Bot | null) {
-  return viewer?.member_status === "member" && (bot === null || bot.scopes.includes("read"));
+export function isMember(viewer: Viewer | null, token: Token | null) {
+  return viewer?.member_status === "member" && (token === null || token.scopes.includes("read"));
 }
 
 // How far into the forum someone reads (design §8.10): guests the public boards only, members
@@ -119,8 +144,8 @@ export function isMember(viewer: Viewer | null, bot: Bot | null) {
 export const GUEST = -1;
 export const EVERY_BOARD = 5;
 
-export function reachOf(viewer: Viewer | null, bot: Bot | null) {
-  if (!viewer || !isMember(viewer, bot)) return GUEST;
+export function reachOf(viewer: Viewer | null, token: Token | null) {
+  if (!viewer || !isMember(viewer, token)) return GUEST;
   return STAFF.includes(viewer.role) || viewer.role === "bot" ? EVERY_BOARD : viewer.level;
 }
 
@@ -132,4 +157,17 @@ export function assertNotMuted(viewer: Viewer) {
     ? `，到 ${r.until.toLocaleString("zh-CN", { timeZone: "Asia/Shanghai" })} 解除`
     : "";
   throw new AppError(403, "muted", `你已被禁言${until}`);
+}
+
+// What a member's Agent puts up takes L3 (design §6.7); moderators and admins aren't held by it.
+const AGENT_POSTING_LEVEL = 3;
+
+export function assertAgentMayPost(viewer: Viewer, token: Token | null) {
+  if (token?.kind !== "member" || viewer.level >= AGENT_POSTING_LEVEL) return;
+  if (STAFF.includes(viewer.role)) return;
+  throw new AppError(
+    403,
+    "level_required",
+    `通过 Agent 发帖、回复和互动要 L${AGENT_POSTING_LEVEL} 起，你现在是 L${viewer.level}`,
+  );
 }

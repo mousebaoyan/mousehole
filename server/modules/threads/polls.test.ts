@@ -283,7 +283,7 @@ describe("群里的投票汇总", () => {
   test("bot 拿到这段时间里发的、还能投的投票帖和投票人数；结束了的、锁定的、门槛高的版块里的不给", async () => {
     const { id: owner } = await createUser("admin");
     const { token } = await createBotToken(
-      { userId: owner, operatorId: null, tokenId: null, ip: null, userAgent: null },
+      { userId: owner, operatorId: null, tokenId: null, via: "web", ip: null, userAgent: null },
       { name: "插件", botQq: nextQq(), scopes: ["read"] },
     );
     const bot = { headers: { authorization: `Bearer ${token}` } };

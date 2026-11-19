@@ -22,8 +22,15 @@ export function meta() {
   return [{ title: pageTitle("登录") }];
 }
 
+// Where to go once logged in: back to the page that sent them here, such as an app's
+// authorization (docs/api.md §8.3), if it is one of ours.
+function nextPath(request: Request) {
+  const next = new URL(request.url).searchParams.get("next");
+  return next && /^\/(?![/\\])/.test(next) ? next : "/";
+}
+
 // Also the code login's poll: it shows this browser's code until a bot confirms it, then logs in.
-export async function loader({ context }: Route.LoaderArgs) {
+export async function loader({ request, context }: Route.LoaderArgs) {
   const api = context.get(apiContext);
   const methods = await (await api.auth.methods.$get()).json();
   if (!methods.code) return { methods, code: null, codeError: null };
@@ -33,7 +40,8 @@ export async function loader({ context }: Route.LoaderArgs) {
   }
   if (!res.ok) return { methods, code: null, codeError: (await res.json()).error.message };
   const state = await res.json();
-  if (state.status === "confirmed") return redirect("/", { headers: cookiesFrom(res) });
+  if (state.status === "confirmed")
+    return redirect(nextPath(request), { headers: cookiesFrom(res) });
   return { methods, code: state, codeError: null };
 }
 
@@ -52,7 +60,7 @@ export async function action({ request, context }: Route.ActionArgs) {
     return { qq, sent: false, error: (await res.json()).error.message };
   }
   const res = await api.auth.email.verify.$post({ json: { qq, code: field("code") } });
-  if (res.ok) return redirect("/", { headers: cookiesFrom(res) });
+  if (res.ok) return redirect(nextPath(request), { headers: cookiesFrom(res) });
   return { qq, sent: true, error: (await res.json()).error.message };
 }
 

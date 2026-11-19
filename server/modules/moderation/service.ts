@@ -6,7 +6,7 @@ import { env } from "../../platform/env.ts";
 import { AppError } from "../../platform/errors.ts";
 import { excerpt } from "../../platform/markdown.ts";
 import { recordAudit } from "../audit/service.ts";
-import { endAllSessions } from "../auth/service.ts";
+import { endAllSessions, revokeTokensOf } from "../auth/service.ts";
 import { recordEvent } from "../events/service.ts";
 import { getPost, holdReported, releaseReported, reportHolds } from "../threads/service.ts";
 import {
@@ -27,7 +27,8 @@ async function ordinaryMember(ref: UserRef) {
   return user;
 }
 
-// Replaces any restriction already there. A ban also logs them out everywhere.
+// Replaces any restriction already there. A ban also logs them out everywhere and ends their
+// tokens.
 export async function restrict(
   actor: Actor,
   ref: UserRef,
@@ -36,7 +37,10 @@ export async function restrict(
   const user = await ordinaryMember(ref);
   await db.transaction().execute(async (trx) => {
     await saveRestriction(trx, user.id, { type: change.type, until: change.until });
-    if (change.type === "ban") await endAllSessions(trx, user.id);
+    if (change.type === "ban") {
+      await endAllSessions(trx, user.id);
+      await revokeTokensOf(trx, user.id);
+    }
     await recordAudit(trx, actor, {
       action: "user.restrict",
       target_type: "user",

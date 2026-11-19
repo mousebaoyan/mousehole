@@ -31,7 +31,7 @@ export interface ActiveDays {
 }
 
 export interface ApiTokens {
-  bot_user_id: number;
+  client_id: number | null;
   created_at: Generated<Timestamp>;
   id: Generated<number>;
   last_used_at: Timestamp | null;
@@ -39,6 +39,7 @@ export interface ApiTokens {
   revoked_at: Timestamp | null;
   scopes: string[];
   token_hash: Buffer;
+  user_id: number;
 }
 
 export interface ArchiveFlags {
@@ -273,6 +274,27 @@ export interface Notifications {
   user_id: number;
 }
 
+export interface OauthClients {
+  client_id: string;
+  created_at: Generated<Timestamp>;
+  disabled_at: Timestamp | null;
+  id: Generated<number>;
+  name: string;
+  redirect_uris: string[];
+  scopes: string[];
+  secret_hash: Buffer;
+}
+
+export interface OauthCodes {
+  client_id: number;
+  code_challenge: string;
+  code_hash: Buffer;
+  expires_at: Timestamp;
+  redirect_uri: string;
+  scopes: string[];
+  user_id: number;
+}
+
 export interface PollOptions {
   id: Generated<number>;
   label: string;
@@ -411,6 +433,22 @@ export interface Sessions {
 export interface Settings {
   key: string;
   value: Json;
+}
+
+export interface Sponsorships {
+  amount: number;
+  anonymous: Generated<boolean>;
+  created_at: Generated<Timestamp>;
+  id: Generated<number>;
+  message: string | null;
+  method: string;
+  paid_at: Generated<Timestamp>;
+  reason: string | null;
+  reviewed_at: Timestamp | null;
+  reviewer_id: number | null;
+  show_amount: boolean;
+  status: Generated<string>;
+  user_id: number;
 }
 
 export interface Tags {
@@ -627,6 +665,8 @@ export interface DB {
   mail_log: MailLog;
   mail_queue: MailQueue;
   notifications: Notifications;
+  oauth_clients: OauthClients;
+  oauth_codes: OauthCodes;
   poll_options: PollOptions;
   poll_votes: PollVotes;
   polls: Polls;
@@ -641,6 +681,7 @@ export interface DB {
   search_terms: SearchTerms;
   sessions: Sessions;
   settings: Settings;
+  sponsorships: Sponsorships;
   tags: Tags;
   thread_aliases: ThreadAliases;
   thread_merges: ThreadMerges;

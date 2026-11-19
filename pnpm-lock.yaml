@@ -202,6 +202,9 @@ importers:
       kysely:
         specifier: ^0.29.6
         version: 0.29.6
+      lean-qr:
+        specifier: ^2.7.4
+        version: 2.7.4
       lucide:
         specifier: ^1.57.0
         version: 1.57.0
@@ -2191,6 +2194,10 @@ packages:
   kysely@0.29.6:
     resolution: {integrity: sha512-hHaB8C/rfzDDtr/t8YZwxAuPJTT0zHyaPoVzcXwDYhYNAgH/4sIfVhi/XLLIY+bL/FqaIJnjATDbi8ObSELmxg==}
     engines: {node: '>=22.0.0'}
+
+  lean-qr@2.7.4:
+    resolution: {integrity: sha512-tlMPFfqhAAZN7+j/djRSvl/2+AYT2+7RRuyq8bvcbV8gMiENiscquQ9WTfCSyeEdxsVaEB+tU7e9nFZC63BFnQ==}
+    hasBin: true
 
   lightningcss-android-arm64@1.32.0:
     resolution: {integrity: sha512-YK7/ClTt4kAK0vo6w3X+Pnm0D2cf2vPHbhOXdoNti1Ga0al1P4TBZhwjATvjNwLEBCnKvjJc2jQgHXH0NEwlAg==}
@@ -4807,6 +4814,8 @@ snapshots:
       - typescript
 
   kysely@0.29.6: {}
+
+  lean-qr@2.7.4: {}
 
   lightningcss-android-arm64@1.32.0:
     optional: true

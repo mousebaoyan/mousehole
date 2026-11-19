@@ -16,6 +16,7 @@ import {
 import { excerpt } from "../../platform/markdown.ts";
 import { levelName, readTime, SITE_NAME, TIER_NAMES } from "../../platform/site.ts";
 import { RECENT_DAYS } from "../levels/rules.ts";
+import { daysOf, METHOD_NAMES, tierName, type Method } from "../sponsors/rules.ts";
 import { anonymousBrief } from "../users/service.ts";
 import { NOTIFICATION_LABELS, type NotificationType } from "./types.ts";
 
@@ -23,10 +24,10 @@ import { NOTIFICATION_LABELS, type NotificationType } from "./types.ts";
 
 type Person = { id: number; qq: number };
 
-// About something done to a floor; levels, lotteries and badges are told by their own, and
-// suggestions on the site only.
+// About something done to a floor; levels, lotteries, badges and sponsorships are told by their
+// own, and suggestions on the site only.
 export type Notice = {
-  type: Exclude<NotificationType, "level" | "lottery" | "badge" | "suggestion">;
+  type: Exclude<NotificationType, "level" | "lottery" | "badge" | "sponsor" | "suggestion">;
   actorId: number;
   // Their number in the thread when they did it anonymously (design §8.12).
   actorAlias: number | null;
@@ -590,4 +591,75 @@ export async function badgeReminders(
       });
     }),
   );
+}
+
+// A sponsorship (design §8.21): registered, which the payee hears of with who paid, or confirmed
+// or turned down, which whoever paid hears of.
+export type Sponsored = {
+  action: "pending" | "confirmed" | "rejected";
+  sponsorship: {
+    id: number;
+    user_id: number;
+    amount: number;
+    method: Method;
+    message: string | null;
+    anonymous: boolean;
+    reason: string | null;
+  };
+};
+
+export async function sponsorReminder(
+  trx: Transaction<DB>,
+  person: Person,
+  { action, sponsorship: s }: Sponsored,
+) {
+  const paid = {
+    kind: "numbers" as const,
+    items: [{ value: s.amount / 100, unit: "元", label: METHOD_NAMES[s.method] }],
+  };
+  if (action === "pending") {
+    const sponsor = await trx
+      .selectFrom("users")
+      .select(["display_name", "qq"])
+      .where("id", "=", s.user_id)
+      .executeTakeFirstOrThrow();
+    return reminder(person, "sponsor", {
+      subject: `${sponsor.display_name} 登记了一笔赞助`,
+      said: `${sponsor.display_name}（QQ ${sponsor.qq}）登记了一笔赞助`,
+      blocks: [
+        paid,
+        s.message !== null && { kind: "quote", text: s.message },
+        s.anonymous && { kind: "small", text: "TA 选择在感谢墙上匿名。" },
+        { kind: "text", text: `请对照${METHOD_NAMES[s.method]}的收款记录，收到后确认。` },
+      ],
+      button: "去确认",
+      url: `${env.PUBLIC_URL}/admin/sponsor`,
+    });
+  }
+  const tier = tierName(daysOf(s.amount));
+  return reminder(person, "sponsor", {
+    subject: action === "confirmed" ? "感谢你赞助鼠群" : "你登记的赞助未查到",
+    said:
+      action === "confirmed"
+        ? "收款人已确认收到你的赞助，衷心感谢你的支持。"
+        : "收款人未查到你登记的这笔赞助",
+    blocks:
+      action === "confirmed"
+        ? [
+            paid,
+            {
+              kind: "text",
+              text: s.anonymous
+                ? `你已以「匿名鼠鼠」列入感谢墙（${tier}），如需显示名字，可在赞助页修改。`
+                : `你已列入感谢墙（${tier}）。`,
+            },
+          ]
+        : [
+            paid,
+            s.reason !== null && { kind: "quote", text: s.reason },
+            { kind: "text", text: "如有疑问，请在群里联系收款人。" },
+          ],
+    button: "查看",
+    url: `${env.PUBLIC_URL}/sponsor`,
+  });
 }

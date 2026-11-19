@@ -4,16 +4,20 @@ import { cn } from "~/cn";
 import {
   Award,
   Bookmark,
-  ExternalLink,
+  CirclePlay,
+  CircleQuestionMark,
   FilePen,
+  HandHeart,
   History,
   Home,
+  Library,
   Lock,
   MessagesSquare,
+  NotebookPen,
 } from "~/components/icons";
 import { useDrafts } from "~/components/composer";
 import { useBoards, useMe, useTags, type Board } from "~/forum";
-import { STAFF } from "../../server/platform/site.ts";
+import { MAIN_SITE, STAFF } from "../../server/platform/site.ts";
 
 const item = ({ isActive }: { isActive: boolean }) =>
   cn(
@@ -27,6 +31,14 @@ const mine = [
   { to: "/my/bookmarks", label: "收藏", icon: Bookmark, count: "bookmarked" },
   { to: "/my/read", label: "已读", icon: History, count: "read" },
 ] as const;
+
+// The main site's sections, as its own header lists them.
+const mainSite = [
+  { path: "/resources", label: "保研资源", icon: Library },
+  { path: "/experiences", label: "保研经验", icon: NotebookPen },
+  { path: "/talks", label: "直播回放", icon: CirclePlay },
+  { path: "/faq", label: "常见问题", icon: CircleQuestionMark },
+];
 
 // The topics with the most threads; the rest open on request.
 const TOPICS_SHOWN = 10;
@@ -63,6 +75,9 @@ export function ForumNav() {
           <Award className="size-4" /> 徽章
           {me && <Count n={me.counts.badges} />}
         </NavLink>
+        <NavLink to="/sponsor" className={item}>
+          <HandHeart className="size-4" /> 赞助鼠群
+        </NavLink>
         {drafts.size > 0 && (
           <NavLink to="/drafts" className={item}>
             <FilePen className="size-4" /> 草稿
@@ -84,6 +99,21 @@ export function ForumNav() {
               <Count n={b.thread_count} />
             )}
           </NavLink>
+        ))}
+      </div>
+      {/* Wider screens link to it from the header. */}
+      <div className="flex flex-col gap-0.5 xl:hidden">
+        <a
+          href={MAIN_SITE}
+          className="flex items-center gap-1.5 px-2.5 pb-1 text-xs font-medium text-muted-foreground hover:text-foreground"
+        >
+          <img src="/mousebaoyan.webp" alt="" width={16} height={16} className="rounded" />
+          鼠群官网
+        </a>
+        {mainSite.map((s) => (
+          <a key={s.path} href={MAIN_SITE + s.path} className={item({ isActive: false })}>
+            <s.icon className="size-4" /> {s.label}
+          </a>
         ))}
       </div>
       {topics.length > 0 && (
@@ -114,12 +144,6 @@ export function ForumNav() {
           </div>
         </div>
       )}
-      <a
-        href="https://mousebaoyan.cn/"
-        className="flex items-center gap-1.5 px-2.5 text-xs text-muted-foreground hover:text-foreground"
-      >
-        鼠群官网 <ExternalLink className="size-3" />
-      </a>
     </nav>
   );
 }

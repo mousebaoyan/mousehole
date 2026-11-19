@@ -1,6 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { expect, test, type Page } from "@playwright/test";
-import { SERVER_ENV } from "./env.ts";
+import { BASE, SERVER_ENV } from "./env.ts";
 
 // Through the bootstrap command's one-time link: --owner as on a new server, --qq for an admin.
 async function signIn(page: Page, args: string[]) {
@@ -72,4 +72,45 @@ test("站长设公告，管理员建版块、发帖再回复，从通知打开�
   const row = page.getByRole("link", { name: /端到端测试发的帖子/ });
   await expect(row).toBeVisible();
   await expect(row).not.toContainText("层没读过");
+});
+
+test("站长登记鼠钟；登录了的打开授权页直接带着授权码回到鼠钟，没登录的带着 login_required 回去", async ({
+  page,
+  browser,
+}) => {
+  // Somewhere the browser can land: Playwright doesn't intercept the request a redirect leads to.
+  const callback = `${BASE}/healthz`;
+  await signIn(page, ["--owner"]);
+  await page.goto("/admin/apps");
+  await page.getByLabel("名称").fill("鼠钟");
+  await page.getByLabel("回调地址").fill(callback);
+  await page.getByRole("button", { name: "登记", exact: true }).click();
+  const clientId = await page.locator("output dd").first().textContent();
+  if (!clientId) throw new Error("no client_id shown");
+
+  const authorize = (extra: Record<string, string> = {}) =>
+    `/oauth/authorize?${new URLSearchParams({
+      response_type: "code",
+      client_id: clientId,
+      redirect_uri: callback,
+      state: "e2e",
+      code_challenge: "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM",
+      code_challenge_method: "S256",
+      ...extra,
+    })}`;
+  const back = (url: URL) => url.href.startsWith(callback);
+
+  await page.goto(authorize());
+  await page.waitForURL(back);
+  const signedIn = new URL(page.url()).searchParams;
+  expect(signedIn.get("code")).toBeTruthy();
+  expect(signedIn.get("state")).toBe("e2e");
+
+  const guest = await browser.newPage();
+  await guest.goto(authorize({ prompt: "none" }));
+  await guest.waitForURL(back);
+  expect(new URL(guest.url()).searchParams.get("error")).toBe("login_required");
+  await guest.goto(authorize());
+  await guest.waitForURL((url) => url.pathname === "/login");
+  expect(new URL(guest.url()).searchParams.get("next")).toMatch(/^\/oauth\/authorize\?/);
 });

@@ -16,7 +16,8 @@ import { countOpenSuggestions } from "../threads/suggestions.ts";
 import { contentStats } from "../threads/service.ts";
 import { uploadBytes } from "../uploads/service.ts";
 import { memberStats } from "../users/service.ts";
-import { databaseBytes, updateSettings } from "./service.ts";
+import { UserBriefSchema, UserRefSchema } from "../users/schemas.ts";
+import { databaseBytes, payeeOf, updateSettings } from "./service.ts";
 
 const SiteSettings = z.object({
   banner: z.string().trim().max(200).openapi({ description: "公告横幅，空字符串不显示" }),
@@ -61,6 +62,10 @@ const WeeklySettings = z
   })
   .openapi({ description: "每周影响力邮件：被读和获赞都达到门槛，或者有回答被采纳，才发" });
 
+// What the payee's codes hold (design §8.21); empty is not set.
+const WECHAT_CODE = /^(wxp:\/\/\S+)?$/;
+const ALIPAY_CODE = /^(https:\/\/qr\.alipay\.com\/\S+)?$/;
+
 const SettingsSchema = z
   .object({
     site: SiteSettings,
@@ -78,6 +83,15 @@ const SettingsSchema = z
       unactivated: z.boolean().openapi({ description: "没登录过论坛的成员也发通知邮件和每周来信" }),
     }),
     weekly: WeeklySettings,
+    sponsor: z
+      .object({
+        payee: UserBriefSchema.extend({ qq: z.number().nullable() })
+          .nullable()
+          .openapi({ description: "收款人；没设为 null" }),
+        wechat: z.string().openapi({ description: "微信收款码的内容，没设为空字符串" }),
+        alipay: z.string().openapi({ description: "支付宝收款码的内容，没设为空字符串" }),
+      })
+      .openapi({ description: "赞助" }),
   })
   .openapi("Settings");
 
@@ -184,7 +198,7 @@ export const adminRoutes = createRouter()
     }),
     async (c) => {
       authorizeOwner(c);
-      const { site, login, smtp, bot, notify, weekly } = await getSettings();
+      const { site, login, smtp, bot, notify, weekly, sponsor } = await getSettings();
       const accounts = smtp.accounts.map(({ password, ...rest }) => ({
         ...rest,
         password_set: password !== "",
@@ -197,6 +211,10 @@ export const adminRoutes = createRouter()
           bot,
           notify: { email: await emailPolicies(), unactivated: notify.unactivated },
           weekly,
+          sponsor: {
+            ...sponsor,
+            payee: sponsor.payee === null ? null : await payeeOf(sponsor.payee),
+          },
         },
         200,
       );
@@ -231,6 +249,23 @@ export const adminRoutes = createRouter()
                   })
                   .optional(),
                 weekly: WeeklySettings.partial().optional(),
+                sponsor: z
+                  .object({
+                    payee: UserRefSchema.nullable().openapi({ description: "只能是管理员" }),
+                    // Real ones run under 100; far longer won't fit in a code.
+                    wechat: z
+                      .string()
+                      .trim()
+                      .max(200)
+                      .regex(WECHAT_CODE, "微信收款码的内容应以 wxp:// 开头"),
+                    alipay: z
+                      .string()
+                      .trim()
+                      .max(200)
+                      .regex(ALIPAY_CODE, "支付宝收款码的内容应以 https://qr.alipay.com/ 开头"),
+                  })
+                  .partial()
+                  .optional(),
               }),
             },
           },
@@ -238,6 +273,7 @@ export const adminRoutes = createRouter()
       },
       responses: {
         204: { description: "已保存" },
+        400: errorResponse("收款人不是管理员，或者收款码的内容不对"),
         403: errorResponse("不是站长，或者用 bot token 调用"),
       },
     }),

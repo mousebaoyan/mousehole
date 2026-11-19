@@ -108,7 +108,7 @@ export const boardsRoutes = createRouter()
       },
     }),
     async (c) => {
-      const items = await listBoards(reachOf(c.var.viewer, c.var.bot));
+      const items = await listBoards(reachOf(c.var.viewer, c.var.token));
       return c.json({ items }, 200);
     },
   )
@@ -121,7 +121,7 @@ export const boardsRoutes = createRouter()
       responses: { 200: boardResponse, 404: errorResponse("版块不存在，或者访客看仅成员版块") },
     }),
     async (c) => {
-      const board = await getBoard(c.req.valid("param").slug, reachOf(c.var.viewer, c.var.bot));
+      const board = await getBoard(c.req.valid("param").slug, reachOf(c.var.viewer, c.var.token));
       return c.json(board, 200);
     },
   )

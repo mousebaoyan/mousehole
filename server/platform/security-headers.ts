@@ -23,5 +23,7 @@ export const securityHeaders = secureHeaders({
     : undefined,
   strictTransportSecurity: https ? "max-age=31536000; includeSubDomains" : false,
   referrerPolicy: "strict-origin-when-cross-origin",
+  // Our other sites under the same domain show members' avatars, ddl.mousebaoyan.cn among them.
+  crossOriginResourcePolicy: "same-site",
   xFrameOptions: "DENY",
 });

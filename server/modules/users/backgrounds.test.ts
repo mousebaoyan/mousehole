@@ -123,7 +123,8 @@ describe("背景", () => {
     expect(outside.status).toBe(400);
     expect(await outside.json()).toMatchObject({ error: { code: "invalid_crop" } });
 
-    // Noise compresses badly: every frame is new. The square one comes to about 1.3MB.
+    // Noise compresses badly: every frame is new. Two colours make the GIF quick to build, and the
+    // square one still comes to about 1MB.
     const frames = await Promise.all(
       Array.from({ length: 16 }, () =>
         sharp(randomBytes(400 * 400 * 3), { raw: { width: 400, height: 400, channels: 3 } })
@@ -132,7 +133,7 @@ describe("背景", () => {
       ),
     );
     const noise = await sharp(frames, { join: { animated: true } })
-      .gif({ effort: 1, dither: 0 })
+      .gif({ effort: 1, dither: 0, colours: 2 })
       .toBuffer();
     const still = await upload(member.who, noise, "0,0,400,400", "0,0,390,130");
     if (!still.ok) throw new Error(`status ${still.status}`);

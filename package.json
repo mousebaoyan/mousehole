@@ -43,6 +43,7 @@
     "hono": "^4.13.13",
     "isbot": "^5.2.2",
     "kysely": "^0.29.6",
+    "lean-qr": "^2.7.4",
     "lucide": "^1.57.0",
     "markdown-it": "^15.0.2",
     "markdown-it-footnote": "^4.0.0",
