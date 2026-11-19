@@ -61,6 +61,13 @@ const LABELS: Record<string, string> = {
   seconds: "时长",
   reply_to_id: "回复的楼层",
   visibility: "可见范围",
+  amount: "金额",
+  message: "留言",
+  method: "付款方式",
+  paid_at: "付款时间",
+  payee: "收款人",
+  wechat: "微信收款码",
+  alipay: "支付宝收款码",
 };
 
 // Zod's own Chinese messages read like a compiler ("数值过小：期望 string >=4 字符"); these are

@@ -20,7 +20,7 @@ import { ThemeToggle } from "~/components/theme-toggle";
 import { UserAvatar } from "~/components/user-avatar";
 import { buttonVariants } from "~/components/ui/button";
 import type { loader as threadLoader } from "~/routes/thread";
-import { STAFF } from "../../server/platform/site.ts";
+import { MAIN_SITE, STAFF } from "../../server/platform/site.ts";
 
 type Me = {
   id: number;
@@ -102,6 +102,13 @@ export function SiteHeader({ me, unread: loaded }: { me: Me | null; unread: numb
             <ForumNav />
           </Drawer>
           <Logo />
+          <a
+            href={MAIN_SITE}
+            className="ml-2 hidden h-8 shrink-0 items-center gap-1.5 rounded-lg border border-border pr-2.5 pl-1.5 text-sm whitespace-nowrap text-foreground/80 hover:bg-accent hover:text-foreground xl:flex"
+          >
+            <img src="/mousebaoyan.webp" alt="" width={20} height={20} className="rounded-md" />
+            鼠群官网
+          </a>
         </div>
         {/* The browser's own clear button is hidden: it ignores the theme. Ours is a reset button,
             shown in place of the shortcut hint once something is typed. */}

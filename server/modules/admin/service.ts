@@ -1,8 +1,9 @@
 import { isDeepStrictEqual } from "node:util";
 import { sql } from "kysely";
 import type { JsonObject } from "../../../db/types.ts";
-import type { Actor } from "../../platform/access.ts";
+import type { Actor, UserRef } from "../../platform/access.ts";
 import { db } from "../../platform/db.ts";
+import { AppError } from "../../platform/errors.ts";
 import {
   getSettings,
   saveSettings,
@@ -10,6 +11,7 @@ import {
   type SmtpAccount,
 } from "../../platform/settings.ts";
 import { recordAudit } from "../audit/service.ts";
+import { findMember, userBriefs } from "../users/service.ts";
 
 export async function databaseBytes() {
   const { bytes } = await db
@@ -25,6 +27,24 @@ function changes(before: JsonObject, after: JsonObject) {
       .filter(([key, value]) => !isDeepStrictEqual(before[key], value))
       .map(([key, value]) => [key, { from: before[key] ?? null, to: value ?? null }]),
   );
+}
+
+// The payee as the settings page shows them, with the QQ number to fill the field.
+export async function payeeOf(id: number) {
+  const { qq } = await db
+    .selectFrom("users")
+    .select("qq")
+    .where("id", "=", id)
+    .executeTakeFirstOrThrow();
+  return { ...(await userBriefs([id]))(id), qq };
+}
+
+// The payee confirms sponsorships with the owner in the admin pages (design §8.21), which are for
+// admins.
+async function payeeId(ref: UserRef) {
+  const user = await findMember(ref);
+  if (user?.role !== "admin") throw new AppError(400, "invalid_request", "收款人只能是管理员");
+  return user.id;
 }
 
 // A mailbox as the log shows it: never the password.
@@ -44,6 +64,7 @@ export async function updateSettings(
     bot?: Partial<Settings["bot"]>;
     notify?: Partial<Settings["notify"]>;
     weekly?: Partial<Settings["weekly"]>;
+    sponsor?: Partial<Omit<Settings["sponsor"], "payee"> & { payee: UserRef | null }>;
   },
 ) {
   const current = await getSettings();
@@ -64,6 +85,14 @@ export async function updateSettings(
       email: { ...current.notify.email, ...change.notify.email },
     },
     weekly: change.weekly && { ...current.weekly, ...change.weekly },
+    sponsor: change.sponsor && {
+      ...current.sponsor,
+      ...change.sponsor,
+      payee:
+        change.sponsor.payee === undefined
+          ? current.sponsor.payee
+          : change.sponsor.payee && (await payeeId(change.sponsor.payee)),
+    },
   };
   const passwords = (next.smtp?.accounts ?? [])
     .filter((a) => a.password !== stored.get(a.user))
@@ -80,6 +109,7 @@ export async function updateSettings(
           { ...next.notify.email, unactivated: next.notify.unactivated },
         ),
       weekly: next.weekly && changes(current.weekly, next.weekly),
+      sponsor: next.sponsor && changes(current.sponsor, next.sponsor),
       smtp: next.smtp && {
         ...changes(
           { accounts: current.smtp.accounts.map(mailbox) },

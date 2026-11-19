@@ -18,6 +18,7 @@ const ACTIONS: Record<string, string> = {
   "auth.session_end": "让设备下线",
   "auth.code_confirm": "确认登录口令",
   "auth.link_issue": "签发登录链接",
+  "auth.authorize": "登录应用",
   "thread.create": "发帖",
   "thread.update": "修改帖子",
   "thread.delete": "删除帖子",
@@ -69,6 +70,14 @@ const ACTIONS: Record<string, string> = {
   "badge.update": "修改徽章",
   "badge.grant": "授予徽章",
   "badge.revoke": "收回徽章",
+  "sponsorship.create": "登记赞助",
+  "sponsorship.edit": "修改自己的赞助",
+  "sponsorship.withdraw": "撤回赞助",
+  "sponsorship.add": "补录赞助",
+  "sponsorship.confirm": "确认赞助",
+  "sponsorship.reject": "赞助标为未收到",
+  "sponsorship.update": "修改赞助记录",
+  "sponsorship.delete": "删除赞助记录",
   "member.role": "角色变更",
   "member.role_unlock": "角色改回跟随群",
   "member.freeze": "冻结",
@@ -85,6 +94,9 @@ const ACTIONS: Record<string, string> = {
   "settings.update": "修改站点设置",
   "token.create": "创建 token",
   "token.revoke": "吊销 token",
+  "app.create": "登记应用",
+  "app.update": "修改应用",
+  "app.secret": "更换应用密钥",
 };
 
 export async function loader({ request, context }: Route.LoaderArgs) {

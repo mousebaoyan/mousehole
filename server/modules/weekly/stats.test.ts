@@ -20,7 +20,14 @@ beforeAll(async () => {
     { json: { slug: "senior", name: "高级", visibility: "members", read_level: 3 } },
     admin,
   );
-  const actor = { userId: id, operatorId: null, tokenId: null, ip: null, userAgent: null };
+  const actor = {
+    userId: id,
+    operatorId: null,
+    tokenId: null,
+    via: "web" as const,
+    ip: null,
+    userAgent: null,
+  };
   const { token } = await createBotToken(actor, { name: "插件", botQq: 99999, scopes: ["read"] });
   bot = { headers: { authorization: `Bearer ${token}` } };
 });

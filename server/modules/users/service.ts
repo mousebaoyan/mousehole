@@ -387,9 +387,11 @@ export async function recountPeopleReached() {
 }
 
 // Posting, reacting or leaving a boost is being active the day it is done, also when it comes from
-// the groups or a bot; for the stats, what comes through a bot was done in the groups.
+// the groups or a bot; for the stats, what comes through a bot was done in the groups. What an
+// Agent does isn't the member being active (design §10.1).
 export async function countActive(trx: Transaction<DB>, actor: Actor, at: RawBuilder<Date>) {
-  const where = actor.tokenId === null ? "site" : "qq";
+  if (actor.via === "agent") return;
+  const where = actor.via === "web" ? "site" : "qq";
   if ((await recordDay(trx, actor.userId, where, undefined, at)) === 0) return;
   await trx
     .updateTable("users")
@@ -578,7 +580,12 @@ async function badgeUnlocks(executor: Kysely<DB>, userId: number) {
 // For what guests get: leaves out what people who keep their content from guests wrote, given the
 // column holding the writer's user ID (design §8.10).
 export function shownToGuests(
-  column: "threads.author_id" | "posts.author_id" | "boosts.user_id" | "user_badges.user_id",
+  column:
+    | "threads.author_id"
+    | "posts.author_id"
+    | "boosts.user_id"
+    | "user_badges.user_id"
+    | "sponsorships.user_id",
 ) {
   return sql<boolean>`NOT EXISTS (SELECT 1 FROM users
     WHERE users.id = ${sql.ref(column)} AND users.hide_from_guests)`;

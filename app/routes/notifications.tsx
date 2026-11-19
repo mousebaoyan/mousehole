@@ -6,6 +6,7 @@ import {
   CircleCheck,
   FilePen,
   Gift,
+  HandHeart,
   Heart,
   Reply,
   Rocket,
@@ -23,6 +24,7 @@ import { UserAvatar } from "~/components/user-avatar";
 import { useMe } from "~/forum";
 import { ago, unixNow } from "~/time";
 import type { Route } from "./+types/notifications.ts";
+import { yuan } from "../../server/modules/sponsors/rules.ts";
 import { levelName } from "../../server/platform/site.ts";
 
 export function meta({ loaderData }: Route.MetaArgs) {
@@ -54,7 +56,8 @@ export async function action({ request, context }: Route.ActionArgs) {
   await read.$post({ json: { ids: [Number(form.get("id"))] } });
   const to = form.get("to");
   return redirect(
-    typeof to === "string" && /^\/(t\/\d+(\?floor=\d+)?|u\/\d+|badges\/\d+)$/.test(to)
+    typeof to === "string" &&
+      /^\/(t\/\d+(\?floor=\d+)?|u\/\d+|badges\/\d+|sponsor|admin\/sponsor)$/.test(to)
       ? to
       : "/notifications",
   );
@@ -75,6 +78,7 @@ const ICONS: Record<string, typeof Reply> = {
   level: TrendingUp,
   lottery: Gift,
   badge: Award,
+  sponsor: HandHeart,
 };
 
 // How a lottery went, for whom; see design §8.13.
@@ -131,6 +135,12 @@ function headline(n: Item) {
       return `${LOTTERY[n.data.result]}${n.data.prize ? `：${n.data.prize}` : ""}`;
     case "badge":
       return `你获得了徽章「${n.data.name}」`;
+    case "sponsor": {
+      const amount = `¥${yuan(Number(n.data.amount))}`;
+      if (n.data.action === "pending") return `${who} 登记了一笔 ${amount} 的赞助`;
+      if (n.data.action === "confirmed") return `你赞助的 ${amount} 已确认，衷心感谢你的支持`;
+      return `收款人未查到你登记的 ${amount} 赞助${n.data.reason ? `：${n.data.reason}` : ""}`;
+    }
     default:
       return `${who} 发了新帖`;
   }
@@ -200,12 +210,17 @@ function Row({ item: n, now }: { item: Item; now: number }) {
   const Icon = ICONS[n.type] ?? Reply;
   const read = n.read || readHere.has(n.id);
   // A lottery goes to its thread, and a badge earned for a floor to that floor; other badges to
-  // the badge's page; a level to one's profile, where the next one's progress is.
+  // the badge's page; a sponsorship to be confirmed to the admin's list of them, and one's own
+  // to the sponsor page; a level to one's profile, where the next one's progress is.
   const to = n.thread
     ? `/t/${n.thread.id}${n.post ? `?floor=${n.post.floor}` : ""}`
     : n.type === "badge"
       ? `/badges/${n.data.badge_id}`
-      : `/u/${me?.id}`;
+      : n.type === "sponsor"
+        ? n.data.action === "pending"
+          ? "/admin/sponsor"
+          : "/sponsor"
+        : `/u/${me?.id}`;
   return (
     <li
       className={cn(

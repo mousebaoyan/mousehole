@@ -855,7 +855,7 @@ async function resolveContent(
 }
 
 function via(actor: Actor, source: Source | undefined) {
-  return source ? "qq" : actor.tokenId === null ? "web" : "bot";
+  return source ? "qq" : actor.via;
 }
 
 // What levels allow (design §6.6). Moderators and admins aren't held by any of it.
@@ -895,6 +895,33 @@ async function assertWithinL0(
     const what = kind === "thread" ? "个帖子" : "条回复";
     throw levelRequired(`L0 每天最多发 ${L0_PER_DAY[kind]} ${what}，升到 L1 后不限`);
   }
+}
+
+// What a member's Agent may post a day, tighter than the site, so one run wild stops there
+// (design §6.7). Deleted posts count too: they were posted.
+const AGENT_PER_DAY = { thread: 5, reply: 30 };
+
+async function assertWithinAgentLimit(actor: Actor, kind: "thread" | "reply") {
+  if (actor.via !== "agent") return;
+  const dayStart = sql<Date>`date_trunc('day', now(), 'Asia/Shanghai')`;
+  const today = await db
+    .selectFrom("posts")
+    .select([
+      sql<number>`count(*)::integer`.as("count"),
+      sql<number>`ceil(extract(epoch FROM ${dayStart} + interval '1 day' - now()))::integer`.as(
+        "left",
+      ),
+    ])
+    .where("author_id", "=", actor.userId)
+    .where("via", "=", "agent")
+    .where("floor", kind === "thread" ? "=" : ">", 1)
+    .where("created_at", ">=", dayStart)
+    .executeTakeFirstOrThrow();
+  if (today.count < AGENT_PER_DAY[kind]) return;
+  const what = kind === "thread" ? "个帖子" : "条回复";
+  throw new AppError(429, "rate_limited", `通过 Agent 每天最多发 ${AGENT_PER_DAY[kind]} ${what}`, {
+    retryAfter: today.left,
+  });
 }
 
 // Starting threads in a board, or moving them there: some boards are for moderators, some want a
@@ -955,6 +982,7 @@ export async function createThread(
   const { markdown } = await resolveContent(viewer, input.content, input.source, null);
   const { html, images, mentions, links } = await renderMarkdown(markdown, showImages);
   await assertWithinL0(viewer, input.source, links, "thread");
+  await assertWithinAgentLimit(actor, "thread");
 
   const status = statusFor(board.review_mode, viewer);
   const kind = input.kind ?? board.default_kind;
@@ -1002,7 +1030,7 @@ export async function createThread(
     await linkUploads(trx, opening.id, images);
     if (input.source) await linkSource(trx, input.source, thread.id, opening.id);
     // Posted from the composer; what a bot posts for them leaves their draft alone.
-    if (actor.tokenId === null) await discardDraft(trx, viewer.id, null);
+    if (actor.via === "web") await discardDraft(trx, viewer.id, null);
     await countActive(trx, actor, at);
     if (tagIds.length > 0) {
       await trx
@@ -1070,10 +1098,11 @@ export async function createPost(
   const replyTo = input.reply_to_id ?? replyToId ?? undefined;
   const { html, images, mentions, links } = await renderMarkdown(markdown, showImages);
   await assertWithinL0(viewer, input.source, links, "reply");
+  await assertWithinAgentLimit(actor, "reply");
 
   const status = statusFor(thread.review_mode, viewer);
   const id = await db.transaction().execute(async (trx) => {
-    if (actor.tokenId === null) await discardDraft(trx, viewer.id, threadId);
+    if (actor.via === "web") await discardDraft(trx, viewer.id, threadId);
     await countActive(trx, actor, at);
     if (replyTo !== undefined) {
       const target = await trx

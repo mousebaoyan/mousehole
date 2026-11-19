@@ -65,6 +65,14 @@ const WeeklySchema = z.object({
   top_likes: z.number().int().default(5),
 });
 
+// Sponsorship (design §8.21): who is paid and confirms with the owner, and what the payee's WeChat
+// and Alipay codes hold; empty is not set.
+const SponsorSchema = z.object({
+  payee: z.number().int().nullable().default(null),
+  wechat: z.string().default(""),
+  alipay: z.string().default(""),
+});
+
 export type Settings = {
   site: z.infer<typeof SiteSchema>;
   login: z.infer<typeof LoginSchema>;
@@ -72,6 +80,7 @@ export type Settings = {
   bot: z.infer<typeof BotSchema>;
   notify: z.infer<typeof NotifySchema>;
   weekly: z.infer<typeof WeeklySchema>;
+  sponsor: z.infer<typeof SponsorSchema>;
 };
 
 let cache: Promise<Settings> | null = null;
@@ -102,6 +111,7 @@ async function load(): Promise<Settings> {
     bot: BotSchema.parse(stored.get("bot") ?? {}),
     notify: NotifySchema.parse(stored.get("notify") ?? {}),
     weekly: WeeklySchema.parse(stored.get("weekly") ?? {}),
+    sponsor: SponsorSchema.parse(stored.get("sponsor") ?? {}),
   };
 }
 
@@ -121,6 +131,7 @@ export async function saveSettings(trx: Transaction<DB>, change: Partial<Setting
   if (change.bot) rows.push({ key: "bot", value: JSON.stringify(change.bot) });
   if (change.notify) rows.push({ key: "notify", value: JSON.stringify(change.notify) });
   if (change.weekly) rows.push({ key: "weekly", value: JSON.stringify(change.weekly) });
+  if (change.sponsor) rows.push({ key: "sponsor", value: JSON.stringify(change.sponsor) });
   if (change.smtp) {
     const accounts = change.smtp.accounts.map((a) => ({ ...a, password: encrypt(a.password) }));
     rows.push({ key: "smtp", value: JSON.stringify({ accounts }) });

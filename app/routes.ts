@@ -11,6 +11,7 @@ export default [
     route("badges", "routes/badges.tsx"),
     route("badges/:id", "routes/badge.tsx"),
     route("coins", "routes/coins.tsx"),
+    route("sponsor", "routes/sponsor.tsx"),
     route("notifications", "routes/notifications.tsx"),
     route("settings", "routes/settings.tsx"),
     route("drafts", "routes/drafts.tsx"),
@@ -20,6 +21,7 @@ export default [
     route("login", "routes/login.tsx"),
     route("login/link", "routes/login-link.tsx"),
     route("unsubscribe", "routes/unsubscribe.tsx"),
+    route("oauth/authorize", "routes/oauth-authorize.tsx"),
   ]),
   // For fetchers on the forum's pages.
   route("new", "routes/new-thread.ts"),
@@ -50,8 +52,10 @@ export default [
     route("boards", "routes/admin/boards.tsx"),
     route("tags", "routes/admin/tags.tsx"),
     route("badges", "routes/admin/badges.tsx"),
+    route("sponsor", "routes/admin/sponsor.tsx"),
     route("site", "routes/admin/site.tsx"),
     route("email", "routes/admin/email.tsx"),
     route("tokens", "routes/admin/tokens.tsx"),
+    route("apps", "routes/admin/apps.tsx"),
   ]),
 ] satisfies RouteConfig;

@@ -3,8 +3,9 @@
 // floor in a thread I watch; following: a new thread by someone I follow; solved: my answer was
 // accepted; moderation: something of mine was approved, rejected, hidden or shown again;
 // suggestion: a change suggested for my thread, or what became of mine; level: I went up a level;
-// lottery: one I entered or started was drawn or called off; badge: I earned a badge. In the order
-// settings list them. Pages use this file too, so it imports nothing.
+// lottery: one I entered or started was drawn or called off; badge: I earned a badge; sponsor: a
+// sponsorship registered, for the payee, or what became of mine. In the order settings list them.
+// Pages use this file too, so it imports nothing.
 export const NOTIFICATION_TYPES = [
   "reply",
   "thread_reply",
@@ -19,6 +20,7 @@ export const NOTIFICATION_TYPES = [
   "level",
   "lottery",
   "badge",
+  "sponsor",
 ] as const;
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
 
@@ -37,6 +39,7 @@ export const NOTIFICATION_LABELS: Record<NotificationType, string> = {
   level: "升级",
   lottery: "抽奖开奖或取消",
   badge: "获得徽章",
+  sponsor: "赞助",
 };
 
 // Told on the site only, never by email (design §6.6).

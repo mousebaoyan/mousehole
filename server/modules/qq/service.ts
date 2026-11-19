@@ -13,7 +13,7 @@ export type Source = { chat_type: "group" | "private"; chat_id: number; message_
 // later than now (design §6.5).
 export function postedAt(actor: Actor, createdAt: number | undefined) {
   if (createdAt === undefined) return sql<Date>`now()`;
-  if (actor.tokenId === null) {
+  if (actor.via !== "bot") {
     throw new AppError(403, "forbidden", "只有 bot 收录群聊时能带 created_at");
   }
   return sql<Date>`least(to_timestamp(${createdAt}), now())`;

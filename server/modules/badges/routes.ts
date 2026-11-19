@@ -130,7 +130,7 @@ export const badgesRoutes = createRouter()
       const page = await getBadge(
         c.req.valid("param").id,
         c.var.viewer?.id ?? null,
-        reachOf(c.var.viewer, c.var.bot),
+        reachOf(c.var.viewer, c.var.token),
         c.req.valid("query").cursor ?? 0,
       );
       return c.json(
@@ -162,7 +162,7 @@ export const badgesRoutes = createRouter()
       const id = await findUserId(c.req.valid("param").user);
       const items = await listUserBadges(
         id,
-        reachOf(c.var.viewer, c.var.bot),
+        reachOf(c.var.viewer, c.var.token),
         c.var.viewer?.id ?? null,
       );
       return c.json(

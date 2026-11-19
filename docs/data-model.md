@@ -10,7 +10,7 @@
 - 回复数、点赞数等计数冗余存在父行里，和写入在同一个事务里更新，列表页不做聚合。`threads`、`posts` 设 `fillfactor = 90`，计数更新可以走 HOT 更新，不用改索引。
 - 列表用游标分页，沿索引顺序取下一页；帖子内按楼层号分页，第 N 页直接定位楼层范围，不用 OFFSET。
 - 正文列用 lz4 压缩，超过约 2KB 的长文会自动压缩。
-- 会话、登录链接、bot token 等令牌只存 SHA-256 哈希。
+- 会话、登录链接、bot token、成员的令牌、授权码和应用的密钥等令牌只存 SHA-256 哈希。
 - 连接：`pg`（node-postgres）连接池最多 10 个连接，另用 1 个单独的连接 LISTEN 事件通知。论坛账号设置 `statement_timeout = '5s'`、`idle_in_transaction_session_timeout = '30s'`。
 - 迁移是按编号排列的 SQL 文件，启动时由 Kysely 的 Migrator 依次执行，执行前先取 advisory lock。改完表结构后用 kysely-codegen 重新生成类型，CI 检查生成的类型和迁移是否一致。
 - `bigint` 在应用里读成 JS 的 `number`：QQ 号和各种 ID 都远小于 2^53。
@@ -32,13 +32,20 @@
   - 名单里没有、仍在群里、`observed_at` 又早于这次全量的成员，标记为退群（`left_reason = 'unknown'`）。
   - 要标记的人数超过当前人数的 20% 时，这次只更新资料、记下 `shrink_held_at`；下一次全量仍然这样，就照常标记。
 
-## 登录与 bot
+## 登录、令牌与应用
 
-表：`sessions`、`login_tickets`、`email_codes`、`api_tokens`、`idempotency_keys`。
+表：`sessions`、`login_tickets`、`email_codes`、`api_tokens`、`idempotency_keys`、`oauth_clients`、`oauth_codes`。
 
 - 邮件验证码每人一条，重发就覆盖。每次校验在同一条 `UPDATE` 里累加 `attempts` 并取出验证码，第 5 次之后作废，并发校验也不会多试。
 - 登录票据用完立即删除。过期的口令票据在申请新口令时顺手删掉，这样表不会变大，旧口令也能再被抽到；过期的链接票据由定时任务清理。口令票据创建时 `user_id` 为空，bot 确认后填入，浏览器换到会话后删除。
-- 每个 bot token 绑定一个 `bot` 角色的账号（`bot_user_id`），创建 token 时按 bot 的 QQ 号找到或新建，角色锁定；登录过的账号不能用作 bot。`last_used_at` 最多一分钟写一次。
+- `api_tokens` 存 bot token 和成员的令牌（[总体设计 §6.7](design.md#67-agent-和自家应用)），`user_id` 是以谁的身份操作：账号是 `bot` 角色的是 bot token，其余是成员的令牌。`last_used_at` 最多一分钟写一次。
+  - 每个 bot token 绑定一个 `bot` 角色的账号，创建 token 时按 bot 的 QQ 号找到或新建，角色锁定；登录过的账号不能用作 bot。
+  - 成员的令牌：`client_id` 指向 `oauth_clients`，应用授权的才有；`name` 在个人令牌是自己起的名字，在应用的令牌是授权时的应用名。`last_used_at`（没用过看 `created_at`）早于 90 天前就失效，撤销记 `revoked_at`。失效的行不删，操作日志和幂等键引用着它们。自家应用的令牌每人一个：签发新的时，把这个人在这个应用的旧令牌标为撤销。设置页按部分索引 `(user_id) WHERE revoked_at IS NULL` 查自己的令牌。
+- `oauth_clients` 是应用，`client_id` 都由论坛随机生成。有 `secret_hash` 的是自家应用，没有的是 Agent 注册的。
+  - 自家应用由站长登记：`secret_hash` 存密钥的 SHA-256，`redirect_uris` 和 `scopes` 是登记的；停用记 `disabled_at`，同时把它的令牌都标为撤销。
+  - Agent 注册时建行，`name`、`redirect_uris` 是它报的。一天内没换到令牌的，由定时任务删除。
+- `oauth_codes` 是授权码：只存 SHA-256，带应用、本人、回调地址、范围和 `code_challenge`，5 分钟过期。换令牌时在同一条 `DELETE … RETURNING` 里取出，用过就没了，并发换也只有一次成功；封禁时删掉这个人的，过期的由定时任务清理。
+- 通过成员的令牌写的楼层、表情回应和短评，`via` 为 `agent`：`posts`、`reactions`、`boosts` 的 CHECK 都加上它。
 - 幂等：收到带键的请求，先插入一行占位（`status` 为 NULL）再执行，成功了回填状态码和响应；出错（4xx、5xx）不算结果，删掉占位让重试重新执行。回填在业务事务提交之后，两者之间进程崩溃的话，占位超过 5 分钟视为中断，重试会再执行一次；从群消息创建内容的请求另有 `409 source_exists` 兜底。超过 7 天的键当作新键，旧行由定时任务清理。
 
 ## 版块与标签
@@ -83,7 +90,7 @@
 
 表：`reactions`、`boosts`、`thread_users`、`user_follows`、`endorsements`、`notifications`、`mail_queue`。
 
-- 表情回应每人每条一个，主键 `(post_id, user_id)`，换表情就是覆盖。`via` 和楼层的一样记从哪来（`web`、`bot`、`qq`），换表情时跟着换，数据页按它分来源；加这一列以前的，没登录过的人留的算 `qq`，其余算 `web`。每个表情都算一次赞：`posts.like_count` 是总数，`posts.reactions` 是各表情的数量，都和写入在同一个事务里更新。
+- 表情回应每人每条一个，主键 `(post_id, user_id)`，换表情就是覆盖。`via` 和楼层的一样记从哪来（`web`、`bot`、`qq`、`agent`），换表情时跟着换，数据页按它分来源；加这一列以前的，没登录过的人留的算 `qq`，其余算 `web`。每个表情都算一次赞：`posts.like_count` 是总数，`posts.reactions` 是各表情的数量，都和写入在同一个事务里更新。
 - 短评每人每层一条，`UNIQUE (post_id, user_id)`，修改就是覆盖，排序位置不变。`via` 同表情回应，修改时跟着换，数据页的活跃用户按它只算网页上写的；加这一列以前的，bot 留的算 `qq`（插件收录短评都带来源消息），其余算 `web`。字数（16 个字，emoji 算一个）由应用按字素计数，库里不设长度约束。
 - 短评数冗余在 `posts.boost_count`，楼层列表每层取前 6 条短评，其余点开再取。删除短评是真删除，它的举报跟着删掉。
 
@@ -91,7 +98,7 @@
 - 收藏是 `thread_users.bookmarked_at`，重复收藏保留第一次的时间。帖子的查询都 left join 读者自己的那行（访客没有），详情里的收藏和关注级别、收藏列表都从这里来。
 - 关注用户（`user_follows`）和认可（`endorsements`）每对人一行，不能对自己。关注数、粉丝数、认可数不冗余存，资料卡里直接数，各是一段索引范围。
 - 个人主页的名单（[总体设计 §9](design.md#9-页面)）：赞过按 `reactions_user`（`user_id, created_at`）倒序取；关系名单分别走 `user_follows` 的主键和 `user_follows_followee`、`endorsements` 的主键和 `endorsements_endorser`，都按 `created_at` 倒序、用偏移翻页。`users.relations_public` 关掉时，别人看不到这几项，这个人也不出现在别人的名单和概要里。概要的两份名单现算：按楼层作者或回应的人分组数表情回应，不算匿名楼层。
-- 通知的 `type`：`reply`、`thread_reply`、`mention`、`like`、`boost`、`watching`、`following`、`solved`、`moderation`、`level`、`lottery`、`badge`，含义见[接口](api.md)的通知对象。都和触发它的写入在同一个事务里插入。
+- 通知的 `type`：`reply`、`thread_reply`、`mention`、`like`、`boost`、`watching`、`following`、`solved`、`moderation`、`level`、`lottery`、`badge`、`sponsor`，含义见[接口](api.md)的通知对象。都和触发它的写入在同一个事务里插入。
 - 一条新楼层只给每人一条通知，按先后取第一个适用的：被回复的那一层的作者（`reply`）；@到的人（`mention`）；没指定楼层时是楼主（`thread_reply`）；关注这个帖子的人（`watching`）。新帖通知 @到的人和作者的粉丝（`following`）。从群里收录来的帖子和楼层（`via` 为 `qq`）不产生通知。
 - 合并通知：`like:{楼层 ID}`、`boost:{楼层 ID}`、`thread_reply:{帖子 ID}`、`watching:{帖子 ID}` 是 `group_key`，未读期间再次触发只更新触发者、次数、`data` 和时间，不新增行；`post_id` 留着第一次的，点进去从最早没看的那层开始。
 - 不通知：自己做的事、冻结的账号、把这个帖子设为 `muted` 的人、在 `users.notify_prefs` 里关掉了这类站内通知的人。`notify_prefs` 形如 `{ "like": { "site": false, "email": true } }`，站内通知没写的按开着算，邮件没写的按站长设的默认值（`settings` 的 `notify`，形如 `{ "email": { "thread_reply": "on", "like": "never" }, "unactivated": false }`，没写的类型用代码里的默认）；站长设为 `never` 的类型不管怎么写都不发邮件。`users.notify_email` 是邮件提醒的总开关，关掉时哪类都不发邮件，`notify_prefs` 里的设置留着。`activated_at` 为空的人只在 `notify.unactivated` 为 `true` 时收到邮件，每周来信也一样。
@@ -139,6 +146,15 @@
 - 签到：`users` 记新的一天（`recordDay`，见上面的阅读统计）时调用 `checkIn`；成员同步写入的 `group_members.last_sent_at` 往后移时，也给那一天签到。都只认今天和昨天；冻结的账号、bot 和站长不签到。
 - 结算：每小时的任务看 `job_runs` 里 `coins` 结算到了哪天，昨天还没结算就结算，一天一个事务。获赞：`reactions.created_at` 落在那天、给赞的人不是 bot、楼层没删没隐藏也不匿名、作者是成员的，按（作者，给赞的人）去重计数；采纳：`posts.accepted_at` 落在那天、同样条件的楼层，有就记一次。悬赏：悬赏期间发的、不是楼主的、不是收录来的回复，`created_at` 或 `accepted_at` 落在那天的，每人取一条，被采纳的优先，记上它的帖子。
 - 明细按 `(user_id, id DESC)` 分页。排行榜现算：按 `day` 的范围汇总 `amount > 0` 的流水，走 `coin_ledger (day)`。
+
+## 赞助
+
+表：`sponsorships`（[总体设计 §8.21](design.md#821-赞助)），只由 `sponsors` 模块写入。收款人和收款码存在 `settings` 的 `sponsor`：`payee` 是收款人的用户 ID，`wechat`、`alipay` 是收款码的内容，空字符串是没设。
+
+- 每笔赞助一行：`user_id` 赞助的人；`amount` 金额，以分记，`CHECK (amount > 0)`；`method` 取 `wechat`、`alipay`；`status` 取 `pending`、`confirmed`、`rejected`；`message` 留言，没有为 `NULL`；`anonymous` 上墙时是否匿名；`show_amount` 感谢墙上是否显示金额，没有默认值，登记时本人选，补录的为 false，加这一列以前登记的也是 false（那时说过只显示档位）；`paid_at` 付款时间，自己登记的是登记的时间，补录的由收款人填；`reviewer_id`、`reviewed_at`、`reason` 是最近一次确认或标为没收到的人、时间和理由。
+- 每人同时只有一条待确认的：部分唯一索引 `(user_id) WHERE status = 'pending'`，登记时冲突返回 `409 sponsorship_pending`。撤回待确认的、删掉记错的，都直接删掉这一行。
+- 感谢墙和后台按状态的列表走 `sponsorships_status`（`status, id`），按 `id` 翻页；自己的记录走 `sponsorships_user`（`user_id, id`）。档位不存，按金额现算。今年的合计和笔数现算，一年几十笔。
+- 「投喂鼠」徽章的规则（`badges/rules.ts`）查 `status = 'confirmed' AND NOT anonymous` 的人。
 
 ## 图片
 
@@ -235,4 +251,6 @@
 | 由楼层找来源消息 | `qq_message_links_post` |
 | 事件流续传 | `events` 主键 |
 | 校验会话 | `sessions.token_hash` 唯一索引 |
+| 校验 bot token 和成员的令牌 | `api_tokens.token_hash` 唯一索引 |
+| 设置页里自己的令牌 | `api_tokens_user`（`user_id`，只含没撤销的） |
 | 全文搜索 | `post_search_document` |

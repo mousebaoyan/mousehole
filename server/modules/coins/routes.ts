@@ -104,7 +104,7 @@ export const coinsRoutes = createRouter()
     }),
     async (c) => {
       const viewer = authorize(c, "read");
-      if (!isMember(viewer, c.var.bot)) throw new AppError(403, "forbidden", "仅成员可查看");
+      if (!isMember(viewer, c.var.token)) throw new AppError(403, "forbidden", "仅成员可查看");
       const rows = await leaderboard(c.req.valid("query").period);
       const user = await userBriefs(rows.map((r) => r.user_id));
       return c.json({ items: rows.map((r) => ({ user: user(r.user_id), earned: r.earned })) }, 200);
