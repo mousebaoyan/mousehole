@@ -81,10 +81,10 @@ function countCachedView(c: Context) {
 }
 
 // The emoji data's path carries its version, so browsers may keep it; public files otherwise
-// get an hour.
+// get an hour. Not an error, though: a file missing from one release may come with the next.
 const cacheForAYear = createMiddleware(async (c, next) => {
   await next();
-  c.res.headers.set("cache-control", "public, max-age=31536000, immutable");
+  if (c.res.ok) c.res.headers.set("cache-control", "public, max-age=31536000, immutable");
 });
 
 // Docker stops the container with SIGTERM; the counts not yet written go out first.
