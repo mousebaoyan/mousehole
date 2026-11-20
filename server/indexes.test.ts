@@ -4,6 +4,7 @@ import { Client } from "pg";
 import { afterAll, beforeAll, describe, expect, test, vi } from "vitest";
 import { as, createUser, login } from "../test/fixtures.ts";
 import { app } from "./app.ts";
+import { countFrequent } from "./modules/threads/service.ts";
 import { db } from "./platform/db.ts";
 import { env } from "./platform/env.ts";
 
@@ -64,6 +65,7 @@ beforeAll(async () => {
     admin,
   );
   await fill(await createUser(), memberId);
+  await countFrequent();
 }, 60_000);
 
 // A year of threads, ten floors each, with what a reader leaves behind: reading records,
@@ -119,6 +121,17 @@ async function fill(author: { id: number }, reader: number) {
         OR users.display_name LIKE '填充成员%' AND (posts.thread_id + users.id) % 200 = 0)`.execute(
     db,
   );
+  // Some of the last three months' are questions with a floor a day for ten days, half of them
+  // taken from the group, so that the frequent questions (design §8.22) are some sixty threads
+  // rather than none.
+  await sql`
+    UPDATE threads SET kind = 'question'
+    WHERE title LIKE '填充帖子%' AND id % 10 = 0
+      AND created_at BETWEEN now() - interval '90 days' AND now() - interval '10 days'`.execute(db);
+  await sql`
+    UPDATE posts SET via = CASE WHEN floor = 1 AND thread_id % 20 = 0 THEN 'qq' ELSE via END,
+      created_at = threads.created_at + posts.floor * interval '1 day'
+    FROM threads WHERE threads.id = posts.thread_id AND threads.kind = 'question'`.execute(db);
   // As autovacuum would: merges the full-text index's pending entries and updates statistics.
   await sql`VACUUM ANALYZE`.execute(db);
 }
@@ -143,7 +156,12 @@ describe("热点查询走索引", () => {
     ] as const;
     for (const view of views) await api.threads.$get({ query: { view } }, member);
     await api.threads.counts.$get({ query: {} }, member);
-    await api.threads.frequent.$get({ query: {} }, member);
+    // The fill puts some sixty questions on it; with none, its queries would go unchecked.
+    const frequent = await api.threads.frequent.$get({ query: {} }, member);
+    if (!frequent.ok) throw new Error(`status ${frequent.status}`);
+    const { items, topics } = await frequent.json();
+    expect(items).not.toHaveLength(0);
+    expect(topics).not.toHaveLength(0);
     await api.me.$get({}, member);
     await api.threads.$get({ query: { board: "hot" } });
     await api.threads.$get({ query: { tag: "夏令营" } });
