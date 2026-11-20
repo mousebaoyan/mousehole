@@ -1,5 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { expect, test, type Page } from "@playwright/test";
+import { Client } from "pg";
 import { BASE, SERVER_ENV } from "./env.ts";
 
 // Through the bootstrap command's one-time link: --owner as on a new server, --qq for an admin.
@@ -72,6 +73,41 @@ test("站长设公告，管理员建版块、发帖再回复，从通知打开�
   const row = page.getByRole("link", { name: /端到端测试发的帖子/ });
   await expect(row).toBeVisible();
   await expect(row).not.toContainText("层没读过");
+});
+
+test("成员翻过的列表，退出后后退，访客看不到只对成员开放的帖子", async ({ page }) => {
+  // More questions than a page holds in a board only members read, and one anyone reads.
+  const db = new Client({ connectionString: SERVER_ENV.DATABASE_URL });
+  await db.connect();
+  await db.query(`
+    WITH author AS (INSERT INTO users (qq, display_name) VALUES (20001, '提问的人') RETURNING id),
+      added AS (
+        INSERT INTO boards (slug, name, visibility)
+        VALUES ('inner', '内部', 'members'), ('open', '公开', 'public') RETURNING id, slug)
+    INSERT INTO threads (board_id, author_id, title, last_poster_id, kind, created_at, last_post_at)
+    SELECT added.id, author.id, title, author.id, 'question', at, at
+    FROM author, added, LATERAL (
+      SELECT '内部的提问 ' || i, now() - i * interval '1 minute' FROM generate_series(1, 31) i
+      WHERE added.slug = 'inner'
+      UNION ALL SELECT '公开的提问', now() - interval '1 hour' WHERE added.slug = 'open'
+    ) asked (title, at)`);
+  await db.query(`
+    INSERT INTO posts (thread_id, floor, author_id, body, html, created_at)
+    SELECT id, 1, author_id, '怎么办', '<p>怎么办</p>', created_at FROM threads
+    WHERE title LIKE '%的提问%'`);
+  await db.end();
+
+  await signIn(page, ["--qq", "10003"]);
+  await page.goto("/?view=unsolved");
+  await page.getByRole("link", { name: "加载更多" }).scrollIntoViewIfNeeded();
+  await expect(page.getByRole("link", { name: /内部的提问/ })).toHaveCount(31);
+  await page.getByRole("button", { name: "我的账号" }).click();
+  await page.getByRole("button", { name: "退出" }).click();
+  await page.waitForURL((url) => url.pathname === "/" && url.search === "");
+  await page.goBack();
+  await expect(page.getByRole("link", { name: "待解答" })).toHaveAttribute("aria-current", "page");
+  await expect(page.getByRole("link", { name: /公开的提问/ })).toBeVisible();
+  await expect(page.getByRole("link", { name: /内部的提问/ })).toHaveCount(0);
 });
 
 test("站长登记鼠钟；登录了的打开授权页直接带着授权码回到鼠钟，没登录的带着 login_required 回去", async ({

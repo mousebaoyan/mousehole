@@ -1,5 +1,6 @@
 import { Fragment, useEffect, useRef, useState, type ReactNode } from "react";
 import { useFetcher, useLocation } from "react-router";
+import { useMe } from "~/forum";
 import { useNearView } from "~/near-view";
 
 // A page of a list as the route's loader `L` gives it.
@@ -30,7 +31,10 @@ export function Pages<L>(props: Props<L>) {
 
 function EntryPages<L>({ kept, first, next, children }: Props<L>) {
   const { key, pathname, search } = useLocation();
-  const [restored] = useState(() => kept.get(key));
+  // Only to the reader they were shown to: after logging out, Back shows a guest none of a
+  // member's pages.
+  const entry = `${useMe()?.id ?? "guest"} ${key}`;
+  const [restored] = useState(() => kept.get(entry));
   const [more, setMore] = useState(() => restored?.slice(1) ?? []);
   const { load, state, data } = useFetcher<L>();
   const [added, setAdded] = useState(data);
@@ -41,9 +45,9 @@ function EntryPages<L>({ kept, first, next, children }: Props<L>) {
   const top = restored?.[0] ?? first;
   useEffect(() => {
     if (more.length === 0) return;
-    kept.set(key, [top, ...more]);
+    kept.set(entry, [top, ...more]);
     for (const old of [...kept.keys()].slice(0, -KEPT)) kept.delete(old);
-  }, [kept, key, top, more]);
+  }, [kept, entry, top, more]);
 
   const link = useRef<HTMLAnchorElement>(null);
   const cursor = next(more.at(-1) ?? top);
