@@ -875,6 +875,11 @@ const TITLE_MIN = 4;
 const TITLE_PAUSE_MS = 1000;
 const RELATED_SHOWN = 3;
 
+// 保研定位 titles are made up from the table, and lotteries ask nothing.
+function asking(kind: Kind) {
+  return kind !== "positioning" && kind !== "lottery";
+}
+
 // A new thread's title, board, kind and tags above its body. Picking a board takes its kind,
 // unless a poll or lottery is being set up. `onLeave` is for opening a related thread.
 function ThreadFields({
@@ -896,20 +901,19 @@ function ThreadFields({
   const pause = useRef<ReturnType<typeof setTimeout>>(undefined);
   const lookedUp = useRef("");
   useEffect(() => () => clearTimeout(pause.current), []);
-  // Threads like this one, looked up once its title is written: as the field is left or typing
-  // pauses, not at every character (design §8.5). 保研定位 titles are made up from the table, and
-  // lotteries ask nothing.
-  function lookUp(title: string) {
+  // Threads like this one, looked up once its title is written: as the field is left, typing
+  // pauses or the kind turns to one that asks, not at every character (design §8.5).
+  function lookUp(title: string, kind: Kind) {
     clearTimeout(pause.current);
     const text = title.trim();
-    if (text.length < TITLE_MIN || text === lookedUp.current) return;
+    if (!asking(kind) || text.length < TITLE_MIN || text === lookedUp.current) return;
     lookedUp.current = text;
     void related.load(`/similar?text=${encodeURIComponent(text)}`);
   }
   const shown =
-    positioning || content.kind === "lottery" || content.title.trim().length < TITLE_MIN
-      ? []
-      : (related.data ?? []).slice(0, RELATED_SHOWN);
+    asking(content.kind) && content.title.trim().length >= TITLE_MIN
+      ? (related.data ?? []).slice(0, RELATED_SHOWN)
+      : [];
   return (
     <div className="flex flex-col gap-2 border-t px-4 py-2.5">
       <Input
@@ -918,9 +922,9 @@ function ThreadFields({
           const title = e.target.value;
           onChange({ ...content, title });
           clearTimeout(pause.current);
-          pause.current = setTimeout(() => lookUp(title), TITLE_PAUSE_MS);
+          pause.current = setTimeout(() => lookUp(title, content.kind), TITLE_PAUSE_MS);
         }}
-        onBlur={(e) => lookUp(e.target.value)}
+        onBlur={(e) => lookUp(e.target.value, content.kind)}
         aria-label="标题"
         placeholder={
           positioning
@@ -990,7 +994,7 @@ function ThreadFields({
                   value={k.kind}
                   checked={content.kind === k.kind}
                   disabled={held}
-                  onChange={() =>
+                  onChange={() => {
                     onChange({
                       ...content,
                       kind: k.kind,
@@ -1010,8 +1014,9 @@ function ThreadFields({
                             ? [...content.tags, POSITIONING_TAG].slice(0, 5)
                             : content.tags,
                       }),
-                    })
-                  }
+                    });
+                    lookUp(content.title, k.kind);
+                  }}
                   className="sr-only"
                 />
                 {k.label}
