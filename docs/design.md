@@ -995,9 +995,9 @@ QQ 群的 2000 人规模、服务器、域名和 bot 用的模型都要花钱，
 - **镜像**：基于 `node:26-slim` 多阶段构建（`Dockerfile`），以 `node` 用户（uid 1000）运行，V8 堆上限 192MB，自带 `/healthz` 健康检查。CI 在每个 PR 上确认镜像能构建；在 `main` 上打 `v1.2.3` 这样的版本标签时，GitHub Actions 构建镜像并推到 `ghcr.io/mousebaoyan/mousehole`（标签是版本号和 `latest`）。这个包设为公开，服务器不用登录就能拉取；镜像里没有密钥，源码本来也是公开的。服务器只拉镜像，不在服务器上编译。
 - **compose**：见 `deploy/compose.yml`，服务器上和 `.env`、`data/` 一起放在 `/opt/1panel/www/sites/mousehole/`。`mousehole` 服务加入 `1panel-network`，通过容器名连接 PostgreSQL；端口只监听 `127.0.0.1:3080`（3000 已被占用）；`data/`（上传的图片和头像）挂载为数据卷；内存上限 384MB，日志轮转。停止时先写入内存里的浏览数。
 - **发布**：版本号 `vX.Y.Z`，修复和小改动加末位。
-  1. 先把线上的库导出一份（`docker exec <PostgreSQL 容器> pg_dump -U postgres -Fc mousehole`），存到维护者本机，只留最近 5 份。
-  2. 在 `main` 上打标签并推送，等 release 工作流把镜像推到 GHCR。
-  3. 在服务器的项目目录里运行 `DOCKER_CONFIG=<空目录> docker compose pull && docker compose up -d`。服务器 root 的 Docker 配置里有一个拉不了这个包的 ghcr.io 登录，换成空配置匿名拉取公开镜像，那个登录不动。
+  1. 在 `main` 上打标签并推送，等 release 工作流把镜像推到 GHCR。
+  2. 部署前把线上的库导出一份（`docker exec <PostgreSQL 容器> pg_dump -U postgres -Fc mousehole`），存到维护者本机，只留最近 5 份。同一个版本部署失败后重来，留着第一次之前的那份，不再导出：库可能已经迁移过了。
+  3. 在服务器的项目目录里运行 `DOCKER_CONFIG=<空目录> docker compose pull`，确认拉到的镜像是这个版本，再 `docker compose up -d`：compose 跑的是 `latest`，这期间如果又构建了新版本，直接启动会跑上新版本的迁移。服务器 root 的 Docker 配置里有一个拉不了这个包的 ghcr.io 登录，换成空配置匿名拉取公开镜像，那个登录不动。
   4. 确认 `kysely_migration` 表里有最新的迁移，`/healthz` 返回 200。
   5. 删掉被换下来的旧镜像：`docker image prune -f --filter label=org.opencontainers.image.source=https://github.com/mousebaoyan/mousehole`。每个版本单独占 240MB 左右，回滚时按版本号从 GHCR 重新拉。
 - **数据库**：1Panel 的 PostgreSQL 里的 `mousehole` 库和同名账号，这个账号只有 `mousehole` 库的权限；连接串通过环境变量传入。
