@@ -122,15 +122,21 @@ async function fill(author: { id: number }, reader: number) {
     db,
   );
   // Some of the last three months' are questions with a floor a day for ten days, half of them
-  // taken from the group, so that the frequent questions (design §8.22) are some sixty threads
-  // rather than none.
+  // taken from the group. Floors 4 and 7 are two more people asking again, each answered by the
+  // next floor, so that the frequent questions (design §8.22) are some sixty threads, not none.
   await sql`
     UPDATE threads SET kind = 'question'
     WHERE title LIKE '填充帖子%' AND id % 10 = 0
       AND created_at BETWEEN now() - interval '90 days' AND now() - interval '10 days'`.execute(db);
   await sql`
     UPDATE posts SET via = CASE WHEN floor = 1 AND thread_id % 20 = 0 THEN 'qq' ELSE via END,
-      created_at = threads.created_at + posts.floor * interval '1 day'
+      created_at = threads.created_at + posts.floor * interval '1 day',
+      body = CASE WHEN floor IN (4, 7) THEN '还有人知道吗？' ELSE body END,
+      author_id = CASE WHEN floor IN (4, 5, 7, 8)
+        THEN (SELECT id FROM users WHERE qq = 20000000 + CASE WHEN floor IN (4, 7) THEN floor ELSE 1 END)
+        ELSE posts.author_id END,
+      reply_to_id = CASE WHEN floor IN (5, 8) THEN (SELECT asked.id FROM posts asked
+        WHERE asked.thread_id = posts.thread_id AND asked.floor = posts.floor - 1) END
     FROM threads WHERE threads.id = posts.thread_id AND threads.kind = 'question'`.execute(db);
   // As autovacuum would: merges the full-text index's pending entries and updates statistics.
   await sql`VACUUM ANALYZE`.execute(db);
