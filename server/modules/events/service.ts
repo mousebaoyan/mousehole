@@ -36,11 +36,11 @@ arrived.setMaxListeners(0);
 let arrivals = 0;
 
 // For the LISTEN connection: wakes the bot streams waiting in nextEvents, and hands the new
-// events to those listening in this process.
+// events to those listening in this process; resolves once it has.
 export function eventsArrived() {
   arrivals += 1;
   arrived.emit("events");
-  pumpSoon();
+  return pumpSoon();
 }
 
 export function arrivalsSoFar() {
@@ -145,9 +145,11 @@ let queued = false;
 
 // One read at a time; NOTIFYs that come while one waits to start are all covered by it.
 function pumpSoon() {
-  if (queued) return;
-  queued = true;
-  queue = queue.then(pumpNow);
+  if (!queued) {
+    queued = true;
+    queue = queue.then(pumpNow);
+  }
+  return queue;
 }
 
 async function pumpNow() {
