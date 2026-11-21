@@ -120,7 +120,7 @@ pnpm mock-bot seed            # 创建演示用的版块、标签和帖子
 pnpm mock-bot link 910000002  # 生成一名演示成员的登录链接
 ```
 
-提交前请运行 `pnpm check`（类型检查、lint、格式检查和测试）。其他命令见 [AGENTS.md](AGENTS.md#命令)。
+提交前请运行 `pnpm check`（类型检查、lint、格式检查、数据库类型核对和测试）。其他命令见 [AGENTS.md](AGENTS.md#命令)。
 
 ## 文档
 
