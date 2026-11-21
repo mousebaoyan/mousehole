@@ -52,7 +52,7 @@
 
 表：`boards`、`tags`、`thread_tags`。
 
-标签页和版块页一样按帖子自己的 `last_post_at` 排，`thread_tags` 只记帖子有哪些标签（每个帖子最多 5 个），按 `tag_id` 有索引。
+标签页和版块页一样按帖子自己的 `last_post_at` 排，`thread_tags` 只记帖子有哪些标签（每个帖子最多 5 个），按 `tag_id` 有索引。这三张表都只由 `boards` 模块写入，发帖、改标签和合并帖子时 `threads` 调用它的 `setThreadTags`。
 
 - 等级门槛：`boards.read_level` 只用于仅成员的版块（CHECK 约束），`post_level` 是发帖要几级。代码里把"能看到哪些版块"算成一个数 `reach`：访客 -1，只看公开版块；成员是自己的等级，看 `read_level` 不超过它的版块；版主、管理员和 bot 自己的账号是 5，都能看。列表、搜索和单个帖子都按它过滤。
 - `boards.position` 是侧栏里的顺序；移动一个版块时，在同一个事务里给全部版块重新编号。
@@ -121,6 +121,7 @@
 - 被读（[总体设计 §8.15](design.md#815-影响力每周邮件和周榜)）：阅读上报时已经算出新读的楼层（并入前后区间集合之差），在同一个事务里按作者分组，不算自己的、匿名的、不公开的楼层，给每个作者的 `users.reads_received` 加上次数，并累加到 `user_reads`（每人每天一行，按北京时间）。`user_reads` 用来算最近 7 天和每周邮件，超过 55 天的每天清理。
 - 帮到的人：`users.people_reached` 是读过这个人至少一层的人数，每小时给今天有 `user_reads` 的人重算：按 `thread_users_thread` 取出他发过楼层的帖子的读者，`read_floors @> floor` 的去重计数。
 - 每周来信每小时看一次到没到时间（周一 9 点），`job_runs` 的 `weekly_letters` 记这周发过了；`users.weekly_email` 是成员自己的开关。
+- `job_runs` 记不能重复、要接着上次做的定时任务做到了哪里（每周来信、鼠币结算），由 `platform/schedule.ts` 的 `recordRun` 在任务的事务里写入。
 - 每周来信和周榜现算，每周各一次：赞看 `reactions.created_at`，采纳看 `posts.accepted_at`，新帖新回复看 `created_at`，被读看 `user_reads`，读帖子的人数看 `thread_users.last_read_at` 落在这一周里的行，徽章看 `user_badges.granted_at`。
 
 ## 个性化

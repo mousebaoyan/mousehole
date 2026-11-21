@@ -14,6 +14,7 @@ import {
   getBoard,
   getTagId,
   readable,
+  setThreadTags,
 } from "../boards/service.ts";
 import { QUESTION_COST } from "../coins/rules.ts";
 import { spendCoins } from "../coins/service.ts";
@@ -1159,12 +1160,7 @@ export async function createThread(
     // Posted from the composer; what a bot posts for them leaves their draft alone.
     if (actor.via === "web") await discardDraft(trx, viewer.id, null);
     await countActive(trx, actor, at);
-    if (tagIds.length > 0) {
-      await trx
-        .insertInto("thread_tags")
-        .values(tagIds.map((tag_id) => ({ thread_id: thread.id, tag_id })))
-        .execute();
-    }
+    await setThreadTags(trx, thread.id, tagIds);
     await trx
       .insertInto("thread_users")
       .values({
@@ -1515,27 +1511,7 @@ export async function saveThreadChange(
   }
 
   if (tagIds !== null) {
-    const current = await trx
-      .selectFrom("thread_tags")
-      .select("tag_id")
-      .where("thread_id", "=", thread.id)
-      .execute();
-    const had = current.map((r) => r.tag_id);
-    const removed = had.filter((id) => !tagIds.includes(id));
-    const added = tagIds.filter((id) => !had.includes(id));
-    if (removed.length > 0) {
-      await trx
-        .deleteFrom("thread_tags")
-        .where("thread_id", "=", thread.id)
-        .where("tag_id", "in", removed)
-        .execute();
-    }
-    if (added.length > 0) {
-      await trx
-        .insertInto("thread_tags")
-        .values(added.map((tag_id) => ({ thread_id: thread.id, tag_id })))
-        .execute();
-    }
+    const { removed, added } = await setThreadTags(trx, thread.id, tagIds);
     if (thread.status === "visible") {
       await countTags(trx, removed, -1);
       await countTags(trx, added, 1);

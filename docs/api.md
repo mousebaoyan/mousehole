@@ -11,7 +11,7 @@
 - **指代用户**：路径、请求头和请求体里的用户，可以写论坛用户 ID（`123`），也可以写 QQ 号（`qq:123456789`）。
 - **QQ 号**：返回给已登录的成员、bot 和管理员；访客和冻结的账号看不到（站点设置可以改成公开）。
 - **分页**：列表返回 `{ "items": [...], "next_cursor": "..." }`，取下一页时带 `?cursor=`。帖子里的楼层不用游标，按楼层号取，见[楼层](#35-楼层)。
-- **错误**：HTTP 状态码加 `{ "error": { "code": "thread_locked", "message": "帖子已锁定" } }`。`code` 固定不变，插件据此判断；`message` 给人看，以后可能调整。各接口都可能返回的错误码：`invalid_request`（400，参数不对，`message` 是一句写明哪个字段的话，可以直接转给群友）、`unauthorized`（401，没有登录）、`forbidden`（403，没有权限）、`level_required`（403，等级不够：L0 的链接数和每天的帖子、回复数，L2 才能发投票帖和抽奖帖，版块的阅读和发帖门槛，抽奖的参与等级；`message` 里有要几级）、`not_found`（404）、`internal_error`（500）。
+- **错误**：HTTP 状态码加 `{ "error": { "code": "thread_locked", "message": "帖子已锁定" } }`。`code` 固定不变，插件据此判断；`message` 给人看，以后可能调整。各接口都可能返回的错误码：`invalid_request`（400，参数不对，`message` 是一句写明哪个字段的话，可以直接转给群友）、`unauthorized`（401，没有登录）、`forbidden`（403，没有权限）、`level_required`（403，等级不够：L0 的链接数和每天的帖子、回复数，L2 才能发投票帖和抽奖帖，版块的阅读和发帖门槛，抽奖的参与等级；`message` 里有要几级）、`not_found`（404；找的是哪一种对象时写明，如 `thread_not_found`、`post_not_found`、`user_not_found`、`tag_not_found`、`badge_not_found`、`boost_not_found`、`option_not_found`、`report_not_found`、`suggestion_not_found`）、`internal_error`（500）。
 - **限流**：按 IP、用户和 token 分别限流，超出时返回 `429 rate_limited` 和 `Retry-After`（秒）。
 - **CSRF**：网页的写请求校验 Origin；带 Bearer token 的请求不受影响。
 
@@ -379,7 +379,7 @@ token 由站长在后台创建，只显示一次。每个 token 绑定一个 bot
 | PATCH | `/admin/badges/{id}` | 改活动徽章的名字、说明、活动框；自动授予的徽章不能改（`403`） | 管理员 / `admin` |
 | POST | `/admin/badges/{id}/grants` | 手动授予活动徽章：`{ user, reason }`，理由必填；已经有了返回 `409 badge_granted`。本人收到通知；记操作日志 | 管理员 / `admin` |
 | DELETE | `/admin/badges/{id}/grants/{user}` | 撤销手动授予的徽章，可附 `{ reason }`；TA 没有这枚返回 `404 badge_not_granted`；当头衔的一并去掉；记操作日志 | 管理员 / `admin` |
-| POST | `/admin/settings/test-email` | `{ qq }`：每个发信邮箱各发一封测试邮件，返回 `results`，每项是 `user` 和失败的原因 `error`（成功为 `null`）；发出去的邮箱不再歇着 | 站长，只能在网页上操作 |
+| POST | `/admin/settings/test-email` | `{ qq }`：每个发信邮箱各发一封测试邮件，返回 `results`，每项是 `user` 和失败的原因 `error`（成功为 `null`）；发出去的邮箱不再歇着；还没配置发信邮箱返回 `503 email_not_configured` | 站长，只能在网页上操作 |
 | GET | `/admin/groups` | 已关联的群和同步状态：最近一次增量、全量、群资料的时间，被拦下的全量 | 管理员 / `admin` |
 | POST | `/admin/groups` | 关联群：`{ group_id }`；第一个关联的群自动成为主群；已关联返回 `409 group_exists` | 站长，只能在网页上操作 |
 | PATCH | `/admin/groups/{group_id}` | 启用、停用、设为主群：`{ enabled?, is_primary?: true }`；相关成员的成员资格和显示名随即重算 | 站长，只能在网页上操作 |
@@ -758,7 +758,7 @@ OAuth 的几个地址不在 `/api/v1` 下，请求和返回按 OAuth 的规范�
 
 - `grant_type=authorization_code`、`code`、`redirect_uri`、`code_verifier`、`client_id`；自家应用还要密钥，放在 HTTP Basic 认证里或者带 `client_secret`；可选 `resource`，规则同上。
 - 成功返回 `200 { "access_token": "…", "token_type": "Bearer", "scope": "read act" }`，不带 `expires_in` 和 `refresh_token`。
-- 出错返回 `{ "error": "…", "error_description": "……" }`：授权码不对、过期、用过，或者 `redirect_uri`、`code_verifier`、`client_id` 和授权时的对不上，是 `400 invalid_grant`；应用不对、密钥不对、应用已停用，是 `401 invalid_client`；`resource` 不对是 `400 invalid_target`。
+- 出错返回 `{ "error": "…", "error_description": "……" }`：授权码不对、过期、用过，或者 `redirect_uri`、`code_verifier`、`client_id` 和授权时的对不上，是 `400 invalid_grant`；应用不对、密钥不对、应用已停用，是 `401 invalid_client`；`resource` 不对是 `400 invalid_target`；`grant_type` 不是 `authorization_code` 是 `400 unsupported_grant_type`。
 - 自家应用每人只有一个令牌：签发新令牌时，这个人在这个应用的旧令牌随即失效。
 
 **自家应用登录**（以鼠钟为例）：
