@@ -45,6 +45,7 @@ test/                   Vitest 的全局准备：测试用的数据库
 - **服务**：业务逻辑都在这里。一个业务动作一个函数，事务也在这里开。服务不碰 HTTP：不读请求头，不返回响应对象，参数是普通的值，出错就抛业务错误。
 - **数据库**：用 Kysely 访问，类型由 kysely-codegen 生成。
 - `platform` 不依赖任何业务模块，业务模块可以用 `platform`。
+- 页面只能引用业务模块里不查库的规则和类型（如 `coins/rules.ts`、`users/customization.ts`、`notifications/types.ts`），以及进程内调用接口要用的 `auth/routes.ts`，不能引用数据库（`platform/db.ts`、`kysely`）；`platform` 不能引用业务模块。这两条由 oxlint 检查（`.oxlintrc.json` 的 `overrides`），页面要用新的纯规则文件时把它加进那里。
 
 ### 1.3 模块之间
 
