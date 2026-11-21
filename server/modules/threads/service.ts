@@ -375,44 +375,95 @@ export async function listThreads(
   };
 }
 
-// ---- Frequent questions (design §8.22): questions with new floors on many Beijing days of late.
-// The groups' questions are collected as questions, and asked again they are collected into the
-// same thread, on the day they were said there. Discussions are left out: a daily check-in thread
-// has floors every day, but nobody asks it. Counted every hour into memory, away from the pages
-// that read it; visibility and the tag still apply when the list is read.
+// ---- Frequent questions (design §8.22): questions several people asked, on several Beijing days.
+// Asked again in a group, a question is collected into the thread it already has, as a floor that
+// replies to none and that the answers reply to; one by someone else, on another day than the
+// opening post, worded as a question, that a third person answered counts as asking again.
+// Answers to the opening post reply to none either, hence the wording. People are told apart as
+// readers see them: named and anonymous are two, so that the count gives no anonymous floor away.
+// Discussions are left out: a daily check-in thread has floors every day, but nobody asks it.
+// Counted every hour into memory, away from the pages that read it; visibility and the tag still
+// apply when the list is read.
 
-const FREQUENT_WITHIN_DAYS = 90;
+const FREQUENT_MIN_ASKERS = 3;
+// Apart from the people, so that a question many asked over a day or two as news broke, such as
+// whether a school's places were gone, isn't one that keeps being asked.
 const FREQUENT_MIN_DAYS = 3;
+// Since the last time it was asked: what nobody asks any more drops out.
+const FREQUENT_WITHIN_DAYS = 90;
 // Far more than anyone reads through.
 const FREQUENT_MAX = 200;
-let frequent: { ids: number[]; days: number[] } = { ids: [], days: [] };
+let frequent: { ids: number[]; askers: number[] } = { ids: [], askers: [] };
+
+// The words the plugin picks questions in the groups by (its suggest.py), any of them.
+const ASKING =
+  "[?？]|吗|嘛|呢|怎么|怎样|如何|哪|多少|几|什么|啥|能不能|可不可以|是不是|有没有|要不要|会不会|求";
+
+const beijingDay = (column: string) => sql`(${sql.ref(column)} AT TIME ZONE 'Asia/Shanghai')::date`;
+const person = (table: string) =>
+  sql`(${sql.ref(`${table}.author_id`)}, ${sql.ref(`${table}.anonymous`)})`;
 
 export async function countFrequent() {
-  const days = sql<number>`count(DISTINCT (posts.created_at AT TIME ZONE 'Asia/Shanghai')::date)::integer`;
+  const askers = sql<number>`count(DISTINCT ${person("asks")})::integer`;
   const rows = await db
-    .selectFrom("posts")
-    .innerJoin("threads", "threads.id", "posts.thread_id")
-    .select(["threads.id", days.as("days")])
-    .where(
-      "posts.created_at",
+    .with("opening", (qc) =>
+      qc
+        .selectFrom("posts")
+        .innerJoin("threads", "threads.id", "posts.thread_id")
+        .select(["posts.thread_id", "posts.author_id", "posts.anonymous", "posts.created_at"])
+        .where("posts.floor", "=", 1)
+        .where("threads.kind", "=", "question")
+        .where("threads.deleted_at", "is", null)
+        .where("threads.status", "=", "visible"),
+    )
+    .with("asks", (qc) =>
+      qc
+        .selectFrom("opening")
+        .select(["thread_id", "author_id", "anonymous", "created_at"])
+        .unionAll(
+          qc
+            .selectFrom("posts as again")
+            .innerJoin("opening", "opening.thread_id", "again.thread_id")
+            .select(["again.thread_id", "again.author_id", "again.anonymous", "again.created_at"])
+            .where("again.reply_to_id", "is", null)
+            .where(person("again"), "<>", person("opening"))
+            .where(beijingDay("again.created_at"), "<>", beijingDay("opening.created_at"))
+            .where("again.body", "~", ASKING)
+            .where("again.deleted_at", "is", null)
+            .where("again.status", "=", "visible")
+            .where((eb) =>
+              eb.exists(
+                eb
+                  .selectFrom("posts as answer")
+                  .select("answer.id")
+                  .whereRef("answer.reply_to_id", "=", "again.id")
+                  .where(person("answer"), "<>", person("opening"))
+                  .where(person("answer"), "<>", person("again"))
+                  .where("answer.deleted_at", "is", null)
+                  .where("answer.status", "=", "visible"),
+              ),
+            ),
+        ),
+    )
+    .selectFrom("asks")
+    .select(["asks.thread_id as id", askers.as("askers")])
+    .groupBy("asks.thread_id")
+    .having(askers, ">=", FREQUENT_MIN_ASKERS)
+    .having(sql`count(DISTINCT ${beijingDay("asks.created_at")})`, ">=", FREQUENT_MIN_DAYS)
+    .having(
+      sql`max(asks.created_at)`,
       ">",
       sql<Date>`now() - make_interval(days => ${FREQUENT_WITHIN_DAYS})`,
     )
-    .where("posts.deleted_at", "is", null)
-    .where("posts.status", "=", "visible")
-    .where("threads.deleted_at", "is", null)
-    .where("threads.status", "=", "visible")
-    .where("threads.kind", "=", "question")
-    .groupBy("threads.id")
-    .having(days, ">=", FREQUENT_MIN_DAYS)
-    .orderBy("days", "desc")
-    .orderBy(sql`max(posts.created_at)`, "desc")
+    .orderBy("askers", "desc")
+    .orderBy(sql`max(asks.created_at)`, "desc")
     .limit(FREQUENT_MAX)
     .execute();
-  frequent = { ids: rows.map((r) => r.id), days: rows.map((r) => r.days) };
+  frequent = { ids: rows.map((r) => r.id), askers: rows.map((r) => r.askers) };
 }
 
-// A page of them, most days first, each with its days. The cursor is an offset, as for `hot`.
+// A page of them, most asked first, each with how many asked it. The cursor is an offset, as for
+// `hot`.
 export async function listFrequent(
   reach: number,
   userId: number | null,
@@ -420,10 +471,10 @@ export async function listFrequent(
 ) {
   if (filter.cursor !== undefined && !/^\d{1,9}$/.test(filter.cursor)) badCursor();
   const offset = Number(filter.cursor ?? 0);
-  const { ids, days } = frequent;
+  const { ids, askers } = frequent;
   const rank = sql<number>`array_position(${ids}::integer[], threads.id)`;
   const rows = await selectThreads(visibleThreads(reach), userId)
-    .select(sql<number>`(${days}::integer[])[${rank}]`.as("days"))
+    .select(sql<number>`(${askers}::integer[])[${rank}]`.as("askers"))
     .where("threads.id", "=", sql<number>`any(${ids}::integer[])`)
     .where(inScope(await scopeOf(reach, filter)))
     .orderBy(rank)

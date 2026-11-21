@@ -727,7 +727,7 @@ export const threadsRoutes = createRouter()
       method: "get",
       path: "/threads/frequent",
       summary:
-        "高频问题：近 90 天里在至少 3 个不同的日子（北京时间）有新楼层的问答帖，收录的楼层按群里说话的时间算，按天数排，每页 30 个",
+        "高频问题：至少 3 个人在至少 3 个不同的日子（北京时间）问过、近 90 天里还有人问的问答帖，按问过的人数排，每页 30 个",
       request: {
         query: z.object({
           tag: z.string().optional(),
@@ -736,14 +736,17 @@ export const threadsRoutes = createRouter()
       },
       responses: {
         200: {
-          description: "天数多的在前，每小时重算一次",
+          description: "问过的人多的在前，一样多的最近有人问的在前，每小时重算一次",
           content: {
             "application/json": {
               schema: z.object({
                 items: z.array(
                   z.object({
                     thread: ThreadSchema,
-                    days: z.number().openapi({ description: "近 90 天里有新楼层的天数" }),
+                    askers: z.number().openapi({
+                      description:
+                        "问过的人数：楼主，和后来在别的日子又问了一遍、有别人回答的人；同一个人实名和匿名算两个",
+                    }),
                     lead: z.string().nullable().openapi({
                       description:
                         "AI 总结的第一句；没有总结、没打开 AI 总结或者访客不能看时为 null",
@@ -774,7 +777,7 @@ export const threadsRoutes = createRouter()
       );
       const items = page.items.map((t) => ({
         thread: threadJson(t, viewer !== null),
-        days: t.days,
+        askers: t.askers,
         lead: leads.get(t.id) ?? null,
       }));
       return c.json({ items, topics, next_cursor: page.next_cursor }, 200);

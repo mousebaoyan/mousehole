@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { data, Link } from "react-router";
 import { cn } from "~/cn";
-import { CalendarCheck, Sparkle } from "~/components/icons";
+import { Sparkle, Users } from "~/components/icons";
 import { Pages, type Loaded } from "~/components/pages";
 import { ThreadList, ThreadRow } from "~/components/thread-list";
 import { shareMeta } from "~/share-meta";
@@ -9,12 +9,9 @@ import { unixNow } from "~/time";
 import { apiContext } from "../api.server.ts";
 import type { Route } from "./+types/frequent.ts";
 
-const DESCRIPTION =
-  "近 90 天里有 3 天以上有人讨论的问答帖，群里收录的提问也算。提问前可以先在这里查找";
-
 export function meta({ loaderData }: Route.MetaArgs) {
   const { tag } = loaderData;
-  return shareMeta([...(tag === null ? [] : [`#${tag}`]), "高频问题"], DESCRIPTION);
+  return shareMeta([...(tag === null ? [] : [`#${tag}`]), "高频问题"], "群里反复问到的问题");
 }
 
 export async function loader({ request, context }: Route.LoaderArgs) {
@@ -58,10 +55,7 @@ export default function Frequent({ loaderData }: Route.ComponentProps) {
   const { tag, topics, items } = loaderData;
   return (
     <section className="flex flex-col gap-4">
-      <header className="px-1">
-        <h1 className="text-xl font-semibold">高频问题</h1>
-        <p className="mt-1 text-meta text-muted-foreground">{DESCRIPTION}</p>
-      </header>
+      <h1 className="px-1 text-xl font-semibold">高频问题</h1>
       {topics.length > 0 && (
         <nav aria-label="按话题筛选" className="flex flex-wrap gap-1.5">
           <TopicLink tag={null} chosen={tag === null}>
@@ -81,7 +75,7 @@ export default function Frequent({ loaderData }: Route.ComponentProps) {
         <ThreadList>
           <Pages<typeof loader> kept={kept} first={loaderData} next={(page) => page.next_cursor}>
             {(page) =>
-              page.items.map(({ thread, days, lead }) => (
+              page.items.map(({ thread, askers, lead }) => (
                 <ThreadRow
                   key={thread.id}
                   thread={thread}
@@ -89,18 +83,18 @@ export default function Frequent({ loaderData }: Route.ComponentProps) {
                   showBoard
                   meta={
                     <span className="flex items-center gap-1 font-medium text-primary">
-                      <CalendarCheck className="size-3.5" />
-                      {days} 天有人讨论
+                      <Users className="size-3.5" />
+                      {askers} 人问过
                     </span>
                   }
                 >
                   {lead !== null && (
-                    <p className="mt-1.5 flex gap-1.5 text-meta text-muted-foreground">
+                    <p className="mt-1.5 flex items-center gap-1.5 text-meta text-muted-foreground">
                       <Sparkle
                         aria-label="AI 总结"
-                        className="mt-0.5 size-3.5 shrink-0 text-brand-strong"
+                        className="size-3.5 shrink-0 text-brand-strong"
                       />
-                      <span className="line-clamp-2">{lead}</span>
+                      <span className="min-w-0 truncate">{lead}</span>
                     </p>
                   )}
                 </ThreadRow>
