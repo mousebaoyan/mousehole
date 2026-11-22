@@ -45,7 +45,7 @@ const AppSchema = z
     name: z.string(),
     redirect_uris: z.array(z.string()),
     scopes: z.array(z.string()),
-    tokens: z.number().openapi({ description: "有效的令牌数，每人一个" }),
+    tokens: z.number().meta({ description: "有效的令牌数，每人一个" }),
     last_used_at: z.number().nullable(),
     disabled: z.boolean(),
   })

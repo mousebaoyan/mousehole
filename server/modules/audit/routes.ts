@@ -20,8 +20,8 @@ export const auditRoutes = createRouter().openapi(
       query: z.object({
         actor: UserRefSchema.optional(),
         ip: z.union([z.ipv4(), z.ipv6()]).optional(),
-        action: z.string().max(40).optional().openapi({ example: "user.restrict" }),
-        target_type: z.string().max(20).optional().openapi({ example: "user" }),
+        action: z.string().max(40).optional().meta({ example: "user.restrict" }),
+        target_type: z.string().max(20).optional().meta({ example: "user" }),
         target_id: IntParam.optional(),
         cursor: z.coerce.number().int().optional(),
       }),
@@ -35,9 +35,9 @@ export const auditRoutes = createRouter().openapi(
               items: z.array(
                 z.object({
                   id: z.number(),
-                  actor: UserBriefSchema.nullable().openapi({ description: "以谁的身份" }),
-                  operator: UserBriefSchema.nullable().openapi({ description: "让 bot 做的人" }),
-                  token: z.string().nullable().openapi({ description: "经由哪个 bot token" }),
+                  actor: UserBriefSchema.nullable().meta({ description: "以谁的身份" }),
+                  operator: UserBriefSchema.nullable().meta({ description: "让 bot 做的人" }),
+                  token: z.string().nullable().meta({ description: "经由哪个 bot token" }),
                   action: z.string(),
                   target_type: z.string().nullable(),
                   target_id: z.number().nullable(),
@@ -47,7 +47,7 @@ export const auditRoutes = createRouter().openapi(
                   device: z
                     .string()
                     .nullable()
-                    .openapi({ description: "从 User-Agent 看出的设备，例如 Chrome · macOS" }),
+                    .meta({ description: "从 User-Agent 看出的设备，例如 Chrome · macOS" }),
                   created_at: z.number(),
                 }),
               ),

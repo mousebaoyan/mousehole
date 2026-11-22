@@ -31,16 +31,16 @@ const StatsSchema = z
     until: z.number(),
     overview: z.object({
       threads: z.number(),
-      posts: z.number().openapi({ description: "新回复，含收录的" }),
-      archived: z.number().openapi({ description: "收录了几层" }),
-      active: z.number().openapi({ description: "发过内容的人数" }),
-      activated: z.number().openapi({ description: "第一次登录的人数" }),
-      badges: z.number().openapi({ description: "发出的徽章数" }),
+      posts: z.number().meta({ description: "新回复，含收录的" }),
+      archived: z.number().meta({ description: "收录了几层" }),
+      active: z.number().meta({ description: "发过内容的人数" }),
+      activated: z.number().meta({ description: "第一次登录的人数" }),
+      badges: z.number().meta({ description: "发出的徽章数" }),
     }),
     threads: z.object({
       most_liked: z.array(ThreadItem),
       most_replied: z.array(ThreadItem),
-      most_read: z.array(ThreadItem).openapi({ description: "这一周里读过它的人数" }),
+      most_read: z.array(ThreadItem).meta({ description: "这一周里读过它的人数" }),
     }),
     people: z.object({
       most_liked: z.array(PersonItem),
@@ -60,7 +60,7 @@ export const weeklyRoutes = createRouter().openapi(
     summary: "一周的统计，给插件排周榜图片：概况、帖子榜、人的榜单和金徽章",
     request: {
       query: z.object({
-        until: UnixSecondsParam.optional().openapi({
+        until: UnixSecondsParam.optional().meta({
           description: "统计 [until - 7 天, until)，Unix 秒，默认现在",
         }),
       }),

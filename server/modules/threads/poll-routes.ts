@@ -106,8 +106,8 @@ export const pollRoutes = createRouter()
       summary: "[since, until) 里发的、还能投的投票帖，给插件每天在群里汇总",
       request: {
         query: z.object({
-          since: UnixSecondsParam.openapi({ description: "Unix 秒" }),
-          until: UnixSecondsParam.optional().openapi({ description: "Unix 秒，默认现在" }),
+          since: UnixSecondsParam.meta({ description: "Unix 秒" }),
+          until: UnixSecondsParam.optional().meta({ description: "Unix 秒，默认现在" }),
         }),
       },
       responses: {
@@ -119,7 +119,7 @@ export const pollRoutes = createRouter()
                 items: z.array(
                   z.object({
                     thread: z.object({ id: z.number(), title: z.string() }),
-                    voters: z.number().openapi({ description: "到现在投了票的人数" }),
+                    voters: z.number().meta({ description: "到现在投了票的人数" }),
                     url: z.string(),
                   }),
                 ),

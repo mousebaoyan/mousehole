@@ -87,7 +87,7 @@ const UserPostSchema = z.object({
   id: z.number(),
   thread: z.object({ id: z.number(), title: z.string() }),
   floor: z.number(),
-  excerpt: z.string().openapi({ description: "正文的纯文本，最多 140 个字" }),
+  excerpt: z.string().meta({ description: "正文的纯文本，最多 140 个字" }),
   like_count: z.number(),
   created_at: z.number(),
 });
@@ -117,44 +117,44 @@ const ThreadDetailSchema = ThreadSchema.extend({
   url: z.string(),
   accepted_floors: z
     .array(z.number())
-    .openapi({ description: "被采纳、公开的回答在第几楼，从小到大" }),
-  excerpt: z.string().openapi({ description: "主楼正文的前 100 个字，分享卡片用" }),
-  status: z.string().openapi({
+    .meta({ description: "被采纳、公开的回答在第几楼，从小到大" }),
+  excerpt: z.string().meta({ description: "主楼正文的前 100 个字，分享卡片用" }),
+  status: z.string().meta({
     description: "visible 公开；pending 待审核、hidden 已隐藏，这两种只有作者和版主打得开",
   }),
-  author_anonymous: z.boolean().openapi({ description: "楼主匿名" }),
-  anonymous_replies: z.boolean().openapi({ description: "楼主以外的人回复时匿名" }),
-  poll: PollSchema.nullable().openapi({ description: "投票帖的投票；其他类型为 null" }),
-  lottery: LotterySchema.nullable().openapi({ description: "抽奖帖的抽奖；其他类型为 null" }),
+  author_anonymous: z.boolean().meta({ description: "楼主匿名" }),
+  anonymous_replies: z.boolean().meta({ description: "楼主以外的人回复时匿名" }),
+  poll: PollSchema.nullable().meta({ description: "投票帖的投票；其他类型为 null" }),
+  lottery: LotterySchema.nullable().meta({ description: "抽奖帖的抽奖；其他类型为 null" }),
   my_alias: z
     .number()
     .nullable()
     .optional()
-    .openapi({ description: "自己在这个帖子里匿名时的编号；只在登录时有" }),
-  my_anonymity: z.enum(["named", "anonymous", "optional"]).nullable().openapi({
+    .meta({ description: "自己在这个帖子里匿名时的编号；只在登录时有" }),
+  my_anonymity: z.enum(["named", "anonymous", "optional"]).nullable().meta({
     description:
       "自己在这里回复时：named 实名，anonymous 匿名，optional 每条回复自己选（楼主匿名、回复不匿名的帖子里，楼主以外的人）；未登录时为 null",
   }),
   read_floors: z
     .array(z.tuple([z.number(), z.number()]))
     .optional()
-    .openapi({ description: "读过的楼层区间，含两端，例如 [[1, 20], [480, 495]]；只在登录时有" }),
-  bookmarked: z.boolean().optional().openapi({ description: "自己是否收藏了；只在登录时有" }),
-  notify_level: z.string().optional().openapi({
+    .meta({ description: "读过的楼层区间，含两端，例如 [[1, 20], [480, 495]]；只在登录时有" }),
+  bookmarked: z.boolean().optional().meta({ description: "自己是否收藏了；只在登录时有" }),
+  notify_level: z.string().optional().meta({
     description:
       "自己的关注级别：watching 每个新楼层都通知，normal 回复我、@我时通知，muted 都不通知；只在登录时有",
   }),
   suggestions: z
     .array(SuggestionSchema)
     .optional()
-    .openapi({ description: "待处理的修改建议，先提的在前；只给楼主和版主" }),
-  summary: SummarySchema.nullable().optional().openapi({
+    .meta({ description: "待处理的修改建议，先提的在前；只给楼主和版主" }),
+  summary: SummarySchema.nullable().optional().meta({
     description: "AI 总结；打开了 AI 总结时才有，没有总结、被关闭或者访客不能看时为 null",
   }),
   summary_disabled: z
     .boolean()
     .optional()
-    .openapi({ description: "版主关闭了这个帖子的总结；打开了 AI 总结时只给版主" }),
+    .meta({ description: "版主关闭了这个帖子的总结；打开了 AI 总结时只给版主" }),
 }).openapi("ThreadDetail");
 
 const PostSchema = z
@@ -163,30 +163,30 @@ const PostSchema = z
     thread_id: z.number(),
     floor: z.number(),
     author: WriterSchema,
-    html: z.string().optional().openapi({ description: "渲染好的正文；带 ?body=markdown 时没有" }),
-    body: z.string().optional().openapi({ description: "Markdown 原文；只在 ?body=markdown 时有" }),
-    via: z.string().openapi({ description: "web、bot、qq 或 agent（成员的 Agent 发的）" }),
+    html: z.string().optional().meta({ description: "渲染好的正文；带 ?body=markdown 时没有" }),
+    body: z.string().optional().meta({ description: "Markdown 原文；只在 ?body=markdown 时有" }),
+    via: z.string().meta({ description: "web、bot、qq 或 agent（成员的 Agent 发的）" }),
     reply_to: z.object({ id: z.number(), floor: z.number(), author: WriterSchema }).nullable(),
     reply_count: z.number(),
     like_count: z.number(),
     reactions: z
       .record(z.string(), z.number())
-      .openapi({ description: '各表情的数量，例如 { heart: 2, "+1": 1 }' }),
-    my_reaction: z.string().nullable().openapi({ description: "自己的表情回应；访客为 null" }),
-    boosts: z.array(BoostSchema).openapi({ description: "最先留下的 6 条短评" }),
+      .meta({ description: '各表情的数量，例如 { heart: 2, "+1": 1 }' }),
+    my_reaction: z.string().nullable().meta({ description: "自己的表情回应；访客为 null" }),
+    boosts: z.array(BoostSchema).meta({ description: "最先留下的 6 条短评" }),
     boost_count: z.number(),
-    my_boost: z.string().nullable().openapi({ description: "自己的短评；访客为 null" }),
-    my_archive_flag: z.boolean().optional().openapi({
+    my_boost: z.string().nullable().meta({ description: "自己的短评；访客为 null" }),
+    my_archive_flag: z.boolean().optional().meta({
       description: "自己是否反馈过这一层收录有误；只有从群聊收录的楼层有",
     }),
-    deleted: z.boolean().openapi({ description: "已删除的楼层保留楼层号，没有正文" }),
-    members_only: z.boolean().openapi({
+    deleted: z.boolean().meta({ description: "已删除的楼层保留楼层号，没有正文" }),
+    members_only: z.boolean().meta({
       description: "作者设置了不给访客看：访客拿到的这一层没有正文、表情和短评",
     }),
-    status: z.string().openapi({
+    status: z.string().meta({
       description: "visible 公开；pending 待审核、hidden 已隐藏，这两种只有作者和版主看得到",
     }),
-    accepted: z.boolean().openapi({ description: "问答帖里被采纳为答案" }),
+    accepted: z.boolean().meta({ description: "问答帖里被采纳为答案" }),
     edited_at: z.number().nullable(),
     created_at: z.number(),
   })
@@ -332,14 +332,14 @@ const Markdown = z
   .max(MAX_BODY)
   .refine((s) => s.trim().length > 0, "正文不能为空");
 
-const Status = z.enum(["visible", "hidden"]).openapi({
+const Status = z.enum(["visible", "hidden"]).meta({
   description: "版主：visible 审核通过或恢复，hidden 隐藏",
 });
 const Reason = z
   .string()
   .trim()
   .max(200)
-  .openapi({ description: "隐藏的理由，告诉作者，记进操作日志" });
+  .meta({ description: "隐藏的理由，告诉作者，记进操作日志" });
 
 const Content = z.union([
   z.object({ markdown: Markdown }),
@@ -348,7 +348,7 @@ const Content = z.union([
       .array(z.object({ type: z.string(), data: z.record(z.string(), z.unknown()) }))
       .min(1)
       .max(200)
-      .openapi({ description: "OneBot v11 消息段，论坛转换成 Markdown" }),
+      .meta({ description: "OneBot v11 消息段，论坛转换成 Markdown" }),
   }),
 ]);
 
@@ -380,18 +380,18 @@ const PollRows = z
 const PollCloses = deadline("截止时间")
   .nullable()
   .default(null)
-  .openapi({ description: "截止时间，Unix 秒，10 分钟以后、一年以内；null 不限" });
+  .meta({ description: "截止时间，Unix 秒，10 分钟以后、一年以内；null 不限" });
 
+// Strict, as the 保研定位 one is: a preset with the fields of a custom poll is refused, rather than
+// taken for a custom one.
 const CustomPoll = z
-  .object({
-    // A preset with the fields of a custom poll is refused, rather than taken for a custom one.
-    preset: z.undefined().optional(),
+  .strictObject({
     options: z
       .array(z.string().trim().min(1).max(50))
       .min(2)
       .max(20)
       .refine(distinct, "选项不能重复"),
-    rows: PollRows.nullable().default(null).openapi({
+    rows: PollRows.nullable().default(null).meta({
       description: "分行投票的各行，每行用同一组选项各投一票，只能单选；null 是普通投票",
     }),
     multiple: z.boolean().default(false),
@@ -401,9 +401,9 @@ const CustomPoll = z
       .min(2)
       .nullable()
       .default(null)
-      .openapi({ description: "多选时最多选几项；null 不限" }),
-    anonymous: z.boolean().default(false).openapi({ description: "匿名投票" }),
-    results: z.enum(["voted", "always"]).default("voted").openapi({
+      .meta({ description: "多选时最多选几项；null 不限" }),
+    anonymous: z.boolean().default(false).meta({ description: "匿名投票" }),
+    results: z.enum(["voted", "always"]).default("voted").meta({
       description: "voted 投过票或结束后才看得到结果，always 随时公开",
     }),
     closes_at: PollCloses,
@@ -421,9 +421,9 @@ const CustomPoll = z
 const PositioningPoll = z
   .strictObject({
     preset: z.literal("positioning"),
-    rows: PollRows.openapi({ description: "目标院校，每所一行" }),
+    rows: PollRows.meta({ description: "目标院校，每所一行" }),
   })
-  .openapi({ description: "保研定位" });
+  .meta({ description: "保研定位" });
 
 const PollInput = z
   .union([CustomPoll, PositioningPoll])
@@ -435,17 +435,17 @@ const LotteryInput = z
       .array(
         z.object({
           name: z.string().trim().min(1).max(50),
-          winners: z.number().int().min(1).max(100).openapi({ description: "抽几人" }),
+          winners: z.number().int().min(1).max(100).meta({ description: "抽几人" }),
         }),
       )
       .min(1)
       .max(10)
-      .openapi({ description: "奖项，按顺序开奖：参与的人排出先后后，先抽满第一个" }),
-    entry: z.enum(["button", "reply"]).default("button").openapi({
+      .meta({ description: "奖项，按顺序开奖：参与的人排出先后后，先抽满第一个" }),
+    entry: z.enum(["button", "reply"]).default("button").meta({
       description: "button 点按钮参与，reply 开奖前回复过帖子就算参与",
     }),
-    min_level: z.number().int().min(0).max(5).default(0).openapi({ description: "参与要几级" }),
-    draws_at: deadline("开奖时间").openapi({
+    min_level: z.number().int().min(0).max(5).default(0).meta({ description: "参与要几级" }),
+    draws_at: deadline("开奖时间").meta({
       description: "开奖时间，Unix 秒，10 分钟以后、一年以内",
     }),
   })
@@ -458,9 +458,9 @@ const Tags = z
 
 const RevisionSchema = z
   .object({
-    rev: z.number().openapi({ description: "第几次修改，从 1 开始" }),
-    title: z.string().nullable().openapi({ description: "改标题时的旧标题" }),
-    body: z.string().openapi({ description: "这次修改之前的 Markdown" }),
+    rev: z.number().meta({ description: "第几次修改，从 1 开始" }),
+    title: z.string().nullable().meta({ description: "改标题时的旧标题" }),
+    body: z.string().meta({ description: "这次修改之前的 Markdown" }),
     editor: WriterSchema,
     created_at: z.number(),
   })
@@ -493,7 +493,7 @@ export const threadsRoutes = createRouter()
         query: z.object({
           board: z.string().optional(),
           tag: z.string().optional(),
-          view: z.enum(VIEWS).default("latest").openapi({
+          view: z.enum(VIEWS).default("latest").meta({
             description:
               "latest 按最后回复，created 按发布时间，hot 热门，unsolved 待解答；要登录的：unvoted 待投票，他人发的、还在投票、自己没投过的投票帖，unread 读过、之后有新楼层，read 读过的、按最后阅读时间，posted 自己发过或回复过的，bookmarked 自己收藏的、按收藏时间",
           }),
@@ -504,7 +504,7 @@ export const threadsRoutes = createRouter()
             .min(1)
             .max(PAGE_SIZE)
             .optional()
-            .openapi({ description: "每页几个，默认也是最多 30 个" }),
+            .meta({ description: "每页几个，默认也是最多 30 个" }),
         }),
       },
       responses: {
@@ -579,7 +579,7 @@ export const threadsRoutes = createRouter()
           solved: z
             .enum(["true", "false"])
             .optional()
-            .openapi({ description: "true 只要在别人的问答帖里被采纳的回答" }),
+            .meta({ description: "true 只要在别人的问答帖里被采纳的回答" }),
           cursor: IntParam.optional(),
         }),
       },
@@ -614,7 +614,7 @@ export const threadsRoutes = createRouter()
       request: {
         params: z.object({ user: UserRefSchema }),
         query: z.object({
-          cursor: z.coerce.number().int().optional().openapi({ description: "已经列出的条数" }),
+          cursor: z.coerce.number().int().optional().meta({ description: "已经列出的条数" }),
         }),
       },
       responses: {
@@ -743,11 +743,11 @@ export const threadsRoutes = createRouter()
                 items: z.array(
                   z.object({
                     thread: ThreadSchema,
-                    askers: z.number().openapi({
+                    askers: z.number().meta({
                       description:
                         "问过的人数：楼主，和后来在别的日子又问了一遍、有别人回答的人；同一个人实名和匿名算两个",
                     }),
-                    lead: z.string().nullable().openapi({
+                    lead: z.string().nullable().meta({
                       description:
                         "AI 总结的第一句；没有总结、没打开 AI 总结或者访客不能看时为 null",
                     }),
@@ -755,7 +755,7 @@ export const threadsRoutes = createRouter()
                 ),
                 topics: z
                   .array(z.object({ name: z.string(), count: z.number() }))
-                  .openapi({ description: "其中的话题标签和各有几个，多的在前" }),
+                  .meta({ description: "其中的话题标签和各有几个，多的在前" }),
                 next_cursor: z.string().nullable(),
               }),
             },
@@ -940,18 +940,18 @@ export const threadsRoutes = createRouter()
               title: Title,
               content: Content,
               kind: z.enum(["discussion", "question", "poll", "lottery"]).optional(),
-              poll: PollInput.optional().openapi({ description: "投票帖必带，其他类型不能带" }),
-              lottery: LotteryInput.optional().openapi({
+              poll: PollInput.optional().meta({ description: "投票帖必带，其他类型不能带" }),
+              lottery: LotteryInput.optional().meta({
                 description: "抽奖帖必带，其他类型不能带",
               }),
               tags: Tags.default([]),
               source: Source.optional(),
               created_at: CreatedAt.optional(),
-              anonymous: z.boolean().optional().openapi({ description: "楼主匿名，发出后不能改" }),
+              anonymous: z.boolean().optional().meta({ description: "楼主匿名，发出后不能改" }),
               anonymous_replies: z
                 .boolean()
                 .optional()
-                .openapi({ description: "楼主以外的人回复时匿名，发出后不能改" }),
+                .meta({ description: "楼主以外的人回复时匿名，发出后不能改" }),
             })
             .refine((b) => (b.kind === "poll") === (b.poll !== undefined), {
               message: "投票帖要带 poll，其他类型不能带",
@@ -998,7 +998,7 @@ export const threadsRoutes = createRouter()
             .object({
               content: Content,
               reply_to_id: Int.optional(),
-              anonymous: z.boolean().optional().openapi({
+              anonymous: z.boolean().optional().meta({
                 description:
                   "这条回复是否匿名，只能在 my_anonymity 为 optional 的帖子里给，不给时实名；其他帖子按帖子的设置",
               }),
@@ -1104,7 +1104,7 @@ export const threadsRoutes = createRouter()
           z
             .object({
               content: Content.optional(),
-              source: Source.optional().openapi({ description: "这一层整理自的全部消息" }),
+              source: Source.optional().meta({ description: "这一层整理自的全部消息" }),
               status: Status.optional(),
               reason: Reason.optional(),
             })
@@ -1239,7 +1239,7 @@ export const threadsRoutes = createRouter()
                   .refine(([from, to]) => from <= to, "区间的起点不能大于终点"),
               )
               .max(100)
-              .openapi({ description: "楼层区间，含两端，例如 [[1, 20], [480, 495]]" }),
+              .meta({ description: "楼层区间，含两端，例如 [[1, 20], [480, 495]]" }),
             seconds: z.number().int().min(0).max(3600),
           }),
         ),

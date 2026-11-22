@@ -99,7 +99,7 @@ export const lotteryRoutes = createRouter()
                     prize: z
                       .number()
                       .nullable()
-                      .openapi({ description: "中了第几个奖项，从 0 数；没中为 null" }),
+                      .meta({ description: "中了第几个奖项，从 0 数；没中为 null" }),
                   }),
                 ),
               }),

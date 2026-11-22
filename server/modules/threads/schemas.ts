@@ -16,21 +16,21 @@ export const ThreadSchema = z
     board: BoardBriefSchema,
     kind: z
       .string()
-      .openapi({ description: "discussion：讨论；question：问答；poll：投票；lottery：抽奖" }),
+      .meta({ description: "discussion：讨论；question：问答；poll：投票；lottery：抽奖" }),
     title: z.string(),
     author: WriterSchema,
     posters: z
       .array(UserBriefSchema)
-      .openapi({ description: "作者以外最近公开回复的最多 4 个人，不含匿名回复的" }),
+      .meta({ description: "作者以外最近公开回复的最多 4 个人，不含匿名回复的" }),
     tags: z.array(z.string()),
-    pinned: z.number().openapi({ description: "0：不置顶；1：版块内置顶；2：全站置顶" }),
+    pinned: z.number().meta({ description: "0：不置顶；1：版块内置顶；2：全站置顶" }),
     featured: z.boolean(),
     locked: z.boolean(),
-    solved: z.boolean().openapi({ description: "问答帖有被采纳、公开的回答" }),
+    solved: z.boolean().meta({ description: "问答帖有被采纳、公开的回答" }),
     bounty_until: z
       .number()
       .nullable()
-      .openapi({ description: "悬赏的截止时间；没有悬赏或已经结束时为 null" }),
+      .meta({ description: "悬赏的截止时间；没有悬赏或已经结束时为 null" }),
     reply_count: z.number(),
     floor_count: z.number(),
     view_count: z.number(),
@@ -40,7 +40,7 @@ export const ThreadSchema = z
     last_read_floor: z
       .number()
       .optional()
-      .openapi({ description: "自己读过的最高一楼，没打开过为 0；只在登录时有" }),
+      .meta({ description: "自己读过的最高一楼，没打开过为 0；只在登录时有" }),
   })
   .openapi("Thread");
 
@@ -79,30 +79,30 @@ export function threadJson(t: ThreadItem, signedIn: boolean) {
 
 export const PollSchema = z
   .object({
-    multiple: z.boolean().openapi({ description: "多选" }),
-    max_choices: z.number().nullable().openapi({ description: "多选时最多选几项；null 不限" }),
-    anonymous: z.boolean().openapi({ description: "匿名投票：只有票数，看不到谁投了什么" }),
-    results: z.string().openapi({
+    multiple: z.boolean().meta({ description: "多选" }),
+    max_choices: z.number().nullable().meta({ description: "多选时最多选几项；null 不限" }),
+    anonymous: z.boolean().meta({ description: "匿名投票：只有票数，看不到谁投了什么" }),
+    results: z.string().meta({
       description: "voted 投过票或结束后才看得到结果，always 随时公开",
     }),
     rows: z
       .array(z.string())
       .nullable()
-      .openapi({ description: "分行投票的各行，每行各有一组选项；普通投票为 null" }),
+      .meta({ description: "分行投票的各行，每行各有一组选项；普通投票为 null" }),
     preset: z
       .string()
       .nullable()
-      .openapi({ description: "生成它的预设：positioning 保研定位；普通投票为 null" }),
-    closes_at: z.number().nullable().openapi({ description: "截止时间；null 不限" }),
+      .meta({ description: "生成它的预设：positioning 保研定位；普通投票为 null" }),
+    closes_at: z.number().nullable().meta({ description: "截止时间；null 不限" }),
     closed: z.boolean(),
-    voter_count: z.number().openapi({ description: "一共多少人投了票" }),
+    voter_count: z.number().meta({ description: "一共多少人投了票" }),
     options: z.array(
       z.object({
         id: z.number(),
-        row: z.number().openapi({ description: "第几行，从 0 起；普通投票都是 0" }),
+        row: z.number().meta({ description: "第几行，从 0 起；普通投票都是 0" }),
         label: z.string(),
-        votes: z.number().nullable().openapi({ description: "票数；还看不到结果时为 null" }),
-        abstain: z.boolean().openapi({
+        votes: z.number().nullable().meta({ description: "票数；还看不到结果时为 null" }),
+        abstain: z.boolean().meta({
           description: "弃权，即保研定位的「不清楚」：算投过票，不计入这一行的结果",
         }),
       }),
@@ -110,7 +110,7 @@ export const PollSchema = z
     my_votes: z
       .array(z.number())
       .nullable()
-      .openapi({ description: "自己投的选项；访客为 null，没投为空数组" }),
+      .meta({ description: "自己投的选项；访客为 null，没投为空数组" }),
   })
   .openapi("Poll");
 
@@ -123,22 +123,22 @@ export const LotterySchema = z
     prizes: z.array(
       z.object({
         name: z.string(),
-        winners: z.number().openapi({ description: "抽几人" }),
+        winners: z.number().meta({ description: "抽几人" }),
         won_by: z
           .array(UserBriefSchema)
           .nullable()
-          .openapi({ description: "中奖的人，按抽中的先后；开奖前为 null" }),
+          .meta({ description: "中奖的人，按抽中的先后；开奖前为 null" }),
       }),
     ),
-    entry: z.string().openapi({ description: "button 点按钮参与，reply 回复帖子就算参与" }),
-    min_level: z.number().openapi({ description: "参与要几级；版主和管理员不受限制" }),
-    draws_at: z.number().openapi({ description: "开奖时间" }),
-    drawn_at: z.number().nullable().openapi({ description: "实际开奖的时间；没开奖为 null" }),
+    entry: z.string().meta({ description: "button 点按钮参与，reply 回复帖子就算参与" }),
+    min_level: z.number().meta({ description: "参与要几级；版主和管理员不受限制" }),
+    draws_at: z.number().meta({ description: "开奖时间" }),
+    drawn_at: z.number().nullable().meta({ description: "实际开奖的时间；没开奖为 null" }),
     cancelled: z.boolean(),
-    seed_hash: z.string().openapi({ description: "种子的 SHA-256，发帖时就公布" }),
-    seed: z.string().nullable().openapi({ description: "种子，开奖后公开；之前为 null" }),
-    entry_count: z.number().openapi({ description: "参与人数" }),
-    entered: z.boolean().nullable().openapi({ description: "自己是否参与了；访客为 null" }),
+    seed_hash: z.string().meta({ description: "种子的 SHA-256，发帖时就公布" }),
+    seed: z.string().nullable().meta({ description: "种子，开奖后公开；之前为 null" }),
+    entry_count: z.number().meta({ description: "参与人数" }),
+    entered: z.boolean().nullable().meta({ description: "自己是否参与了；访客为 null" }),
   })
   .openapi("Lottery");
 
@@ -150,7 +150,7 @@ export function lotteryJson(l: Lottery) {
 export const SuggestionSchema = z
   .object({
     id: z.number(),
-    user: UserBriefSchema.openapi({ description: "提建议的人" }),
+    user: UserBriefSchema.meta({ description: "提建议的人" }),
     title: z.string().nullable(),
     board: BoardBriefSchema.nullable(),
     tags: z.array(z.string()).nullable(),

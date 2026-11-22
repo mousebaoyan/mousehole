@@ -29,11 +29,11 @@ const BoostBody = z
   .trim()
   .refine((s) => s.length > 0, "短评不能为空")
   .refine((s) => boostLength(s) <= BOOST_MAX, `短评不超过 ${BOOST_MAX} 个字`)
-  .openapi({ description: `不超过 ${BOOST_MAX} 个字，emoji 算一个` });
+  .meta({ description: `不超过 ${BOOST_MAX} 个字，emoji 算一个` });
 
 // What a bot brings over from a group says where and when (docs/api.md §2.5).
 const archived = {
-  source: Source.optional().openapi({
+  source: Source.optional().meta({
     description: "bot 收录时带：整理自哪条群消息；不提醒楼层作者",
   }),
   created_at: CreatedAt.optional(),

@@ -9,23 +9,23 @@ import { coinBalance, leaderboard, listLedger } from "./service.ts";
 
 const EntrySchema = z
   .object({
-    amount: z.number().openapi({ description: "挣为正、花为负" }),
-    reason: z.string().openapi({
+    amount: z.number().meta({ description: "挣为正、花为负" }),
+    reason: z.string().meta({
       description:
         "check_in 签到、liked 获赞、accepted 回复被采纳、bounty 回答悬赏、question 发问答帖、look 兑换动态版",
     }),
     day: z
       .string()
-      .openapi({ description: "北京时间的日期 YYYY-MM-DD：挣的是算的那天，花的是花的那天" }),
+      .meta({ description: "北京时间的日期 YYYY-MM-DD：挣的是算的那天，花的是花的那天" }),
     created_at: z.number(),
     thread: z
       .object({ id: z.number(), title: z.string() })
       .nullable()
-      .openapi({ description: "发的问答帖，或者回答的悬赏" }),
+      .meta({ description: "发的问答帖，或者回答的悬赏" }),
     look: z
       .object({ kind: z.string(), key: z.string() })
       .nullable()
-      .openapi({ description: "兑换的动态版" }),
+      .meta({ description: "兑换的动态版" }),
   })
   .openapi("CoinEntry");
 
@@ -83,7 +83,7 @@ export const coinsRoutes = createRouter()
       summary: "鼠币排行榜：这段时间挣到的鼠币，前 50 名，不含 bot 和冻结的账号",
       request: {
         query: z.object({
-          period: z.enum(PERIODS).default("week").openapi({
+          period: z.enum(PERIODS).default("week").meta({
             description: "week 本周一起、month 本月 1 日起、all 总榜，北京时间",
           }),
         }),

@@ -7,22 +7,22 @@ import { countUnread, listNotifications, markRead, onUnreadChange } from "./serv
 const NotificationSchema = z
   .object({
     id: z.number(),
-    type: z.string().openapi({
+    type: z.string().meta({
       description:
         "reply 回复了我的楼层，mention @了我，like 赞了我的楼层，boost 给我的楼层留了短评，watching 关注的帖子有新楼层，following 关注的人发了新帖，solved 我的回答被采纳，moderation 审核了我的内容，suggestion 修改建议（data.kind：new 有人建议修改我的帖子，accepted、rejected 我的建议被同意或未被同意，applied 版主照建议修改了我的帖子），level 我升级了（data 带 level）",
     }),
-    actor: WriterSchema.nullable().openapi({ description: "最近触发的人；匿名时是编号" }),
-    count: z.number().openapi({ description: "合并了几次：点赞、短评按楼层，新楼层按帖子" }),
+    actor: WriterSchema.nullable().meta({ description: "最近触发的人；匿名时是编号" }),
+    count: z.number().meta({ description: "合并了几次：点赞、短评按楼层，新楼层按帖子" }),
     thread: z
       .object({ id: z.number(), title: z.string() })
       .nullable()
-      .openapi({ description: "升级的通知为 null" }),
+      .meta({ description: "升级的通知为 null" }),
     post: z
       .object({ id: z.number(), floor: z.number() })
       .nullable()
-      .openapi({ description: "新的那一层；点赞和短评是被赞的那一层；升级的通知为 null" }),
-    excerpt: z.string().openapi({ description: "这一层正文的前 80 个字；删掉了是空字符串" }),
-    data: z.record(z.string(), z.string()).openapi({
+      .meta({ description: "新的那一层；点赞和短评是被赞的那一层；升级的通知为 null" }),
+    excerpt: z.string().meta({ description: "这一层正文的前 80 个字；删掉了是空字符串" }),
+    data: z.record(z.string(), z.string()).meta({
       description: "点赞带最近的 emoji，短评带最近的短评 body",
     }),
     read: z.boolean(),

@@ -13,7 +13,7 @@ export const Source = z
   })
   .openapi("Source", { description: "内容整理自同一个聊天里的哪几条 QQ 消息" });
 
-export const CreatedAt = UnixSeconds.positive().openapi({
+export const CreatedAt = UnixSeconds.positive().meta({
   description: "bot 收录时带：消息在群里发出的时间（Unix 秒），晚于现在的按现在算",
 });
 

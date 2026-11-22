@@ -23,14 +23,14 @@ const AnswersSchema = z
         thread: z.object({
           id: z.number(),
           title: z.string(),
-          created_at: z.number().openapi({ description: "Unix 秒；收录的提问是在群里问的时间" }),
+          created_at: z.number().meta({ description: "Unix 秒；收录的提问是在群里问的时间" }),
         }),
         asker: z.object({ id: z.number(), display_name: z.string(), qq: z.number() }),
         source: z
           .object({ chat_id: z.number(), message_id: z.number() })
-          .openapi({ description: "主楼整理自的第一条群消息" }),
-        count: z.number().openapi({ description: "新回答几条" }),
-        url: z.string().openapi({ description: "第一条新回答" }),
+          .meta({ description: "主楼整理自的第一条群消息" }),
+        count: z.number().meta({ description: "新回答几条" }),
+        url: z.string().meta({ description: "第一条新回答" }),
       }),
     ),
   })
@@ -63,8 +63,8 @@ export const qqRoutes = createRouter()
       summary: "从群里收录的提问在论坛上有了哪些新回答，给插件在群里提醒提问的人",
       request: {
         query: z.object({
-          since: UnixSecondsParam.openapi({ description: "Unix 秒" }),
-          until: UnixSecondsParam.optional().openapi({
+          since: UnixSecondsParam.meta({ description: "Unix 秒" }),
+          until: UnixSecondsParam.optional().meta({
             description: "算 [since, until) 里发的回复，Unix 秒，默认现在",
           }),
         }),

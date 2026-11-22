@@ -28,14 +28,14 @@ const BoardSchema = z
     name: z.string(),
     description: z.string(),
     color: z.string(),
-    visibility: z.string().openapi({ description: "public：公开；members：仅成员" }),
-    read_level: z.number().openapi({
+    visibility: z.string().meta({ description: "public：公开；members：仅成员" }),
+    read_level: z.number().meta({
       description: "仅成员的版块还要几级才能看，0 不限；版主和管理员不受限",
     }),
-    post_role: z.string().openapi({ description: "谁能发帖。user：成员；moderator：版主" }),
-    post_level: z.number().openapi({ description: "成员要几级才能发帖，0 不限" }),
-    default_kind: z.string().openapi({ description: "发帖时默认的类型：discussion 或 question" }),
-    review_mode: z.string().openapi({
+    post_role: z.string().meta({ description: "谁能发帖。user：成员；moderator：版主" }),
+    post_level: z.number().meta({ description: "成员要几级才能发帖，0 不限" }),
+    default_kind: z.string().meta({ description: "发帖时默认的类型：discussion 或 question" }),
+    review_mode: z.string().meta({
       description: "after：先发后审；before：先审后发，版主以外的人发的内容通过审核才公开",
     }),
     thread_count: z.number(),
@@ -46,7 +46,7 @@ const TagSchema = z
   .object({
     id: z.number(),
     name: z.string(),
-    kind: z.string().openapi({ description: "topic：话题；school：院校；major：方向" }),
+    kind: z.string().meta({ description: "topic：话题；school：院校；major：方向" }),
     thread_count: z.number(),
   })
   .openapi("Tag");
@@ -64,7 +64,7 @@ const BoardFields = z.object({
     .int()
     .min(0)
     .max(5)
-    .openapi({ description: "大于 0 时版块自动变为仅成员；改成公开时归零" }),
+    .meta({ description: "大于 0 时版块自动变为仅成员；改成公开时归零" }),
   post_role: z.enum(["user", "moderator"]),
   post_level: z.number().int().min(0).max(5),
   default_kind: z.enum(["discussion", "question"]),

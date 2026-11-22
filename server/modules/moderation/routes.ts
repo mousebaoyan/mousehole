@@ -45,8 +45,8 @@ const ReportSchema = z
   .object({
     id: z.number(),
     reason: z.string(),
-    status: z.string().openapi({ description: "open 待处理，resolved 已处理，dismissed 已驳回" }),
-    held: z.boolean().openapi({
+    status: z.string().meta({ description: "open 待处理，resolved 已处理，dismissed 已驳回" }),
+    held: z.boolean().meta({
       description: "L4 举报等级比自己低的人，这一层先隐藏了；驳回时恢复",
     }),
     reporter: UserBriefSchema,
@@ -61,7 +61,7 @@ const ReportSchema = z
     boost: z
       .object({ id: z.number(), body: z.string(), user: WriterSchema })
       .nullable()
-      .openapi({ description: "举报的是这一层下的短评时" }),
+      .meta({ description: "举报的是这一层下的短评时" }),
     handler: UserBriefSchema.nullable(),
     handled_at: z.number().nullable(),
     created_at: z.number(),
@@ -83,10 +83,10 @@ const ArchiveFlagSchema = z
       thread: z.object({ id: z.number(), title: z.string() }),
       author: WriterSchema,
       excerpt: z.string(),
-      created_at: z.number().openapi({ description: "在群里发出的时间" }),
+      created_at: z.number().meta({ description: "在群里发出的时间" }),
     }),
-    count: z.number().openapi({ description: "几个人反馈了" }),
-    flagged_at: z.number().openapi({ description: "最近一次反馈的时间" }),
+    count: z.number().meta({ description: "几个人反馈了" }),
+    flagged_at: z.number().meta({ description: "最近一次反馈的时间" }),
   })
   .openapi("ArchiveFlag");
 

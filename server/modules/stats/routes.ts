@@ -32,7 +32,7 @@ const Range = z.coerce
   .number()
   .pipe(z.literal(RANGES))
   .default(30)
-  .openapi({ description: "最近几天，含今天" });
+  .meta({ description: "最近几天，含今天" });
 
 // The page a response opened: its HTML, or its data fetched in the browser on the way there. Not
 // what the pages' fetchers load, which `_routes` names, nor a page loading again after a change,
@@ -107,71 +107,71 @@ export async function serveMailOpen(c: Context<AppEnv, "/mail/:file{[0-9]+\\.gif
 
 const Kinds = z
   .object({ site: z.number(), qq: z.number(), total: z.number() })
-  .openapi({ description: "论坛、群里、合起来" });
+  .meta({ description: "论坛、群里、合起来" });
 
 const Bytes = z.object({
   page: z.number(),
   api: z.number(),
-  image: z.number().openapi({ description: "正文图、头像和背景" }),
-  asset: z.number().openapi({ description: "静态文件" }),
+  image: z.number().meta({ description: "正文图、头像和背景" }),
+  asset: z.number().meta({ description: "静态文件" }),
 });
 
 const Sources = z
   .object({ web: z.number(), bot: z.number(), qq: z.number() })
-  .openapi({ description: "网页上、bot 代发、群里收录" });
+  .meta({ description: "网页上、bot 代发、群里收录" });
 
 const Content = z
   .object({ threads: Sources, replies: Sources, reactions: Sources })
-  .openapi({ description: "公开的新帖、回复和表情回应，收录的按在群里说的时间算" });
+  .meta({ description: "公开的新帖、回复和表情回应，收录的按在群里说的时间算" });
 
 const Logins = z
   .object({ code: z.number(), link: z.number(), email: z.number() })
-  .openapi({ description: "口令、链接、QQ 邮箱验证码三种方式各登录了几次" });
+  .meta({ description: "口令、链接、QQ 邮箱验证码三种方式各登录了几次" });
 
 const Coins = z
   .object({
     earned: z
       .object({ check_in: z.number(), liked: z.number(), accepted: z.number(), bounty: z.number() })
-      .openapi({ description: "发出的：签到、获赞、回复被采纳、回答悬赏" }),
+      .meta({ description: "发出的：签到、获赞、回复被采纳、回答悬赏" }),
     spent: z
       .object({ question: z.number(), look: z.number() })
-      .openapi({ description: "花掉的：发问答帖、兑换动态版" }),
+      .meta({ description: "花掉的：发问答帖、兑换动态版" }),
   })
-  .openapi({ description: "鼠币，按记账的那天；获赞、采纳和悬赏次日结算" });
+  .meta({ description: "鼠币，按记账的那天；获赞、采纳和悬赏次日结算" });
 
 const Totals = z.object({
-  dau: Kinds.openapi({ description: "平均日活，只算过完了的天" }),
-  wau: Kinds.openapi({ description: "截至最后一天的 7 天里来过的人" }),
-  mau: Kinds.openapi({ description: "截至最后一天的 30 天里来过的人" }),
+  dau: Kinds.meta({ description: "平均日活，只算过完了的天" }),
+  wau: Kinds.meta({ description: "截至最后一天的 7 天里来过的人" }),
+  mau: Kinds.meta({ description: "截至最后一天的 30 天里来过的人" }),
   new_activated: z.number(),
   read_seconds: z.number(),
   posts_read: z.number(),
-  guests: z.number().nullable().openapi({ description: "平均每天的访客，只算过完了的天" }),
-  guest_views: z.number().nullable().openapi({ description: "平均每天访客的浏览量" }),
-  member_views: z.number().nullable().openapi({ description: "平均每天成员的浏览量" }),
-  bytes: Bytes.nullable().openapi({ description: "平均每天发出的字节数" }),
+  guests: z.number().nullable().meta({ description: "平均每天的访客，只算过完了的天" }),
+  guest_views: z.number().nullable().meta({ description: "平均每天访客的浏览量" }),
+  member_views: z.number().nullable().meta({ description: "平均每天成员的浏览量" }),
+  bytes: Bytes.nullable().meta({ description: "平均每天发出的字节数" }),
   content: Content,
   questions: z
     .object({
       asked: z.number(),
-      solved: z.number().openapi({ description: "其中已解决的" }),
-      answered: z.number().openapi({ description: "其中有别人回复的" }),
+      solved: z.number().meta({ description: "其中已解决的" }),
+      answered: z.number().meta({ description: "其中有别人回复的" }),
       wait: z
         .number()
         .nullable()
-        .openapi({ description: "第一条别人回复的等待时间的中位数，秒；没人回复过时为 null" }),
+        .meta({ description: "第一条别人回复的等待时间的中位数，秒；没人回复过时为 null" }),
     })
-    .openapi({ description: "这一段在论坛上发的问答帖，不算群里收录的" }),
+    .meta({ description: "这一段在论坛上发的问答帖，不算群里收录的" }),
   logins: Logins,
   coins: Coins,
 });
 
 const Made = z.object({
-  replies: z.number().openapi({ description: "这一段公开的新回复" }),
-  reactions: z.number().openapi({ description: "这一段公开的楼层收到的表情回应" }),
+  replies: z.number().meta({ description: "这一段公开的新回复" }),
+  reactions: z.number().meta({ description: "这一段公开的楼层收到的表情回应" }),
 });
 
-const Count = z.number().openapi({ description: "人次，每人每天算一次" });
+const Count = z.number().meta({ description: "人次，每人每天算一次" });
 
 export const statsRoutes = createRouter()
   .openapi(
@@ -194,21 +194,21 @@ export const statsRoutes = createRouter()
                 range: z.number(),
                 days: z.array(
                   z.object({
-                    day: z.string().openapi({ description: "YYYY-MM-DD" }),
+                    day: z.string().meta({ description: "YYYY-MM-DD" }),
                     active: Kinds,
-                    members: z.number().nullable().openapi({ description: "那天的群成员数" }),
-                    activated: z.number().nullable().openapi({ description: "其中已激活的" }),
+                    members: z.number().nullable().meta({ description: "那天的群成员数" }),
+                    activated: z.number().nullable().meta({ description: "其中已激活的" }),
                     new_activated: z.number(),
-                    joined: z.number().openapi({ description: "进群的人次，按群算" }),
-                    left: z.number().openapi({ description: "退群的人次，按群算" }),
+                    joined: z.number().meta({ description: "进群的人次，按群算" }),
+                    left: z.number().meta({ description: "退群的人次，按群算" }),
                     read_seconds: z.number(),
                     posts_read: z.number(),
-                    guests: z.number().nullable().openapi({
+                    guests: z.number().nullable().meta({
                       description: "访客人数：没登录的 IP + User-Agent；开始记录以前为 null",
                     }),
                     guest_views: z.number().nullable(),
                     member_views: z.number().nullable(),
-                    bytes: Bytes.nullable().openapi({ description: "发出的字节数" }),
+                    bytes: Bytes.nullable().meta({ description: "发出的字节数" }),
                     content: Content,
                     logins: Logins,
                     coins: Coins,
@@ -216,60 +216,60 @@ export const statsRoutes = createRouter()
                 ),
                 totals: z.object({
                   now: Totals,
-                  before: Totals.openapi({ description: "前一段同样长的时间" }),
+                  before: Totals.meta({ description: "前一段同样长的时间" }),
                 }),
                 retention: z.array(
                   z.object({
-                    week: z.string().openapi({ description: "这一周的周一" }),
-                    size: z.number().openapi({ description: "这一周激活的人数" }),
-                    back: z.array(z.number().nullable()).openapi({
+                    week: z.string().meta({ description: "这一周的周一" }),
+                    size: z.number().meta({ description: "这一周激活的人数" }),
+                    back: z.array(z.number().nullable()).meta({
                       description: "其中第 1、2、4、8 周来过论坛的人数，那一周还没过完时为 null",
                     }),
                   }),
                 ),
                 referrers: z
                   .array(z.object({ host: z.string(), visits: Count }))
-                  .openapi({ description: "访客从哪些网站来，按域名" }),
+                  .meta({ description: "访客从哪些网站来，按域名" }),
                 landings: z
                   .array(
                     z.object({
                       path: z.string(),
-                      title: z.string().nullable().openapi({ description: "帖子页的标题" }),
+                      title: z.string().nullable().meta({ description: "帖子页的标题" }),
                       visits: Count,
                     }),
                   )
-                  .openapi({ description: "访客最先打开的页面" }),
+                  .meta({ description: "访客最先打开的页面" }),
                 devices: z
                   .object({
                     guests: z.array(z.object({ device: z.string(), visits: Count })),
                     members: z.array(z.object({ device: z.string(), visits: Count })),
                   })
-                  .openapi({ description: "浏览器和系统" }),
+                  .meta({ description: "浏览器和系统" }),
                 mail: z
                   .array(
                     z.object({
                       kind: z
                         .string()
-                        .openapi({ description: "通知类型、weekly、login（验证码）或 test" }),
+                        .meta({ description: "通知类型、weekly、login（验证码）或 test" }),
                       sent: z.number(),
-                      dropped: z.number().openapi({ description: "发不出去丢掉的" }),
-                      opened: z.number().nullable().openapi({
+                      dropped: z.number().meta({ description: "发不出去丢掉的" }),
+                      opened: z.number().nullable().meta({
                         description: "其中打开过的；验证码和测试邮件不记，为 null",
                       }),
-                      clicked: z.number().nullable().openapi({ description: "其中点击过的" }),
+                      clicked: z.number().nullable().meta({ description: "其中点击过的" }),
                     }),
                   )
-                  .openapi({ description: "这一段的邮件，按类，发得多的在前" }),
+                  .meta({ description: "这一段的邮件，按类，发得多的在前" }),
                 searches: z
                   .object({
                     most: z
                       .array(z.object({ term: z.string(), searches: z.number() }))
-                      .openapi({ description: "搜得最多的词，前 20" }),
-                    unfound: z.array(z.object({ term: z.string(), searches: z.number() })).openapi({
+                      .meta({ description: "搜得最多的词，前 20" }),
+                    unfound: z.array(z.object({ term: z.string(), searches: z.number() })).meta({
                       description: "没有结果的词，前 20；searches 是没有结果的次数",
                     }),
                   })
-                  .openapi({
+                  .meta({
                     description: "这一段网页上搜的词，转成小写；每人每天搜同一个词算一次",
                   }),
                 top: z
@@ -282,7 +282,7 @@ export const statsRoutes = createRouter()
                     ),
                     tags: z.array(z.object({ name: z.string(), ...Made.shape })),
                   })
-                  .openapi({
+                  .meta({
                     description: "这一段新回复和表情回应合起来最多的帖子、版块和标签，各前 10",
                   }),
               }),
@@ -309,12 +309,12 @@ export const statsRoutes = createRouter()
           sort: z
             .enum(USER_SORTS)
             .default("posts")
-            .openapi({ description: "按哪一项排，posts 是发帖和回复合起来；这一项为 0 的不列" }),
+            .meta({ description: "按哪一项排，posts 是发帖和回复合起来；这一项为 0 的不列" }),
           staff: z
             .enum(["true", "false"])
             .default("true")
             .transform((v) => v === "true")
-            .openapi({ description: "false 时不含版主和管理员" }),
+            .meta({ description: "false 时不含版主和管理员" }),
         }),
       },
       responses: {
@@ -326,15 +326,13 @@ export const statsRoutes = createRouter()
                 items: z.array(
                   z.object({
                     user: UserBriefSchema,
-                    days: z.number().openapi({ description: "来过论坛的天数" }),
-                    threads: z.number().openapi({ description: "在网页上发的帖子" }),
-                    replies: z.number().openapi({ description: "在网页上发的回复" }),
-                    accepted: z.number().openapi({ description: "回复被别人采纳的次数" }),
-                    likes: z
-                      .number()
-                      .openapi({ description: "网页上写的楼层在网页上收到的表情回应" }),
-                    votes: z.number().openapi({ description: "投过票的投票帖" }),
-                    boosts: z.number().openapi({ description: "在网页上写的短评" }),
+                    days: z.number().meta({ description: "来过论坛的天数" }),
+                    threads: z.number().meta({ description: "在网页上发的帖子" }),
+                    replies: z.number().meta({ description: "在网页上发的回复" }),
+                    accepted: z.number().meta({ description: "回复被别人采纳的次数" }),
+                    likes: z.number().meta({ description: "网页上写的楼层在网页上收到的表情回应" }),
+                    votes: z.number().meta({ description: "投过票的投票帖" }),
+                    boosts: z.number().meta({ description: "在网页上写的短评" }),
                   }),
                 ),
               }),
@@ -360,12 +358,7 @@ export const statsRoutes = createRouter()
       request: {
         params: z.object({ user: UserRefSchema }),
         query: z.object({
-          cursor: z.coerce
-            .number()
-            .int()
-            .min(0)
-            .optional()
-            .openapi({ description: "已经列出的条数" }),
+          cursor: z.coerce.number().int().min(0).optional().meta({ description: "已经列出的条数" }),
         }),
       },
       responses: {
@@ -376,9 +369,9 @@ export const statsRoutes = createRouter()
               schema: z.object({
                 items: z.array(
                   z.object({
-                    day: z.string().openapi({ description: "YYYY-MM-DD" }),
+                    day: z.string().meta({ description: "YYYY-MM-DD" }),
                     ip: z.string(),
-                    device: z.string().openapi({ example: "Chrome · Windows" }),
+                    device: z.string().meta({ example: "Chrome · Windows" }),
                     user_agent: z.string(),
                     views: z.number(),
                   }),
@@ -386,7 +379,7 @@ export const statsRoutes = createRouter()
                 next_cursor: z.string().nullable(),
                 others: z
                   .array(z.object({ user: UserBriefSchema, ips: z.array(z.string()) }))
-                  .openapi({
+                  .meta({
                     description: "这些 IP 上来过的其他账号，共用的 IP 多的在前，最多 20 个",
                   }),
               }),
@@ -426,7 +419,7 @@ export const statsRoutes = createRouter()
           content: {
             "application/json": {
               schema: z.object({
-                mail: z.string().max(100).openapi({ description: "链接里的 m：邮件 ID.签名" }),
+                mail: z.string().max(100).meta({ description: "链接里的 m：邮件 ID.签名" }),
               }),
             },
           },
