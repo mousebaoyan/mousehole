@@ -432,15 +432,16 @@ export async function revokeMemberToken(actor: Actor, id: number) {
 }
 
 // A ban ends someone's tokens along with their logins (design §6.7), and the codes an app has yet
-// to exchange for one.
+// to exchange for one. Codes go first, in the order an exchange takes them, so the two never wait
+// on each other.
 export async function revokeTokensOf(trx: Transaction<DB>, userId: number) {
+  await trx.deleteFrom("oauth_codes").where("user_id", "=", userId).execute();
   await trx
     .updateTable("api_tokens")
     .set({ revoked_at: new Date() })
     .where("user_id", "=", userId)
     .where("revoked_at", "is", null)
     .execute();
-  await trx.deleteFrom("oauth_codes").where("user_id", "=", userId).execute();
 }
 
 // Sends a 6-digit code to the member's QQ mailbox, after the code is stored and outside any

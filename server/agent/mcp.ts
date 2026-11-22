@@ -284,7 +284,8 @@ function mcpServer(call: (request: ApiCall) => Promise<CallToolResult>) {
 }
 
 const RESOURCE_METADATA = `${env.PUBLIC_URL}/.well-known/oauth-protected-resource/mcp`;
-const SCOPES = "read act";
+export const MCP_SCOPES = ["read", "act"];
+const SCOPES = MCP_SCOPES.join(" ");
 // What the API takes in one request.
 const MAX_BODY = 1024 * 1024;
 
