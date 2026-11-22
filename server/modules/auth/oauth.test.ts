@@ -117,6 +117,12 @@ describe("自家应用的 OAuth", () => {
       id: me.id,
       restriction: { type: "mute", until: null },
     });
+    // Listed in their settings as the app, for them to revoke.
+    const listed = await api.me.tokens.$get({}, me.who);
+    if (!listed.ok) throw new Error(`status ${listed.status}`);
+    expect((await listed.json()).items).toMatchObject([
+      { name: "鼠钟", scopes: ["profile"], app: { name: "鼠钟", first_party: true } },
+    ]);
   });
 
   test("授权码只能试一次：verifier 不对的那次也用掉了", async () => {
@@ -194,5 +200,18 @@ describe("自家应用的 OAuth", () => {
     expect((await api.admin.apps[":id"].$patch(disable, owner)).status).toBe(204);
     expect((await api.me.$get({}, token)).status).toBe(401);
     expect((await authorize(who, { client_id: other.client_id })).status).toBe(400);
+  });
+
+  test("自己的令牌列表里是应用现在的名字", async () => {
+    const renamed = await register("改名前");
+    const { who } = await person();
+    await tokenFor(who, renamed);
+    const rename = { param: { id: String(renamed.id) }, json: { name: "改名后" } };
+    expect((await api.admin.apps[":id"].$patch(rename, owner)).status).toBe(204);
+    const listed = await api.me.tokens.$get({}, who);
+    if (!listed.ok) throw new Error(`status ${listed.status}`);
+    expect((await listed.json()).items).toMatchObject([
+      { app: { name: "改名后", first_party: true } },
+    ]);
   });
 });

@@ -361,18 +361,27 @@ export async function revokeBotToken(actor: Actor, id: number) {
   });
 }
 
-// The tokens a member has given to their Agents and scripts that are still in force, the last
-// used first (design §6.7).
+// The tokens a member has given to their Agents and scripts, or apps got from them, that are still
+// in force, the last used first (design §6.7). Our own apps are those with a secret.
 export async function listMemberTokens(userId: number) {
-  const lastUse = sql<Date>`coalesce(last_used_at, created_at)`;
+  const lastUse = sql<Date>`coalesce(api_tokens.last_used_at, api_tokens.created_at)`;
   return db
     .selectFrom("api_tokens")
-    .select(["id", "name", "scopes", "created_at", "last_used_at"])
-    .where("user_id", "=", userId)
-    .where("revoked_at", "is", null)
+    .leftJoin("oauth_clients", "oauth_clients.id", "api_tokens.client_id")
+    .select([
+      "api_tokens.id",
+      "api_tokens.name",
+      "api_tokens.scopes",
+      "api_tokens.created_at",
+      "api_tokens.last_used_at",
+      "oauth_clients.name as app_name",
+      sql<boolean>`oauth_clients.secret_hash IS NOT NULL`.as("first_party"),
+    ])
+    .where("api_tokens.user_id", "=", userId)
+    .where("api_tokens.revoked_at", "is", null)
     .where(lastUse, ">", new Date(Date.now() - MEMBER_TOKEN_IDLE_MS))
     .orderBy(lastUse, "desc")
-    .orderBy("id", "desc")
+    .orderBy("api_tokens.id", "desc")
     .execute();
 }
 

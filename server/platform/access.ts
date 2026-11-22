@@ -160,7 +160,7 @@ export function assertNotMuted(viewer: Viewer) {
 }
 
 // What a member's Agent puts up takes L3 (design §6.7); moderators and admins aren't held by it.
-const AGENT_POSTING_LEVEL = 3;
+export const AGENT_POSTING_LEVEL = 3;
 
 export function assertAgentMayPost(viewer: Viewer, token: Token | null) {
   if (token?.kind !== "member" || viewer.level >= AGENT_POSTING_LEVEL) return;

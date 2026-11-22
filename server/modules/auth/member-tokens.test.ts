@@ -40,7 +40,9 @@ describe("成员的令牌", () => {
     const list = await api.me.tokens.$get({}, me.who);
     if (!list.ok) throw new Error(`status ${list.status}`);
     const listed = (await list.json()).items;
-    expect(listed).toMatchObject([{ id, name: "Codex", scopes: ["read"], last_used_at: null }]);
+    expect(listed).toMatchObject([
+      { id, name: "Codex", scopes: ["read"], app: null, last_used_at: null },
+    ]);
     expect(JSON.stringify(listed)).not.toContain(token);
 
     const mine = await api.me.$get({}, agent);

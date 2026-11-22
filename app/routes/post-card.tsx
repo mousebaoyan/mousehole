@@ -4,6 +4,7 @@ import { cn } from "~/cn";
 import {
   ArrowDown,
   ArrowUp,
+  Bot,
   ChevronDown,
   ChevronUp,
   CircleCheck,
@@ -272,6 +273,15 @@ export function PostCard({
             </button>
           )}
           {post.via === "qq" && <Archived post={post} threadId={threadId} />}
+          {post.via === "agent" && (
+            <span
+              title="通过本人的 Agent 发布"
+              className="inline-flex items-center gap-1 rounded-full bg-secondary px-2 py-0.5 text-2xs"
+            >
+              <Bot className="size-3" />
+              Agent
+            </span>
+          )}
           {post.edited_at !== null &&
             (manage.history ? (
               <button

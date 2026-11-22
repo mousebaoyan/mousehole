@@ -1,6 +1,6 @@
-import { Download, LogOut, Monitor } from "~/components/icons";
+import { AppWindow, Copy, Download, KeyRound, LogOut, Monitor } from "~/components/icons";
 import { pageTitle } from "~/share-meta";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { redirect, useFetcher, useRevalidator } from "react-router";
 import { apiContext } from "../api.server.ts";
 import { browserApi } from "~/browser-api";
@@ -11,6 +11,7 @@ import { Input } from "~/components/ui/input";
 import { Select } from "~/components/ui/select";
 import { Textarea } from "~/components/ui/textarea";
 import { toast } from "~/components/ui/toast";
+import { confirmSubmit } from "~/components/ui/dialog";
 import { UserAvatar } from "~/components/user-avatar";
 import { useMe } from "~/forum";
 import type { Route } from "./+types/settings.ts";
@@ -20,9 +21,11 @@ import {
   NOTIFICATION_TYPES,
   SITE_ONLY,
 } from "../../server/modules/notifications/types.ts";
-import { BOT_NAME, TIER_NAMES } from "../../server/platform/site.ts";
+import { BOT_NAME, STAFF, TIER_NAMES } from "../../server/platform/site.ts";
+import { AGENT_POSTING_LEVEL } from "../../server/platform/access.ts";
 import { BuyButton, buyLook, Customize, DEFAULT_STATUS_EMOJI } from "./settings-customize.tsx";
 import { endOfDay, unixNow } from "~/time";
+import { useHydrated } from "~/hydrated";
 import {
   BACKGROUNDS,
   FRAMES,
@@ -43,17 +46,19 @@ const SECTIONS = {
   proxy: { id: "proxy", title: "群聊收录" },
   notify: { id: "notify", title: "通知" },
   devices: { id: "devices", title: "登录设备" },
+  agent: { id: "agent", title: "Agent" },
   export: { id: "export", title: "导出" },
 };
 
 export async function loader({ context }: Route.LoaderArgs) {
   const api = context.get(apiContext);
-  const [settings, sessions, me] = await Promise.all([
+  const [settings, sessions, tokens, me] = await Promise.all([
     api.me.settings.$get(),
     api.me.sessions.$get(),
+    api.me.tokens.$get(),
     api.me.$get(),
   ]);
-  if (!settings.ok || !sessions.ok || !me.ok) return redirect("/login");
+  if (!settings.ok || !sessions.ok || !tokens.ok || !me.ok) return redirect("/login");
   // Their card as others see it, which the 个性化 preview dresses.
   const card = await api.users[":user"].$get({ param: { user: String((await me.json()).id) } });
   if (!card.ok) throw new Error("Card failed");
@@ -61,17 +66,29 @@ export async function loader({ context }: Route.LoaderArgs) {
   return {
     settings: await settings.json(),
     sessions: (await sessions.json()).items,
+    tokens: (await tokens.json()).items,
     profile: profile.members_only ? null : profile,
     now: unixNow(),
   };
 }
 
-// Saving the form, or signing a device out.
+// Saving the form, signing a device out, or making or revoking a token.
 export async function action({ request, context }: Route.ActionArgs) {
   const api = context.get(apiContext);
   const field = await readForm(request);
   if (field("intent") === "sign-out") {
     await api.me.sessions[":id"].$delete({ param: { id: field("id") } });
+    return null;
+  }
+  if (field("intent") === "create-token") {
+    const res = await api.me.tokens.$post({
+      json: { name: field("name"), scopes: field("act") === "on" ? ["read", "act"] : ["read"] },
+    });
+    if (res.ok) return { ok: true, message: "已生成", ...(await res.json()) };
+    return { ok: false, message: (await res.json()).error.message };
+  }
+  if (field("intent") === "revoke-token") {
+    await api.me.tokens[":id"].$delete({ param: { id: field("id") } });
     return null;
   }
   if (field("intent") === "qq-avatar") {
@@ -147,7 +164,7 @@ function ids(value: string) {
 }
 
 export default function Settings({ loaderData, actionData }: Route.ComponentProps) {
-  const { settings, sessions, profile, now } = loaderData;
+  const { settings, sessions, tokens, profile, now } = loaderData;
   const me = useMe();
   return (
     <div className="flex gap-8">
@@ -310,6 +327,13 @@ export default function Settings({ loaderData, actionData }: Route.ComponentProp
         </Section>
 
         <Section
+          {...SECTIONS.agent}
+          description="让你的 Agent 和自己写的脚本以你的身份使用鼠洞。令牌 90 天未使用会失效"
+        >
+          <AgentTokens tokens={tokens} />
+        </Section>
+
+        <Section
           {...SECTIONS.export}
           description="导出你的帖子、回复、短评和收藏，帖子和回复保留 Markdown 原文。每小时最多导出 3 次"
         >
@@ -392,6 +416,145 @@ function Device({ session: s }: { session: Session }) {
         </signOut.Form>
       )}
     </li>
+  );
+}
+
+type Token = Route.ComponentProps["loaderData"]["tokens"][number];
+
+const SCOPE_LABELS: Record<string, string> = { profile: "资料", read: "读取", act: "发帖和互动" };
+
+// Their tokens and the apps they let in (design §6.7), and a form for a new token. A new one is
+// shown once, as the forum keeps only its hash, and not after it was revoked. Before the page's
+// script runs the forms would post as plain forms, whose result this section doesn't read.
+function AgentTokens({ tokens }: { tokens: Token[] }) {
+  const me = useMe();
+  const create = useFetcher<typeof action>();
+  const form = useRef<HTMLFormElement>(null);
+  const hydrated = useHydrated();
+  const made = create.data && "token" in create.data ? create.data : null;
+  const created = made && tokens.some((t) => t.id === made.id) ? made.token : null;
+  useEffect(() => {
+    if (create.data?.ok === false) toast(create.data.message);
+    if (create.data?.ok) form.current?.reset();
+  }, [create.data]);
+  if (!me) return null;
+  const mayCreate = me.member_status === "member" && me.role !== "owner";
+  const belowLevel = me.level < AGENT_POSTING_LEVEL && !STAFF.includes(me.role);
+  return (
+    <>
+      {tokens.length === 0 ? (
+        <p className="text-sm text-muted-foreground">暂无令牌</p>
+      ) : (
+        <ul className="-mt-3 divide-y">
+          {tokens.map((t) => (
+            <TokenItem key={t.id} token={t} />
+          ))}
+        </ul>
+      )}
+      {created && <NewToken token={created} />}
+      {mayCreate ? (
+        <create.Form method="post" ref={form} className="mt-4 flex flex-col gap-3 border-t pt-4">
+          <Field label="新令牌的名称" hint="用来区分不同的 Agent 和脚本">
+            <Input name="name" required maxLength={24} placeholder="例如：Codex" />
+          </Field>
+          <Check
+            name="act"
+            label="允许发帖、回复和互动"
+            hint={
+              belowLevel
+                ? `通过 Agent 发内容需要 L${AGENT_POSTING_LEVEL}，你目前是 L${me.level}`
+                : "不勾选时只能读取你能看到的内容"
+            }
+            checked={false}
+          />
+          <Button
+            type="submit"
+            name="intent"
+            value="create-token"
+            className="self-start"
+            disabled={!hydrated || create.state !== "idle"}
+          >
+            生成令牌
+          </Button>
+        </create.Form>
+      ) : (
+        <p className="mt-4 border-t pt-4 text-meta text-muted-foreground">
+          {me.role === "owner" ? "站长账号不能生成令牌" : "账号已冻结，重新进群后才能生成令牌"}
+        </p>
+      )}
+    </>
+  );
+}
+
+function TokenItem({ token: t }: { token: Token }) {
+  const revoke = useFetcher();
+  const hydrated = useHydrated();
+  // Apps by the name they have now, which they may have changed since.
+  const name = t.app?.name ?? t.name;
+  const Icon = t.app ? AppWindow : KeyRound;
+  return (
+    <li className="flex items-center gap-3 py-3 text-sm">
+      <Icon className="size-4 shrink-0 text-muted-foreground" />
+      <div className="min-w-0 flex-1">
+        <p className="truncate">{name}</p>
+        <p className="text-meta text-muted-foreground">
+          {t.app ? (t.app.first_party ? "用鼠洞账号登录" : "授权的 Agent") : "个人令牌"} ·{" "}
+          {t.scopes.map((scope) => SCOPE_LABELS[scope] ?? scope).join("、")} ·{" "}
+          {t.last_used_at === null ? (
+            "未使用"
+          ) : (
+            <>
+              最近使用 <Time value={t.last_used_at} />
+            </>
+          )}
+        </p>
+      </div>
+      <revoke.Form method="post">
+        <input type="hidden" name="intent" value="revoke-token" />
+        <input type="hidden" name="id" value={t.id} />
+        <Button
+          variant="ghost"
+          size="sm"
+          disabled={!hydrated || revoke.state !== "idle"}
+          onClick={confirmSubmit(
+            t.app?.first_party
+              ? `撤销对「${name}」的授权？你将在「${name}」退出登录。`
+              : t.app
+                ? `撤销对「${name}」的授权？它将立即无法以你的身份访问鼠洞。`
+                : `撤销令牌「${name}」？使用它的 Agent 和脚本将立即无法访问鼠洞。`,
+            "撤销",
+          )}
+        >
+          撤销
+        </Button>
+      </revoke.Form>
+    </li>
+  );
+}
+
+function NewToken({ token }: { token: string }) {
+  return (
+    <output className="mt-4 block rounded-xl border border-success/40 bg-success/5 p-3 text-sm">
+      <p className="font-medium text-success">令牌只显示这一次，请立即复制到 Agent 的配置中</p>
+      <div className="mt-2 flex items-center gap-2">
+        <code className="min-w-0 flex-1 rounded-lg bg-card px-3 py-2 font-mono break-all select-all">
+          {token}
+        </code>
+        <Button
+          variant="outline"
+          size="sm"
+          // QQ's built-in browser can refuse the clipboard.
+          onClick={() =>
+            void navigator.clipboard.writeText(token).then(
+              () => toast("令牌已复制"),
+              () => toast("复制失败，请手动选中复制"),
+            )
+          }
+        >
+          <Copy /> 复制
+        </Button>
+      </div>
+    </output>
   );
 }
 
