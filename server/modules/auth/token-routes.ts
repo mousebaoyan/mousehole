@@ -35,6 +35,10 @@ const MemberTokenSchema = z
     id: z.number(),
     name: z.string(),
     scopes: z.array(z.string()),
+    app: z
+      .object({ name: z.string(), first_party: z.boolean() })
+      .nullable()
+      .openapi({ description: "授权的应用，first_party 是不是自家应用；个人令牌为 null" }),
     created_at: z.number(),
     last_used_at: z.number().nullable(),
   })
@@ -159,6 +163,7 @@ export const memberTokenRoutes = createRouter()
         id: t.id,
         name: t.name,
         scopes: t.scopes,
+        app: t.app_name === null ? null : { name: t.app_name, first_party: t.first_party },
         created_at: unix(t.created_at),
         last_used_at: t.last_used_at && unix(t.last_used_at),
       }));

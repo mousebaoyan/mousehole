@@ -87,6 +87,7 @@ export const History = icon(lucide.History);
 export const Home = icon(lucide.Home);
 export const ImagePlus = icon(lucide.ImagePlus);
 export const Info = icon(lucide.Info);
+export const KeyRound = icon(lucide.KeyRound);
 export const LayoutDashboard = icon(lucide.LayoutDashboard);
 export const LayoutList = icon(lucide.LayoutList);
 export const Lightbulb = icon(lucide.Lightbulb);
