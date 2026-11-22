@@ -209,6 +209,17 @@ describe("读帖子", () => {
 
   test("ID、楼层、游标和时间超出数据库能存的范围时是请求有误，不是服务器出错", async () => {
     const thread = String(await newThread(await newBoard()));
+    const { token } = await createBotToken(
+      {
+        userId: (await createUser("admin")).id,
+        operatorId: null,
+        tokenId: null,
+        via: "web",
+        ip: null,
+        userAgent: null,
+      },
+      { name: "插件", botQq: nextQq(), scopes: ["read"] },
+    );
     const statuses = await Promise.all(
       [
         api.threads[":id"].$get({ param: { id: "9999999999" } }),
@@ -216,7 +227,10 @@ describe("读帖子", () => {
         api.threads.$get({ query: { cursor: "99999999999999999999_1" } }),
         api.threads.$get({ query: { view: "created", cursor: "9999999999" } }),
         api.users[":user"].$get({ param: { user: "9999999999" } }),
-        api.bot.bounties.$get({ query: { since: "99999999999999" } }, admin),
+        api.bot.bounties.$get(
+          { query: { since: "99999999999999" } },
+          { headers: { authorization: `Bearer ${token}` } },
+        ),
       ].map(async (res) => (await res).status),
     );
     expect(statuses).toEqual([400, 400, 400, 400, 400, 400]);

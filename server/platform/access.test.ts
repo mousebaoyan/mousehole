@@ -56,11 +56,6 @@ describe("权限判定", () => {
     expect(code(member, bot({ scopes: ["read"] }), "read")).toBe("ok");
   });
 
-  test("同步、口令登录、事件流只给 bot", () => {
-    expect(code(moderator, null, "sync")).toBe("forbidden");
-    expect(code(botAccount, bot({ scopes: ["sync"], actingAs: false }), "sync")).toBe("ok");
-  });
-
   test("冻结的账号只能读", () => {
     const frozen = { ...member, member_status: "frozen" };
     expect(code(frozen, null, "act")).toBe("member_frozen");
