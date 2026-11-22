@@ -45,6 +45,11 @@ const changed = {
   404: errorResponse("回复不存在"),
 };
 
+// Also the MCP's tools' (server/agent/mcp.ts).
+export const ReactionBody = z
+  .object({ emoji: z.enum(REACTIONS), ...archived })
+  .refine(createdWithSource, CREATED_WITH_SOURCE);
+
 export const reactionsRoutes = createRouter()
   .openapi(
     createRoute({
@@ -57,9 +62,7 @@ export const reactionsRoutes = createRouter()
           required: true,
           content: {
             "application/json": {
-              schema: z
-                .object({ emoji: z.enum(REACTIONS), ...archived })
-                .refine(createdWithSource, CREATED_WITH_SOURCE),
+              schema: ReactionBody,
             },
           },
         },

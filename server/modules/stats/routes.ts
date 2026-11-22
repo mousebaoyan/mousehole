@@ -50,7 +50,7 @@ function openedPage(c: Context, referer: URL | null, fetched: Set<string>) {
 }
 
 function kindOf(path: string): Sent {
-  if (path.startsWith("/api/")) return "api";
+  if (path.startsWith("/api/") || path === "/mcp") return "api";
   if (/^\/(?:uploads|avatars|backgrounds)\//.test(path)) return "image";
   return /\.\w+$/.test(path) && !path.endsWith(".data") ? "asset" : "page";
 }

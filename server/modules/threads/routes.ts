@@ -341,7 +341,7 @@ const Reason = z
   .max(200)
   .meta({ description: "隐藏的理由，告诉作者，记进操作日志" });
 
-const Content = z.union([
+export const Content = z.union([
   z.object({ markdown: Markdown }),
   z.object({
     onebot: z
@@ -483,6 +483,76 @@ const postResponse = {
 // Lists of the reader's own, for someone signed in.
 const OWN_VIEWS = new Set<ThreadView>(["unvoted", "unread", "read", "posted", "bookmarked"]);
 
+// Also the MCP's tools' (server/agent/mcp.ts).
+export const ThreadListQuery = z.object({
+  board: z.string().optional(),
+  tag: z.string().optional(),
+  view: z.enum(VIEWS).default("latest").meta({
+    description:
+      "latest 按最后回复，created 按发布时间，hot 热门，unsolved 待解答；要登录的：unvoted 待投票，他人发的、还在投票、自己没投过的投票帖，unread 读过、之后有新楼层，read 读过的、按最后阅读时间，posted 自己发过或回复过的，bookmarked 自己收藏的、按收藏时间",
+  }),
+  cursor: z.string().optional(),
+  limit: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(PAGE_SIZE)
+    .optional()
+    .meta({ description: "每页几个，默认也是最多 30 个" }),
+});
+
+export const PostsQuery = BodyQuery.extend({
+  after: IntParam.min(0).optional(),
+  before: IntParam.min(1).optional(),
+});
+
+export const NewThread = z
+  .object({
+    board: z.string(),
+    title: Title,
+    content: Content,
+    kind: z.enum(["discussion", "question", "poll", "lottery"]).optional(),
+    poll: PollInput.optional().meta({ description: "投票帖必带，其他类型不能带" }),
+    lottery: LotteryInput.optional().meta({
+      description: "抽奖帖必带，其他类型不能带",
+    }),
+    tags: Tags.default([]),
+    source: Source.optional(),
+    created_at: CreatedAt.optional(),
+    anonymous: z.boolean().optional().meta({ description: "楼主匿名，发出后不能改" }),
+    anonymous_replies: z
+      .boolean()
+      .optional()
+      .meta({ description: "楼主以外的人回复时匿名，发出后不能改" }),
+  })
+  .refine((b) => (b.kind === "poll") === (b.poll !== undefined), {
+    message: "投票帖要带 poll，其他类型不能带",
+    path: ["poll"],
+  })
+  .refine((b) => (b.kind === "lottery") === (b.lottery !== undefined), {
+    message: "抽奖帖要带 lottery，其他类型不能带",
+    path: ["lottery"],
+  })
+  // Winners must find the author, and the list of them is public (design §8.13).
+  .refine((b) => b.kind !== "lottery" || !(b.anonymous || b.anonymous_replies), {
+    message: "抽奖帖不能匿名",
+    path: ["anonymous"],
+  })
+  .refine(createdWithSource, CREATED_WITH_SOURCE);
+
+export const NewReply = z
+  .object({
+    content: Content,
+    reply_to_id: Int.optional(),
+    anonymous: z.boolean().optional().meta({
+      description:
+        "这条回复是否匿名，只能在 my_anonymity 为 optional 的帖子里给，不给时实名；其他帖子按帖子的设置",
+    }),
+    source: Source.optional(),
+    created_at: CreatedAt.optional(),
+  })
+  .refine(createdWithSource, CREATED_WITH_SOURCE);
+
 export const threadsRoutes = createRouter()
   .openapi(
     createRoute({
@@ -490,22 +560,7 @@ export const threadsRoutes = createRouter()
       path: "/threads",
       summary: "帖子列表",
       request: {
-        query: z.object({
-          board: z.string().optional(),
-          tag: z.string().optional(),
-          view: z.enum(VIEWS).default("latest").meta({
-            description:
-              "latest 按最后回复，created 按发布时间，hot 热门，unsolved 待解答；要登录的：unvoted 待投票，他人发的、还在投票、自己没投过的投票帖，unread 读过、之后有新楼层，read 读过的、按最后阅读时间，posted 自己发过或回复过的，bookmarked 自己收藏的、按收藏时间",
-          }),
-          cursor: z.string().optional(),
-          limit: z.coerce
-            .number()
-            .int()
-            .min(1)
-            .max(PAGE_SIZE)
-            .optional()
-            .meta({ description: "每页几个，默认也是最多 30 个" }),
-        }),
+        query: ThreadListQuery,
       },
       responses: {
         200: {
@@ -866,10 +921,7 @@ export const threadsRoutes = createRouter()
       summary: "楼层，按楼层号升序，每次最多 20 层；after 和 before 二选一，都不带时从主楼开始",
       request: {
         params: IdParam,
-        query: BodyQuery.extend({
-          after: IntParam.min(0).optional(),
-          before: IntParam.min(1).optional(),
-        }),
+        query: PostsQuery,
       },
       responses: {
         200: {
@@ -933,41 +985,7 @@ export const threadsRoutes = createRouter()
       path: "/threads",
       summary: "发帖；kind 不带时用版块的默认类型",
       request: {
-        body: json(
-          z
-            .object({
-              board: z.string(),
-              title: Title,
-              content: Content,
-              kind: z.enum(["discussion", "question", "poll", "lottery"]).optional(),
-              poll: PollInput.optional().meta({ description: "投票帖必带，其他类型不能带" }),
-              lottery: LotteryInput.optional().meta({
-                description: "抽奖帖必带，其他类型不能带",
-              }),
-              tags: Tags.default([]),
-              source: Source.optional(),
-              created_at: CreatedAt.optional(),
-              anonymous: z.boolean().optional().meta({ description: "楼主匿名，发出后不能改" }),
-              anonymous_replies: z
-                .boolean()
-                .optional()
-                .meta({ description: "楼主以外的人回复时匿名，发出后不能改" }),
-            })
-            .refine((b) => (b.kind === "poll") === (b.poll !== undefined), {
-              message: "投票帖要带 poll，其他类型不能带",
-              path: ["poll"],
-            })
-            .refine((b) => (b.kind === "lottery") === (b.lottery !== undefined), {
-              message: "抽奖帖要带 lottery，其他类型不能带",
-              path: ["lottery"],
-            })
-            // Winners must find the author, and the list of them is public (design §8.13).
-            .refine((b) => b.kind !== "lottery" || !(b.anonymous || b.anonymous_replies), {
-              message: "抽奖帖不能匿名",
-              path: ["anonymous"],
-            })
-            .refine(createdWithSource, CREATED_WITH_SOURCE),
-        ),
+        body: json(NewThread),
       },
       responses: {
         201: threadResponse,
@@ -993,20 +1011,7 @@ export const threadsRoutes = createRouter()
       summary: "回复；reply_to_id 是回复同一帖子里的哪一条",
       request: {
         params: IdParam,
-        body: json(
-          z
-            .object({
-              content: Content,
-              reply_to_id: Int.optional(),
-              anonymous: z.boolean().optional().meta({
-                description:
-                  "这条回复是否匿名，只能在 my_anonymity 为 optional 的帖子里给，不给时实名；其他帖子按帖子的设置",
-              }),
-              source: Source.optional(),
-              created_at: CreatedAt.optional(),
-            })
-            .refine(createdWithSource, CREATED_WITH_SOURCE),
-        ),
+        body: json(NewReply),
       },
       responses: {
         201: postResponse,

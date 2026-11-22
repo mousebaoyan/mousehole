@@ -23,6 +23,7 @@ server/
       service.test.ts
     auth/  users/  boards/  threads/  posts/  uploads/
     search/  notifications/  events/  moderation/  admin/  levels/
+  agent/                成员的 Agent 用的 /mcp 和 /llms.txt：每个工具在进程内调一个 /api/v1 的接口，挂在 main.ts 里（app.ts 不能反过来引用它）
   platform/             和业务无关的基础设施：数据库连接、错误类型、日志、设置、邮件、图片处理
 db/migrations/          SQL 迁移
 db/types.ts             kysely-codegen 从数据库生成的类型
@@ -40,6 +41,7 @@ test/                   Vitest 的全局准备：测试用的数据库
 依赖只能单向：页面 → `/api/v1` → 接口（`routes.ts`）→ 服务（`service.ts`）→ 数据库。不能反过来，也不能跳层。
 
 - **页面**（React Router 的路由模块）：loader 和 action 在进程内调用 `/api/v1`，不直接调用服务，也不查数据库。这样网页能做的事，bot 一定也能做。调用方式是 `context.get(apiContext)` 拿到的 Hono `hc` 客户端：它带着访客自己的 Cookie 等请求头，经 `app.request()` 在进程内完成，类型来自接口定义。登录、退出这类会写 Cookie 的接口，action 要用 `cookiesFrom()` 把 Set-Cookie 转给浏览器。
+- **MCP 的工具**（`server/agent/`）和页面一样：带着令牌的持有人在进程内调 `/api/v1`，不直接调用服务，权限、限额和操作日志都和接口一致。
 - 关页面时也要送达的请求（阅读记录）不走 action，由浏览器直接用 `fetch` 加 `keepalive: true` 调 `/api/v1`，页面卸载后请求照样发出。同源请求带着 Cookie 和 Origin，认证和 CSRF 检查照常。
 - **接口**（Hono + `@hono/zod-openapi`）：校验参数、认证和鉴权，然后调用服务、返回结果，不写业务逻辑。
 - **服务**：业务逻辑都在这里。一个业务动作一个函数，事务也在这里开。服务不碰 HTTP：不读请求头，不返回响应对象，参数是普通的值，出错就抛业务错误。

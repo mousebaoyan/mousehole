@@ -1027,7 +1027,7 @@ async function assertWithinL0(
 
 // What a member's Agent may post a day, tighter than the site, so one run wild stops there
 // (design §6.7). Deleted posts count too: they were posted.
-const AGENT_PER_DAY = { thread: 5, reply: 30 };
+export const AGENT_PER_DAY = { thread: 5, reply: 30 };
 
 async function assertWithinAgentLimit(actor: Actor, kind: "thread" | "reply") {
   if (actor.via !== "agent") return;

@@ -64,10 +64,10 @@ export function bearerToken(c: Context) {
 
 export type Visitor = AppEnv["Variables"];
 
-// A page's loaders call the API in-process (app/api.server.ts) as the visitor the page request
-// was already found to be, which spares each call looking the session or token up again. The
-// token comes along: a page opened with one may do only what the token may, not what the site
-// may. Kept out of the headers, which anyone could send.
+// A page's loaders, and the MCP's tools, call the API in-process (app/api.server.ts,
+// server/agent/mcp.ts) as the visitor the request was already found to be, which spares each call
+// looking the session or token up again. The token comes along: a page opened with one may do
+// only what the token may, not what the site may. Kept out of the headers, which anyone could send.
 const visitors = new WeakMap<Request, Visitor>();
 
 export function asVisitor(request: Request, visitor: Visitor) {

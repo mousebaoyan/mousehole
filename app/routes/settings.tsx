@@ -3,12 +3,14 @@ import { pageTitle } from "~/share-meta";
 import { useEffect, useRef, useState } from "react";
 import { redirect, useFetcher, useRevalidator } from "react-router";
 import { apiContext } from "../api.server.ts";
+import { SITE_URL } from "../site.server.ts";
 import { browserApi } from "~/browser-api";
 import { Check, Field, readForm, Section, Time } from "~/components/form-parts";
 import { SettingsForm } from "~/components/settings-form";
 import { Button, buttonVariants } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Select } from "~/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { Textarea } from "~/components/ui/textarea";
 import { toast } from "~/components/ui/toast";
 import { confirmSubmit } from "~/components/ui/dialog";
@@ -69,6 +71,7 @@ export async function loader({ context }: Route.LoaderArgs) {
     tokens: (await tokens.json()).items,
     profile: profile.members_only ? null : profile,
     now: unixNow(),
+    site: SITE_URL,
   };
 }
 
@@ -164,7 +167,7 @@ function ids(value: string) {
 }
 
 export default function Settings({ loaderData, actionData }: Route.ComponentProps) {
-  const { settings, sessions, tokens, profile, now } = loaderData;
+  const { settings, sessions, tokens, profile, now, site } = loaderData;
   const me = useMe();
   return (
     <div className="flex gap-8">
@@ -330,7 +333,7 @@ export default function Settings({ loaderData, actionData }: Route.ComponentProp
           {...SECTIONS.agent}
           description="让你的 Agent 和自己写的脚本以你的身份使用鼠洞。令牌 90 天未使用会失效"
         >
-          <AgentTokens tokens={tokens} />
+          <AgentTokens tokens={tokens} site={site} />
         </Section>
 
         <Section
@@ -426,7 +429,7 @@ const SCOPE_LABELS: Record<string, string> = { profile: "资料", read: "读取"
 // Their tokens and the apps they let in (design §6.7), and a form for a new token. A new one is
 // shown once, as the forum keeps only its hash, and not after it was revoked. Before the page's
 // script runs the forms would post as plain forms, whose result this section doesn't read.
-function AgentTokens({ tokens }: { tokens: Token[] }) {
+function AgentTokens({ tokens, site }: { tokens: Token[]; site: string }) {
   const me = useMe();
   const create = useFetcher<typeof action>();
   const form = useRef<HTMLFormElement>(null);
@@ -482,7 +485,95 @@ function AgentTokens({ tokens }: { tokens: Token[] }) {
           {me.role === "owner" ? "站长账号不能生成令牌" : "账号已冻结，重新进群后才能生成令牌"}
         </p>
       )}
+      {mayCreate && <AgentSetup site={site} token={created} />}
     </>
+  );
+}
+
+// Copies, saying so: QQ's built-in browser can refuse the clipboard.
+function copy(text: string, message: string) {
+  void navigator.clipboard.writeText(text).then(
+    () => toast(message),
+    () => toast("复制失败，请手动选中复制"),
+  );
+}
+
+// How each Agent connects with a personal token (docs/api.md §8.6), the one just made filled in.
+function AgentSetup({ site, token }: { site: string; token: string | null }) {
+  const secret = token ?? "<令牌>";
+  const mcp = `${site}/mcp`;
+  return (
+    <div className="mt-4 border-t pt-4">
+      <h3 className="text-sm font-medium">接入 Agent</h3>
+      <p className="mt-1 text-meta text-muted-foreground">
+        {token ? "下面已填入刚生成的令牌" : "先生成令牌，再把下面的 <令牌> 换成它"}
+      </p>
+      <Tabs defaultValue="codex" className="mt-3">
+        <TabsList className="w-full">
+          <TabsTrigger value="codex">Codex</TabsTrigger>
+          <TabsTrigger value="claude">Claude Code</TabsTrigger>
+          <TabsTrigger value="dsh">dsh</TabsTrigger>
+          <TabsTrigger value="other">其他</TabsTrigger>
+        </TabsList>
+        <TabsContent value="codex" className="flex flex-col gap-3 pt-2">
+          <Step
+            text="在 ~/.codex/config.toml 里加上这几行，命令行、桌面版和 IDE 插件通用。读取直接执行，发帖、回复前先征得你同意："
+            code={`[mcp_servers.mousehole]\nurl = "${mcp}"\nhttp_headers = { Authorization = "Bearer ${secret}" }\ndefault_tools_approval_mode = "writes"`}
+          />
+        </TabsContent>
+        <TabsContent value="claude" className="flex flex-col gap-3 pt-2">
+          <Step
+            text="在终端运行下面这行，之后在所有项目新开的会话里都能用："
+            code={`claude mcp add --scope user --transport http mousehole ${mcp} --header "Authorization: Bearer ${secret}"`}
+          />
+        </TabsContent>
+        <TabsContent value="dsh" className="flex flex-col gap-3 pt-2">
+          <Step
+            text="把令牌放进环境变量 MOUSEHOLE_TOKEN。macOS 和 Linux 写进 shell 的配置文件（如 ~/.zshrc、~/.bashrc）："
+            code={`export MOUSEHOLE_TOKEN="${secret}"`}
+          />
+          <Step
+            text="Windows 在 PowerShell 里运行下面这行，再重新打开终端："
+            code={`setx MOUSEHOLE_TOKEN "${secret}"`}
+          />
+          <Step
+            text="在 ~/.dsh/cordis.patch.yml 的末尾加上这几行，对所有 profile 生效："
+            code={[
+              "- insert:",
+              "    - id: mcp-mousehole",
+              "      name: '@deepseek-ai/dsh-mcp-client'",
+              "      config:",
+              "        serverName: mousehole",
+              "        transport: streamable-http",
+              `        url: ${mcp}`,
+              "        headers:",
+              "          Authorization: !!js '`Bearer ${process.env.MOUSEHOLE_TOKEN}`'",
+            ].join("\n")}
+          />
+        </TabsContent>
+        <TabsContent value="other" className="flex flex-col gap-3 pt-2">
+          <Step text="添加 Streamable HTTP 的 MCP 服务，地址：" code={mcp} />
+          <Step text="请求头：" code={`Authorization: Bearer ${secret}`} />
+        </TabsContent>
+      </Tabs>
+    </div>
+  );
+}
+
+function Step({ text, code }: { text: string; code: string }) {
+  return (
+    <div className="text-meta">
+      <div className="flex items-end gap-2">
+        <p className="min-w-0 flex-1 text-muted-foreground">{text}</p>
+        <Button variant="ghost" size="xs" onClick={() => copy(code, "已复制")}>
+          <Copy /> 复制
+        </Button>
+      </div>
+      {/* Not wrapped: configs go by their indentation. */}
+      <pre className="mt-1.5 overflow-x-auto overscroll-x-contain rounded-lg bg-muted px-3 py-2 font-mono">
+        {code}
+      </pre>
+    </div>
   );
 }
 
@@ -540,17 +631,7 @@ function NewToken({ token }: { token: string }) {
         <code className="min-w-0 flex-1 rounded-lg bg-card px-3 py-2 font-mono break-all select-all">
           {token}
         </code>
-        <Button
-          variant="outline"
-          size="sm"
-          // QQ's built-in browser can refuse the clipboard.
-          onClick={() =>
-            void navigator.clipboard.writeText(token).then(
-              () => toast("令牌已复制"),
-              () => toast("复制失败，请手动选中复制"),
-            )
-          }
-        >
+        <Button variant="outline" size="sm" onClick={() => copy(token, "令牌已复制")}>
           <Copy /> 复制
         </Button>
       </div>

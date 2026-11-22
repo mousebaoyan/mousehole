@@ -99,6 +99,7 @@ mousehole 容器（Hono + React Router 8，Node 26）── 图片目录（数�
 | 二维码 | lean-qr | 赞助页按收款码的内容重新画码（第 8.21 节）：零依赖、自带类型；只在服务端算出码，再用 sharp 画成 PNG，不进浏览器的包 |
 | 邮件 | nodemailer + SMTP | SMTP 在管理后台配置，可以配几个邮箱轮流顶上；用阿里云邮件推送发信，QQ 邮箱排在后面兜底。服务器出方向的 25 端口不通，没法自己投递 |
 | 实时 | SSE（Hono 的 `streamSSE`） | 只需要服务端单向推送，经过反向代理也简单 |
+| MCP | 官方的 `@modelcontextprotocol/server` 2.x | 成员的 Agent 用的 `/mcp`（第 6.7 节）：同时支持 2025 版和 2026-07-28 版的协议，工具的参数直接用接口的 Zod 定义；只依赖 Zod |
 | 代码检查 | oxlint + tsgolint（含需要类型信息的规则）、Prettier | 基于 TypeScript 7，比 ESLint 快一个数量级 |
 | 测试 | Vitest（单元、接口）、Playwright（关键页面）、`scripts/load-test.ts`（压测） | 接口测试连真实的 PostgreSQL；压测脚本用 Node 自带的 fetch，和 mock-bot 共用演示群，不另装工具 |
 | 部署 | GitHub Actions 构建镜像推到 GHCR，服务器用 docker compose 拉取运行 | 服务器不编译 |
@@ -1113,7 +1114,7 @@ AI 总结（第 8.18 节）论坛和插件都已做好，站点页的开关还�
 Agent 和自家应用（第 6.7 节）分四步做，每步一个 PR，四步都做完、在本机验收后一起发版：
 
 1. 成员的令牌：设置页生成和撤销个人令牌，接口认令牌、按范围和 L3 放行，`via = 'agent'` 的标注和限额，封禁时作废。已做好：接口认令牌、按范围和 L3 放行，`via = 'agent'`、每天的限额和每分钟的请求数，封禁时作废，`/me/tokens` 的三个接口，设置页的 Agent 一栏列出、生成和撤销令牌，楼层旁标"Agent"；数据页按来源分开统计还没做。
-2. MCP：`/mcp`、它的工具和使用说明，`/llms.txt`，设置页给出用令牌接 Codex、Claude Code 和 dsh 的命令。用 Codex 实际跑一遍搜索、读帖和回复。
+2. MCP：`/mcp`、它的工具和使用说明，`/llms.txt`，设置页给出用令牌接 Codex、Claude Code 和 dsh 的命令。用 Codex 实际跑一遍搜索、读帖和回复。已做好，在本机用 Codex 0.171 跑通了搜索、读帖和回复。
 3. OAuth：授权服务器的元数据、Agent 注册、授权页、换令牌，后台登记自家应用，`/me` 加上禁言状态，设置页的接入命令换成授权的。用 Codex 实际连一遍。鼠钟一期开工前做完。自家应用这一半已做好：后台登记应用，授权码和换令牌，`prompt=none`，登录后回到授权页，每人每个应用一个令牌，`/me` 的禁言状态；元数据、Agent 注册、Agent 的授权页和设置页的接入命令还没做。
 4. 插件和一句话：在 `mousebaoyan/mousehole-plugin` 仓库写插件，带上 dsh 的配置，论坛加上 `/agent.md`，设置页加上发给 Agent 的一句话和插件的安装命令。在新装的 Codex 和 Claude Code 里各走一遍：发一句话，到能搜帖、发回复。
 
