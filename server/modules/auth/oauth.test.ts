@@ -1,11 +1,13 @@
 import { createHash, randomBytes } from "node:crypto";
 import { testClient } from "hono/testing";
-import { beforeAll, describe, expect, test } from "vitest";
+import { sql } from "kysely";
+import { beforeAll, describe, expect, test, vi } from "vitest";
 import { z } from "zod";
 import { as, createUser, login, ownerSession } from "../../../test/fixtures.ts";
 import { app } from "../../app.ts";
 import { db } from "../../platform/db.ts";
 import { env } from "../../platform/env.ts";
+import { clearUnusedAgentApps } from "./oauth.ts";
 
 const api = testClient(app).api.v1;
 
@@ -213,5 +215,290 @@ describe("自家应用的 OAuth", () => {
     expect((await listed.json()).items).toMatchObject([
       { app: { name: "改名后", first_party: true } },
     ]);
+  });
+});
+
+// As Codex has it: a callback on whichever port is free when it logs in.
+const AGENT_CALLBACK = "http://127.0.0.1:41234/callback";
+let lastIp = 0;
+
+// An Agent registering, each from an address of its own unless said.
+function registerAgent(body: object, ip = `198.51.100.${++lastIp}`) {
+  return app.request("/oauth/register", {
+    method: "POST",
+    headers: { "content-type": "application/json", "x-real-ip": ip },
+    body: JSON.stringify(body),
+  });
+}
+
+const Registered = z.object({ client_id: z.string() });
+
+async function agent(name = "Codex", redirect_uris = [AGENT_CALLBACK]) {
+  const res = await registerAgent({ client_name: name, redirect_uris });
+  if (res.status !== 201) throw new Error(`status ${res.status}`);
+  return Registered.parse(await res.json()).client_id;
+}
+
+function agentRequest(clientId: string, params: Record<string, string> = {}) {
+  return {
+    response_type: "code",
+    client_id: clientId,
+    redirect_uri: AGENT_CALLBACK,
+    state: "abc",
+    code_challenge: challenge,
+    code_challenge_method: "S256",
+    ...params,
+  };
+}
+
+// What the page sends when the member presses a button.
+function decide(
+  who: Who,
+  clientId: string,
+  choice: { approve: boolean; scopes?: ("profile" | "read" | "act")[] },
+  params: Record<string, string> = {},
+) {
+  return api.oauth.authorize.$post({ json: { ...agentRequest(clientId, params), ...choice } }, who);
+}
+
+// As an Agent calls it: no secret, its client ID in the form.
+function agentExchange(clientId: string, fields: Record<string, string>) {
+  return app.request("/oauth/token", {
+    method: "POST",
+    body: new URLSearchParams({
+      grant_type: "authorization_code",
+      client_id: clientId,
+      redirect_uri: AGENT_CALLBACK,
+      code_verifier: verifier,
+      ...fields,
+    }),
+  });
+}
+
+async function agentToken(who: Who, clientId: string) {
+  const back = new URL(
+    z
+      .object({ redirect_url: z.string() })
+      .parse(await (await decide(who, clientId, { approve: true })).json()).redirect_url,
+  );
+  const res = await agentExchange(clientId, { code: back.searchParams.get("code") ?? "" });
+  return bearer(Issued.parse(await res.json()).access_token);
+}
+
+describe("Agent 的 OAuth", () => {
+  test("元数据给出注册、授权和换令牌的地址，issuer 和回跳的 iss 一字不差，不说支持 CIMD", async () => {
+    const res = await app.request("/.well-known/oauth-authorization-server");
+    const metadata = z
+      .object({ issuer: z.string(), registration_endpoint: z.string() })
+      .loose()
+      .parse(await res.json());
+    expect(metadata.issuer).toBe(env.PUBLIC_URL);
+    expect(metadata.registration_endpoint).toBe(`${env.PUBLIC_URL}/oauth/register`);
+    expect(metadata).not.toHaveProperty("client_id_metadata_document_supported");
+  });
+
+  test("注册后本人在授权页去掉发帖再允许，换到只能读的令牌；回调换了端口也认", async () => {
+    const me = await person();
+    const clientId = await agent();
+    const elsewhere = { redirect_uri: "http://127.0.0.1:50999/callback" };
+
+    const page = await api.oauth.authorize.$get(
+      { query: agentRequest(clientId, elsewhere) },
+      me.who,
+    );
+    expect(await page.json()).toEqual({
+      app: { name: "Codex", first_party: false },
+      redirect_host: "127.0.0.1",
+      local: true,
+      scopes: ["read", "act"],
+      level: 1,
+      role: "user",
+    });
+
+    const res = await decide(me.who, clientId, { approve: true, scopes: ["read"] }, elsewhere);
+    if (!res.ok) throw new Error(`status ${res.status}`);
+    const back = new URL((await res.json()).redirect_url);
+    expect(back.origin + back.pathname).toBe("http://127.0.0.1:50999/callback");
+    expect(back.searchParams.get("state")).toBe("abc");
+    expect(back.searchParams.get("iss")).toBe(env.PUBLIC_URL);
+
+    const token = await agentExchange(clientId, {
+      code: back.searchParams.get("code") ?? "",
+      redirect_uri: elsewhere.redirect_uri,
+      resource: `${env.PUBLIC_URL}/mcp`,
+    });
+    expect(token.status).toBe(200);
+    const body: unknown = await token.json();
+    expect(body).toMatchObject({ token_type: "Bearer", scope: "read" });
+    const agentBearer = bearer(Issued.parse(body).access_token);
+    expect((await api.me.$get({}, agentBearer)).status).toBe(200);
+    const listed = await api.me.tokens.$get({}, me.who);
+    if (!listed.ok) throw new Error(`status ${listed.status}`);
+    expect((await listed.json()).items).toMatchObject([
+      { name: "Codex", scopes: ["read"], app: { name: "Codex", first_party: false } },
+    ]);
+  });
+
+  test("拒绝就带着 access_denied 跳回；不能比应用要的多；每次授权一个新令牌，旧的照样能用", async () => {
+    const { who } = await person();
+    const clientId = await agent();
+    const denied = await decide(who, clientId, { approve: false });
+    if (!denied.ok) throw new Error(`status ${denied.status}`);
+    expect(new URL((await denied.json()).redirect_url).searchParams.get("error")).toBe(
+      "access_denied",
+    );
+    const more = await decide(
+      who,
+      clientId,
+      { approve: true, scopes: ["read", "act"] },
+      {
+        scope: "read",
+      },
+    );
+    expect(more.status).toBe(400);
+
+    const first = await agentToken(who, clientId);
+    const second = await agentToken(who, clientId);
+    expect((await api.me.$get({}, first)).status).toBe(200);
+    expect((await api.me.$get({}, second)).status).toBe(200);
+  });
+
+  test("冻结的账号和站长不能授权 Agent", async () => {
+    const clientId = await agent();
+    const frozen = await person();
+    await db
+      .updateTable("users")
+      .set({ member_status: "frozen" })
+      .where("id", "=", frozen.id)
+      .execute();
+    for (const who of [frozen.who, owner]) {
+      const page = await api.oauth.authorize.$get({ query: agentRequest(clientId) }, who);
+      expect(page.status).toBe(403);
+      expect((await decide(who, clientId, { approve: true })).status).toBe(403);
+    }
+  });
+
+  test("只有本机的回调不比端口，别的一字不差；resource 只能是论坛或 MCP", async () => {
+    const { who } = await person();
+    const local = await agent();
+    const site = await agent("网页版", ["https://agent.example.com/callback"]);
+    for (const [clientId, redirect_uri] of [
+      [local, "http://localhost:41234/callback"],
+      [local, "http://127.0.0.1:41234/other"],
+      [site, "https://agent.example.com:8443/callback"],
+    ]) {
+      const res = await api.oauth.authorize.$get(
+        { query: agentRequest(clientId, { redirect_uri }) },
+        who,
+      );
+      expect(res.status).toBe(400);
+    }
+
+    const wrong = await decide(
+      who,
+      local,
+      { approve: true },
+      {
+        resource: "https://evil.example.com/mcp",
+      },
+    );
+    if (!wrong.ok) throw new Error(`status ${wrong.status}`);
+    expect(new URL((await wrong.json()).redirect_url).searchParams.get("error")).toBe(
+      "invalid_target",
+    );
+    const res = await decide(who, local, { approve: true });
+    if (!res.ok) throw new Error(`status ${res.status}`);
+    const code = new URL((await res.json()).redirect_url).searchParams.get("code") ?? "";
+    const token = await agentExchange(local, { code, resource: "https://evil.example.com/" });
+    expect(token.status).toBe(400);
+    expect(await token.json()).toMatchObject({ error: "invalid_target" });
+  });
+
+  test("注册：回调要是 https 或本机的 http，不带密钥；一个地址每小时 10 次，请求体最多 4KB", async () => {
+    const uri = await registerAgent({
+      client_name: "Codex",
+      redirect_uris: ["http://agent.example.com/callback"],
+    });
+    expect(uri.status).toBe(400);
+    expect(await uri.json()).toMatchObject({ error: "invalid_redirect_uri" });
+    const secret = await registerAgent({
+      client_name: "Codex",
+      redirect_uris: [AGENT_CALLBACK],
+      token_endpoint_auth_method: "client_secret_basic",
+    });
+    expect(await secret.json()).toMatchObject({ error: "invalid_client_metadata" });
+    const big = await registerAgent({
+      client_name: "Codex",
+      redirect_uris: [AGENT_CALLBACK],
+      logo_uri: "x".repeat(5000),
+    });
+    expect(big.status).toBe(413);
+
+    const body = { client_name: "Codex", redirect_uris: [AGENT_CALLBACK] };
+    const statuses = [];
+    for (let i = 0; i < 11; i++) statuses.push((await registerAgent(body, "192.0.2.1")).status);
+    expect(statuses).toEqual([...Array<number>(10).fill(201), 429]);
+  });
+
+  test("第一次换令牌时碰上每天的清理，应用不会被删", async () => {
+    const { who } = await person();
+    const clientId = await agent();
+    await db
+      .updateTable("oauth_clients")
+      .set({ created_at: sql`now() - interval '2 days'` })
+      .where("client_id", "=", clientId)
+      .execute();
+    const res = await decide(who, clientId, { approve: true });
+    if (!res.ok) throw new Error(`status ${res.status}`);
+    const code = new URL((await res.json()).redirect_url).searchParams.get("code") ?? "";
+
+    // Holds the exchange just before it writes the token, then clears.
+    const taken = Promise.withResolvers<void>();
+    const held = Promise.withResolvers<void>();
+    const lock = db.transaction().execute(async (trx) => {
+      await sql`LOCK TABLE api_tokens IN SHARE MODE`.execute(trx);
+      taken.resolve();
+      await held.promise;
+    });
+    await taken.promise;
+    const exchanging = agentExchange(clientId, { code });
+    try {
+      await vi.waitFor(async () => {
+        const { rows } = await sql<{ n: number }>`SELECT count(*)::int AS n FROM pg_stat_activity
+          WHERE datname = current_database() AND wait_event_type = 'Lock'
+            AND query LIKE 'insert into "api_tokens"%'`.execute(db);
+        expect(rows[0].n).toBe(1);
+      });
+      await clearUnusedAgentApps();
+    } finally {
+      held.resolve();
+      await lock;
+    }
+    expect((await exchanging).status).toBe(200);
+  });
+
+  test("一天前注册、没换到令牌的被清掉；后台的应用列表里没有 Agent 的，站长也改不了", async () => {
+    const { who } = await person();
+    const unused = await agent("没用上的");
+    const used = await agent("用上的");
+    await agentToken(who, used);
+    await db
+      .updateTable("oauth_clients")
+      .set({ created_at: sql`now() - interval '2 days'` })
+      .where("client_id", "in", [unused, used])
+      .execute();
+    await clearUnusedAgentApps();
+    const left = await db
+      .selectFrom("oauth_clients")
+      .select(["id", "client_id"])
+      .where("client_id", "in", [unused, used])
+      .execute();
+    expect(left.map((a) => a.client_id)).toEqual([used]);
+
+    const apps = await api.admin.apps.$get({}, owner);
+    if (!apps.ok) throw new Error(`status ${apps.status}`);
+    expect((await apps.json()).items.map((a) => a.client_id)).not.toContain(used);
+    const disable = { param: { id: String(left[0].id) }, json: { disabled: true } };
+    expect((await api.admin.apps[":id"].$patch(disable, owner)).status).toBe(404);
   });
 });

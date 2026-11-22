@@ -6,7 +6,12 @@ import { auditRoutes } from "./modules/audit/routes.ts";
 import { authenticate, authRoutes, bearerToken } from "./modules/auth/routes.ts";
 import { badgesRoutes } from "./modules/badges/routes.ts";
 import { coinsRoutes } from "./modules/coins/routes.ts";
-import { oauthRoutes, serveToken } from "./modules/auth/oauth-routes.ts";
+import {
+  oauthRoutes,
+  serveRegistration,
+  serveServerMetadata,
+  serveToken,
+} from "./modules/auth/oauth-routes.ts";
 import { memberTokenRoutes, tokenRoutes } from "./modules/auth/token-routes.ts";
 import { boardsRoutes } from "./modules/boards/routes.ts";
 import { draftsRoutes } from "./modules/drafts/routes.ts";
@@ -113,8 +118,10 @@ export const app = new Hono<AppEnv>()
   .get("/mail/:file{[0-9]+\\.gif}", serveMailOpen)
   .get("/robots.txt", (c) => c.text(ROBOTS, 200, { "cache-control": "public, max-age=86400" }))
   .get("/sitemap.xml", serveSitemap)
-  // Apps' servers post here without an Origin or a session; their secret is what counts.
+  // Apps' servers and Agents post here without an Origin or a session.
   .post("/oauth/token", requestBody, serveToken)
+  .post("/oauth/register", requestBody, serveRegistration)
+  .get("/.well-known/oauth-authorization-server", serveServerMetadata)
   // A cross-site page can make the browser send our cookie, but not a bearer token. Mail apps
   // post to unsubscribe links without an Origin; the signature in the link is what counts there.
   .use((c, next) =>

@@ -49,8 +49,13 @@ function openedPage(c: Context, referer: URL | null, fetched: Set<string>) {
   return referer?.pathname === path && referer.search === url.search ? null : path;
 }
 
+// What programs call beside the API: the MCP, and the OAuth endpoints Agents and our sites use.
+const PROGRAM_PATHS = new Set(["/mcp", "/oauth/token", "/oauth/register"]);
+
 function kindOf(path: string): Sent {
-  if (path.startsWith("/api/") || path === "/mcp") return "api";
+  if (path.startsWith("/api/") || path.startsWith("/.well-known/") || PROGRAM_PATHS.has(path)) {
+    return "api";
+  }
   if (/^\/(?:uploads|avatars|backgrounds)\//.test(path)) return "image";
   return /\.\w+$/.test(path) && !path.endsWith(".data") ? "asset" : "page";
 }

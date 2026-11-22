@@ -741,7 +741,7 @@ OAuth 的几个地址不在 `/api/v1` 下，请求和返回按 OAuth 的规范�
 | `state` | 应用自己的随机值，原样带回 |
 | `code_challenge`、`code_challenge_method` | PKCE，方法只能是 `S256` |
 | `scope` | 空格分隔，可选。不带时，自家应用取登记的范围，Agent 的应用取 `read act`；有不认识的范围、或者超出自家应用登记的范围，返回 `invalid_scope` |
-| `resource` | 可选，只能是站点地址或 `https://bbs.mousebaoyan.cn/mcp`（RFC 8707），否则返回 `invalid_target` |
+| `resource` | 可选，只能是站点地址或 `https://bbs.mousebaoyan.cn/mcp`（RFC 8707），否则返回 `invalid_target`。只检查取值，不记进授权码和令牌：接口和 MCP 是同一个服务，令牌两边都认（8.1） |
 | `prompt` | `none`：只用于自家应用，没登录鼠洞时不去登录页，直接带着 `error=login_required` 跳回 |
 
 - `client_id`、`redirect_uri` 不对，或者应用已停用时，只在页面上报错，不跳回去。其余错误按 OAuth 的格式带 `error` 跳回 `redirect_uri`。
@@ -753,8 +753,8 @@ OAuth 的几个地址不在 `/api/v1` 下，请求和返回按 OAuth 的规范�
 
 | 方法 | 路径 | 说明 | 权限 |
 | --- | --- | --- | --- |
-| GET | `/oauth/authorize` | 校验授权请求，参数同上，返回授权页要显示的：`app`（`{ name, first_party }`）、`redirect_host`（回调地址的主机名）、`local`（回调是不是本机）、`scopes`（请求的范围）、`level`（自己的等级，提示发内容要 L3）。`client_id`、`redirect_uri` 不对或应用已停用返回 `400 invalid_client` | 已登录，只能在网页上 |
-| POST | `/oauth/authorize` | 同样的参数，加 `approve`（是否允许）和 `scopes`（本人选定的范围，只能比请求的少）；返回 `{ redirect_url }`：带着授权码或错误的回跳地址。自家应用的授权页加载时直接调用它。没登录时，带 `prompt=none` 的返回带着 `error=login_required` 的地址，不带的返回 `401`，授权页转去登录页 | 只能在网页上 |
+| GET | `/oauth/authorize` | 校验授权请求，参数同上，返回授权页要显示的：`app`（`{ name, first_party }`）、`redirect_host`（回调地址的主机名）、`local`（回调是不是本机）、`scopes`（请求的范围）、`level` 和 `role`（自己的等级和角色，提示发内容要 L3）。请求有误要带着错误跳回时，返回 `{ redirect_url }`。`client_id`、`redirect_uri` 不对或应用已停用返回 `400 invalid_client`；没登录时同 POST；冻结的账号和站长授权 Agent 的应用返回 `403 forbidden`，授权页显示原因 | 只能在网页上 |
+| POST | `/oauth/authorize` | 同样的参数，加 `approve`（是否允许，Agent 的应用要带，不是 `true` 就带着 `access_denied` 跳回）和 `scopes`（本人选定的范围，只能比请求的少，多了返回 `400`；不带时就是请求的）；返回 `{ redirect_url }`：带着授权码或错误的回跳地址。自家应用的授权页加载时直接调用它，不看这两项。没登录时，带 `prompt=none` 的返回带着 `error=login_required` 的地址，不带的返回 `401`，授权页转去登录页 | 只能在网页上 |
 
 **换令牌**：应用的服务端或程序调 `POST /oauth/token`，`application/x-www-form-urlencoded`：
 

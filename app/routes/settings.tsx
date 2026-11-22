@@ -506,7 +506,8 @@ function AgentSetup({ site, token }: { site: string; token: string | null }) {
     <div className="mt-4 border-t pt-4">
       <h3 className="text-sm font-medium">接入 Agent</h3>
       <p className="mt-1 text-meta text-muted-foreground">
-        {token ? "下面已填入刚生成的令牌" : "先生成令牌，再把下面的 <令牌> 换成它"}
+        Codex 和 Claude Code 在浏览器里授权，不用令牌。dsh 等不支持授权的 Agent 用上面生成的令牌
+        {token ? "，下面已填入刚生成的令牌" : "，把下面的 <令牌> 换成它"}
       </p>
       <Tabs defaultValue="codex" className="mt-3">
         <TabsList className="w-full">
@@ -518,13 +519,26 @@ function AgentSetup({ site, token }: { site: string; token: string | null }) {
         <TabsContent value="codex" className="flex flex-col gap-3 pt-2">
           <Step
             text="在 ~/.codex/config.toml 里加上这几行，命令行、桌面版和 IDE 插件通用。读取直接执行，发帖、回复前先征得你同意："
-            code={`[mcp_servers.mousehole]\nurl = "${mcp}"\nhttp_headers = { Authorization = "Bearer ${secret}" }\ndefault_tools_approval_mode = "writes"`}
+            code={`[mcp_servers.mousehole]\nurl = "${mcp}"\ndefault_tools_approval_mode = "writes"`}
+          />
+          <Step
+            text="再在终端运行下面这行，在打开的授权页点“允许”："
+            code="codex mcp login mousehole"
+          />
+          <Step
+            text="没法在浏览器里授权时（比如在服务器上），改用个人令牌：在上面那段里加一行，不用运行 login。"
+            code={`http_headers = { Authorization = "Bearer ${secret}" }`}
           />
         </TabsContent>
         <TabsContent value="claude" className="flex flex-col gap-3 pt-2">
           <Step
             text="在终端运行下面这行，之后在所有项目新开的会话里都能用："
-            code={`claude mcp add --scope user --transport http mousehole ${mcp} --header "Authorization: Bearer ${secret}"`}
+            code={`claude mcp add --scope user --transport http mousehole ${mcp}`}
+          />
+          <Step text="再在会话里输入下面这行，选中 mousehole 授权：" code="/mcp" />
+          <Step
+            text="没法在浏览器里授权时，改用个人令牌：在第一行命令后面加上"
+            code={`--header "Authorization: Bearer ${secret}"`}
           />
         </TabsContent>
         <TabsContent value="dsh" className="flex flex-col gap-3 pt-2">
@@ -552,8 +566,11 @@ function AgentSetup({ site, token }: { site: string; token: string | null }) {
           />
         </TabsContent>
         <TabsContent value="other" className="flex flex-col gap-3 pt-2">
-          <Step text="添加 Streamable HTTP 的 MCP 服务，地址：" code={mcp} />
-          <Step text="请求头：" code={`Authorization: Bearer ${secret}`} />
+          <Step
+            text="添加 Streamable HTTP 的 MCP 服务，地址填下面这个。支持授权的 Agent 会打开授权页："
+            code={mcp}
+          />
+          <Step text="不支持授权的，加上请求头：" code={`Authorization: Bearer ${secret}`} />
         </TabsContent>
       </Tabs>
     </div>

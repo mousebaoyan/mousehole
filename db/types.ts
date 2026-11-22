@@ -282,7 +282,7 @@ export interface OauthClients {
   name: string;
   redirect_uris: string[];
   scopes: string[];
-  secret_hash: Buffer;
+  secret_hash: Buffer | null;
 }
 
 export interface OauthCodes {

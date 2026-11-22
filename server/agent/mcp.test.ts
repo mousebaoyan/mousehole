@@ -4,6 +4,7 @@ import { z } from "zod";
 import { as, createUser, login, nextQq, ownerSession } from "../../test/fixtures.ts";
 import { app } from "../app.ts";
 import { db } from "../platform/db.ts";
+import { env } from "../platform/env.ts";
 import { agentApp } from "./routes.ts";
 
 const api = testClient(app).api.v1;
@@ -70,9 +71,15 @@ describe("MCP", () => {
   test("没有令牌、只能取资料的令牌和 bot 的令牌连不上，告诉 Agent 怎么授权", async () => {
     const none = await rpc(null, "tools/list");
     expect(none.status).toBe(401);
-    expect(none.headers.get("www-authenticate")).toMatch(
+    const header = none.headers.get("www-authenticate") ?? "";
+    expect(header).toMatch(
       /^Bearer resource_metadata="http:\/\/[^"]+\/\.well-known\/oauth-protected-resource\/mcp", scope="read act"$/,
     );
+    const metadata = await agentApp.request(new URL(header.split('"')[1]).pathname);
+    expect(await metadata.json()).toMatchObject({
+      resource: `${env.PUBLIC_URL}/mcp`,
+      authorization_servers: [env.PUBLIC_URL],
+    });
 
     // As an app that signs people in with the forum holds.
     const holder = await person(3);
