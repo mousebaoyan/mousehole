@@ -266,17 +266,18 @@ bot 把 QQ 群的信息推送给论坛。两种方式都支持，推荐一起用
 
 ### 6.7 Agent 和自家应用
 
-成员可以让自己的 Agent（Codex 的命令行、桌面版和 IDE 插件，Claude Code、Cursor、网页版的 Claude 等）以本人的身份使用论坛：搜索、读帖、看通知，L3 起还能发帖和回复。群里用 Codex 的人最多，接入和使用都先照顾 Codex。鼠洞也是鼠钟等自家网站的登录授权方。两件事用同一套 OAuth 2.1 授权，参考了 Discourse 的 User API Key 和官方 MCP 服务、Stack Overflow 的 MCP 服务。接口细节见[接口 · 令牌、授权和 MCP](api.md#8-令牌授权和-mcp)。
+成员可以让自己的 Agent（Codex 的命令行、桌面版和 IDE 插件，Claude Code、DeepSeek 的 dsh、Cursor、网页版的 Claude 等）以本人的身份使用论坛：搜索、读帖、看通知，L3 起还能发帖和回复。群里用 Codex 的人最多，接入和使用都先照顾 Codex。鼠洞也是鼠钟等自家网站的登录授权方。两件事用同一套 OAuth 2.1 授权，参考了 Discourse 的 User API Key 和官方 MCP 服务、Stack Overflow 的 MCP 服务。接口细节见[接口 · 令牌、授权和 MCP](api.md#8-令牌授权和-mcp)。
 
 - **接入方式**：从最省事的排起，设置页的 Agent 一栏按这个顺序给出，每段都能一键复制（[接口 §8.6](api.md#86-各个-agent-怎么接)）。
   - **一句话**：把设置页上的一句话发给自己的 Agent，Agent 读网站上写给它的安装说明 `/agent.md`，自己装好鼠洞插件，再告诉本人怎么登录。做法同 Moltbook 的"读 skill.md 照着做"。本人只要批准 Agent 改它自己的配置、在授权页点"允许"。
   - **插件**：自己运行安装命令，Codex 是 `codex plugin marketplace add mousebaoyan/mousehole-plugin` 再在 `/plugins` 里安装，Claude Code 是 `/plugin marketplace add` 加 `/plugin install`；`npx plugins add mousebaoyan/mousehole-plugin` 一条命令装进本机所有支持的 Agent。
   - **MCP**：不装插件，直接在 Agent 里添加 `https://bbs.mousebaoyan.cn/mcp`，Agent 会打开鼠洞的授权页，本人点"允许"后就连上了。
-  - **个人令牌**：在设置里生成，填进 Agent 的配置（MCP 的 `Authorization` 请求头），或者自己写脚本调接口。Agent 不支持 MCP 授权，或者在没有浏览器的服务器上跑时用它。
+  - **个人令牌**：在设置里生成，填进 Agent 的配置（MCP 的 `Authorization` 请求头），或者自己写脚本调接口。Agent 不支持 MCP 授权（比如 dsh），或者在没有浏览器的服务器上跑时用它。
   - 网站根目录的 `/llms.txt` 是写给 Agent 看的简介：鼠洞是什么、怎么接、接口文档在哪、有哪些规矩。
 - **插件**：放在独立的仓库 `mousebaoyan/mousehole-plugin`，和 AstrBot 插件一样不进这个仓库。
   - 内容：鼠洞的 MCP 服务（OAuth 授权，用 DCR 注册），和一个 skill：遇到保研的问题先搜鼠洞，回答时附上帖子和楼层的链接，替本人发帖、回复前先给本人看，写法照鼠洞的版块和标签。
   - 格式：同一个插件写两份清单。Codex、Cursor、VS Code 认 Agent Plugins 1.0 的通用格式（根目录的 `plugin.json`、`mcp.json`），Claude Code 认它自己的格式（`.claude-plugin/`、`.mcp.json`）；skill 两边共用。插件市场也各放一份：Codex 的 `.agents/plugins/marketplace.json`，Claude Code 的 `.claude-plugin/marketplace.json`。
+  - dsh（DeepSeek Harness）：插件仓库里放一段 dsh 的配置和同一个 skill，不另做 dsh 的插件。dsh 的插件是 npm 包，发包要维护 npm 账号和版本，而 dsh 还是预览版（0.2），插件的做法可能还会变。dsh 的 MCP 客户端只能在配置里写固定的请求头，不支持 OAuth 授权，所以用个人令牌：本人在设置页生成令牌，自己放进环境变量，配置里只引用这个变量。一句话对 dsh 也管用，Agent 照 `/agent.md` 装好配置和 skill，令牌由本人自己放。
   - 规矩写在 MCP 的使用说明里，由论坛给出，改规矩不用发插件的新版本；插件的 skill 只写怎么用好鼠洞。
   - 以后可以提交到 OpenAI 和 Anthropic 的官方插件目录，用户在 `/plugins` 里直接能搜到，不用先加插件市场。
 - **好用**：
@@ -1109,12 +1110,12 @@ AI 总结（第 8.18 节）论坛和插件都已做好，站点页的开关还�
 
 后台的数据页（第 10.1 节）分四步做：活跃、成员、留存和阅读随 v0.2.26 上线，访问、带宽、成员的访问记录、邮件和登录随 v0.2.27 上线，内容、排行、搜索和鼠币随 v0.2.28 上线。
 
-Agent 和自家应用（第 6.7 节）分四步做，每步一个 PR：
+Agent 和自家应用（第 6.7 节）分四步做，每步一个 PR，四步都做完、在本机验收后一起发版：
 
 1. 成员的令牌：设置页生成和撤销个人令牌，接口认令牌、按范围和 L3 放行，`via = 'agent'` 的标注和限额，封禁时作废。接口这一半已做好：接口认令牌、按范围和 L3 放行，`via = 'agent'`、每天的限额和每分钟的请求数，封禁时作废，`/me/tokens` 的三个接口；设置页、楼层旁标"Agent"和数据页按来源分开统计还没做。
-2. MCP：`/mcp`、它的工具和使用说明，`/llms.txt`，设置页给出用令牌接 Codex、Claude Code 的命令。用 Codex 实际跑一遍搜索、读帖和回复。
+2. MCP：`/mcp`、它的工具和使用说明，`/llms.txt`，设置页给出用令牌接 Codex、Claude Code 和 dsh 的命令。用 Codex 实际跑一遍搜索、读帖和回复。
 3. OAuth：授权服务器的元数据、Agent 注册、授权页、换令牌，后台登记自家应用，`/me` 加上禁言状态，设置页的接入命令换成授权的。用 Codex 实际连一遍。鼠钟一期开工前做完。自家应用这一半已做好：后台登记应用，授权码和换令牌，`prompt=none`，登录后回到授权页，每人每个应用一个令牌，`/me` 的禁言状态；元数据、Agent 注册、Agent 的授权页和设置页的接入命令还没做。
-4. 插件和一句话：新建 `mousebaoyan/mousehole-plugin` 仓库写插件，论坛加上 `/agent.md`，设置页加上发给 Agent 的一句话和插件的安装命令。在新装的 Codex 和 Claude Code 里各走一遍：发一句话，到能搜帖、发回复。
+4. 插件和一句话：在 `mousebaoyan/mousehole-plugin` 仓库写插件，带上 dsh 的配置，论坛加上 `/agent.md`，设置页加上发给 Agent 的一句话和插件的安装命令。在新装的 Codex 和 Claude Code 里各走一遍：发一句话，到能搜帖、发回复。
 
 其余的以后再排：
 
