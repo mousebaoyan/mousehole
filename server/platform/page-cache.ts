@@ -38,7 +38,9 @@ export function guestPages<E extends object>(server: Hono<E>, onHit: (c: Context
       c.req.method !== "GET" ||
       ttl === undefined ||
       encoding === null ||
-      getCookie(c, "session") !== undefined
+      // Someone's, not a guest's: signed in, or a token's holder.
+      getCookie(c, "session") !== undefined ||
+      c.req.header("authorization") !== undefined
     ) {
       return next();
     }

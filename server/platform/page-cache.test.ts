@@ -41,6 +41,16 @@ describe("访客页面缓存", () => {
     expect(renders).toBe(before + 3);
   });
 
+  test("带着令牌的请求每次都渲染，渲染出的页面不给访客", async () => {
+    const token = { authorization: "Bearer abc" };
+    await get("/t/3", token);
+    const before = renders;
+    await get("/t/3");
+    expect(renders).toBe(before + 1);
+    await get("/t/3", token);
+    expect(renders).toBe(before + 2);
+  });
+
   test("过期后先给旧页面，同时在后台重新渲染，之后给新的", async () => {
     vi.useFakeTimers({ toFake: ["Date"] });
     await get("/t/2");
