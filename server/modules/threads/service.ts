@@ -716,7 +716,7 @@ export async function getThread(id: number, reader: Reader) {
     }
     const above = reader.reach === GUEST ? undefined : await boardLevel(id);
     if (above !== undefined && above > reader.reach) throw needsLevelToRead(above);
-    throw (await mergedAway(id, 1)) ?? threadNotFound();
+    throw (await mergedAway(id, 1, reader)) ?? threadNotFound();
   }
   const [thread] = await withUsers([row]);
   return {
@@ -728,11 +728,11 @@ export async function getThread(id: number, reader: Reader) {
 }
 
 // A thread merged into another (design §8.20) tells where a floor of it is now; one past its last
-// floor leads to its opening post.
-async function mergedAway(id: number, floor: number) {
-  const now = await db
-    .selectFrom("thread_merges")
-    .innerJoin("posts", (join) =>
+// floor leads to its opening post. Only to who may open the thread it is in now.
+async function mergedAway(id: number, floor: number, reader: Reader) {
+  const now = await openableThreads(reader)
+    .innerJoin("posts", "posts.thread_id", "threads.id")
+    .innerJoin("thread_merges", (join) =>
       join.on(
         sql<boolean>`posts.id = coalesce(thread_merges.post_ids[${floor}], thread_merges.post_ids[1])`,
       ),
@@ -862,7 +862,7 @@ async function assertVisible(threadId: number, reader: Reader, floor = 1) {
     ])
     .where("threads.id", "=", threadId)
     .executeTakeFirst();
-  if (!thread) throw (await mergedAway(threadId, floor)) ?? threadNotFound();
+  if (!thread) throw (await mergedAway(threadId, floor, reader)) ?? threadNotFound();
   return thread;
 }
 
