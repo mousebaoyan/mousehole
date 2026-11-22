@@ -1,8 +1,10 @@
 import { testClient } from "hono/testing";
 import { beforeAll, describe, expect, test } from "vitest";
+import { createApi } from "../../../app/api.server.ts";
 import { as, createUser, login, ownerSession } from "../../../test/fixtures.ts";
 import { app } from "../../app.ts";
 import { db } from "../../platform/db.ts";
+import { resolveToken } from "./service.ts";
 
 const api = testClient(app).api.v1;
 
@@ -95,6 +97,28 @@ describe("成员的令牌", () => {
       expect(res.status).toBe(403);
       expect(await res.json()).toMatchObject({ error: { code: "forbidden" } });
     }
+  });
+
+  test("带着令牌打开页面时，页面调接口也只能做令牌能做的", async () => {
+    const { token } = await tokenOf((await person(3)).who, ["read"]);
+    const page = new Request("http://localhost/settings", {
+      method: "POST",
+      headers: { authorization: `Bearer ${token}` },
+    });
+    const pageApi = createApi(page, {
+      ...(await resolveToken(token, null, null)),
+      sessionId: null,
+    });
+
+    const minted = await pageApi.me.tokens.$post({
+      json: { name: "页面上生成的", scopes: ["read", "act"] },
+    });
+    expect(minted.status).toBe(403);
+    expect(await minted.json()).toMatchObject({ error: { code: "forbidden" } });
+    const posted = await pageApi.threads.$post({
+      json: { board: "agents", title: "页面上发的帖子", content: { markdown: "正文" } },
+    });
+    expect(await posted.json()).toMatchObject({ error: { code: "scope_missing" } });
   });
 
   test("发内容要 act 和 L3，发出的标为 agent", async () => {

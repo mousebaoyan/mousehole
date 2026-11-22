@@ -2,7 +2,6 @@ import { createRoute, z } from "@hono/zod-openapi";
 import type { Context } from "hono";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import { createMiddleware } from "hono/factory";
-import type { Viewer } from "../../platform/access.ts";
 import { env } from "../../platform/env.ts";
 import { AppError } from "../../platform/errors.ts";
 import {
@@ -63,11 +62,12 @@ export function bearerToken(c: Context) {
   return c.req.header("authorization")?.match(/^Bearer (\S+)$/)?.[1];
 }
 
-export type Visitor = { viewer: Viewer | null; sessionId: number | null };
+export type Visitor = AppEnv["Variables"];
 
 // A page's loaders call the API in-process (app/api.server.ts) as the visitor the page request
-// was already found to be, which spares each call looking the session up again. Kept out of the
-// headers, which anyone could send.
+// was already found to be, which spares each call looking the session or token up again. The
+// token comes along: a page opened with one may do only what the token may, not what the site
+// may. Kept out of the headers, which anyone could send.
 const visitors = new WeakMap<Request, Visitor>();
 
 export function asVisitor(request: Request, visitor: Visitor) {
@@ -78,13 +78,14 @@ export function asVisitor(request: Request, visitor: Visitor) {
 // Runs for every request, pages included. Bots and members' Agents authenticate with a bearer
 // token; people with the session cookie, whose sliding renewal also refreshes the cookie.
 export const authenticate = createMiddleware<AppEnv>(async (c, next) => {
-  c.set("token", null);
   const known = visitors.get(c.req.raw);
   if (known) {
     c.set("viewer", known.viewer);
     c.set("sessionId", known.sessionId);
+    c.set("token", known.token);
     return next();
   }
+  c.set("token", null);
   const bearer = bearerToken(c);
   if (bearer) {
     const { viewer, token } = await resolveToken(

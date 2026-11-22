@@ -131,7 +131,11 @@ export default await createHonoServer<{ Variables: SecureHeadersVariables & AppE
     const context = new RouterContextProvider();
     context.set(
       apiContext,
-      createApi(c.req.raw, { viewer: c.var.viewer, sessionId: c.var.sessionId }),
+      createApi(c.req.raw, {
+        viewer: c.var.viewer,
+        sessionId: c.var.sessionId,
+        token: c.var.token,
+      }),
     );
     context.set(nonceContext, c.get("secureHeadersNonce"));
     return context;
