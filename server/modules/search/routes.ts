@@ -9,6 +9,33 @@ import { UserRefSchema } from "../users/schemas.ts";
 import { findUserId } from "../users/service.ts";
 import { recordSearch, search, similar, SORTS } from "./service.ts";
 
+// Also the MCP's search tool's (server/agent/mcp.ts).
+export const SearchQuery = z.object({
+  q: z.string().trim().min(1).max(100),
+  board: z.string().optional(),
+  tag: z.string().optional(),
+  author: UserRefSchema.optional().meta({ description: "楼主" }),
+  kind: z.enum(["discussion", "question"]).optional(),
+  solved: z
+    .enum(["true", "false"])
+    .optional()
+    .transform((v) => (v === undefined ? undefined : v === "true"))
+    .meta({ description: "true：已解决；false：还在等回答的问答帖" }),
+  since: z
+    .enum(["week", "month", "year"])
+    .optional()
+    .meta({ description: "一周、一个月、一年内发的帖子" }),
+  title_only: z
+    .enum(["true", "false"])
+    .optional()
+    .transform((v) => v === "true"),
+  sort: z.enum(SORTS).default("relevance").meta({
+    description:
+      "relevance 相关度，旧的逐渐靠后；created 最新发布；last_post 最新回复；hot 最热，按回复数 × 2 + 赞数 + 浏览数 / 20",
+  }),
+  cursor: z.coerce.number().int().min(0).default(0),
+});
+
 export const searchRoutes = createRouter()
   .openapi(
     createRoute({
@@ -16,31 +43,7 @@ export const searchRoutes = createRouter()
       path: "/search",
       summary: "搜索帖子和回复：每个帖子一条，带最相关的那一层和命中的片段；每页 20 个",
       request: {
-        query: z.object({
-          q: z.string().trim().min(1).max(100),
-          board: z.string().optional(),
-          tag: z.string().optional(),
-          author: UserRefSchema.optional().meta({ description: "楼主" }),
-          kind: z.enum(["discussion", "question"]).optional(),
-          solved: z
-            .enum(["true", "false"])
-            .optional()
-            .transform((v) => (v === undefined ? undefined : v === "true"))
-            .meta({ description: "true：已解决；false：还在等回答的问答帖" }),
-          since: z
-            .enum(["week", "month", "year"])
-            .optional()
-            .meta({ description: "一周、一个月、一年内发的帖子" }),
-          title_only: z
-            .enum(["true", "false"])
-            .optional()
-            .transform((v) => v === "true"),
-          sort: z.enum(SORTS).default("relevance").meta({
-            description:
-              "relevance 相关度，旧的逐渐靠后；created 最新发布；last_post 最新回复；hot 最热，按回复数 × 2 + 赞数 + 浏览数 / 20",
-          }),
-          cursor: z.coerce.number().int().min(0).default(0),
-        }),
+        query: SearchQuery,
       },
       responses: {
         200: {

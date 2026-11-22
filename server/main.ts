@@ -6,6 +6,7 @@ import { createHonoServer } from "react-router-hono-server/node";
 import { routes } from "virtual:react-router/server-build";
 import { apiContext, createApi } from "../app/api.server.ts";
 import { nonceContext } from "../app/nonce.ts";
+import { agentApp } from "./agent/routes.ts";
 import { app } from "./app.ts";
 import { clearExpiredLogins } from "./modules/auth/service.ts";
 import { checkBadges, syncBadges } from "./modules/badges/service.ts";
@@ -123,6 +124,7 @@ export default await createHonoServer<{ Variables: SecureHeadersVariables & AppE
   },
   configure(server) {
     server.use(compressResponses);
+    server.route("/", agentApp);
     server.route("/", app);
     // Only the pages, which React Router serves after these routes.
     server.use(atPublicOrigin);

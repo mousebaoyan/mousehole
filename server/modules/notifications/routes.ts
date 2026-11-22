@@ -30,6 +30,20 @@ const NotificationSchema = z
   })
   .openapi("Notification");
 
+// Also the MCP's tools' (server/agent/mcp.ts).
+export const NotificationsQuery = z.object({
+  unread_only: z
+    .enum(["true", "false"])
+    .default("false")
+    .transform((v) => v === "true"),
+  cursor: z.string().optional(),
+});
+
+export const ReadNotifications = z.union([
+  z.object({ ids: z.array(z.number().int()).min(1).max(100) }),
+  z.object({ all: z.literal(true) }),
+]);
+
 export const notificationsRoutes = createRouter()
   .openapi(
     createRoute({
@@ -37,13 +51,7 @@ export const notificationsRoutes = createRouter()
       path: "/notifications",
       summary: "通知，最新的在前，每页 30 条；合并的通知有新动静时排到前面",
       request: {
-        query: z.object({
-          unread_only: z
-            .enum(["true", "false"])
-            .default("false")
-            .transform((v) => v === "true"),
-          cursor: z.string().optional(),
-        }),
+        query: NotificationsQuery,
       },
       responses: {
         200: {
@@ -100,10 +108,7 @@ export const notificationsRoutes = createRouter()
           required: true,
           content: {
             "application/json": {
-              schema: z.union([
-                z.object({ ids: z.array(z.number().int()).min(1).max(100) }),
-                z.object({ all: z.literal(true) }),
-              ]),
+              schema: ReadNotifications,
             },
           },
         },
