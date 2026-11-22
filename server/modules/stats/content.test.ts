@@ -96,6 +96,17 @@ async function member() {
   return { id, qq, who: as(await login(id)) };
 }
 
+// A member's Agent, with their token; posting through one takes L3.
+async function agent() {
+  const { id } = await createUser("user", 3);
+  const res = await api.me.tokens.$post(
+    { json: { name: "Codex", scopes: ["read", "act"] } },
+    as(await login(id)),
+  );
+  if (res.status !== 201) throw new Error(`status ${res.status}`);
+  return { headers: { authorization: `Bearer ${(await res.json()).token}` } };
+}
+
 describe("内容", () => {
   test("按来源数公开的新帖、回复和表情回应，收录的算在群里发的那天，隐藏和删除的不算", async () => {
     const before = await stats();
@@ -108,6 +119,10 @@ describe("内容", () => {
     await react(reader.who, t.opening);
     await reply(viaBot(asker.qq), t.id);
     await react(viaBot(asker.qq), t.opening);
+    const codex = await agent();
+    await thread(codex);
+    await reply(codex, t.id);
+    await react(codex, t.opening);
     const archived = await thread(viaBot(asker.qq), {}, archivedAt(yesterday));
     await reply(viaBot(reader.qq), archived.id, archivedAt(yesterday));
     await react(viaBot(reader.qq), archived.opening, archivedAt(yesterday));
@@ -137,21 +152,24 @@ describe("内容", () => {
             web: is[kind].web - was[kind].web,
             bot: is[kind].bot - was[kind].bot,
             qq: is[kind].qq - was[kind].qq,
+            agent: is[kind].agent - was[kind].agent,
           },
         ]),
       );
     };
     expect(change(0)).toEqual({
-      threads: { web: 1, bot: 0, qq: 0 },
-      replies: { web: 1, bot: 1, qq: 0 },
-      reactions: { web: 1, bot: 1, qq: 0 },
+      threads: { web: 1, bot: 0, qq: 0, agent: 1 },
+      replies: { web: 1, bot: 1, qq: 0, agent: 1 },
+      reactions: { web: 1, bot: 1, qq: 0, agent: 1 },
     });
     expect(change(1)).toEqual({
-      threads: { web: 0, bot: 0, qq: 1 },
-      replies: { web: 0, bot: 0, qq: 1 },
-      reactions: { web: 0, bot: 0, qq: 1 },
+      threads: { web: 0, bot: 0, qq: 1, agent: 0 },
+      replies: { web: 0, bot: 0, qq: 1, agent: 0 },
+      reactions: { web: 0, bot: 0, qq: 1, agent: 0 },
     });
-    expect(after.totals.now.content.replies.web - before.totals.now.content.replies.web).toBe(1);
+    const totals = (kind: "web" | "agent") =>
+      after.totals.now.content.replies[kind] - before.totals.now.content.replies[kind];
+    expect([totals("web"), totals("agent")]).toEqual([1, 1]);
   });
 
   test("问答帖只算论坛上发的：解决率、他人回复过的、首条他人回复等待时间的中位数", async () => {

@@ -443,16 +443,16 @@ async function searching(range: Range) {
 // ---- Content: what was made public, by where it came from. Floors and reactions archived from
 // the groups count on the day they were said there.
 
-const VIAS = ["web", "bot", "qq"] as const;
+const VIAS = ["web", "bot", "qq", "agent"] as const;
 type Via = (typeof VIAS)[number];
 const MADE = ["threads", "replies", "reactions"] as const;
 type Content = Record<(typeof MADE)[number], Record<Via, number>>;
 
 function noContent(): Content {
   return {
-    threads: { web: 0, bot: 0, qq: 0 },
-    replies: { web: 0, bot: 0, qq: 0 },
-    reactions: { web: 0, bot: 0, qq: 0 },
+    threads: { web: 0, bot: 0, qq: 0, agent: 0 },
+    replies: { web: 0, bot: 0, qq: 0, agent: 0 },
+    reactions: { web: 0, bot: 0, qq: 0, agent: 0 },
   };
 }
 

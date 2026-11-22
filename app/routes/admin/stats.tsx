@@ -536,6 +536,7 @@ const VIAS = [
   { via: "web", label: "网页", color: "var(--chart-1)" },
   { via: "bot", label: BOT_NAME, color: "var(--chart-2)" },
   { via: "qq", label: "群里收录", color: "var(--chart-3)" },
+  { via: "agent", label: "Agent", color: "var(--chart-4)" },
 ] as const;
 
 const MADE = [
@@ -547,7 +548,7 @@ const MADE = [
 type Made = Stats["totals"]["now"]["content"];
 
 function allSources(made: Made, kind: (typeof MADE)[number]["kind"]) {
-  return made[kind].web + made[kind].bot + made[kind].qq;
+  return VIAS.reduce((total, { via }) => total + made[kind][via], 0);
 }
 
 // Minutes under an hour, hours under two days, then days.
@@ -564,7 +565,7 @@ function Content({ stats, dates }: { stats: Stats; dates: string[] }) {
   return (
     <Section
       title="内容"
-      description={`公开的帖子、回复和表情回应，按来源分为网页、${BOT_NAME} 代发和群里收录。收录的按在群里发出的时间统计`}
+      description={`公开的帖子、回复和表情回应，按来源分为网页、${BOT_NAME} 代发、群里收录和 Agent。收录的按在群里发出的时间统计`}
     >
       <div className="-mx-5 overflow-x-auto overscroll-x-contain">
         <table className="w-full text-sm whitespace-nowrap">
@@ -1079,7 +1080,7 @@ function ActiveUsers({ users, sort, staff }: Extract<Data, { tab: "users" }>) {
   return (
     <Section
       title="活跃用户"
-      description={`这段时间在论坛上最活跃的 30 位成员，只统计本人在网页上的操作，不含群里收录、${BOT_NAME} 代发和匿名的内容`}
+      description={`这段时间在论坛上最活跃的 30 位成员，只统计本人在网页上的操作，不含群里收录、${BOT_NAME} 代发、Agent 和匿名的内容`}
     >
       <label htmlFor={staffId} className="inline-flex items-center gap-2 text-sm">
         <Checkbox
