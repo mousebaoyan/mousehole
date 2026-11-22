@@ -25,6 +25,7 @@ beforeAll(async () => {
   const admin = (await person("admin")).who;
   await api.boards.$post({ json: { slug: "mg", name: "合并" } }, admin);
   await api.boards.$post({ json: { slug: "mg2", name: "合并二" } }, admin);
+  await api.boards.$post({ json: { slug: "mg-l3", name: "合并高阶", read_level: 3 } }, admin);
   for (const name of ["合一", "合二", "合三", "合四", "合五", "合六"]) {
     await api.tags.$post({ json: { name, kind: "topic" } }, admin);
   }
@@ -248,6 +249,31 @@ describe("合并帖子", () => {
       thread_id: gone.id,
       into: { id: kept.id },
       url: `${env.PUBLIC_URL}/t/${kept.id}?floor=2`,
+    });
+  });
+
+  test("看不到留下的帖子的人，打开被合并的帖子的地址只得到帖子不存在", async () => {
+    const kept = await thread(asker, 10);
+    const gone = await thread(other, 15);
+    expect((await merge(gone.id, { into: kept.id, board: "mg-l3" })).status).toBe(200);
+
+    const param = { id: String(gone.id) };
+    const detail = await api.threads[":id"].$get({ param }, other.who);
+    expect(detail.status).toBe(404);
+    expect(await detail.json()).toEqual({
+      error: { code: "thread_not_found", message: "帖子不存在" },
+    });
+    const posts = await api.threads[":id"].posts.$get({ param, query: {} }, other.who);
+    expect(posts.status).toBe(404);
+    expect(await posts.json()).toEqual({
+      error: { code: "thread_not_found", message: "帖子不存在" },
+    });
+    const able = await person("user", 3);
+    const res = await api.threads[":id"].$get({ param }, able.who);
+    expect(await res.json()).toMatchObject({
+      thread_id: kept.id,
+      floor: 2,
+      error: { code: "thread_merged" },
     });
   });
 
