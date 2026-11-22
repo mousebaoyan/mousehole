@@ -63,7 +63,6 @@ export type Scope = (typeof SCOPES)[number];
 
 const MEMBER_SCOPES = new Set<Scope>(["profile", "read", "act"]);
 const WRITES = new Set<Scope>(["act", "moderate", "admin"]);
-const BOT_ONLY = new Set<Scope>(["sync", "auth", "events"]);
 const ROLES: Partial<Record<Scope, string[]>> = { moderate: STAFF, admin: ["admin", "owner"] };
 
 function hasScope(scopes: string[], need: Scope) {
@@ -78,9 +77,6 @@ export function checkPermission(
   archived = false,
 ) {
   if (!viewer) throw new AppError(401, "unauthorized", "请先登录");
-  if (token?.kind !== "bot" && BOT_ONLY.has(need)) {
-    throw new AppError(403, "forbidden", "只有 bot 能调用这个接口");
-  }
   if (token?.kind === "member" && !MEMBER_SCOPES.has(need)) {
     throw new AppError(403, "forbidden", "版主和管理员的操作只能在网页上做");
   }

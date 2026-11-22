@@ -33,6 +33,7 @@ import { weeklyRoutes } from "./modules/weekly/routes.ts";
 import { UNWELCOME_CRAWLERS } from "./platform/crawlers.ts";
 import { db } from "./platform/db.ts";
 import { env } from "./platform/env.ts";
+import { AppError } from "./platform/errors.ts";
 import { createRouter, handleError, type AppEnv } from "./platform/http.ts";
 import { requestBody } from "./platform/body.ts";
 import { idempotency } from "./platform/idempotency.ts";
@@ -121,6 +122,16 @@ export const app = new Hono<AppEnv>()
   )
   .use(authenticate)
   .get("/sponsor/:file{(?:wechat|alipay)\\.png}", serveSponsorCode)
+  // The plugin's (docs/api.md §4): bot tokens alone, whatever scope a route asks for. Members'
+  // Agents and the pages have routes of their own. Turned away before the body is read or an
+  // idempotency key taken.
+  .use("/api/v1/bot/*", async (c, next) => {
+    if (!c.var.viewer) throw new AppError(401, "unauthorized", "请先登录");
+    if (c.var.token?.kind !== "bot") {
+      throw new AppError(403, "forbidden", "只有 bot 能调用这个接口");
+    }
+    await next();
+  })
   .use("/api/v1/*", requestBody, idempotency)
   .get("/healthz", async (c) => {
     await sql`select 1`.execute(db);
