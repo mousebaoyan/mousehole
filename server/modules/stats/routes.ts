@@ -122,8 +122,8 @@ const Bytes = z.object({
 });
 
 const Sources = z
-  .object({ web: z.number(), bot: z.number(), qq: z.number() })
-  .meta({ description: "网页上、bot 代发、群里收录" });
+  .object({ web: z.number(), bot: z.number(), qq: z.number(), agent: z.number() })
+  .meta({ description: "网页上、bot 代发、群里收录、成员的 Agent 发的" });
 
 const Content = z
   .object({ threads: Sources, replies: Sources, reactions: Sources })
