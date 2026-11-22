@@ -38,7 +38,7 @@ const MemberTokenSchema = z
     app: z
       .object({ name: z.string(), first_party: z.boolean() })
       .nullable()
-      .openapi({ description: "授权的应用，first_party 是不是自家应用；个人令牌为 null" }),
+      .meta({ description: "授权的应用，first_party 是不是自家应用；个人令牌为 null" }),
     created_at: z.number(),
     last_used_at: z.number().nullable(),
   })

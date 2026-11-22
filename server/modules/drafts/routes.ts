@@ -18,8 +18,8 @@ const DraftPollSchema = z
     max_choices: z.number().int().nullable(),
     anonymous: z.boolean(),
     results: z.enum(["voted", "always"]),
-    days: z.number().int().min(1).max(30).nullable().openapi({ description: "选的是几天后截止" }),
-    closes_at: z.number().int().nullable().openapi({ description: "自定义的截止时间" }),
+    days: z.number().int().min(1).max(30).nullable().meta({ description: "选的是几天后截止" }),
+    closes_at: z.number().int().nullable().meta({ description: "自定义的截止时间" }),
   })
   .openapi("DraftPoll", {
     description:
@@ -33,8 +33,8 @@ const DraftLotterySchema = z
       .max(10),
     entry: z.enum(["button", "reply"]),
     min_level: z.number().int().min(0).max(5),
-    days: z.number().int().min(1).max(30).nullable().openapi({ description: "选的是几天后开奖" }),
-    draws_at: z.number().int().nullable().openapi({ description: "自定义的开奖时间" }),
+    days: z.number().int().min(1).max(30).nullable().meta({ description: "选的是几天后开奖" }),
+    draws_at: z.number().int().nullable().meta({ description: "自定义的开奖时间" }),
   })
   .openapi("DraftLottery", {
     description:
@@ -45,7 +45,7 @@ const DraftPositioningSchema = z
   .object({
     fields: z
       .record(z.string(), z.string().max(200))
-      .openapi({ description: "各项背景，键是编辑器定的" }),
+      .meta({ description: "各项背景，键是编辑器定的" }),
     schools: z.array(z.string().max(30)).max(10),
   })
   .openapi("DraftPositioning", {
@@ -54,7 +54,7 @@ const DraftPositioningSchema = z
 
 const DraftSchema = z
   .object({
-    thread_id: z.number().nullable().openapi({ description: "回复哪个帖子；null 是发帖" }),
+    thread_id: z.number().nullable().meta({ description: "回复哪个帖子；null 是发帖" }),
     title: z.string(),
     board: z.string().nullable(),
     kind: z.string().nullable(),
@@ -64,11 +64,11 @@ const DraftSchema = z
     tags: z.array(z.string()),
     author_anonymous: z.boolean(),
     anonymous_replies: z.boolean(),
-    body: z.string().openapi({ description: "Markdown" }),
+    body: z.string().meta({ description: "Markdown" }),
     reply_to: z
       .object({ id: z.number(), floor: z.number(), name: z.string() })
       .nullable()
-      .openapi({ description: "回复的是哪一层" }),
+      .meta({ description: "回复的是哪一层" }),
     updated_at: z.number(),
   })
   .openapi("Draft");
@@ -94,14 +94,14 @@ export const draftsRoutes = createRouter()
                       .object({
                         id: z.number(),
                         title: z.string(),
-                        my_anonymity: z.enum(["named", "anonymous", "optional"]).openapi({
+                        my_anonymity: z.enum(["named", "anonymous", "optional"]).meta({
                           description: "自己在这个帖子里回复时是否匿名，同帖子详情的 my_anonymity",
                         }),
                       })
                       .nullable()
-                      .openapi({ description: "回复的是哪个帖子；发帖的草稿为 null" }),
+                      .meta({ description: "回复的是哪个帖子；发帖的草稿为 null" }),
                     title: z.string(),
-                    excerpt: z.string().openapi({ description: "正文的前 100 个字" }),
+                    excerpt: z.string().meta({ description: "正文的前 100 个字" }),
                     updated_at: z.number(),
                   }),
                 ),

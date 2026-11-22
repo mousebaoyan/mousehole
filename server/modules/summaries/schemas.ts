@@ -4,14 +4,14 @@ import type { Point } from "./service.ts";
 
 export const SummarySchema = z
   .object({
-    lead: z.string().openapi({ description: "讨论的是什么，一句话" }),
+    lead: z.string().meta({ description: "讨论的是什么，一句话" }),
     points: z.array(
       z.object({
         text: z.string(),
-        floors: z.array(z.number()).openapi({ description: "出处的楼层号" }),
+        floors: z.array(z.number()).meta({ description: "出处的楼层号" }),
       }),
     ),
-    replies: z.number().openapi({ description: "根据几条回复写的" }),
+    replies: z.number().meta({ description: "根据几条回复写的" }),
     created_at: z.number(),
   })
   .openapi("Summary", { description: "AI 总结（总体设计 §8.18）" });

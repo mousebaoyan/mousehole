@@ -19,7 +19,7 @@ const Types = z
   .optional()
   .transform((v) => (v === undefined ? null : v.split(",")))
   .pipe(z.array(z.enum(EVENT_TYPES)).nullable())
-  .openapi({ description: "只要这几类，逗号分隔，例如 member.activated,lottery.drawn" });
+  .meta({ description: "只要这几类，逗号分隔，例如 member.activated,lottery.drawn" });
 
 const expired = errorResponse(
   "游标早于最早的事件；latest_id 是当前最新的事件 ID，可以从那里重新开始",
@@ -86,7 +86,7 @@ export const eventsRoutes = createRouter()
       summary: "按游标拉取事件，和事件流的内容一样；next_after 是下次的 after",
       request: {
         query: z.object({
-          after: z.coerce.number().int().min(0).optional().openapi({
+          after: z.coerce.number().int().min(0).optional().meta({
             description: "不带时不返回事件，next_after 是当前最新的事件 ID，从现在开始拉取用",
           }),
           limit: z.coerce.number().int().min(1).max(500).default(100),

@@ -81,17 +81,17 @@ const MeSchema = z
     avatar_url: z.string().nullable(),
     role: z.string(),
     level: z.number(),
-    qq: z.number().nullable().openapi({ description: "站长账号没有 QQ 号，为 null" }),
+    qq: z.number().nullable().meta({ description: "站长账号没有 QQ 号，为 null" }),
     member_status: z.string(),
     restriction: z
       .object({ type: z.enum(["mute", "ban"]), until: z.number().nullable() })
       .nullable()
-      .openapi({ description: "禁言（mute）或封禁（ban）和到期时间，没有为 null" }),
+      .meta({ description: "禁言（mute）或封禁（ban）和到期时间，没有为 null" }),
     activated: z.boolean(),
-    coins: z.number().openapi({ description: "鼠币余额" }),
+    coins: z.number().meta({ description: "鼠币余额" }),
     counts: z
       .object({ posted: z.number(), bookmarked: z.number(), read: z.number(), badges: z.number() })
-      .openapi({ description: "侧栏用：发过或回复过、收藏、读过的帖子数，得到的徽章有几种" }),
+      .meta({ description: "侧栏用：发过或回复过、收藏、读过的帖子数，得到的徽章有几种" }),
   })
   .openapi("Me");
 
@@ -100,7 +100,7 @@ const BackgroundUrls = z.object({ card_url: z.string(), profile_url: z.string() 
 const BackgroundSchema = z
   .union([z.object({ preset: z.enum(BACKGROUNDS), moving: z.boolean() }), BackgroundUrls])
   .nullable()
-  .openapi({
+  .meta({
     description:
       "背景：预设的 { preset, moving }，moving 是兑换了动态版；或上传的两张图。没有为 null",
   });
@@ -108,20 +108,20 @@ const BackgroundSchema = z
 const UserSchema = UserBriefSchema.extend({
   members_only: z.literal(false),
   bio: z.string(),
-  theme: z.string().nullable().openapi({ description: "主题色；null 是默认的海青" }),
+  theme: z.string().nullable().meta({ description: "主题色；null 是默认的海青" }),
   background: BackgroundSchema,
-  background_opacity: z.number().openapi({ description: "背景浓淡，20–100 的百分数" }),
-  card: z.string().nullable().optional().openapi({
+  background_opacity: z.number().meta({ description: "背景浓淡，20–100 的百分数" }),
+  card: z.string().nullable().optional().meta({
     description:
       "群名片，取自主群，不在主群时取最早加入的群，都不在为 null；这一项和下面两项只给成员和 bot",
   }),
-  joined_at: z.number().nullable().optional().openapi({ description: "加入这个群的时间" }),
+  joined_at: z.number().nullable().optional().meta({ description: "加入这个群的时间" }),
   last_sent_at: z
     .number()
     .nullable()
     .optional()
-    .openapi({ description: "最近一次在这个群发言，精确到小时" }),
-  qq: z.number().nullable().optional().openapi({
+    .meta({ description: "最近一次在这个群发言，精确到小时" }),
+  qq: z.number().nullable().optional().meta({
     description:
       "qq 只给成员和 bot，站点设置为公开时也给访客，站长账号为 null；member_status、activated 只给成员和 bot",
   }),
@@ -129,22 +129,19 @@ const UserSchema = UserBriefSchema.extend({
     .object({ type: z.string(), until: z.number().nullable() })
     .nullable()
     .optional()
-    .openapi({ description: "禁言（mute）或封禁（ban）和到期时间；只给本人和版主" }),
-  followed: z.boolean().optional().openapi({ description: "自己是否关注了 TA；只在登录时有" }),
-  endorsed: z.boolean().optional().openapi({ description: "自己是否认可了 TA；只在登录时有" }),
+    .meta({ description: "禁言（mute）或封禁（ban）和到期时间；只给本人和版主" }),
+  followed: z.boolean().optional().meta({ description: "自己是否关注了 TA；只在登录时有" }),
+  endorsed: z.boolean().optional().meta({ description: "自己是否认可了 TA；只在登录时有" }),
   member_status: z.string().optional(),
   activated: z.boolean().optional(),
-  relations_public: z
-    .boolean()
-    .optional()
-    .openapi({ description: "TA 是否公开赞和关系；只给成员" }),
-  badges: z.array(z.object({ id: z.number(), name: z.string(), tier: z.string() })).openapi({
+  relations_public: z.boolean().optional().meta({ description: "TA 是否公开赞和关系；只给成员" }),
+  badges: z.array(z.object({ id: z.number(), name: z.string(), tier: z.string() })).meta({
     description: "TA 选的展示徽章，按选的顺序；没选过的最多 3 枚，金的在前，同档的最近得到的在前",
   }),
   stats: z.object({
     threads: z.number(),
     posts: z.number(),
-    likes: z.number().openapi({ description: "获赞数" }),
+    likes: z.number().meta({ description: "获赞数" }),
     days_visited: z.number(),
     read_seconds: z.number(),
     threads_read: z.number(),
@@ -152,11 +149,11 @@ const UserSchema = UserBriefSchema.extend({
     followers: z.number(),
     following: z.number(),
     endorsements: z.number(),
-    solved: z.number().openapi({ description: "在别人的问答帖里被采纳的回答数" }),
-    badges: z.number().openapi({ description: "得到的徽章有几种" }),
-    people_reached: z.number().openapi({ description: "帮到的人：读过 TA 至少一层的人数" }),
-    reads: z.number().openapi({ description: "被读次数：别人第一次读到 TA 的一层算一次" }),
-    reads_week: z.number().optional().openapi({ description: "最近 7 天的被读次数，只给本人" }),
+    solved: z.number().meta({ description: "在别人的问答帖里被采纳的回答数" }),
+    badges: z.number().meta({ description: "得到的徽章有几种" }),
+    people_reached: z.number().meta({ description: "帮到的人：读过 TA 至少一层的人数" }),
+    reads: z.number().meta({ description: "被读次数：别人第一次读到 TA 的一层算一次" }),
+    reads_week: z.number().optional().meta({ description: "最近 7 天的被读次数，只给本人" }),
   }),
 }).openapi("User");
 
@@ -185,8 +182,8 @@ const ExportSchema = z.object({
       thread_id: z.number(),
       title: z.string(),
       board: z.string(),
-      floor: z.number().openapi({ description: "1 是主楼，也就是自己发的帖子" }),
-      body: z.string().openapi({ description: "Markdown 原文" }),
+      floor: z.number().meta({ description: "1 是主楼，也就是自己发的帖子" }),
+      body: z.string().meta({ description: "Markdown 原文" }),
       status: z.string(),
       created_at: z.number(),
       edited_at: z.number().nullable(),
@@ -207,70 +204,68 @@ const ExportSchema = z.object({
 
 const Switches = z.object({
   site: z.boolean(),
-  email: z.boolean().nullable().openapi({ description: "null：站长不允许这类通知发邮件" }),
+  email: z.boolean().nullable().meta({ description: "null：站长不允许这类通知发邮件" }),
 });
 
 const AvatarSchema = z.object({ avatar_url: z.string().nullable() });
 
 const SettingsSchema = z
   .object({
-    custom_name: z.string().nullable().openapi({ description: "自己起的名字；null 是跟着 QQ" }),
-    custom_bio: z.string().nullable().openapi({ description: "自己写的个性签名；null 是跟着 QQ" }),
-    qq_bio: z.string().openapi({ description: "QQ 的个性签名，由 bot 推送" }),
-    avatar_custom: z.boolean().openapi({ description: "头像是自己上传的；false 是跟着 QQ" }),
-    allow_proxy: z.boolean().openapi({ description: "是否允许 bot 代自己发帖、回复等" }),
-    hide_from_guests: z.boolean().openapi({ description: "我的内容不给访客看" }),
+    custom_name: z.string().nullable().meta({ description: "自己起的名字；null 是跟着 QQ" }),
+    custom_bio: z.string().nullable().meta({ description: "自己写的个性签名；null 是跟着 QQ" }),
+    qq_bio: z.string().meta({ description: "QQ 的个性签名，由 bot 推送" }),
+    avatar_custom: z.boolean().meta({ description: "头像是自己上传的；false 是跟着 QQ" }),
+    allow_proxy: z.boolean().meta({ description: "是否允许 bot 代自己发帖、回复等" }),
+    hide_from_guests: z.boolean().meta({ description: "我的内容不给访客看" }),
     relations_public: z
       .boolean()
-      .openapi({ description: "公开我的赞和关系：赞过、概要里的名单、关注和认可的名单" }),
+      .meta({ description: "公开我的赞和关系：赞过、概要里的名单、关注和认可的名单" }),
     title_badge_id: z
       .number()
       .nullable()
-      .openapi({ description: "当头衔的徽章；null 是 QQ 的专属头衔" }),
+      .meta({ description: "当头衔的徽章；null 是 QQ 的专属头衔" }),
     title_badges: z
       .array(z.object({ id: z.number(), name: z.string(), tier: z.string() }))
-      .openapi({ description: "能当头衔的徽章：自己得到的金徽章和银徽章" }),
+      .meta({ description: "能当头衔的徽章：自己得到的金徽章和银徽章" }),
     shown_badge_ids: z
       .array(z.number())
       .nullable()
-      .openapi({ description: "资料卡上展示的徽章，按顺序；null 是没选过，按默认规则" }),
+      .meta({ description: "资料卡上展示的徽章，按顺序；null 是没选过，按默认规则" }),
     badges: z
       .array(z.object({ id: z.number(), name: z.string(), tier: z.string() }))
-      .openapi({ description: "自己得到的全部徽章，选展示徽章用" }),
-    theme: z.string().nullable().openapi({ description: "主题色；null 是默认的海青" }),
+      .meta({ description: "自己得到的全部徽章，选展示徽章用" }),
+    theme: z.string().nullable().meta({ description: "主题色；null 是默认的海青" }),
     background: z
       .string()
       .nullable()
-      .openapi({ description: "背景：预设的 key，上传的为 custom，没有为 null" }),
-    background_urls: BackgroundUrls.nullable().openapi({ description: "上传的背景，没有为 null" }),
-    background_opacity: z.number().openapi({ description: "背景浓淡，20–100 的百分数" }),
-    frame: z.string().nullable().openapi({ description: "头像框；null 是不用" }),
+      .meta({ description: "背景：预设的 key，上传的为 custom，没有为 null" }),
+    background_urls: BackgroundUrls.nullable().meta({ description: "上传的背景，没有为 null" }),
+    background_opacity: z.number().meta({ description: "背景浓淡，20–100 的百分数" }),
+    frame: z.string().nullable().meta({ description: "头像框；null 是不用" }),
     unlocked: z.object({
-      backgrounds: z.array(z.string()).openapi({ description: "能选的预设背景" }),
-      frames: z.array(z.string()).openapi({ description: "能选的头像框" }),
-      upload: z.boolean().openapi({ description: "能不能上传自己的背景" }),
+      backgrounds: z.array(z.string()).meta({ description: "能选的预设背景" }),
+      frames: z.array(z.string()).meta({ description: "能选的头像框" }),
+      upload: z.boolean().meta({ description: "能不能上传自己的背景" }),
     }),
     owned: z
       .object({
         backgrounds: z.array(z.string()),
         frames: z.array(z.string()),
-        avatar: z.boolean().openapi({ description: "兑换了动态头像" }),
+        avatar: z.boolean().meta({ description: "兑换了动态头像" }),
       })
-      .openapi({ description: "兑换了的动态版，key 的列表；上传背景的为 custom" }),
-    coins: z.number().openapi({ description: "鼠币余额" }),
+      .meta({ description: "兑换了的动态版，key 的列表；上传背景的为 custom" }),
+    coins: z.number().meta({ description: "鼠币余额" }),
     user_status: z
       .object({ emoji: z.string(), text: z.string(), until: z.number().nullable() })
       .nullable()
-      .openapi({ description: "状态；until 是自动清除的时间，null 是不清除" }),
+      .meta({ description: "状态；until 是自动清除的时间，null 是不清除" }),
     pins: z
       .array(z.object({ id: z.number(), title: z.string() }))
-      .openapi({ description: "代表作，按顺序；删除、隐藏了的不在里面" }),
-    showcase: z.string().nullable().openapi({ description: "展柜的 Markdown 原文" }),
-    weekly_email: z.boolean().openapi({ description: "收每周影响力邮件" }),
-    notify_email: z
-      .boolean()
-      .openapi({ description: "邮件提醒的总开关；关掉后哪类通知都不发邮件" }),
-    notify_prefs: z.record(z.string(), Switches).openapi({
+      .meta({ description: "代表作，按顺序；删除、隐藏了的不在里面" }),
+    showcase: z.string().nullable().meta({ description: "展柜的 Markdown 原文" }),
+    weekly_email: z.boolean().meta({ description: "收每周影响力邮件" }),
+    notify_email: z.boolean().meta({ description: "邮件提醒的总开关；关掉后哪类通知都不发邮件" }),
+    notify_prefs: z.record(z.string(), Switches).meta({
       description: "每类通知的站内（site）和邮件（email）开关；自己没改过的跟着站长设的默认值",
     }),
   })
@@ -362,7 +357,7 @@ export const usersRoutes = createRouter()
                 items: z.array(
                   UserBriefSchema.extend({
                     qq: z.number(),
-                    frozen: z.boolean().openapi({ description: "已冻结（退了所有的群）" }),
+                    frozen: z.boolean().meta({ description: "已冻结（退了所有的群）" }),
                     thread_count: z.number(),
                     post_count: z.number(),
                     match: z
@@ -372,7 +367,7 @@ export const usersRoutes = createRouter()
                         group: z.string().nullable(),
                       })
                       .nullable()
-                      .openapi({
+                      .meta({
                         description:
                           "名字以外对上的：card 是 group 群里的群名片，qq_nickname 是 QQ 昵称；名字或 QQ 号对上的为 null",
                       }),
@@ -571,7 +566,7 @@ export const usersRoutes = createRouter()
         params: UserParam,
         query: z.object({
           list: z.enum(RELATION_LISTS),
-          cursor: z.coerce.number().int().optional().openapi({ description: "已经列出的人数" }),
+          cursor: z.coerce.number().int().optional().meta({ description: "已经列出的人数" }),
         }),
       },
       responses: {
@@ -734,36 +729,32 @@ export const usersRoutes = createRouter()
                   .regex(/^[^\n\r]*$/, "名字不能换行")
                   .nullable()
                   .optional()
-                  .openapi({ description: "最多 24 个字；null 是改回跟着 QQ" }),
+                  .meta({ description: "最多 24 个字；null 是改回跟着 QQ" }),
                 custom_bio: z
                   .string()
                   .trim()
                   .max(MAX_BIO)
                   .nullable()
                   .optional()
-                  .openapi({ description: "最多 60 个字；null 是改回跟着 QQ" }),
+                  .meta({ description: "最多 60 个字；null 是改回跟着 QQ" }),
                 allow_proxy: z.boolean().optional(),
                 hide_from_guests: z.boolean().optional(),
                 relations_public: z.boolean().optional(),
                 title_badge_id: Int.nullable()
                   .optional()
-                  .openapi({ description: "自己得到的金徽章或银徽章；null 改回 QQ 的专属头衔" }),
+                  .meta({ description: "自己得到的金徽章或银徽章；null 改回 QQ 的专属头衔" }),
                 shown_badge_ids: z
                   .array(Int)
                   .max(SHOWN_BADGES)
                   .refine((ids) => new Set(ids).size === ids.length, "展示徽章不能重复")
                   .nullable()
                   .optional()
-                  .openapi({
+                  .meta({
                     description: "最多 3 枚自己得到的徽章，按顺序；[] 是不展示，null 改回默认规则",
                   }),
-                theme: z
-                  .enum(THEMES)
-                  .nullable()
-                  .optional()
-                  .openapi({ description: "null 改回默认" }),
-                frame: z.enum(FRAMES).nullable().optional().openapi({ description: "null 是不用" }),
-                background: z.enum(BACKGROUNDS).nullable().optional().openapi({
+                theme: z.enum(THEMES).nullable().optional().meta({ description: "null 改回默认" }),
+                frame: z.enum(FRAMES).nullable().optional().meta({ description: "null 是不用" }),
+                background: z.enum(BACKGROUNDS).nullable().optional().meta({
                   description: "预设背景的 key，null 是不用背景；上传的用 PUT /me/background",
                 }),
                 background_opacity: z
@@ -772,7 +763,7 @@ export const usersRoutes = createRouter()
                   .min(BACKGROUND_OPACITY.min)
                   .max(BACKGROUND_OPACITY.max)
                   .optional()
-                  .openapi({ description: "背景浓淡，20–100 的百分数" }),
+                  .meta({ description: "背景浓淡，20–100 的百分数" }),
                 user_status: z
                   .object({
                     emoji: z
@@ -789,7 +780,7 @@ export const usersRoutes = createRouter()
                   })
                   .nullable()
                   .optional()
-                  .openapi({
+                  .meta({
                     description:
                       "表情加一句话，until 是自动清除的 Unix 秒，null 是不清除；整个为 null 是清除状态",
                   }),
@@ -798,7 +789,7 @@ export const usersRoutes = createRouter()
                   .max(PINS_MAX)
                   .refine((ids) => new Set(ids).size === ids.length, "代表作不能重复")
                   .optional()
-                  .openapi({ description: "代表作：自己公开发布的帖子 ID，按顺序" }),
+                  .meta({ description: "代表作：自己公开发布的帖子 ID，按顺序" }),
                 showcase: z
                   .string()
                   .trim()
@@ -806,7 +797,7 @@ export const usersRoutes = createRouter()
                   .max(SHOWCASE_MAX)
                   .nullable()
                   .optional()
-                  .openapi({ description: "展柜的 Markdown，null 是不要展柜" }),
+                  .meta({ description: "展柜的 Markdown，null 是不要展柜" }),
                 weekly_email: z.boolean().optional(),
                 notify_email: z.boolean().optional(),
                 notify_prefs: z
@@ -1093,19 +1084,19 @@ export const usersRoutes = createRouter()
             .enum(["true", "false"])
             .optional()
             .transform((v) => (v === undefined ? undefined : v === "true"))
-            .openapi({ description: "邮件提醒的总开关" }),
+            .meta({ description: "邮件提醒的总开关" }),
           seen_within: z.coerce
             .number()
             .int()
             .min(1)
             .optional()
-            .openapi({ description: "最近 N 天内访问过" }),
+            .meta({ description: "最近 N 天内访问过" }),
           unseen_for: z.coerce
             .number()
             .int()
             .min(1)
             .optional()
-            .openapi({ description: "N 天以上没访问，包括从没访问过的" }),
+            .meta({ description: "N 天以上没访问，包括从没访问过的" }),
           sort: z.enum(MEMBER_SORTS).default("created_at"),
           order: z.enum(["asc", "desc"]).default("desc"),
           page: z.coerce.number().int().min(1).default(1),

@@ -20,22 +20,22 @@ export const searchRoutes = createRouter()
           q: z.string().trim().min(1).max(100),
           board: z.string().optional(),
           tag: z.string().optional(),
-          author: UserRefSchema.optional().openapi({ description: "楼主" }),
+          author: UserRefSchema.optional().meta({ description: "楼主" }),
           kind: z.enum(["discussion", "question"]).optional(),
           solved: z
             .enum(["true", "false"])
             .optional()
             .transform((v) => (v === undefined ? undefined : v === "true"))
-            .openapi({ description: "true：已解决；false：还在等回答的问答帖" }),
+            .meta({ description: "true：已解决；false：还在等回答的问答帖" }),
           since: z
             .enum(["week", "month", "year"])
             .optional()
-            .openapi({ description: "一周、一个月、一年内发的帖子" }),
+            .meta({ description: "一周、一个月、一年内发的帖子" }),
           title_only: z
             .enum(["true", "false"])
             .optional()
             .transform((v) => v === "true"),
-          sort: z.enum(SORTS).default("relevance").openapi({
+          sort: z.enum(SORTS).default("relevance").meta({
             description:
               "relevance 相关度，旧的逐渐靠后；created 最新发布；last_post 最新回复；hot 最热，按回复数 × 2 + 赞数 + 浏览数 / 20",
           }),
@@ -52,7 +52,7 @@ export const searchRoutes = createRouter()
                   z.object({
                     thread: ThreadSchema,
                     post: z.object({ id: z.number(), floor: z.number() }),
-                    snippet: z.string().openapi({ description: "命中处前后的纯文本" }),
+                    snippet: z.string().meta({ description: "命中处前后的纯文本" }),
                   }),
                 ),
                 next_cursor: z.string().nullable(),

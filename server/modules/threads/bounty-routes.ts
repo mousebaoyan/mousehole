@@ -10,8 +10,8 @@ export const bountyRoutes = createRouter().openapi(
     summary: "[since, until) 里开始悬赏、到现在还没有别人回复的问题，给插件每天在群里发",
     request: {
       query: z.object({
-        since: UnixSecondsParam.openapi({ description: "Unix 秒" }),
-        until: UnixSecondsParam.optional().openapi({ description: "Unix 秒，默认现在" }),
+        since: UnixSecondsParam.meta({ description: "Unix 秒" }),
+        until: UnixSecondsParam.optional().meta({ description: "Unix 秒，默认现在" }),
       }),
     },
     responses: {
@@ -25,12 +25,12 @@ export const bountyRoutes = createRouter().openapi(
                   thread: z.object({ id: z.number(), title: z.string(), kind: z.string() }),
                   board: z.object({ slug: z.string(), name: z.string() }),
                   url: z.string(),
-                  until: z.number().openapi({ description: "悬赏的截止时间" }),
+                  until: z.number().meta({ description: "悬赏的截止时间" }),
                 }),
               ),
               reward: z.object({
-                reply: z.number().openapi({ description: "回复得的鼠币" }),
-                answer: z.number().openapi({ description: "回复被采纳再得的鼠币" }),
+                reply: z.number().meta({ description: "回复得的鼠币" }),
+                answer: z.number().meta({ description: "回复被采纳再得的鼠币" }),
               }),
             }),
           },

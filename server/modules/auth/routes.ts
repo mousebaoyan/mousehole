@@ -119,7 +119,7 @@ const SessionSchema = z
   .object({
     id: z.number(),
     user_agent: z.string(),
-    device: z.string().openapi({ example: "Chrome · macOS" }),
+    device: z.string().meta({ example: "Chrome · macOS" }),
     ip: z.string().nullable(),
     created_at: z.number(),
     last_seen_at: z.number(),
@@ -246,7 +246,7 @@ export const authRoutes = createRouter()
           description: "已确认，浏览器下一次查询时登录",
           content: {
             "application/json": {
-              schema: z.object({ device: z.string().openapi({ example: "Chrome · macOS" }) }),
+              schema: z.object({ device: z.string().meta({ example: "Chrome · macOS" }) }),
             },
           },
         },

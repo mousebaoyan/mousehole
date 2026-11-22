@@ -20,9 +20,9 @@ import { UserBriefSchema, UserRefSchema } from "../users/schemas.ts";
 import { databaseBytes, payeeOf, updateSettings } from "./service.ts";
 
 const SiteSettings = z.object({
-  banner: z.string().trim().max(200).openapi({ description: "公告横幅，空字符串不显示" }),
-  qq_public: z.boolean().openapi({ description: "访客也能看到 QQ 号" }),
-  summaries: z.boolean().openapi({ description: "显示 AI 总结，并给插件派写总结的活" }),
+  banner: z.string().trim().max(200).meta({ description: "公告横幅，空字符串不显示" }),
+  qq_public: z.boolean().meta({ description: "访客也能看到 QQ 号" }),
+  summaries: z.boolean().meta({ description: "显示 AI 总结，并给插件派写总结的活" }),
 });
 
 const LoginSettings = z.object({
@@ -44,23 +44,23 @@ const MAX_MAILBOXES = 10;
 
 const BotSettings = z.object({ require_operator: z.boolean() });
 
-const EmailPolicy = z.enum(["on", "off", "never"]).openapi({
+const EmailPolicy = z.enum(["on", "off", "never"]).meta({
   description: "on：默认发邮件；off：默认不发，成员可以自己打开；never：不发，成员也不能打开",
 });
 
 const WeeklySettings = z
   .object({
-    enabled: z.boolean().openapi({ description: "是否发每周影响力邮件" }),
-    min_reads: z.number().int().min(0).max(10000).openapi({ description: "一周被读至少几次" }),
-    min_likes: z.number().int().min(0).max(10000).openapi({ description: "同时获赞至少几次" }),
+    enabled: z.boolean().meta({ description: "是否发每周影响力邮件" }),
+    min_reads: z.number().int().min(0).max(10000).meta({ description: "一周被读至少几次" }),
+    min_likes: z.number().int().min(0).max(10000).meta({ description: "同时获赞至少几次" }),
     top_likes: z
       .number()
       .int()
       .min(1)
       .max(10000)
-      .openapi({ description: "一层一周获赞至少几次才写进邮件" }),
+      .meta({ description: "一层一周获赞至少几次才写进邮件" }),
   })
-  .openapi({ description: "每周影响力邮件：被读和获赞都达到门槛，或者有回答被采纳，才发" });
+  .meta({ description: "每周影响力邮件：被读和获赞都达到门槛，或者有回答被采纳，才发" });
 
 // What the payee's codes hold (design §8.21); empty is not set.
 const WECHAT_CODE = /^(wxp:\/\/\S+)?$/;
@@ -73,25 +73,25 @@ const SettingsSchema = z
     smtp: z.object({
       accounts: z
         .array(SmtpAccount.extend({ password_set: z.boolean() }))
-        .openapi({ description: "发信邮箱，按顺序用，一个发不出去就换下一个" }),
+        .meta({ description: "发信邮箱，按顺序用，一个发不出去就换下一个" }),
     }),
     bot: BotSettings,
     notify: z.object({
       email: z
         .record(z.string(), EmailPolicy)
-        .openapi({ description: "每类通知是否发邮件；成员没改过的按这里的默认" }),
-      unactivated: z.boolean().openapi({ description: "没登录过论坛的成员也发通知邮件和每周来信" }),
+        .meta({ description: "每类通知是否发邮件；成员没改过的按这里的默认" }),
+      unactivated: z.boolean().meta({ description: "没登录过论坛的成员也发通知邮件和每周来信" }),
     }),
     weekly: WeeklySettings,
     sponsor: z
       .object({
         payee: UserBriefSchema.extend({ qq: z.number().nullable() })
           .nullable()
-          .openapi({ description: "收款人；没设为 null" }),
-        wechat: z.string().openapi({ description: "微信收款码的内容，没设为空字符串" }),
-        alipay: z.string().openapi({ description: "支付宝收款码的内容，没设为空字符串" }),
+          .meta({ description: "收款人；没设为 null" }),
+        wechat: z.string().meta({ description: "微信收款码的内容，没设为空字符串" }),
+        alipay: z.string().meta({ description: "支付宝收款码的内容，没设为空字符串" }),
       })
-      .openapi({ description: "赞助" }),
+      .meta({ description: "赞助" }),
   })
   .openapi("Settings");
 
@@ -127,27 +127,23 @@ export const adminRoutes = createRouter()
                   frozen: z.number(),
                 }),
                 content: z.object({
-                  threads_today: z.number().openapi({ description: "今天（北京时间）公开的帖子" }),
-                  posts_today: z.number().openapi({ description: "今天公开的回复" }),
-                  pending: z.number().openapi({ description: "待审核的帖子和回复" }),
-                  reports: z.number().openapi({ description: "待处理的举报" }),
-                  archive_flags: z
-                    .number()
-                    .openapi({ description: "被反馈收录有误、还没处理的楼层" }),
-                  suggestions: z.number().openapi({ description: "待处理的修改建议" }),
+                  threads_today: z.number().meta({ description: "今天（北京时间）公开的帖子" }),
+                  posts_today: z.number().meta({ description: "今天公开的回复" }),
+                  pending: z.number().meta({ description: "待审核的帖子和回复" }),
+                  reports: z.number().meta({ description: "待处理的举报" }),
+                  archive_flags: z.number().meta({ description: "被反馈收录有误、还没处理的楼层" }),
+                  suggestions: z.number().meta({ description: "待处理的修改建议" }),
                 }),
                 events: z.object({
-                  streams: z.number().openapi({ description: "现在连着的事件流" }),
+                  streams: z.number().meta({ description: "现在连着的事件流" }),
                   polled_at: z
                     .number()
                     .nullable()
-                    .openapi({ description: "最近一次按游标拉取事件的时间，进程重启后为 null" }),
+                    .meta({ description: "最近一次按游标拉取事件的时间，进程重启后为 null" }),
                 }),
                 storage: z.object({
-                  database: z.number().openapi({ description: "数据库占用的字节数" }),
-                  uploads: z
-                    .number()
-                    .openapi({ description: "上传的图片占用的字节数，两种尺寸合计" }),
+                  database: z.number().meta({ description: "数据库占用的字节数" }),
+                  uploads: z.number().meta({ description: "上传的图片占用的字节数，两种尺寸合计" }),
                 }),
               }),
             },
@@ -251,7 +247,7 @@ export const adminRoutes = createRouter()
                 weekly: WeeklySettings.partial().optional(),
                 sponsor: z
                   .object({
-                    payee: UserRefSchema.nullable().openapi({ description: "只能是管理员" }),
+                    payee: UserRefSchema.nullable().meta({ description: "只能是管理员" }),
                     // Real ones run under 100; far longer won't fit in a code.
                     wechat: z
                       .string()
@@ -305,7 +301,7 @@ export const adminRoutes = createRouter()
                 results: z.array(
                   z.object({
                     user: z.string(),
-                    error: z.string().nullable().openapi({ description: "发送失败的原因" }),
+                    error: z.string().nullable().meta({ description: "发送失败的原因" }),
                   }),
                 ),
               }),

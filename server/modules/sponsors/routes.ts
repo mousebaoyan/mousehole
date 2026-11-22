@@ -38,51 +38,48 @@ const Amount = z
   .int()
   .min(MIN_AMOUNT, `金额至少 ¥${yuan(MIN_AMOUNT)}`)
   .max(MAX_AMOUNT, `金额最多 ¥${yuan(MAX_AMOUNT)}`)
-  .openapi({ description: "金额，以分记" });
+  .meta({ description: "金额，以分记" });
 const Message = z
   .string()
   .trim()
   .max(MAX_MESSAGE)
   .nullable()
   .transform((m) => m || null)
-  .openapi({ description: `留言，最多 ${MAX_MESSAGE} 个字，纯文本` });
+  .meta({ description: `留言，最多 ${MAX_MESSAGE} 个字，纯文本` });
 
 const SponsorshipSchema = z
   .object({
     id: z.number(),
-    amount: z.number().openapi({ description: "金额，以分记" }),
+    amount: z.number().meta({ description: "金额，以分记" }),
     method: z.enum(METHODS),
     status: z
       .enum(STATUSES)
-      .openapi({ description: "pending 待确认、confirmed 已确认、rejected 没收到" }),
+      .meta({ description: "pending 待确认、confirmed 已确认、rejected 没收到" }),
     message: z.string().nullable(),
-    anonymous: z.boolean().openapi({ description: "在感谢墙上匿名" }),
-    show_amount: z.boolean().openapi({ description: "在感谢墙上显示金额" }),
+    anonymous: z.boolean().meta({ description: "在感谢墙上匿名" }),
+    show_amount: z.boolean().meta({ description: "在感谢墙上显示金额" }),
     paid_at: z.number(),
-    reason: z.string().nullable().openapi({ description: "标为没收到的理由" }),
+    reason: z.string().nullable().meta({ description: "标为没收到的理由" }),
   })
   .openapi("Sponsorship");
 
 const ReviewedSchema = SponsorshipSchema.extend({
-  user: UserBriefSchema.extend({ qq: z.number().nullable() }).openapi({
+  user: UserBriefSchema.extend({ qq: z.number().nullable() }).meta({
     description: "赞助的人，匿名的也给",
   }),
-  reviewer: UserBriefSchema.nullable().openapi({ description: "最近一次确认或标为没收到的人" }),
+  reviewer: UserBriefSchema.nullable().meta({ description: "最近一次确认或标为没收到的人" }),
   reviewed_at: z.number().nullable(),
-  created_at: z.number().openapi({ description: "登记的时间" }),
+  created_at: z.number().meta({ description: "登记的时间" }),
 }).openapi("ReviewedSponsorship");
 
 const ThanksSchema = z
   .object({
     id: z.number(),
-    user: UserBriefSchema.nullable().openapi({ description: "匿名的为 null" }),
-    days: z.number().nullable().openapi({
+    user: UserBriefSchema.nullable().meta({ description: "匿名的为 null" }),
+    days: z.number().nullable().meta({
       description: "档位：7（¥24 起）、4（¥14 起）、2（¥7 起），不到 ¥7 的为 null",
     }),
-    amount: z
-      .number()
-      .nullable()
-      .openapi({ description: "金额，以分记；本人没选显示金额的为 null" }),
+    amount: z.number().nullable().meta({ description: "金额，以分记；本人没选显示金额的为 null" }),
     message: z.string().nullable(),
     paid_at: z.number(),
   })
@@ -138,16 +135,16 @@ export const sponsorsRoutes = createRouter()
           content: {
             "application/json": {
               schema: z.object({
-                payee: UserBriefSchema.nullable().openapi({
+                payee: UserBriefSchema.nullable().meta({
                   description: "收款人；没设时为 null，不能登记",
                 }),
                 codes: z
                   .object({ wechat: z.string().nullable(), alipay: z.string().nullable() })
                   .nullable()
-                  .openapi({ description: "收款码的内容，没设的为 null；只给成员，访客为 null" }),
+                  .meta({ description: "收款码的内容，没设的为 null；只给成员，访客为 null" }),
                 year: z
                   .object({ amount: z.number(), count: z.number() })
-                  .openapi({ description: "今年（北京时间）确认过的赞助：金额以分记，笔数" }),
+                  .meta({ description: "今年（北京时间）确认过的赞助：金额以分记，笔数" }),
               }),
             },
           },
@@ -281,7 +278,7 @@ export const sponsorsRoutes = createRouter()
                 .object({
                   anonymous: z.boolean().optional(),
                   show_amount: z.boolean().optional(),
-                  message: z.null().optional().openapi({ description: "为 null 时删掉留言" }),
+                  message: z.null().optional().meta({ description: "为 null 时删掉留言" }),
                 })
                 .refine(
                   (b) =>
@@ -443,7 +440,7 @@ export const sponsorsRoutes = createRouter()
                 status: z
                   .enum(["confirmed", "rejected"])
                   .optional()
-                  .openapi({ description: "confirmed 确认；rejected 没收到，或者撤销确认" }),
+                  .meta({ description: "confirmed 确认；rejected 没收到，或者撤销确认" }),
                 reason: z
                   .string()
                   .trim()
@@ -451,14 +448,11 @@ export const sponsorsRoutes = createRouter()
                   .nullable()
                   .optional()
                   .transform((r) => r || null)
-                  .openapi({ description: "标为没收到的理由" }),
+                  .meta({ description: "标为没收到的理由" }),
                 amount: Amount.optional(),
-                anonymous: z.boolean().optional().openapi({ description: "感谢墙上是否匿名" }),
-                show_amount: z
-                  .boolean()
-                  .optional()
-                  .openapi({ description: "感谢墙上是否显示金额" }),
-                message: Message.optional().openapi({
+                anonymous: z.boolean().optional().meta({ description: "感谢墙上是否匿名" }),
+                show_amount: z.boolean().optional().meta({ description: "感谢墙上是否显示金额" }),
+                message: Message.optional().meta({
                   description: `新的留言，最多 ${MAX_MESSAGE} 个字；为 null 或空时删掉留言`,
                 }),
               }),

@@ -33,7 +33,7 @@ export const summariesRoutes = createRouter()
                 items: z.array(
                   z.object({
                     thread_id: z.number(),
-                    replies: z.number().openapi({ description: "现在的回复数" }),
+                    replies: z.number().meta({ description: "现在的回复数" }),
                   }),
                 ),
               }),
@@ -63,20 +63,20 @@ export const summariesRoutes = createRouter()
                   id: z.number(),
                   kind: z.string(),
                   title: z.string(),
-                  board: z.string().openapi({ description: "版块名" }),
+                  board: z.string().meta({ description: "版块名" }),
                   tags: z.array(z.string()),
-                  positioning: z.boolean().openapi({ description: "保研定位帖" }),
+                  positioning: z.boolean().meta({ description: "保研定位帖" }),
                 }),
-                replies: z.number().openapi({ description: "现在的回复数，推送总结时带回来" }),
+                replies: z.number().meta({ description: "现在的回复数，推送总结时带回来" }),
                 posts: z.array(
                   z.object({
                     floor: z.number(),
-                    op: z.boolean().openapi({ description: "楼主写的" }),
+                    op: z.boolean().meta({ description: "楼主写的" }),
                     accepted: z.boolean(),
                     likes: z.number(),
                     text: z
                       .string()
-                      .openapi({ description: "正文的纯文字，图片写成[图片]，最多 1000 个字" }),
+                      .meta({ description: "正文的纯文字，图片写成[图片]，最多 1000 个字" }),
                   }),
                 ),
               }),
@@ -106,7 +106,7 @@ export const summariesRoutes = createRouter()
               schema: z.object({
                 lead: z.string().trim().min(1).max(80),
                 points: z.array(PointSchema).min(1).max(5),
-                replies: z.number().int().min(0).openapi({ description: "取内容时的回复数" }),
+                replies: z.number().int().min(0).meta({ description: "取内容时的回复数" }),
               }),
             },
           },

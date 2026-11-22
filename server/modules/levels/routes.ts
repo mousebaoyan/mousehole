@@ -10,21 +10,21 @@ const UserParam = z.object({ user: UserRefSchema });
 const ProgressSchema = z
   .object({
     level: z.number(),
-    locked: z.boolean().openapi({ description: "管理员定下的等级，不再自动升降" }),
+    locked: z.boolean().meta({ description: "管理员定下的等级，不再自动升降" }),
     next: z
       .object({
-        level: z.number().openapi({ description: "下一级；和 level 相同时是 L4 保级的条件" }),
+        level: z.number().meta({ description: "下一级；和 level 相同时是 L4 保级的条件" }),
         items: z.array(
           z.object({
             key: z.string(),
             label: z.string(),
             have: z.number(),
-            need: z.number().openapi({ description: "阅读时间以秒计" }),
+            need: z.number().meta({ description: "阅读时间以秒计" }),
           }),
         ),
       })
       .nullable()
-      .openapi({ description: "L5 和锁定的等级为 null" }),
+      .meta({ description: "L5 和锁定的等级为 null" }),
   })
   .openapi("LevelProgress");
 
