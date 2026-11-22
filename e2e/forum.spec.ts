@@ -66,11 +66,21 @@ test("站长设公告，管理员建版块、发帖再回复，从通知打开�
   await page.locator('a[href$="?floor=3"]').click();
   await expect(page.locator("#floor-3")).toBeInViewport();
 
-  // Read there, then straight back by the sidebar: the list already knows.
+  // Read there, then straight back by the sidebar: what was read goes out on the way, and the
+  // list already knows.
   await page.setViewportSize({ width: 1280, height: 720 });
-  await page.waitForTimeout(2500);
+  await expect(page.locator("#floor-3").getByTitle("未读")).toHaveCount(0);
+  const read = `${new URL(thread).pathname.replace("/t/", "/api/v1/threads/")}/read`;
+  const reported = page.waitForResponse(
+    (res) => res.request().method() === "POST" && new URL(res.url()).pathname === read,
+  );
   await page.getByRole("link", { name: "全部帖子" }).click();
+  expect((await reported).status()).toBe(204);
   const row = page.getByRole("link", { name: /端到端测试发的帖子/ });
+  await expect(row).toBeVisible();
+  await expect(row).not.toContainText("层没读过");
+  // Loaded afresh, the list goes by what the server kept.
+  await page.reload();
   await expect(row).toBeVisible();
   await expect(row).not.toContainText("层没读过");
 });

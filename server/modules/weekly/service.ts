@@ -2,6 +2,7 @@ import { sql } from "kysely";
 import { db } from "../../platform/db.ts";
 import { env } from "../../platform/env.ts";
 import { queueMail, unsubscribeUrl } from "../../platform/mail.ts";
+import { recordRun } from "../../platform/schedule.ts";
 import { getSettings } from "../../platform/settings.ts";
 import { levelName } from "../../platform/site.ts";
 import { levelProgress } from "../levels/service.ts";
@@ -178,10 +179,6 @@ export async function sendWeeklyLetters(now = new Date()) {
   );
   await db.transaction().execute(async (trx) => {
     await queueMail(trx, mails);
-    await trx
-      .insertInto("job_runs")
-      .values({ name: SENT, ran_at: now })
-      .onConflict((oc) => oc.column("name").doUpdateSet({ ran_at: now }))
-      .execute();
+    await recordRun(trx, SENT, now);
   });
 }

@@ -90,5 +90,80 @@
     "unicorn/no-array-sort": "off",
     "unicorn/no-array-reverse": "off",
     "react/react-in-jsx-scope": "off"
-  }
+  },
+  // The layers of docs/development.md §1.2. An override replaces the rule's options, so each one
+  // repeats the paths above.
+  "overrides": [
+    {
+      "files": ["app/**"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "paths": [
+              {
+                "name": "react",
+                "importNames": ["useMemo", "useCallback", "memo"],
+                "message": "React Compiler memoizes automatically.",
+                "allowTypeImports": true
+              },
+              {
+                "name": "cn",
+                "message": "Import cn from ~/cn, which knows the theme's font sizes."
+              },
+              {
+                "name": "kysely",
+                "message": "Pages call /api/v1 and don't query the database."
+              }
+            ],
+            "patterns": [
+              {
+                "group": [
+                  "**/server/modules/**",
+                  "!**/server/modules/coins/rules.ts",
+                  "!**/server/modules/levels/rules.ts",
+                  "!**/server/modules/sponsors/rules.ts",
+                  "!**/server/modules/threads/merge-rules.ts",
+                  "!**/server/modules/users/customization.ts",
+                  "!**/server/modules/notifications/types.ts",
+                  "!**/server/modules/auth/routes.ts",
+                  "**/platform/db.ts"
+                ],
+                "message": "Pages call /api/v1; of the modules they import only rules and types."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["server/platform/**"],
+      "excludeFiles": ["**/*.test.ts"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "paths": [
+              {
+                "name": "react",
+                "importNames": ["useMemo", "useCallback", "memo"],
+                "message": "React Compiler memoizes automatically.",
+                "allowTypeImports": true
+              },
+              {
+                "name": "cn",
+                "message": "Import cn from ~/cn, which knows the theme's font sizes."
+              }
+            ],
+            "patterns": [
+              {
+                "group": ["**/modules/**"],
+                "message": "platform depends on no business module."
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
 }

@@ -4,7 +4,7 @@ import type { Actor, Reader, Viewer } from "../../platform/access.ts";
 import { db } from "../../platform/db.ts";
 import { AppError } from "../../platform/errors.ts";
 import { recordAudit } from "../audit/service.ts";
-import { countBoard, findTags, getBoard } from "../boards/service.ts";
+import { countBoard, findTags, getBoard, setThreadTags } from "../boards/service.ts";
 import { moveDrafts } from "../drafts/service.ts";
 import { moveNotifications, notifyOnPost } from "../notifications/service.ts";
 import { moveLinks } from "../qq/service.ts";
@@ -166,7 +166,7 @@ export async function mergeThread(
       .set({ deleted_at: sql<Date>`now()` })
       .where("id", "=", gone.id)
       .execute();
-    await trx.deleteFrom("thread_tags").where("thread_id", "=", gone.id).execute();
+    await setThreadTags(trx, gone.id, []);
     await trx
       .deleteFrom("thread_suggestions")
       .where("thread_id", "=", gone.id)

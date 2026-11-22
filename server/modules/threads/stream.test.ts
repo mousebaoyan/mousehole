@@ -24,8 +24,7 @@ beforeAll(async () => {
 describe("帖子的实时更新", () => {
   test("新楼层推给正在看这个帖子的人，访客也有；别的帖子的不推", async () => {
     // Where the listeners start, as at start-up; then what the LISTEN connection does on a NOTIFY.
-    eventsArrived();
-    await new Promise((resolve) => setTimeout(resolve, 100));
+    await eventsArrived();
     const stream = await readStream(`/api/v1/threads/${threadId}/stream`, {});
     await api.threads.$post(
       { json: { board: "live", title: "别的帖子", content: { markdown: "主楼" } } },
@@ -36,7 +35,7 @@ describe("帖子的实时更新", () => {
       member,
     );
     if (!res.ok) throw new Error(`status ${res.status}`);
-    eventsArrived();
+    await eventsArrived();
     expect(await stream.next()).toBe("event: post.created\ndata: 2\n\n");
     await stream.close();
   });

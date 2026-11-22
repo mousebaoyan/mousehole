@@ -326,6 +326,33 @@ export async function countBoard(
     .execute();
 }
 
+// Gives the thread these tags and no others. Their counts are the caller's, which knows whether
+// the thread is public.
+export async function setThreadTags(trx: Transaction<DB>, threadId: number, tagIds: number[]) {
+  const current = await trx
+    .selectFrom("thread_tags")
+    .select("tag_id")
+    .where("thread_id", "=", threadId)
+    .execute();
+  const had = current.map((r) => r.tag_id);
+  const removed = had.filter((id) => !tagIds.includes(id));
+  const added = tagIds.filter((id) => !had.includes(id));
+  if (removed.length > 0) {
+    await trx
+      .deleteFrom("thread_tags")
+      .where("thread_id", "=", threadId)
+      .where("tag_id", "in", removed)
+      .execute();
+  }
+  if (added.length > 0) {
+    await trx
+      .insertInto("thread_tags")
+      .values(added.map((tag_id) => ({ thread_id: threadId, tag_id })))
+      .execute();
+  }
+  return { removed, added };
+}
+
 export async function countTags(trx: Transaction<DB>, tagIds: number[], threads: number) {
   if (tagIds.length === 0) return;
   await trx

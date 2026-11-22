@@ -32,14 +32,14 @@
 | --- | --- |
 | `docker compose up -d` | 启动本地 PostgreSQL；第一次先 `cp .env.example .env` |
 | `pnpm dev` | 本地开发，启动时自动执行迁移 |
-| `pnpm check` | 类型检查、lint、格式检查和测试，提交前要全部通过 |
+| `pnpm check` | 类型检查、lint、格式检查，迁移本地库并核对数据库类型，再跑测试；和 CI 的 check 一项相同，提交前要全部通过 |
 | `pnpm test <路径>` | 只跑相关的测试 |
 | `pnpm format` | 格式化 |
 | `pnpm db:migrate` | 执行迁移 |
 | `pnpm db:codegen` | 改完迁移后重新生成数据库类型 |
 | `pnpm bootstrap --owner` | 生成站长的一次性登录链接，管系统用；`--qq <QQ号>` 生成管理员的，本地试发帖和管论坛用 |
 | `pnpm mock-bot <命令>` | 模拟 bot 插件：`setup` 建 token 并推送演示群，`seed` 建演示用的版块和标签，`demo` 跑一遍 bot 的完整流程；不带命令列出全部 |
-| `pnpm e2e` | 构建后用 Playwright 在浏览器里跑关键流程（登录、发帖、回复、后台设置）；第一次先 `pnpm exec playwright install chromium` |
+| `pnpm e2e` | 构建（含旧浏览器的兼容检查）后用 Playwright 在浏览器里跑关键流程（登录、发帖、回复、后台设置），和 CI 的 e2e 一项相同；第一次先 `pnpm exec playwright install chromium` |
 | `pnpm load-test [--base URL]` | 压测：100 个并发读者跑 150 秒，输出各类请求的 p50、p95；先 `mock-bot setup` 和 `seed`，只对本地或预发的服务器跑 |
 | `pnpm phone-check [路径…]` | 按 360px 宽的手机打开页面，报告超出屏幕的元素和展开后超出屏幕的菜单，截图存到 `test-results/phone/`；改了界面后运行 |
 

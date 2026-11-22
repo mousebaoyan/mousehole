@@ -2,6 +2,7 @@ import { sql, type RawBuilder, type Transaction } from "kysely";
 import type { DB } from "../../../db/types.ts";
 import { db } from "../../platform/db.ts";
 import { AppError } from "../../platform/errors.ts";
+import { recordRun } from "../../platform/schedule.ts";
 import {
   ACCEPTED,
   BOUNTY_ANSWER,
@@ -126,11 +127,7 @@ async function settleDay(day: string) {
         ${ONCE_A_DAY}
         RETURNING user_id, amount)
       ${CREDIT}`.execute(trx);
-    await trx
-      .insertInto("job_runs")
-      .values({ name: SETTLED, ran_at: start })
-      .onConflict((oc) => oc.column("name").doUpdateSet({ ran_at: start }))
-      .execute();
+    await recordRun(trx, SETTLED, start);
   });
 }
 
