@@ -6,6 +6,11 @@ export const SITE_DESCRIPTION = "四非计算机保研鼠群的论坛";
 export const BOT_NAME = "鼬鼬bot";
 // 鼠群's own site, which links back to the forum from its header.
 export const MAIN_SITE = "https://mousebaoyan.cn";
+// The Agent plugin (design §6.7): the GitHub repository its marketplaces are added from, the
+// plugin in them, and its skill on its own for dsh, all in what members are told to run.
+export const PLUGIN_REPO = "mousebaoyan/mousehole-plugin";
+export const PLUGIN_ID = "mousehole@mousebaoyan";
+export const PLUGIN_SKILL = `https://raw.githubusercontent.com/${PLUGIN_REPO}/main/skills/mousehole/SKILL.md`;
 
 // The forum's levels L0–L5 (design §6.6), always shown with their number: "L3 硕鼠".
 export const LEVEL_NAMES = ["鼠鼠", "小鼠", "学鼠", "硕鼠", "博鼠", "鼠导"];
